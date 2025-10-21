@@ -1,0 +1,2848 @@
+// Merged TypeScript files from: C:\MyDartProjects\dart_quill\lib\src\dependencies
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\dart_quill_delta\core\delta.dart ----
+import 'dart:math' as math;
+
+import 'package:collection/collection.dart';
+import 'package:diff_match_patch/diff_match_patch.dart' as dmp;
+import 'package:quiver/core.dart';
+
+import 'operation.dart';
+import 'delta_iterator.dart';
+
+/// Delta represents a document or a modification of a document as a sequence of
+/// insert, delete and retain operations.
+///
+/// Delta consisting of only "insert" operations is usually referred to as
+/// "document delta". When delta includes also "retain" or "delete" operations
+/// it is a "change delta".
+class Delta {
+  /// Creates new empty [Delta].
+  factory Delta() => Delta._(<Operation>[]);
+
+  Delta._(this.operations);
+
+  /// Creates new [Delta] from [other].
+  factory Delta.from(Delta other) =>
+      Delta._(List<Operation>.from(other.operations));
+
+  /// Creates new [Delta] from a List of Operation
+  factory Delta.fromOperations(List<Operation> operations) =>
+      Delta._(operations.toList());
+
+  // Placeholder char for embed in diff()
+  static final String _kNullCharacter = String.fromCharCode(0);
+
+  /// Transforms two attribute sets.
+  static Map<String, dynamic>? transformAttributes(
+      Map<String, dynamic>? a, Map<String, dynamic>? b, bool priority) {
+    if (a == null) return b;
+    if (b == null) return null;
+
+    if (!priority) return b;
+
+    final result = b.keys.fold<Map<String, dynamic>>({}, (attributes, key) {
+      if (!a.containsKey(key)) attributes[key] = b[key];
+      return attributes;
+    });
+
+    return result.isEmpty ? null : result;
+  }
+
+  /// Composes two attribute sets.
+  static Map<String, dynamic>? composeAttributes(
+      Map<String, dynamic>? a, Map<String, dynamic>? b,
+      {bool keepNull = false}) {
+    a ??= const {};
+    b ??= const {};
+
+    final result = Map<String, dynamic>.from(a)..addAll(b);
+    final keys = result.keys.toList(growable: false);
+
+    if (!keepNull) {
+      for (final key in keys) {
+        if (result[key] == null) result.remove(key);
+      }
+    }
+
+    return result.isEmpty ? null : result;
+  }
+
+  ///get anti-attr result base on base
+  static Map<String, dynamic> invertAttributes(
+      Map<String, dynamic>? attr, Map<String, dynamic>? base) {
+    attr ??= const {};
+    base ??= const {};
+
+    final baseInverted = base.keys.fold({}, (dynamic memo, key) {
+      if (base![key] != attr![key] && attr.containsKey(key)) {
+        memo[key] = base[key];
+      }
+      return memo;
+    });
+
+    final inverted =
+        Map<String, dynamic>.from(attr.keys.fold(baseInverted, (memo, key) {
+      if (base![key] != attr![key] && !base.containsKey(key)) {
+        memo[key] = null;
+      }
+      return memo;
+    }));
+    return inverted;
+  }
+
+  /// Returns diff between two attribute sets
+  static Map<String, dynamic>? diffAttributes(
+      Map<String, dynamic>? a, Map<String, dynamic>? b) {
+    a ??= const {};
+    b ??= const {};
+
+    final attributes = <String, dynamic>{};
+    for (final key in (a.keys.toList()..addAll(b.keys))) {
+      if (a[key] != b[key]) {
+        attributes[key] = b.containsKey(key) ? b[key] : null;
+      }
+    }
+
+    return attributes.keys.isNotEmpty ? attributes : null;
+  }
+
+  final List<Operation> operations;
+
+  int modificationCount = 0;
+
+  /// Creates [Delta] from de-serialized JSON representation.
+  ///
+  /// If `dataDecoder` parameter is not null then it is used to additionally
+  /// decode the operation's data object. Only applied to insert operations.
+  static Delta fromJson(List data, {DataDecoder? dataDecoder}) {
+    return Delta._(data
+        .map((op) => Operation.fromJson(op, dataDecoder: dataDecoder))
+        .toList());
+  }
+
+  /// Returns list of operations in this delta.
+  List<Operation> toList() => List.from(operations);
+
+  /// Returns JSON-serializable version of this delta.
+  List<Map<String, dynamic>> toJson() =>
+      toList().map((operation) => operation.toJson()).toList();
+
+  /// Returns `true` if this delta is empty.
+  bool get isEmpty => operations.isEmpty;
+
+  /// Returns `true` if this delta is not empty.
+  bool get isNotEmpty => operations.isNotEmpty;
+
+  /// Returns number of operations in this delta.
+  int get length => operations.length;
+
+  /// Returns [Operation] at specified [index] in this delta.
+  Operation operator [](int index) => operations[index];
+
+  /// Returns [Operation] at specified [index] in this delta.
+  Operation elementAt(int index) => operations.elementAt(index);
+
+  /// Returns the first [Operation] in this delta.
+  Operation get first => operations.first;
+
+  /// Returns the last [Operation] in this delta.
+  Operation get last => operations.last;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! Delta) return false;
+    final typedOther = other;
+    const comparator = ListEquality<Operation>(DefaultEquality<Operation>());
+    return comparator.equals(operations, typedOther.operations);
+  }
+
+  @override
+  int get hashCode => hashObjects(operations);
+
+  /// Retain [count] of characters from current position.
+  void retain(int count, [Map<String, dynamic>? attributes]) {
+    assert(count >= 0);
+    if (count == 0) return; // no-op
+    push(Operation.retain(count, attributes));
+  }
+
+  /// Insert [data] at current position.
+  void insert(dynamic data, [Map<String, dynamic>? attributes]) {
+    if (data is String && data.isEmpty) return; // no-op
+    push(Operation.insert(data, attributes));
+  }
+
+  /// Delete [count] characters from current position.
+  void delete(int count) {
+    assert(count >= 0);
+    if (count == 0) return;
+    push(Operation.delete(count));
+  }
+
+  void _mergeWithTail(Operation operation) {
+    assert(isNotEmpty);
+    assert(last.key == operation.key);
+    assert(operation.data is String && last.data is String);
+
+    final length = operation.length! + last.length!;
+    final lastText = last.data as String;
+    final opText = operation.data as String;
+    final resultText = lastText + opText;
+    final index = operations.length;
+    operations.replaceRange(index - 1, index, [
+      Operation(operation.key, length, resultText, operation.attributes),
+    ]);
+  }
+
+  /// Pushes new operation into this delta.
+  ///
+  /// Performs compaction by composing [operation] with current tail operation
+  /// of this delta, when possible. For instance, if current tail is
+  /// `insert('abc')` and pushed operation is `insert('123')` then existing
+  /// tail is replaced with `insert('abc123')` - a compound result of the two
+  /// operations.
+  void push(Operation operation) {
+    if (operation.isEmpty) return;
+
+    var index = operations.length;
+    final lastOp = operations.isNotEmpty ? operations.last : null;
+    if (lastOp != null) {
+      if (lastOp.isDelete && operation.isDelete) {
+        _mergeWithTail(operation);
+        return;
+      }
+
+      if (lastOp.isDelete && operation.isInsert) {
+        index -= 1; // Always insert before deleting
+        final nLastOp = (index > 0) ? operations.elementAt(index - 1) : null;
+        if (nLastOp == null) {
+          operations.insert(0, operation);
+          return;
+        }
+      }
+
+      if (lastOp.isInsert && operation.isInsert) {
+        if (lastOp.hasSameAttributes(operation) &&
+            operation.data is String &&
+            lastOp.data is String) {
+          _mergeWithTail(operation);
+          return;
+        }
+      }
+
+      if (lastOp.isRetain && operation.isRetain) {
+        if (lastOp.hasSameAttributes(operation)) {
+          _mergeWithTail(operation);
+          return;
+        }
+      }
+    }
+    if (index == operations.length) {
+      operations.add(operation);
+    } else {
+      final opAtIndex = operations.elementAt(index);
+      operations.replaceRange(index, index + 1, [operation, opAtIndex]);
+    }
+    modificationCount++;
+  }
+
+  /// Composes next operation from [thisIter] and [otherIter].
+  ///
+  /// Returns new operation or `null` if operations from [thisIter] and
+  /// [otherIter] nullify each other. For instance, for the pair `insert('abc')`
+  /// and `delete(3)` composition result would be empty string.
+  Operation? _composeOperation(
+      DeltaIterator thisIter, DeltaIterator otherIter) {
+    if (otherIter.isNextInsert) return otherIter.next();
+    if (thisIter.isNextDelete) return thisIter.next();
+
+    final length = math.min(thisIter.peekLength(), otherIter.peekLength());
+    final thisOp = thisIter.next(length);
+    final otherOp = otherIter.next(length);
+    assert(thisOp.length == otherOp.length);
+
+    if (otherOp.isRetain) {
+      final attributes = composeAttributes(
+        thisOp.attributes,
+        otherOp.attributes,
+        keepNull: thisOp.isRetain,
+      );
+      if (thisOp.isRetain) {
+        return Operation.retain(thisOp.length, attributes);
+      } else if (thisOp.isInsert) {
+        return Operation.insert(thisOp.data, attributes);
+      } else {
+        throw StateError('Unreachable');
+      }
+    } else {
+      // otherOp == delete && thisOp in [retain, insert]
+      assert(otherOp.isDelete);
+      if (thisOp.isRetain) return otherOp;
+      assert(thisOp.isInsert);
+      // otherOp(delete) + thisOp(insert) => null
+    }
+    return null;
+  }
+
+  /// Composes this delta with [other] and returns new [Delta].
+  ///
+  /// It is not required for this and [other] delta to represent a document
+  /// delta (consisting only of insert operations).
+  Delta compose(Delta other) {
+    final result = Delta();
+    final thisIter = DeltaIterator(this);
+    final otherIter = DeltaIterator(other);
+
+    while (thisIter.hasNext || otherIter.hasNext) {
+      final newOp = _composeOperation(thisIter, otherIter);
+      if (newOp != null) result.push(newOp);
+    }
+    return result..trim();
+  }
+
+  /// Returns a new lazy Iterable with elements that are created by calling
+  /// f on each element of this Iterable in iteration order.
+  ///
+  /// Convenience method
+  Iterable<T> map<T>(T Function(Operation) f) {
+    return operations.map<T>(f);
+  }
+
+  /// Returns a [Delta] containing differences between 2 [Delta]s.
+  /// If [cleanupSemantic] is `true` (default), applies the following:
+  ///
+  /// The diff of "mouse" and "sofas" is
+  ///   [delete(1), insert("s"), retain(1),
+  ///   delete("u"), insert("fa"), retain(1), delete(1)].
+  /// While this is the optimum diff, it is difficult for humans to understand.
+  /// Semantic cleanup rewrites the diff,
+  /// expanding it into a more intelligible format.
+  /// The above example would become: [(-1, "mouse"), (1, "sofas")].
+  /// (source: https://github.com/google/diff-match-patch/wiki/API)
+  ///
+  /// Useful when one wishes to display difference between 2 documents
+  Delta diff(Delta other, {bool cleanupSemantic = true}) {
+    if (operations.equals(other.operations)) {
+      return Delta();
+    }
+    final stringThis = map((op) {
+      if (op.isInsert) {
+        return op.data is String ? op.data : _kNullCharacter;
+      }
+      final prep = this == other ? 'on' : 'with';
+      throw ArgumentError('diff() call $prep non-document');
+    }).join();
+    final stringOther = other.map((op) {
+      if (op.isInsert) {
+        return op.data is String ? op.data : _kNullCharacter;
+      }
+      final prep = this == other ? 'on' : 'with';
+      throw ArgumentError('diff() call $prep non-document');
+    }).join();
+
+    final retDelta = Delta();
+    final diffResult = dmp.diff(stringThis, stringOther);
+    if (cleanupSemantic) {
+      dmp.DiffMatchPatch().diffCleanupSemantic(diffResult);
+    }
+
+    final thisIter = DeltaIterator(this);
+    final otherIter = DeltaIterator(other);
+
+    bool isEqual(Object? a, Object? b) =>
+        const DeepCollectionEquality.unordered().equals(a, b);
+
+    for (final component in diffResult) {
+      var length = component.text.length;
+      while (length > 0) {
+        var opLength = 0;
+        switch (component.operation) {
+          case dmp.DIFF_INSERT:
+            opLength = math.min(otherIter.peekLength(), length);
+            retDelta.push(otherIter.next(opLength));
+            break;
+          case dmp.DIFF_DELETE:
+            opLength = math.min(length, thisIter.peekLength());
+            thisIter.next(opLength);
+            retDelta.delete(opLength);
+            break;
+          case dmp.DIFF_EQUAL:
+            opLength = math.min(
+              math.min(thisIter.peekLength(), otherIter.peekLength()),
+              length,
+            );
+            final thisOp = thisIter.next(opLength);
+            final otherOp = otherIter.next(opLength);
+            if (isEqual(thisOp.data, otherOp.data)) {
+              retDelta.retain(
+                opLength,
+                diffAttributes(thisOp.attributes, otherOp.attributes),
+              );
+            } else {
+              retDelta
+                ..push(otherOp)
+                ..delete(opLength);
+            }
+            break;
+        }
+        length -= opLength;
+      }
+    }
+    return retDelta..trim();
+  }
+
+  /// Transforms next operation from [otherIter] against next operation in
+  /// [thisIter].
+  ///
+  /// Returns `null` if both operations nullify each other.
+  Operation? _transformOperation(
+      DeltaIterator thisIter, DeltaIterator otherIter, bool priority) {
+    if (thisIter.isNextInsert && (priority || !otherIter.isNextInsert)) {
+      return Operation.retain(thisIter.next().length);
+    } else if (otherIter.isNextInsert) {
+      return otherIter.next();
+    }
+
+    final length = math.min(thisIter.peekLength(), otherIter.peekLength());
+    final thisOp = thisIter.next(length);
+    final otherOp = otherIter.next(length);
+    assert(thisOp.length == otherOp.length);
+
+    // At this point only delete and retain operations are possible.
+    if (thisOp.isDelete) {
+      // otherOp is either delete or retain, so they nullify each other.
+      return null;
+    } else if (otherOp.isDelete) {
+      return otherOp;
+    } else {
+      // Retain otherOp which is either retain or insert.
+      return Operation.retain(
+        length,
+        transformAttributes(thisOp.attributes, otherOp.attributes, priority),
+      );
+    }
+  }
+
+  /// Transforms [other] delta against operations in this delta.
+  Delta transform(Delta other, bool priority) {
+    final result = Delta();
+    final thisIter = DeltaIterator(this);
+    final otherIter = DeltaIterator(other);
+
+    while (thisIter.hasNext || otherIter.hasNext) {
+      final newOp = _transformOperation(thisIter, otherIter, priority);
+      if (newOp != null) result.push(newOp);
+    }
+    return result..trim();
+  }
+
+  /// Removes trailing retain operation with empty attributes, if present.
+  void trim() {
+    if (isNotEmpty) {
+      final last = operations.last;
+      if (last.isRetain && last.isPlain) operations.removeLast();
+    }
+  }
+
+  /// Removes trailing '\n'
+  void _trimNewLine() {
+    if (isNotEmpty) {
+      final lastOp = operations.last;
+      final lastOpData = lastOp.data;
+
+      if (lastOpData is String && lastOpData.endsWith('\n')) {
+        operations.removeLast();
+        if (lastOpData.length > 1) {
+          insert(lastOpData.substring(0, lastOpData.length - 1),
+              lastOp.attributes);
+        }
+      }
+    }
+  }
+
+  /// Concatenates [other] with this delta and returns the result.
+  Delta concat(Delta other, {bool trimNewLine = false}) {
+    final result = Delta.from(this);
+    if (trimNewLine) {
+      result._trimNewLine();
+    }
+    if (other.isNotEmpty) {
+      // In case first operation of other can be merged with last operation in
+      // our list.
+      result.push(other.operations.first);
+      result.operations.addAll(other.operations.sublist(1));
+    }
+    return result;
+  }
+
+  /// Inverts this delta against [base].
+  ///
+  /// Returns new delta which negates effect of this delta when applied to
+  /// [base]. This is an equivalent of "undo" operation on deltas.
+  Delta invert(Delta base) {
+    final inverted = Delta();
+    if (base.isEmpty) return inverted;
+
+    var baseIndex = 0;
+    for (final op in operations) {
+      if (op.isInsert) {
+        inverted.delete(op.length!);
+      } else if (op.isRetain && op.isPlain) {
+        inverted.retain(op.length!);
+        baseIndex += op.length!;
+      } else if (op.isDelete || (op.isRetain && op.isNotPlain)) {
+        final length = op.length!;
+        final sliceDelta = base.slice(baseIndex, baseIndex + length);
+        sliceDelta.toList().forEach((baseOp) {
+          if (op.isDelete) {
+            inverted.push(baseOp);
+          } else if (op.isRetain && op.isNotPlain) {
+            final invertAttr =
+                invertAttributes(op.attributes, baseOp.attributes);
+            inverted.retain(
+                baseOp.length!, invertAttr.isEmpty ? null : invertAttr);
+          }
+        });
+        baseIndex += length;
+      } else {
+        throw StateError('Unreachable');
+      }
+    }
+    inverted.trim();
+    return inverted;
+  }
+
+  /// Returns slice of this delta from [start] index (inclusive) to [end]
+  /// (exclusive).
+  Delta slice(int start, [int? end]) {
+    final delta = Delta();
+    var index = 0;
+    final opIterator = DeltaIterator(this);
+
+    final actualEnd = end ?? DeltaIterator.maxLength;
+
+    while (index < actualEnd && opIterator.hasNext) {
+      Operation op;
+      if (index < start) {
+        op = opIterator.next(start - index);
+      } else {
+        op = opIterator.next(actualEnd - index);
+        delta.push(op);
+      }
+      index += op.length!;
+    }
+    return delta;
+  }
+
+  /// Transforms [index] against this delta.
+  ///
+  /// Any "delete" operation before specified [index] shifts it backward, as
+  /// well as any "insert" operation shifts it forward.
+  ///
+  /// The [force] argument is used to resolve scenarios when there is an
+  /// insert operation at the same position as [index]. If [force] is set to
+  /// `true` (default) then position is forced to shift forward, otherwise
+  /// position stays at the same index. In other words setting [force] to
+  /// `false` gives higher priority to the transformed position.
+  ///
+  /// Useful to adjust caret or selection positions.
+  int transformPosition(int index, {bool force = true}) {
+    final iter = DeltaIterator(this);
+    var offset = 0;
+    while (iter.hasNext && offset <= index) {
+      final op = iter.next();
+      if (op.isDelete) {
+        index -= math.min(op.length!, index - offset);
+        continue;
+      } else if (op.isInsert && (offset < index || force)) {
+        index += op.length!;
+      }
+      offset += op.length!;
+    }
+    return index;
+  }
+
+  @override
+  String toString() => operations.join('\n');
+}
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\dart_quill_delta\core\delta.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\dart_quill_delta\core\delta_iterator.dart ----
+import 'dart:math' as math;
+
+import 'operation.dart';
+import 'delta.dart';
+
+/// Specialized iterator for [Delta]s.
+class DeltaIterator {
+  DeltaIterator(this.delta) : _modificationCount = delta.modificationCount;
+
+  static const int maxLength = 1073741824;
+
+  final Delta delta;
+  final int _modificationCount;
+  int _index = 0;
+  int _offset = 0;
+
+  bool get isNextInsert => nextOperationKey == Operation.insertKey;
+
+  bool get isNextDelete => nextOperationKey == Operation.deleteKey;
+
+  bool get isNextRetain => nextOperationKey == Operation.retainKey;
+
+  String? get nextOperationKey {
+    if (_index < delta.length) {
+      return delta.elementAt(_index).key;
+    } else {
+      return null;
+    }
+  }
+
+  bool get hasNext => peekLength() < maxLength;
+
+  /// Returns length of next operation without consuming it.
+  ///
+  /// Returns [maxLength] if there is no more operations left to iterate.
+  int peekLength() {
+    if (_index < delta.length) {
+      final operation = delta.operations[_index];
+      return operation.length! - _offset;
+    }
+    return maxLength;
+  }
+
+  /// Consumes and returns next operation.
+  ///
+  /// Optional [length] specifies maximum length of operation to return. Note
+  /// that actual length of returned operation may be less than specified value.
+  ///
+  /// If this iterator reached the end of the Delta then returns a retain
+  /// operation with its length set to [maxLength].
+  // TODO: Note that we used double.infinity as the default value
+  // for length here
+  //       but this can now cause a type error since operation length is
+  //       expected to be an int. Changing default length to [maxLength] is
+  //       a workaround to avoid breaking changes.
+  Operation next([int length = maxLength]) {
+    if (_modificationCount != delta.modificationCount) {
+      throw ConcurrentModificationError(delta);
+    }
+
+    if (_index < delta.length) {
+      final op = delta.elementAt(_index);
+      final opKey = op.key;
+      final opAttributes = op.attributes;
+      final currentOffset = _offset;
+      final actualLength = math.min(op.length! - currentOffset, length);
+      if (actualLength == op.length! - currentOffset) {
+        _index++;
+        _offset = 0;
+      } else {
+        _offset += actualLength;
+      }
+      final opData = op.isInsert && op.data is String
+          ? (op.data as String)
+              .substring(currentOffset, currentOffset + actualLength)
+          : op.data;
+      final opIsNotEmpty =
+          opData is String ? opData.isNotEmpty : true; // embeds are never empty
+      final opLength = opData is String ? opData.length : 1;
+      final opActualLength = opIsNotEmpty ? opLength : actualLength;
+      return Operation(opKey, opActualLength, opData, opAttributes);
+    }
+    return Operation.retain(length);
+  }
+
+  /// Skips [length] characters in source delta.
+  ///
+  /// Returns last skipped operation, or `null` if there was nothing to skip.
+  Operation? skip(int length) {
+    var skipped = 0;
+    Operation? op;
+    while (skipped < length && hasNext) {
+      final opLength = peekLength();
+      final skip = math.min(length - skipped, opLength);
+      op = next(skip);
+      skipped += op.length!;
+    }
+    return op;
+  }
+}
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\dart_quill_delta\core\delta_iterator.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\dart_quill_delta\core\operation.dart ----
+import 'package:collection/collection.dart';
+import 'package:quiver/core.dart';
+
+/// Decoder function to convert raw `data` object into a user-defined data type.
+///
+/// Useful with embedded content.
+typedef DataDecoder = Object? Function(Object data);
+
+/// Default data decoder which simply passes through the original value.
+Object? _passThroughDataDecoder(Object? data) => data;
+
+const _attributeEquality = DeepCollectionEquality();
+const _valueEquality = DeepCollectionEquality();
+
+/// Operation performed on a rich-text document.
+class Operation {
+  Operation(this.key, this.length, this.data, Map? attributes)
+      : assert(_validKeys.contains(key), 'Invalid operation key "$key".'),
+        assert(() {
+          if (key != Operation.insertKey) return true;
+          return data is String ? data.length == length : length == 1;
+        }(), 'Length of insert operation must be equal to the data length.'),
+        _attributes =
+            attributes != null ? Map<String, dynamic>.from(attributes) : null;
+
+  /// Creates operation which deletes [length] of characters.
+  factory Operation.delete(int length) =>
+      Operation(Operation.deleteKey, length, '', null);
+
+  /// Creates operation which inserts [text] with optional [attributes].
+  factory Operation.insert(dynamic data, [Map<String, dynamic>? attributes]) =>
+      Operation(Operation.insertKey, data is String ? data.length : 1, data,
+          attributes);
+
+  /// Creates operation which retains [length] of characters and optionally
+  /// applies attributes.
+  factory Operation.retain(int? length, [Map<String, dynamic>? attributes]) =>
+      Operation(Operation.retainKey, length, '', attributes);
+
+  /// Key of insert operations.
+  static const String insertKey = 'insert';
+
+  /// Key of delete operations.
+  static const String deleteKey = 'delete';
+
+  /// Key of retain operations.
+  static const String retainKey = 'retain';
+
+  /// Key of attributes collection.
+  static const String attributesKey = 'attributes';
+
+  static const List<String> _validKeys = [insertKey, deleteKey, retainKey];
+
+  /// Key of this operation, can be "insert", "delete" or "retain".
+  final String key;
+
+  /// Length of this operation.
+  final int? length;
+
+  /// Payload of "insert" operation, for other types is set to empty string.
+  final Object? data;
+
+  /// Rich-text attributes set by this operation, can be `null`.
+  Map<String, dynamic>? get attributes =>
+      _attributes == null ? null : Map<String, dynamic>.from(_attributes!);
+  final Map<String, dynamic>? _attributes;
+
+  /// Creates new [Operation] from JSON payload.
+  ///
+  /// If `dataDecoder` parameter is not null then it is used to additionally
+  /// decode the operation's data object. Only applied to insert operations.
+  static Operation fromJson(Map data, {DataDecoder? dataDecoder}) {
+    dataDecoder ??= _passThroughDataDecoder;
+    final map = Map<String, dynamic>.from(data);
+    if (map.containsKey(Operation.insertKey)) {
+      final data = dataDecoder(map[Operation.insertKey]);
+      final dataLength = data is String ? data.length : 1;
+      return Operation(
+          Operation.insertKey, dataLength, data, map[Operation.attributesKey]);
+    } else if (map.containsKey(Operation.deleteKey)) {
+      final int? length = map[Operation.deleteKey];
+      return Operation(Operation.deleteKey, length, '', null);
+    } else if (map.containsKey(Operation.retainKey)) {
+      final int? length = map[Operation.retainKey];
+      return Operation(
+          Operation.retainKey, length, '', map[Operation.attributesKey]);
+    }
+    throw ArgumentError.value(data, 'Invalid data for Delta operation.');
+  }
+
+  /// Returns JSON-serializable representation of this operation.
+  Map<String, dynamic> toJson() {
+    final json = {key: value};
+    if (_attributes != null) json[Operation.attributesKey] = attributes;
+    return json;
+  }
+
+  /// Returns value of this operation.
+  ///
+  /// For insert operations this returns text, for delete and retain - length.
+  dynamic get value => (key == Operation.insertKey) ? data : length;
+
+  /// Returns `true` if this is a delete operation.
+  bool get isDelete => key == Operation.deleteKey;
+
+  /// Returns `true` if this is an insert operation.
+  bool get isInsert => key == Operation.insertKey;
+
+  /// Returns `true` if this is a retain operation.
+  bool get isRetain => key == Operation.retainKey;
+
+  /// Returns `true` if this operation has no attributes, e.g. is plain text.
+  bool get isPlain => (_attributes == null || _attributes!.isEmpty);
+
+  /// Returns `true` if this operation sets at least one attribute.
+  bool get isNotPlain => !isPlain;
+
+  /// Returns `true` is this operation is empty.
+  ///
+  /// An operation is considered empty if its [length] is equal to `0`.
+  bool get isEmpty => length == 0;
+
+  /// Returns `true` is this operation is not empty.
+  bool get isNotEmpty => length! > 0;
+
+  @override
+  bool operator ==(other) {
+    if (identical(this, other)) return true;
+    if (other is! Operation) return false;
+    final typedOther = other;
+    return key == typedOther.key &&
+        length == typedOther.length &&
+        _valueEquality.equals(data, typedOther.data) &&
+        hasSameAttributes(typedOther);
+  }
+
+  /// Returns `true` if this operation has attribute specified by [name].
+  bool hasAttribute(String name) =>
+      isNotPlain && _attributes!.containsKey(name);
+
+  /// Returns `true` if [other] operation has the same attributes as this one.
+  bool hasSameAttributes(Operation other) {
+    // treat null and empty equal
+    if ((_attributes?.isEmpty ?? true) &&
+        (other._attributes?.isEmpty ?? true)) {
+      return true;
+    }
+    return _attributeEquality.equals(_attributes, other._attributes);
+  }
+
+  @override
+  int get hashCode {
+    if (_attributes != null && _attributes!.isNotEmpty) {
+      final attrsHash =
+          hashObjects(_attributes!.entries.map((e) => hash2(e.key, e.value)));
+      return hash3(key, value, attrsHash);
+    }
+    return hash2(key, value);
+  }
+
+  @override
+  String toString() {
+    final attr = attributes == null ? '' : ' + $attributes';
+    final text = isInsert
+        ? (data is String
+            ? (data as String).replaceAll('\n', '⏎')
+            : data.toString())
+        : '$length';
+    return '$key⟨ $text ⟩$attr';
+  }
+}
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\dart_quill_delta\core\operation.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\dart_quill_delta\dart_quill_delta.dart ----
+library;
+
+export 'core/delta_iterator.dart';
+export 'core/delta.dart';
+export 'core/operation.dart';
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\dart_quill_delta\dart_quill_delta.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\blocks\document.dart ----
+import 'package:collection/collection.dart';
+
+import 'line.dart';
+import 'paragraph.dart';
+
+
+/// Represents a structured document consisting of paragraphs.
+class Document {
+  /// List of paragraphs contained within the document.
+  final List<Paragraph> paragraphs;
+
+  // Refer to https://www.fileformat.info/info/unicode/char/fffc/index.htm
+  static const String kObjectReplacementCharacter = '\uFFFC';
+  static const int kObjectReplacementInt = 65532;
+
+  Document({
+    required Iterable<Paragraph> paragraphs,
+  }) : paragraphs = <Paragraph>[] {
+    for (var pr in paragraphs) {
+      insert(pr);
+    }
+  }
+
+  /// Inserts a new [paragraph] into the document.
+  void insert(Paragraph paragraph) {
+    final Paragraph? lastParagraph = paragraphs.lastOrNull;
+    if (lastParagraph != null) {
+      if (lastParagraph.shouldBreakToNext) {
+        lastParagraph.unseal();
+        lastParagraph
+          ..removeLastLineIfNeeded()
+          ..seal();
+        updateLast(lastParagraph);
+      }
+
+      if (lastParagraph.isEmpty) {
+        lastParagraph.unseal();
+        lastParagraph.insertAll(paragraph.lines);
+        lastParagraph.setType(paragraph.type);
+        lastParagraph.blockAttributes = paragraph.blockAttributes;
+        if ((lastParagraph.isBlock ||
+                lastParagraph.isEmbed ||
+                lastParagraph.isNewLine) &&
+            !lastParagraph.isSealed) {
+          lastParagraph.seal(sealLines: true);
+        }
+        updateLast(lastParagraph);
+        return;
+      }
+    }
+
+    paragraphs.add(paragraph);
+  }
+
+  void updateParagraphSafe(Paragraph paragraph) {
+    if (exist(paragraph)) {
+      updateParagraph(paragraph);
+      return;
+    }
+    paragraphs.add(paragraph);
+  }
+
+  /// Returns the last [paragraph] into the document and validate before to avoid exceptions.
+  Paragraph getLastSafe() {
+    if (paragraphs.isEmpty) Paragraph.base();
+    return paragraphs.last;
+  }
+
+  /// Returns the last [paragraph] into the document.
+  Paragraph? getLast({Paragraph Function()? orElse}) {
+    return paragraphs.lastOrNull ?? orElse?.call();
+  }
+
+  /// Returns a [bool] value that indicates if the [Paragraph] exists into the [Document].
+  bool exist(Paragraph pr) {
+    if (paragraphs.isEmpty) return false;
+    return paragraphs.contains(pr) ||
+        paragraphs.firstWhereOrNull((e) => e.id == pr.id) != null;
+  }
+
+  /// Update a last [paragraph] into the document validating to make more safe the operation.
+  void updateLastSafe(Paragraph paragraph) {
+    if (paragraphs.isEmpty) {
+      paragraphs.add(paragraph);
+      return;
+    }
+    paragraphs[paragraphs.length - 1] = paragraph;
+  }
+
+  Paragraph? getParagraph(Paragraph paragraph) {
+    if (paragraphs.isEmpty) return null;
+    return paragraphs
+        .firstWhereOrNull((pr) => pr.id == paragraph.id || pr == paragraph);
+  }
+
+  Paragraph? getParagraphBefore(Paragraph paragraph) {
+    if (paragraphs.isEmpty) return null;
+    final int index =
+        paragraphs.indexWhere((pr) => pr.id == paragraph.id || pr == paragraph);
+    if (index <= 0) return null;
+    return paragraphs.elementAt(index - 1);
+  }
+
+  Paragraph? getParagraphAfter(Paragraph paragraph) {
+    if (paragraphs.isEmpty) return null;
+    final int index =
+        paragraphs.indexWhere((pr) => pr.id == paragraph.id || pr == paragraph);
+    if (index < 0 && (index + 1) >= paragraphs.length) return null;
+    return paragraphs.elementAt(index + 1);
+  }
+
+  /// Update a [paragraph] into the document validating to make more safe the operation.
+  void updateParagraph(Paragraph paragraph) {
+    int lastIndex = paragraphs.lastIndexOf(paragraph);
+    // make a second check to be sure that it does exist or not
+    if (lastIndex == -1 && paragraphs.isNotEmpty) {
+      lastIndex = paragraphs.indexWhere((pr) => pr.id == paragraph.id);
+    }
+    if (paragraphs.isEmpty || lastIndex == -1) {
+      throw StateError(
+          'Not found element of type ${paragraph.runtimeType} with id: ${paragraph.id}');
+    }
+    paragraphs[lastIndex] = paragraph;
+  }
+
+  /// Update a last [paragraph] into the document.
+  void updateLast(Paragraph paragraph) {
+    paragraphs[paragraphs.length - 1] = paragraph;
+  }
+
+  /// Clears all paragraphs from the document.
+  void clean() {
+    paragraphs.clear();
+  }
+
+  /// Ensures correct formatting of paragraphs in the document.
+  @Deprecated(
+      'ensureCorrectFormat is no longer used and will be removed in future releases')
+  Document ensureCorrectFormat() {
+    return this;
+  }
+
+  /// Returns a string representation of the document.
+  @override
+  String toString() {
+    return 'Paragraphs: ${paragraphs.map<String>((Paragraph paragraph) {
+          return paragraph.toString();
+        }).toList().toString()}';
+  }
+
+  /// Returns a version of the string that can be readed more easily.
+  String toPrettyString() {
+    final StringBuffer buffer = StringBuffer('  Paragraph:\n');
+    final String rawParagraph = paragraphs.map((Paragraph paragraph) {
+      for (final Line line in paragraph.lines) {
+        buffer.writeln('  ${line.toPrettyString(indent: '  ')}');
+      }
+      final String attrStr = paragraph.blockAttributes != null
+          ? 'Paragraph Attributes: ${paragraph.blockAttributes ?? <String, dynamic>{}}'
+          : "";
+      final String typeStr = 'Type: ${paragraph.type.name}';
+      if (attrStr.isNotEmpty) {
+        buffer.write('    $attrStr\n');
+      }
+      if (typeStr.isNotEmpty) {
+        buffer.write('    $typeStr\n');
+      }
+      final String str = '$buffer';
+      buffer
+        ..clear()
+        ..write('  Paragraph:\n');
+      return str;
+    }).join();
+    return 'Document:\n$rawParagraph';
+  }
+
+  @override
+  bool operator ==(covariant Document other) {
+    if (identical(this, other)) return true;
+    return ListEquality<Paragraph>().equals(paragraphs, other.paragraphs);
+  }
+
+  @override
+  int get hashCode => Object.hashAll(paragraphs);
+}
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\blocks\document.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\blocks\line.dart ----
+import 'package:collection/collection.dart';
+
+import 'package:meta/meta.dart';
+
+import '../../utils/nano_id_generator.dart';
+import 'text_fragment.dart';
+
+/// Represents a line of data with associated attributes.
+///
+/// This class encapsulates a data object and optional attributes associated
+/// with that data. It provides methods to manipulate and manage the data and
+/// attributes.
+///
+/// Example usage:
+/// ```dart
+/// // Creating a new Line instance
+/// Line line = Line(data: 'Example data', attributes: {'color': 'red'});
+///
+/// // Setting new data and merging attributes
+/// line.setData('Updated data');
+/// line.mergeAttributes({'size': '12px'});
+///
+/// print(line.toString()); // Output: Data: Updated data, attributes: {color: red, size: 12px}
+/// ```
+class Line {
+  final List<TextFragment> _fragments;
+  final String id;
+  bool _sealed;
+
+  Line({
+    required List<TextFragment> fragments,
+    String? id,
+  })  : _fragments = List.from(fragments),
+        id = id == null || id.trim().isEmpty ? nanoid(8) : id,
+        _sealed = fragments.isEmpty
+            ? false
+            : fragments.isNotEmpty && fragments.length == 1
+                ? fragments.first.data == '\n' ||
+                    fragments.first.data is Map<String, dynamic>
+                : false;
+
+  Line.fromData({
+    required Object data,
+    String? id,
+    Map<String, dynamic>? attributes,
+  })  : _fragments = List.from(
+          <dynamic>[
+            TextFragment(
+              data: data,
+              attributes: attributes,
+            )
+          ],
+        ),
+        id = id == null || id.trim().isEmpty ? nanoid(8) : id,
+        _sealed = data == '\n' || data is Map ? true : false;
+
+  Line.newLine({
+    String? id,
+    @visibleForTesting bool enableTesting = false,
+  })  : _fragments = List.from(
+          <dynamic>[
+            TextFragment(
+              data: '\n',
+            )
+          ],
+        ),
+        _sealed = true,
+        id = id == null || id.trim().isEmpty ? nanoid(8) : id;
+
+  /// Set a sealed state, where we can't do any type of modification to this Line instance
+  void seal() {
+    _sealed = true;
+  }
+
+  /// Removed the sealed state, to allow modification to this Line instance
+  void unseal() {
+    _sealed = false;
+  }
+
+  void removeFragment(TextFragment fragment) {
+    if (_sealed) {
+      throw StateError(
+          'Element of type ${fragment.runtimeType} cannot be removed when $runtimeType is sealed');
+    }
+    _fragments.remove(fragment);
+  }
+
+  void removeFragmentAt(int index) {
+    if (_sealed) {
+      throw StateError(
+          'Cannot make remove operation when $runtimeType is sealed');
+    }
+    _fragments.removeAt(index);
+  }
+
+  void removeFragmentWhere({required bool Function(TextFragment) where}) {
+    if (_sealed) {
+      throw StateError(
+          'Cannot make remove operation when $runtimeType is sealed');
+    }
+    _fragments.removeWhere(where);
+  }
+
+  void updateFragment(int index, TextFragment fragment) {
+    if (_sealed) {
+      throw StateError(
+          'Element of type ${fragment.runtimeType} cannot be updated when $runtimeType is sealed');
+    }
+    _fragments[index] = fragment;
+  }
+
+  void addFragment(TextFragment fragment) {
+    if (_sealed) {
+      throw StateError(
+          'Element of type ${fragment.runtimeType} cannot be inserted when $runtimeType is sealed');
+    }
+    if (fragment.data is String || fragment.data is Map) {
+      if (fragment.data is String) {
+        _mergeWithTail(fragment);
+        return;
+      }
+      _fragments.add(fragment);
+      return;
+    }
+  }
+
+  void insertAt(int index, TextFragment fragment) {
+    if (_sealed) {
+      throw StateError(
+          'Element of type ${fragment.runtimeType} cannot be inserted at $index when $runtimeType is sealed');
+    }
+    _fragments.insert(index, fragment);
+    return;
+  }
+
+  void insertBefore(int index, TextFragment fragment) {
+    if (_sealed) {
+      throw StateError(
+          'Element of type ${fragment.runtimeType} cannot be inserted before at $index when $runtimeType is sealed');
+    }
+    insertAt(index - 1, fragment);
+    return;
+  }
+
+  void _mergeWithTail(TextFragment fragment) {
+    final TextFragment? previous = _fragments.lastOrNull;
+    void add() {
+      _fragments.add(fragment);
+    }
+
+    if (previous == null ||
+        previous.data is! String ||
+        fragment.data is! String ||
+        previous.data == '\n' ||
+        fragment.data == '\n') {
+      add();
+      return;
+    }
+    final int lastIndex = _fragments.length - 1;
+    if (previous.canMergeWith(fragment)) {
+      final String previousData = previous.data as String;
+      final String newData = '$previousData${fragment.data}';
+      // does not require a reorganization of siblings
+      // since we're merging two fragments in just one
+      _fragments[lastIndex] = TextFragment(
+        data: newData,
+        attributes: previous.attributes,
+      );
+      return;
+    }
+    add();
+  }
+
+  /// Creates a copy of the current [Line] instance.
+  Line get clone => Line(fragments: <TextFragment>[..._fragments]);
+
+  /// Creates a deep copy of the current [Line] instance.
+  Line get deepClone {
+    return Line(
+      id: id,
+      fragments: _fragments
+          .map<TextFragment>(
+            (TextFragment e) => e.clone,
+          )
+          .toList(),
+    );
+  }
+
+  /// Get a secure copy of the fragments into this Line
+  List<TextFragment> get fragments =>
+      List<TextFragment>.unmodifiable(_fragments);
+
+  /// Get all direct instances of the fragments into this Line
+  ///
+  /// This is called `unsafeLines` because this ones can be modified
+  /// but, all the changes won't be notified to this Line (like reorganizing
+  /// siblings)
+  List<TextFragment> unsafeFragments() => _fragments;
+
+  @visibleForTesting
+  @Deprecated('rawFragments is no longer '
+      'used and will be removed '
+      'in future releases. '
+      'Please, use unsafeFragments instead')
+  List<TextFragment> get rawFragments => _fragments;
+
+  int get length => _fragments.length;
+
+  bool get isSingle => length == 1;
+
+  String get toPlainText => _fragments
+      .map<String>(
+        (TextFragment e) => e.data is! String ? '' : e.data.toString(),
+      )
+      .join();
+
+  int get textLength => _fragments
+      .map<int>(
+        (TextFragment e) => e.data is! String ? 1 : e.data.toString().length,
+      )
+      .fold(0, (int a, int b) => a + b);
+
+  bool get isNewLine => isSingle ? _fragments.single.data == '\n' : false;
+
+  bool get isSealed => _sealed;
+
+  bool get isEmbedFragment => _fragments.single.data is Map<String, dynamic>;
+
+  bool get isTextInsert => _fragments.isEmpty || _fragments.first.data != '\n';
+
+  TextFragment? get first => _fragments.firstOrNull;
+  TextFragment? get last => _fragments.lastOrNull;
+  bool get isEmpty => _fragments.isEmpty;
+  bool get isNotEmpty => !isEmpty;
+
+  @override
+  String toString() {
+    return 'Line: $_fragments, Sealed: $_sealed';
+  }
+
+  String toPrettyString({String indent = ' '}) {
+    final StringBuffer buffer = StringBuffer(indent);
+    final String rawFragments = _fragments.map((TextFragment fragment) {
+      buffer.writeln(
+          '${'$indent  '}${fragment.toString().replaceAll('\n', '¶')},');
+      final String str = '$buffer';
+      buffer
+        ..clear()
+        ..write(indent);
+      return str;
+    }).join();
+    final String sealedStr = _sealed ? ' <Sealed>' : "";
+    return '${indent}Line:$sealedStr [\n$rawFragments${'$indent  '}]';
+  }
+
+  TextFragment elementAt(int index) {
+    return _fragments[index];
+  }
+
+  TextFragment? elementAtOrNull(int index) {
+    return index < 0 || index >= length ? null : _fragments[index];
+  }
+
+  TextFragment operator [](int index) {
+    return _fragments[index];
+  }
+
+  void operator []=(int index, TextFragment fragment) {
+    _fragments[index] = fragment;
+  }
+
+  bool equals(covariant Line other, {bool full = false}) {
+    if (full) {
+      return id == other.id &&
+          _equality.equals(
+            _fragments,
+            other._fragments,
+          ) &&
+          fullHashCode == other.fullHashCode;
+    }
+
+    return this == other;
+  }
+
+  @override
+  bool operator ==(covariant Line other) {
+    if (identical(this, other)) return true;
+    return _equality.equals(
+      _fragments,
+      other._fragments,
+    );
+  }
+
+  @override
+  int get hashCode => Object.hashAll(<Object?>[
+        _fragments,
+      ]);
+
+  int get fullHashCode => Object.hashAll(<Object?>[
+        id,
+        _fragments,
+      ]);
+}
+
+const ListEquality<TextFragment> _equality = ListEquality();
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\blocks\line.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\blocks\paragraph.dart ----
+import 'package:collection/collection.dart';
+import '../../../dart_quill_delta/dart_quill_delta.dart' as fq;
+
+import 'package:meta/meta.dart';
+
+import '../../enums/enums.dart';
+import '../../extensions/helpers/map_helper.dart';
+import '../../utils/nano_id_generator.dart';
+import 'line.dart';
+import 'text_fragment.dart';
+
+/// Represents a paragraph consisting of lines of text or embedded content with optional attributes.
+///
+/// This class encapsulates the structure of a paragraph, which can contain multiple lines
+/// and may have associated block-level attributes and a specific paragraph type.
+///
+/// * [lines] property holds a list of [Line] objects representing individual lines within
+/// the paragraph.
+/// * [type] property specifies the type of paragraph, if any, such as normal text or an embedded content.
+/// * [blockAttributes] property is a map that can hold additional attributes specific to the paragraph block.
+///
+/// Example usage:
+/// ```dart
+/// Paragraph paragraph = Paragraph(
+///   lines: [
+///     Line(data: 'First line'),
+///     Line(data: 'Second line'),
+///   ],
+///   blockAttributes: {'indent': 2,'align': 'right'},
+///   type: ParagraphType.block,
+/// );
+///
+/// paragraph.insert(Line(data: 'Third line'));
+/// paragraph.setType(ParagraphType.block);
+///
+/// // if after the insert, you want to avoid another types of
+/// // changes in this paragraph use:
+/// paragraph.seal();
+/// if(paragraph.isSealed) {
+///  // do something
+/// }
+/// ```
+class Paragraph {
+  /// List of lines composing the paragraph.
+  final List<Line> _lines;
+
+  /// The type of the paragraph.
+  ///
+  /// This can be used to distinguish between different types of paragraphs, such as normal text or embedded content.
+  ParagraphType type;
+
+  /// Additional attributes specific to the paragraph block.
+  ///
+  /// This map can hold any additional metadata or styling information related to the paragraph.
+  Map<String, dynamic>? blockAttributes;
+
+  /// Indicates if the paragraph can insert new elements
+  bool _sealed;
+
+  final String id;
+
+  Paragraph({
+    required List<Line> lines,
+    required this.type,
+    this.blockAttributes,
+    String? id,
+  })  : _lines = List<Line>.from(lines),
+        id = id == null || id.trim().isEmpty ? nanoid(8) : id,
+        _sealed = type == ParagraphType.block || type == ParagraphType.embed
+            ? true
+            : lines.isNotEmpty && lines.length == 1 && lines.first.isNotEmpty
+                ? lines.first.length > 1
+                    ? false
+                    : lines.single.isNewLine || lines.single.isEmbedFragment
+                : false;
+
+  Paragraph.auto({
+    required List<Line> lines,
+    this.blockAttributes,
+    String? id,
+  })  : _lines = List<Line>.from(lines),
+        id = id == null || id.trim().isEmpty ? nanoid(8) : id,
+        type = lines.isEmpty
+            ? blockAttributes == null || blockAttributes.isEmpty
+                ? ParagraphType.inline
+                : ParagraphType.block
+            : lines.isNotEmpty
+                ? lines.first.isEmbedFragment
+                    ? ParagraphType.embed
+                    : lines.first.isNewLine
+                        ? ParagraphType.lineBreak
+                        : blockAttributes == null || blockAttributes.isEmpty
+                            ? ParagraphType.inline
+                            : ParagraphType.block
+                : blockAttributes == null || blockAttributes.isEmpty
+                    ? ParagraphType.inline
+                    : ParagraphType.block,
+        _sealed = false {
+    _sealed = type == ParagraphType.block || type == ParagraphType.embed
+        ? true
+        : lines.isNotEmpty && lines.length == 1 && lines.first.isNotEmpty
+            ? lines.first.length > 1
+                ? false
+                : lines.single.isNewLine || lines.single.isEmbedFragment
+            : false;
+  }
+
+  @visibleForTesting
+  Paragraph.sealed({
+    required List<Line> lines,
+    required this.type,
+    this.blockAttributes,
+    String? id,
+  })  : _lines = List<Line>.from(lines),
+        id = id == null || id.trim().isEmpty ? nanoid(8) : id,
+        _sealed = true;
+
+  @visibleForTesting
+  factory Paragraph.fragment(
+    TextFragment frag, {
+    String? id,
+    Map<String, dynamic>? blockAttributes,
+  }) {
+    return Paragraph.sealed(
+      id: id,
+      lines: <Line>[
+        Line(fragments: <TextFragment>[frag.clone])
+      ],
+      type: frag.data is! String
+          ? ParagraphType.embed
+          : frag.data == '\n'
+              ? ParagraphType.lineBreak
+              : blockAttributes != null
+                  ? ParagraphType.block
+                  : ParagraphType.inline,
+      blockAttributes:
+          blockAttributes?.isNotEmpty ?? false ? blockAttributes : null,
+    );
+  }
+
+  factory Paragraph.withLine({
+    String? id,
+    Iterable<TextFragment>? fragments,
+  }) {
+    return Paragraph(
+      id: id,
+      lines: <Line>[
+        Line(
+          fragments: [...?fragments],
+        ),
+      ],
+      type: ParagraphType.inline,
+    );
+  }
+
+  factory Paragraph.base({String? id}) {
+    return Paragraph(
+      id: id,
+      lines: <Line>[],
+      type: ParagraphType.inline,
+    );
+  }
+
+  factory Paragraph.newLine({
+    Map<String, dynamic>? blockAttributes,
+    String? id,
+  }) {
+    return Paragraph.sealed(
+      id: id,
+      lines: <Line>[
+        Line.newLine(),
+      ],
+      blockAttributes: blockAttributes,
+      type: ParagraphType.lineBreak,
+    );
+  }
+
+  /// Constructs a [Paragraph] instance from a Object embed.
+  /// [operation] is the Quill Delta operation representing the embed.
+  factory Paragraph.fromRawEmbed({
+    required Object data,
+    Map<String, dynamic>? attributes,
+    Map<String, dynamic>? blockAttributes,
+    String? id,
+  }) {
+    return Paragraph.sealed(
+      id: id,
+      lines: <Line>[
+        Line.fromData(data: data, attributes: attributes),
+      ],
+      blockAttributes: blockAttributes,
+      type: data is String
+          ? blockAttributes != null
+              ? ParagraphType.block
+              : ParagraphType.inline
+          : ParagraphType.embed,
+    );
+  }
+
+  /// Constructs a [Paragraph] instance from a Quill Delta embed operation.
+  ///
+  /// This factory method creates a paragraph with a single line from the provided embed operation.
+  ///
+  /// [operation] is the Quill Delta operation representing the embed.
+  factory Paragraph.fromEmbed(
+    fq.Operation operation, {
+    String? id,
+    Map<String, dynamic>? blockAttributes,
+  }) {
+    final bool isInlineOp = operation.data is String;
+    return Paragraph.sealed(
+      id: id,
+      lines: <Line>[
+        Line.fromData(
+          data: operation.data!,
+          attributes: operation.attributes,
+        ),
+      ],
+      blockAttributes: blockAttributes,
+      type: isInlineOp ? ParagraphType.inline : ParagraphType.embed,
+    );
+  }
+
+  /// Get all the Lines into this Paragraph
+  List<Line> get lines => List<Line>.unmodifiable(_lines);
+
+  /// Get all direct instances of the lines into this Paragraph
+  ///
+  /// This is called `unsafeLines` because this ones can be modified
+  /// but, all the changes won't be notified to this Paragraph
+  List<Line> unsafeLines() => [..._lines];
+
+  /// Get the last element of this Paragraph
+  Line? get last => _lines.lastOrNull;
+
+  /// Get the first element of this Paragraph
+  Line? get first => _lines.firstOrNull;
+
+  /// Get the length of lines
+  int get length => _lines.length;
+  bool get isEmpty => _lines.isEmpty;
+  bool get isNotEmpty => !isEmpty;
+
+  /// Determines if this Paragraph is a block type one
+  bool get isBlock => type == ParagraphType.block && blockAttributes != null;
+
+  /// Determines if this Paragraph is an embed type one
+  bool get isEmbed =>
+      type == ParagraphType.embed && lines.first.isEmbedFragment;
+
+  /// Determines if this Paragraph is a new line type one
+  bool get isNewLine => type == ParagraphType.lineBreak && length == 1
+      ? _lines.single.isNewLine
+      : false;
+
+  /// Determines if this Paragraph is just a paragraph empty with a new line
+  /// that has block attributes
+  bool get isNewLineWithBlockAttributes => isNewLine && blockAttributes != null;
+  @Deprecated('Use isTextInsert')
+  bool get isInsertText => type == ParagraphType.inline;
+
+  /// Determines if this Paragraph is just an inline type one
+  bool get isTextInsert => type == ParagraphType.inline;
+
+  /// Determines if this paragraph cannot be modified
+  bool get isSealed => _sealed;
+
+  /// Determines whether the last line is empty (just a newline) and whether the next
+  /// content should start in a new paragraph.
+  ///
+  /// This is typically used to decide whether to create a new paragraph containing
+  /// just a newline. For example:
+  ///
+  /// Given this Delta input:
+  /// ```json
+  /// [
+  ///   {"insert": "my_delta\n\n"}
+  /// ]
+  /// ```
+  ///
+  /// The parsed `Document` structure should be:
+  /// ```dart
+  /// Document:
+  ///   Paragraph:
+  ///     Line: [
+  ///       TextFragment: "my_delta"
+  ///     ]
+  ///     Type: inline
+  ///   Paragraph:
+  ///     Line: [
+  ///       TextFragment: "\n"
+  ///     ]
+  ///     Type: lineBreak
+  /// ```
+  ///
+  /// The first newline character serves as a separator between content, while the second
+  /// newline indicates an intentional line break. To maintain this distinction in the
+  /// object structure:
+  /// 1. The first newline is treated as content separation
+  /// 2. Subsequent newlines trigger the creation of a new paragraph
+  ///
+  /// This ensures proper semantic representation of intentional line breaks while
+  /// avoiding unnecessary paragraph divisions for content separators.
+  bool get shouldBreakToNext => isEmpty ? false : last!.isEmpty;
+  bool containsSameAttributes(Map<String, dynamic>? attrs) {
+    return mapEquality(blockAttributes, attrs);
+  }
+
+  void seal({bool sealLines = false}) {
+    _sealed = true;
+    if (sealLines) {
+      for (final Line line in _lines) {
+        if (!line.isSealed) line.seal();
+      }
+    }
+  }
+
+  void unseal({bool unsealLines = false}) {
+    _sealed = false;
+    if (unsealLines) {
+      for (final Line line in _lines) {
+        if (line.isSealed) line.unseal();
+      }
+    }
+  }
+
+  void insertEmptyLine() {
+    if (_sealed) {
+      throw StateError('Cannot be inserted when $runtimeType is sealed');
+    }
+    if (_lines.isNotEmpty) {
+      _lines.last.seal();
+    }
+    _lines.add(Line(fragments: []));
+  }
+
+  /// Inserts a new Line into the paragraph.
+  void insertAll(Iterable<Line> lines) {
+    if (_sealed) {
+      throw StateError(
+          'Elements cannot be inserted when $runtimeType(sealed=$_sealed)');
+    }
+    lines.forEach(insert);
+  }
+
+  /// Inserts a new Line into the paragraph.
+  void insert(Line line) {
+    if (_sealed) {
+      throw StateError(
+          'Element of type ${line.runtimeType} cannot be inserted when $runtimeType is sealed');
+    }
+    if (last != null && !last!.isSealed && last!.isEmpty && line.isNotEmpty) {
+      for (final TextFragment frag in line.fragments) {
+        _lines.last.addFragment(frag);
+      }
+      return;
+    }
+    _lines.add(line);
+  }
+
+  void updateLine(int index, Line line) {
+    if (_sealed) {
+      throw StateError(
+          'Element of type ${line.runtimeType} at $index cannot be updated when $runtimeType is sealed');
+    }
+    _lines[index] = line;
+  }
+
+  void insertTextFragment(TextFragment fragment) {
+    if (_sealed) {
+      throw StateError(
+          'Element of type ${fragment.runtimeType} cannot be inserted when $runtimeType is sealed');
+    }
+    final Line line = _lines[_lines.length - 1];
+    line.addFragment(fragment);
+  }
+
+  void removeLastLineIfNeeded() {
+    if (_sealed) {
+      throw StateError(
+          'Cannot be removed the Element at ${_lines.length - 1} when $runtimeType is sealed');
+    }
+    if (last != null) {
+      if (last!.isEmpty) {
+        _lines.removeLast();
+      }
+    }
+  }
+
+  /// Removes last line from the paragraph.
+  Line removeLastLine() {
+    if (_sealed) {
+      throw StateError(
+          'Cannot be removed the Element at ${_lines.length - 1} when $runtimeType is sealed');
+    }
+    return _lines.removeLast();
+  }
+
+  /// Removes a line from the paragraph at the specified index.
+  ///
+  /// [index] is the index of the line to be removed.
+  void removeLine(int index) {
+    if (_sealed) {
+      throw StateError(
+          'Cannot be removed the Element at $index when $runtimeType is sealed');
+    }
+    _lines.removeAt(index);
+  }
+
+  /// Sets the type of the paragraph.
+  ///
+  /// * [paragraphType] specifies the type of the paragraph to be set.
+  void setType(ParagraphType paragraphType) {
+    type = paragraphType;
+  }
+
+  /// Sets the type of the paragraph if it hasn't been set already.
+  ///
+  /// * [paragraphType] specifies the type of the paragraph to be set, if not already set.
+  @Deprecated(
+      'setTypeSafe is no longer used and will be removed in future releases.')
+  void setTypeSafe(ParagraphType? paragraphType) {}
+
+  /// Sets additional attributes for the paragraph block.
+  ///
+  /// [attrs] is a map containing the additional attributes to be set.
+  void setAttributes(Map<String, dynamic>? attrs) {
+    blockAttributes = attrs;
+  }
+
+  /// Clears all lines from the paragraph.
+  void clean() {
+    _lines.clear();
+  }
+
+  /// Creates a clone of the current paragraph.
+  Paragraph get clone {
+    return Paragraph(
+      id: id,
+      lines: [..._lines],
+      blockAttributes: blockAttributes == null ? null : {...blockAttributes!},
+      type: type,
+    );
+  }
+
+  /// Creates a clone of the current paragraph.
+  Paragraph get deepClone {
+    return Paragraph(
+      id: id,
+      lines: _lines.map<Line>((Line l) => l.deepClone).toList(),
+      blockAttributes: blockAttributes == null ? null : {...blockAttributes!},
+      type: type,
+    );
+  }
+
+  @override
+  String toString() {
+    return 'Paragraph: {'
+        'id: $id, '
+        'Lines: ${lines.map<String>((line) => line.toString()).toList().toString()} '
+        '${blockAttributes != null ? 'Paragraph Attributes: $blockAttributes' : ""} '
+        'Type: ${type.name}, '
+        'Sealed: $_sealed'
+        '}';
+  }
+
+  String toPrettyString({String indent = ' '}) {
+    final StringBuffer buffer = StringBuffer(indent);
+    final String rawFragments = _lines.map((Line line) {
+      buffer.writeln('${'$indent  '}${line.toString().replaceAll('\n', '¶')},');
+      final String str = '$buffer';
+      buffer
+        ..clear()
+        ..write(indent);
+      return str;
+    }).join();
+    return '${indent}Paragraph: [\n$rawFragments${'$indent  '}]';
+  }
+
+  @override
+  bool operator ==(covariant Paragraph other) {
+    if (identical(this, other)) return true;
+    return id == other.id &&
+        ListEquality().equals(lines, other.lines) &&
+        type == other.type &&
+        MapEquality().equals(
+          blockAttributes,
+          other.blockAttributes,
+        );
+  }
+
+  @override
+  int get hashCode => Object.hash(lines, blockAttributes, type, id);
+}
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\blocks\paragraph.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\blocks\text_fragment.dart ----
+import 'package:collection/collection.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/blocks/document.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/extensions/extensions.dart';
+
+
+import '../../utils/map_equals.dart';
+
+/// Represents a portion of the text into a [Line], separated by
+/// the attributes
+class TextFragment {
+  /// The main data object associated with the line.
+  Object data;
+
+  /// Optional attributes associated with the line data.
+  Map<String, dynamic>? attributes;
+
+  /// The current length of the fragment
+  int? _length;
+
+  TextFragment({
+    required this.data,
+    this.attributes,
+  });
+
+  TextFragment.empty()
+      : data = "",
+        attributes = null;
+
+  /// Determines if this contains a custom object
+  bool get isEmbedFragment => data is! String;
+
+  /// Determines if this contains plain text
+  bool get isText => data is String;
+
+  /// Determines if this `TextFragment` is fully empty
+  /// with no data into it
+  bool get isBlank => isText
+      ? data.cast<String>().trim().isEmpty
+      : data.cast<dynamic>().isEmpty;
+
+  /// Sets the attributes of the fragment to [attrs].
+  ///
+  /// If [attrs] is `null`, no changes are made to the current attributes.
+  void setAttributes(Map<String, dynamic>? attrs) {
+    if (attrs == null) return;
+    attributes = attrs;
+  }
+
+  /// Returns a Boolean indicating if we can merge the current fragment
+  /// with the other one
+  bool canMergeWith(TextFragment other) {
+    if (data.runtimeType != other.data.runtimeType) return false;
+    if (attributes != null && other.attributes == null) return false;
+    if (attributes == null && other.attributes != null) return false;
+    if (attributes == null && other.attributes == null) return true;
+    if (attributes!.isEmpty && other.attributes!.isNotEmpty) return false;
+    if (attributes!.isNotEmpty && other.attributes!.isEmpty) return false;
+    if (mapEquals(attributes, other.attributes)) {
+      return true;
+    }
+
+    return true;
+  }
+
+  /// Sets the data object of the fragment to [data].
+  ///
+  /// If [data] is not the same type of the last data registered,
+  /// no changes are made to the current [data] on this fragment.
+  void setData(Object data) {
+    if (data.runtimeType != this.data.runtimeType || data == this.data) return;
+    this.data = data;
+    _length = null;
+  }
+
+  /// Merges additional [attrs] into the current attributes.
+  ///
+  /// If [attributes] is `null`, creates a new map and adds [attrs] to it.
+  void mergeAttributes(Map<String, dynamic> attrs) {
+    attributes?.addAll(attrs);
+  }
+
+  /// Converts the operation to its plain text representation.
+  String toPlain({String Function(Object embedData)? embedBuilder}) {
+    return data is String
+        ? '$data'
+        : embedBuilder?.call(data) ?? Document.kObjectReplacementCharacter;
+  }
+
+  int get length => _length ??= isText ? data.cast<String>().length : 1;
+  set length(int? len) => _length = len;
+
+  String text({
+    String ifNot = Document.kObjectReplacementCharacter,
+    String Function(Object d)? ifNotBuilder,
+  }) =>
+      isText ? getTextValue() : ifNotBuilder?.call(data) ?? ifNot;
+
+  bool get hasAttributes => attributes != null && attributes!.isNotEmpty;
+  bool get hasNoAttributes => !hasAttributes;
+
+  bool hasSameAttributes(Map<String, dynamic>? attrs) =>
+      mapEquals<String, dynamic>(attributes, attrs);
+
+  /// Returns `true` if this [TextFragment] contains character at specified [offset]
+  bool containsOffset(int offset, {bool inclusive = true}) {
+    return inclusive
+        ? offset >= 0 && offset <= length
+        : offset >= 0 && offset < length;
+  }
+
+  /// Creates a deep copy of the current [TextFragment] instance.
+  TextFragment get clone => TextFragment(data: data, attributes: attributes);
+
+  /// Get the string contained by this fragment
+  ///
+  /// Return an empty string if the element is an embed fragment
+  String getTextValue() {
+    if (isEmbedFragment) return "";
+    return data.cast<String>();
+  }
+
+  /// Get the object contained by this fragment
+  T? getValue<T extends Object>() {
+    return data.castOrNull<T>();
+  }
+
+  /// Get the object map contained by this fragment
+  Map<String, dynamic> getEmbedValue() {
+    return getValue<Map<String, dynamic>>()!;
+  }
+
+  /// Clears the data and attributes of the line, setting them to `null`.
+  @Deprecated('cleanLine is no longer used and '
+      'will be removed in future releases. '
+      'Use cleanAttributes instead')
+  void cleanLine() {
+    data is String ? data = '' : data = <String, dynamic>{};
+    attributes = null;
+  }
+
+  /// Clears the data and attributes of the line, setting them to `null`.
+  void cleanAttributes() {
+    attributes = null;
+  }
+
+  @override
+  String toString() {
+    attributes ??= null;
+    return 'TextFragment: "${data is String ? '$data'.replaceAll('\n', '\\n') : data}'
+        '"${attributes == null ? '' : ', attributes: $attributes'}';
+  }
+
+  @override
+  bool operator ==(covariant TextFragment other) {
+    if (identical(this, other)) return true;
+    return (data is Map && other.data is Map
+            ? _equality.equals(
+                data as Map,
+                other.data as Map,
+              )
+            : data == other.data) &&
+        _equality.equals(
+          attributes,
+          other.attributes,
+        );
+  }
+
+  @override
+  int get hashCode => Object.hash(data, attributes);
+}
+
+// ignore: strict_raw_type
+const MapEquality _equality = MapEquality();
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\blocks\text_fragment.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\mergers\base\merger_builder.dart ----
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/blocks/paragraph.dart';
+
+import 'package:meta/meta.dart';
+
+/// Accumulator is a base class that give to us some methods that let us build
+@immutable
+abstract class MergerBuilder {
+  const MergerBuilder();
+
+  bool get enabled;
+
+  /// Decides if we will merge the current Pr ↓ with the nextParagraph
+  bool canMergeBothParagraphs(
+      {required Paragraph paragraph, required Paragraph nextParagraph});
+
+  Iterable<Paragraph> buildAccumulation(List<Paragraph> paragraphs);
+}
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\mergers\base\merger_builder.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\mergers\block_merger_builder.dart ----
+
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/blocks/line.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/blocks/paragraph.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/mergers/base/merger_builder.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/extensions/helpers/map_helper.dart';
+import 'package:meta/meta.dart';
+
+/// [BlockMergerBuilder] is focused in merge only paragraphs with the same block-attributes
+@immutable
+class BlockMergerBuilder extends MergerBuilder {
+  const BlockMergerBuilder();
+
+  @override
+  List<Paragraph> buildAccumulation(List<Paragraph> paragraphs) {
+    final List<Paragraph> result = <Paragraph>[];
+    final Set<int> indexsIgnore = <int>{};
+    for (int i = 0; i < paragraphs.length; i++) {
+      final Paragraph curParagraph = paragraphs.elementAt(i);
+      final Paragraph? nextParagraph = paragraphs.elementAtOrNull(i + 1);
+      if (indexsIgnore.contains(i)) {
+        if (nextParagraph != null) {
+          if (canMergeBothParagraphs(
+              paragraph: curParagraph, nextParagraph: nextParagraph)) {
+            final Paragraph lastParagraph = result.last;
+            final Paragraph paragraphResult = Paragraph(
+              lines: <Line>[
+                ...lastParagraph.lines,
+                ...nextParagraph.lines,
+              ],
+              blockAttributes: curParagraph.blockAttributes,
+              type: curParagraph.type,
+            );
+            result[result.length - 1] = paragraphResult;
+            indexsIgnore.add(i + 1);
+          }
+        }
+        continue;
+      }
+      // check if the current iteration is the last
+      if (nextParagraph == null) {
+        result.add(curParagraph);
+        break;
+      }
+      if (canMergeBothParagraphs(
+          paragraph: curParagraph, nextParagraph: nextParagraph)) {
+        final Paragraph paragraphResult = Paragraph(
+          lines: <Line>[
+            ...curParagraph.lines,
+            ...nextParagraph.lines,
+          ],
+          blockAttributes: curParagraph.blockAttributes,
+          type: curParagraph.type,
+        );
+        result.add(paragraphResult);
+        indexsIgnore.add(i + 1);
+        continue;
+      }
+      result.add(curParagraph);
+    }
+    indexsIgnore.clear();
+    return <Paragraph>[...result];
+  }
+
+  @override
+  bool get enabled => true;
+
+  @override
+  bool canMergeBothParagraphs({
+    required Paragraph paragraph,
+    required Paragraph nextParagraph,
+  }) {
+    return paragraph.isBlock &&
+        nextParagraph.isBlock &&
+        mapEquality(
+          paragraph.blockAttributes,
+          nextParagraph.blockAttributes,
+        );
+  }
+}
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\mergers\block_merger_builder.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\mergers\common_merger_builder.dart ----
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/blocks/line.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/blocks/paragraph.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/mergers/base/merger_builder.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/extensions/helpers/map_helper.dart';
+
+import 'package:meta/meta.dart';
+
+/// [CommonMergerBuilder] is focused in merge paragraphs with the same block-attributes or if them are inlines
+/// and accept also merge embeds if [mergeEmbeds] param is true
+@immutable
+class CommonMergerBuilder extends MergerBuilder {
+  const CommonMergerBuilder({this.mergeEmbeds = false});
+
+  final bool mergeEmbeds;
+
+  @override
+  List<Paragraph> buildAccumulation(List<Paragraph> paragraphs) {
+    final List<Paragraph> result = <Paragraph>[];
+    final Set<int> indexsIgnore = <int>{};
+    for (int i = 0; i < paragraphs.length; i++) {
+      final Paragraph curParagraph = paragraphs.elementAt(i);
+      final Paragraph? nextParagraph = paragraphs.elementAtOrNull(i + 1);
+      if (indexsIgnore.contains(i)) {
+        if (nextParagraph != null) {
+          if (canMergeBothParagraphs(
+              paragraph: curParagraph, nextParagraph: nextParagraph)) {
+            final Paragraph lastParagraph = result.last;
+            final Paragraph paragraphResult = Paragraph(
+              lines: <Line>[
+                ...lastParagraph.lines,
+                ...nextParagraph.lines,
+              ],
+              blockAttributes: curParagraph.blockAttributes,
+              type: curParagraph.type,
+            );
+            result[result.length - 1] = paragraphResult;
+            indexsIgnore.add(i + 1);
+          }
+        }
+        continue;
+      }
+      // check if the current iteration is the last
+      if (nextParagraph == null) {
+        result.add(curParagraph);
+        break;
+      }
+      if (canMergeBothParagraphs(
+          paragraph: curParagraph, nextParagraph: nextParagraph)) {
+        final Paragraph paragraphResult = Paragraph(
+          lines: <Line>[
+            ...curParagraph.lines,
+            ...nextParagraph.lines,
+          ],
+          blockAttributes: curParagraph.blockAttributes,
+          type: curParagraph.type,
+        );
+        result.add(paragraphResult);
+        indexsIgnore.add(i + 1);
+        continue;
+      }
+      result.add(curParagraph);
+    }
+    indexsIgnore.clear();
+    return <Paragraph>[...result];
+  }
+
+  @override
+  bool get enabled => true;
+
+  @override
+  bool canMergeBothParagraphs({
+    required Paragraph paragraph,
+    required Paragraph nextParagraph,
+  }) {
+    return paragraph.isTextInsert && nextParagraph.isTextInsert ||
+        (paragraph.isBlock) &&
+            nextParagraph.isBlock &&
+            mapEquality(
+              paragraph.blockAttributes,
+              nextParagraph.blockAttributes,
+            ) ||
+        mergeEmbeds &&
+            (paragraph.isBlock) &&
+            nextParagraph.isBlock &&
+            mapEquality(
+              paragraph.blockAttributes,
+              nextParagraph.blockAttributes,
+              true,
+            );
+  }
+}
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\mergers\common_merger_builder.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\mergers\no_merger_builder.dart ----
+
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/blocks/paragraph.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/mergers/base/merger_builder.dart';
+import 'package:meta/meta.dart';
+
+/// [NoMergeBuilder] does not accumulate nothing and return the paragraphs as are generated
+@immutable
+class NoMergeBuilder extends MergerBuilder {
+  const NoMergeBuilder();
+  @override
+  List<Paragraph> buildAccumulation(List<Paragraph> paragraphs) =>
+      <Paragraph>[...paragraphs];
+
+  @override
+  bool get enabled => false;
+
+  @override
+  bool canMergeBothParagraphs(
+          {required Paragraph paragraph, required Paragraph nextParagraph}) =>
+      false;
+}
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\mergers\no_merger_builder.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\parsers\document_parser.dart ----
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/blocks/document.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/blocks/line.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/blocks/paragraph.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/blocks/text_fragment.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/mergers/base/merger_builder.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/mergers/common_merger_builder.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/enums/enums.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/extensions/extensions.dart';
+import '../../../dart_quill_delta/dart_quill_delta.dart' as fq;
+
+
+/// A Easy-to-use converter that transform Quill Delta into a Document formatting.
+class DocumentParser {
+  DocumentParser({
+    this.mergerBuilder = const CommonMergerBuilder(),
+  });
+
+  /// This is the encharge to merge some paragraphs when they contains the same block attributes
+  /// or when contains same types.
+  ///
+  /// Default implementations:
+  ///
+  ///  1. [NoMergeBuilder]: don't do nothing
+  ///  2. [CommonMergerBuilder] (default merge behavior): check if the [Paragraph] can be merged. It's focused on merge general [Paragraph] (even if them are pure inline types)
+  ///  3. [BlockMergerBuilder]: check just if the [Paragraph]s with block-attributes can be merge into a same one.
+  ///
+  /// Example:
+  ///
+  /// ```dart
+  /// // to ignore merging behavior
+  /// final parser1 = DocumentParser(mergerBuilder: NoMergeBuilder())
+  /// // to merge [Paragraph]s if them can do it
+  /// final parser2 = DocumentParser(mergerBuilder: CommonMergerBuilder())
+  /// // to only merge blocks
+  /// final parser3 = DocumentParser(mergerBuilder: BlockMergerBuilder())
+  /// ```
+  final MergerBuilder mergerBuilder;
+  final Document _document = Document(
+    paragraphs: [],
+  );
+
+  /// Parses a Quill Delta into a structured document.
+  ///
+  /// * [returnNoSealedCopies] indicates if will need to return a deep copy of the elements to avoid return a [Paragraph]s that cannot add more elements
+  /// * [ignoreAllNewLines] indicates that all the new lines with no block-level target to apply will be ignored
+  ///
+  Document? parseDelta({
+    required fq.Delta delta,
+    bool returnNoSealedCopies = false,
+    bool ignoreAllNewLines = false,
+  }) {
+    if (delta.isEmpty) return null;
+    _document.clean();
+    final List<fq.Operation> denormalizedOperations =
+        delta.denormalize().operations;
+    // sometimes, we can find only new lines at the start of the Delta, then to avoid remove them, we
+    // will need to add a verification
+    bool startParagraphNewLineChecking = false;
+    final Iterator<fq.Operation> it = denormalizedOperations.iterator;
+    int index = 0;
+    while (it.moveNext()) {
+      final fq.Operation? previousOperation =
+          index == 0 ? null : denormalizedOperations.elementAtOrNull(index - 1);
+      final fq.Operation operation = it.current;
+      final fq.Operation? nextOp =
+          denormalizedOperations.elementAtOrNull(index + 1);
+      _checkOperation(index, operation);
+      if (nextOp != null) _checkOperation(index, nextOp);
+
+      if (ignoreAllNewLines &&
+          operation.data == '\n' &&
+          operation.attributes == null) {
+        continue;
+      }
+
+      if (!startParagraphNewLineChecking) {
+        startParagraphNewLineChecking = operation.data != '\n';
+      }
+
+      if (operation.data == '\n' &&
+          !startParagraphNewLineChecking &&
+          !ignoreAllNewLines) {
+        _document
+            .insert(Paragraph.newLine(blockAttributes: operation.attributes));
+        index++;
+        continue;
+      }
+
+      final bool isParagraphBreak =
+          previousOperation?.data != '\n' && operation.data == '\n';
+      final bool isBlankLine =
+          previousOperation?.data == '\n' && operation.data == '\n';
+
+      final bool hasNextOp = nextOp != null;
+      final bool isLastInsertion = isParagraphBreak && !hasNextOp;
+
+      // updates here
+      index++;
+
+      if (operation.data is! String) {
+        _applyEmbed(operation: operation);
+        continue;
+      }
+      if (operation.data == '\n') {
+        _applyNewLine(
+          operation: operation,
+          isBlankLine: isBlankLine,
+          ignoreAllNewLines: ignoreAllNewLines,
+          isParagraphBreak: isParagraphBreak,
+          isLastInsertion: isLastInsertion,
+        );
+        continue;
+      }
+      _applyText(operation, hasNextOp);
+    }
+    if (mergerBuilder.enabled) {
+      final List<Paragraph> paragraphs = <Paragraph>[..._document.paragraphs];
+      _document.clean();
+      _document.paragraphs.addAll(mergerBuilder.buildAccumulation(
+        paragraphs,
+      ));
+    }
+    if (returnNoSealedCopies) {
+      return Document(
+        paragraphs: _document.paragraphs
+            .map(
+              (pr) => pr.clone,
+            )
+            .toList(),
+      );
+    }
+    return _document;
+  }
+
+  void _applyEmbed({required fq.Operation operation}) {
+    _document.insert(Paragraph.fromEmbed(operation));
+  }
+
+  void _applyNewLine({
+    required fq.Operation operation,
+    required bool isBlankLine,
+    required bool ignoreAllNewLines,
+    required bool isParagraphBreak,
+    required bool isLastInsertion,
+  }) {
+    Paragraph? lastParagraph = _document.getLast();
+    if (lastParagraph == null) {
+      lastParagraph = Paragraph.withLine();
+      _document.insert(lastParagraph);
+    }
+    if (isBlankLine) {
+      if (lastParagraph.shouldBreakToNext) {
+        lastParagraph.removeLastLine();
+        lastParagraph.seal(sealLines: true);
+        _document.updateLast(lastParagraph);
+      }
+      if (!ignoreAllNewLines) {
+        _document
+            .insert(Paragraph.newLine(blockAttributes: operation.attributes));
+      }
+    } else if (isLastInsertion && operation.attributes == null) {
+      if (!ignoreAllNewLines) {
+        _document
+            .insert(Paragraph.newLine(blockAttributes: operation.attributes));
+      }
+    } else if (isParagraphBreak) {
+      if (lastParagraph.length > 1 &&
+          operation.attributes != null &&
+          !lastParagraph.shouldBreakToNext) {
+        lastParagraph.unseal();
+        final Line lastLine = lastParagraph.removeLastLine();
+        lastParagraph.seal(sealLines: true);
+        _document.updateLast(lastParagraph);
+        _document.insert(
+          Paragraph(
+            lines: [lastLine],
+            blockAttributes: operation.attributes,
+            type: ParagraphType.block,
+          ),
+        );
+        return;
+      }
+      if (operation.attributes != null) {
+        lastParagraph.blockAttributes = operation.attributes;
+        if (lastParagraph.isTextInsert) {
+          lastParagraph.setType(ParagraphType.block);
+        }
+        lastParagraph.seal(sealLines: true);
+        _document.updateParagraph(lastParagraph);
+        _startNewParagraph();
+        return;
+      }
+      if (!ignoreAllNewLines) {
+        if (lastParagraph.isEmbed || lastParagraph.isNewLine) {
+          _document.insert(
+            Paragraph.newLine(
+              blockAttributes: operation.attributes,
+            ),
+          );
+          return;
+        }
+        lastParagraph.insertEmptyLine();
+      }
+    }
+  }
+
+  /// Starts a new paragraph in the document.
+  void _startNewParagraph() => _document.insert(Paragraph.base());
+
+  /// Inserts text into the document.
+  void _applyText(fq.Operation operation, bool hasNextOp) {
+    Paragraph? paragraph = _document.getLast();
+    if (paragraph == null || paragraph.isSealed) {
+      paragraph = Paragraph.base();
+      _document.insert(paragraph);
+    }
+    if (paragraph.isEmpty ||
+        (paragraph.last!.isSealed && paragraph.last!.isNotEmpty)) {
+      paragraph.insert(Line(
+        fragments: [],
+      ));
+    }
+    paragraph.insertTextFragment(
+      TextFragment(
+        data: operation.data!,
+        attributes: operation.attributes,
+      ),
+    );
+    _document.updateParagraph(paragraph);
+  }
+
+  void _checkOperation(int index, fq.Operation operation) {
+    // a basic check to avoid process retain or delete operations
+    if (!operation.isInsert) {
+      throw StateError(
+        'Operation at $index '
+        'is "${operation.key}" type and parseDelta() only accepts: "insert" type',
+      );
+    }
+  }
+}
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\parsers\document_parser.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\parsers\easy_parser.dart ----
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/blocks/document.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/mergers/base/merger_builder.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/mergers/common_merger_builder.dart';
+import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/parsers/document_parser.dart';
+
+import '../../../dart_quill_delta/dart_quill_delta.dart' as fq;
+
+
+/// Represents a parser that converts the Quill Delta operations into a structured document format.
+@Deprecated('RichTextParser is not longer supported, and '
+    'it will be removed in future releases. '
+    'Use DocumentParser instead')
+class RichTextParser {
+  RichTextParser({
+    this.mergerBuilder = const CommonMergerBuilder(),
+  });
+
+  /// This is the encharge to merge some paragraphs when they contains the same block attributes
+  /// or when contains same types.
+  ///
+  /// Default implementations:
+  ///
+  ///  1. [NoMergeBuilder]: don't do nothing
+  ///  2. [CommonMergerBuilder] (default merge behavior): check if the [Paragraph] can be merged. It's focused on merge general [Paragraph] (even if them are pure inline types)
+  ///  3. [BlockMergerBuilder]: check just if the [Paragraph]s with block-attributes can be merge into a same one.
+  ///
+  /// Example:
+  ///
+  /// ```dart
+  /// // to ignore merging behavior
+  /// final parser1 = RichTextParser(mergerBuilder: NoMergeBuilder())
+  /// // to merge [Paragraph]s if them can do it
+  /// final parser2 = RichTextParser(mergerBuilder: CommonMergerBuilder())
+  /// // to only merge blocks
+  /// final parser3 = RichTextParser(mergerBuilder: BlockMergerBuilder())
+  /// ```
+  final MergerBuilder mergerBuilder;
+
+  /// Parses a Quill Delta into a structured document.
+  ///
+  /// * [returnNoSealedCopies] indicates if will need to return a deep copy of the elements to avoid return a [Paragraph]s that cannot add more elements
+  /// * [ignoreAllNewLines] indicates that all the new lines with no block-level target to apply will be ignored
+  ///
+  @Deprecated('RichTextParser.parseDelta is not longer supported, and '
+      'it will be removed in future releases. '
+      'Use DocumentParser.parseDelta instead')
+  Document? parseDelta(
+    fq.Delta delta, {
+    bool returnNoSealedCopies = false,
+    bool ignoreAllNewLines = false,
+  }) {
+    return DocumentParser(mergerBuilder: mergerBuilder).parseDelta(
+      delta: delta,
+      returnNoSealedCopies: returnNoSealedCopies,
+      ignoreAllNewLines: ignoreAllNewLines,
+    );
+  }
+}
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\core\parsers\easy_parser.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\enums\enums.dart ----
+/// Enumerates different types of paragraphs that can be represented.
+///
+/// This enum defines three types of paragraphs:
+/// - [inline]: Represents inline paragraphs typically used for short text or elements
+///   embedded within larger content.
+/// - [block]: Denotes block-level paragraphs, which are standalone elements
+///   separated from adjacent content by line breaks or other spacing.
+/// - [lineBreak]: Denotes block-level separation for the paragraphs
+/// - [embed]: Indicates embedded content paragraphs, such as multimedia or
+///   external content integrated within a document.
+enum ParagraphType {
+  /// Inline paragraph type for short text or elements within larger content.
+  inline,
+
+  /// Block-level paragraph type, representing standalone elements.
+  block,
+  lineBreak,
+
+  /// Embedded content paragraph type, integrating external or multimedia content.
+  embed,
+}
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\enums\enums.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\extensions\extensions.dart ----
+import 'package:collection/collection.dart';
+import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+
+import 'helpers/string_helper.dart';
+
+extension ObjectCast on Object {
+  /// Cast the object to the type specified
+  T cast<T>() => this as T;
+
+  /// Cast the object only if it is the type specified
+  /// if it's not, just return null
+  T? castOrNull<T>() => this is T ? cast<T>() : null;
+
+  /// Determines if the object is the type specified
+  bool isThis<T>() => this is T;
+}
+
+/// Extension on `Delta` to denormalize operations within a Quill Delta object.
+extension DeltaDenormilazer on Delta {
+  /// Denormalizes the operations within the Delta.
+  ///
+  /// Converts each operation in the Delta to a fully expanded form,
+  /// where operations that contain newlines are split into separate operations.
+  Delta denormalize() {
+    if (isEmpty) return this;
+
+    final List<Map<String, dynamic>> denormalizedOps =
+        map<List<Map<String, dynamic>>>(
+      (Operation op) => _denormalize(
+        op.toJson(),
+      ),
+    ).flattened.toList();
+    return Delta.fromOperations(
+        denormalizedOps.map<Operation>((e) => Operation.fromJson(e)).toList());
+  }
+
+  /// Denormalizes a single operation map by splitting newlines into separate operations.
+  ///
+  /// [op] is a Map representing a single operation within the Delta.
+  List<Map<String, dynamic>> _denormalize(Map<String, dynamic> op) {
+    const newLine = '\n';
+    final insertValue = op['insert'];
+    if (insertValue is Map ||
+        insertValue == newLine ||
+        !insertValue.toString().contains('\n')) {
+      return <Map<String, dynamic>>[op];
+    }
+
+    final List<String> newlinedArray =
+        tokenizeWithNewLines(insertValue.toString());
+
+    if (newlinedArray.length == 1) {
+      return <Map<String, dynamic>>[op];
+    }
+
+    // Copy op to retain its attributes, but replace the insert value with a newline.
+    final Map<String, dynamic> nlObj = <String, dynamic>{
+      ...op,
+      ...<String, String>{'insert': newLine}
+    };
+
+    return newlinedArray.map((String line) {
+      if (line == newLine) {
+        return nlObj;
+      }
+      return <String, dynamic>{
+        ...op,
+        ...<String, String>{'insert': line},
+      };
+    }).toList();
+  }
+}
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\extensions\extensions.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\extensions\helpers\map_helper.dart ----
+/// Checks equality between two maps [map1] and [map2].
+///
+/// Returns `true` if both maps are structurally equal, meaning they have the same
+/// keys and corresponding values. Returns `false` otherwise.
+///
+/// If either [map1] or [map2] is `null`, the function returns `false`.
+///
+/// Equality is determined recursively for nested maps and directly for non-map values.
+///
+/// Example usage:
+/// ```dart
+/// Map<String, dynamic> map1 = {
+///   'name': 'John',
+///   'age': 30,
+///   'address': {
+///     'city': 'New York',
+///     'zip': 10001,
+///   },
+/// };
+///
+/// Map<String, dynamic> map2 = {
+///   'name': 'John',
+///   'age': 30,
+///   'address': {
+///     'city': 'New York',
+///     'zip': 10001,
+///   },
+/// };
+///
+/// bool result = mapEquality(map1, map2); // true
+/// ```
+bool mapEquality(Map<String, dynamic>? map1, Map<String, dynamic>? map2,
+    [bool allowNullables = false]) {
+  if (allowNullables && map1 == null && map2 == null) return true;
+  if (map1 == null || map2 == null) return false;
+
+  // Check if both maps have the same keys
+  if (map1.keys.toSet().difference(map2.keys.toSet()).isNotEmpty ||
+      map2.keys.toSet().difference(map1.keys.toSet()).isNotEmpty) {
+    return false;
+  }
+
+  // Check if all key-value pairs are equal
+  for (var key in map1.keys) {
+    var value1 = map1[key];
+    var value2 = map2[key];
+
+    if (value1 is Map<String, dynamic> && value2 is Map<String, dynamic>) {
+      // Recursively check nested maps
+      if (!mapEquality(value1, value2)) {
+        return false;
+      }
+    } else if (value1 != value2) {
+      // Compare values directly
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\extensions\helpers\map_helper.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\extensions\helpers\string_helper.dart ----
+import 'package:collection/collection.dart';
+
+/// Splits a string [str] by new line characters ("\n"), preserving empty lines
+/// as separate tokens in the resulting array.
+///
+/// Example:
+/// ```dart
+/// String input = "hello\n\nworld\n ";
+/// List<String> tokens = tokenizeWithNewLines(input);
+/// print(tokens); // Output: ["hello", "\n", "\n", "world", "\n", " "]
+/// ```
+///
+/// Returns a list of strings where each element represents either a line of text
+/// or a new line character.
+List<String> tokenizeWithNewLines(String str) {
+  const String newLine = '\n';
+
+  if (str == newLine) {
+    return <String>[str];
+  }
+
+  List<String> lines = str.split(newLine);
+
+  if (lines.length == 1) {
+    return lines;
+  }
+
+  int lastIndex = lines.length - 1;
+
+  return lines.foldIndexed(<String>[], (int ind, List<String> pv, String line) {
+    if (ind != lastIndex) {
+      if (line != '') {
+        pv.add(line);
+        pv.add(newLine);
+      } else {
+        pv.add(newLine);
+      }
+    } else if (line != '') {
+      pv.add(line);
+    }
+    return pv;
+  });
+}
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\extensions\helpers\string_helper.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\flutter_quill_delta_easy_parser.dart ----
+library;
+
+export 'core/blocks/document.dart';
+export 'core/blocks/line.dart';
+export 'core/blocks/paragraph.dart';
+export 'core/blocks/text_fragment.dart';
+export 'core/parsers/document_parser.dart';
+export 'core/parsers/easy_parser.dart';
+export 'core/mergers/base/merger_builder.dart';
+export 'core/mergers/block_merger_builder.dart';
+export 'core/mergers/common_merger_builder.dart';
+export 'core/mergers/no_merger_builder.dart';
+export 'enums/enums.dart';
+export 'utils/nano_id_generator.dart';
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\flutter_quill_delta_easy_parser.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\utils\map_equals.dart ----
+/// Compares two maps for element-by-element equality.
+///
+/// Returns true if the maps are both null, or if they are both non-null, have
+/// the same length, and contain the same keys associated with the same values.
+/// Returns false otherwise.
+///
+/// If the elements are maps, lists, sets, or other collections/composite
+/// objects, then the contents of those elements are not compared element by
+/// element unless their equality operators ([Object.==]) do so. For checking
+/// deep equality, consider using the [DeepCollectionEquality] class.
+///
+/// See also:
+///
+///  * [setEquals], which does something similar for sets.
+///  * [listEquals], which does something similar for lists.
+bool mapEquals<T, U>(Map<T, U>? a, Map<T, U>? b) {
+  if (a == null) {
+    return b == null;
+  }
+  if (b == null || a.length != b.length) {
+    return false;
+  }
+  if (identical(a, b)) {
+    return true;
+  }
+  for (final T key in a.keys) {
+    if (!b.containsKey(key) || b[key] != a[key]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\utils\map_equals.dart ----
+
+// ---- Start: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\utils\nano_id_generator.dart ----
+import 'dart:math';
+
+const String _hexDigits = '0123456789ABCDEF';
+
+String nanoid(int length) {
+  if (length <= 0 || length > 35) {
+    throw Exception(
+        "The length provided: $length, cannot be used to generate an id");
+  }
+  final Random random = Random.secure();
+  final StringBuffer buffer = StringBuffer();
+
+  for (int i = 0; i < length; i++) {
+    buffer.write(_hexDigits[random.nextInt(_hexDigits.length)]);
+  }
+
+  return buffer.toString();
+}
+
+// ---- End: C:\MyDartProjects\dart_quill\lib\src\dependencies\quill_delta_easy_parser\utils\nano_id_generator.dart ----
+
