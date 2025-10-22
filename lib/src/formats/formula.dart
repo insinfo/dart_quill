@@ -1,77 +1,68 @@
+import 'dart:js' as js;
+
+import '../blots/abstract/blot.dart';
 import '../blots/embed.dart';
-import 'dart:html';
+import '../platform/dom.dart';
+import '../platform/platform.dart';
 
 class Formula extends Embed {
-  Formula(HtmlElement domNode) : super(null as dynamic, domNode); // ScrollBlot needs to be passed
+  Formula(DomElement node) : super(node);
 
-  static const String blotName = 'formula';
-  static const String className = 'ql-formula';
-  static const String tagName = 'SPAN';
+  static const String kBlotName = 'formula';
+  static const String kClassName = 'ql-formula';
+  static const String kTagName = 'SPAN';
+  static const int kScope = Scope.INLINE_BLOT;
 
-  static HtmlElement create(String value) {
-    // @ts-expect-error
-    // if (window.katex == null) {
-    //   throw new Error('Formula module requires KaTeX.');
-    // }
-    final node = HtmlElement.span(); // super.create(value) as Element;
-    if (value is String) {
-      // @ts-expect-error
-      // window.katex.render(value, node, {
-      //   throwOnError: false,
-      //   errorColor: '#f00',
-      // });
-      node.setAttribute('data-value', value);
+  static DomElement create(String value) {
+    // Verificar se KaTeX está disponível
+    if (!js.context.hasProperty('katex')) {
+      throw Exception('Formula module requires KaTeX.');
     }
+    
+    final node = domBindings.adapter.document.createElement(kTagName);
+    node.classes.add(kClassName);
+    
+    // Renderizar fórmula usando KaTeX
+    js.context['katex'].callMethod('render', [
+      value,
+      node,
+      js.JsObject.jsify({
+        'throwOnError': false,
+        'errorColor': '#f00',
+      })
+    ]);
+    node.setAttribute('data-value', value);
+    
     return node;
   }
 
-  static String? value(HtmlElement domNode) {
-    return domNode.getAttribute('data-value');
+  static String? getValue(DomElement node) {
+    return node.getAttribute('data-value');
   }
 
   String html() {
-    // Placeholder for value() returning a map with 'formula' key
-    // final formula = value()['formula'];
-    final formula = value(); // Assuming value() returns the formula string directly
-    return '<span>$formula</span>';
+    final formula = getValue(element);
+    return '<span>\$\$${formula ?? ''}\$\$</span>';
   }
 
   @override
-  Blot clone() => Formula(domNode.clone(true) as HtmlElement);
+  String get blotName => kBlotName;
 
   @override
-  void attach() {}
+  int get scope => kScope;
 
   @override
-  void detach() {}
+  Formula clone() => Formula(element.cloneNode(deep: true));
 
   @override
-  Map<String, dynamic> formats() => {};
+  void optimize([
+    List<DomMutationRecord>? mutations,
+    Map<String, dynamic>? context,
+  ]) {}
 
   @override
-  void format(String name, value) {}
+  Map<String, dynamic> formats() => {kBlotName: getValue(element)};
 
   @override
-  void formatAt(int index, int length, String name, value) {}
-
-  @override
-  void insertAt(int index, String value, [def]) {}
-
-  @override
-  void deleteAt(int index, int length) {}
-
-  @override
-  dynamic value() => null;
-
-  @override
-  void optimize([context]) {}
-
-  @override
-  void update([source]) {}
-
-  @override
-  List<dynamic> path(int index, [bool inclusive = false]) => [];
-
-  @override
-  int offset(Blot? root) => 0;
+  dynamic value() => getValue(element);
 }

@@ -1,20 +1,27 @@
+import '../blots/abstract/blot.dart';
+import '../platform/dom.dart';
 import 'abstract/attributor.dart';
-import 'dart:html';
 
-final Map<String, dynamic> config = {
+final Map<String, dynamic> fontConfig = {
   'scope': Scope.INLINE,
-  'whitelist': ['serif', 'monospace'],
+  'whitelist': ['serif', 'monospace']
 };
 
 class FontClass extends ClassAttributor {
-  FontClass() : super('font', 'ql-font', config);
+  static final FontClass instance = FontClass._();
+  
+  FontClass._() : super('font', 'ql-font', fontConfig);
 }
 
 class FontStyleAttributor extends StyleAttributor {
-  FontStyleAttributor() : super('font', 'font-family', config);
+  static final FontStyleAttributor instance = FontStyleAttributor._();
+  
+  FontStyleAttributor._() : super('font', 'font-family', fontConfig);
 
   @override
-  dynamic value(HtmlElement node) {
-    return super.value(node).replaceAll(RegExp(r'["']'), '');
+  String? value(DomElement node) {
+    final raw = super.value(node) as String?;
+    if (raw == null) return null;
+    return raw.replaceAll('"', '').replaceAll("'", '');
   }
 }

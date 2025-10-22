@@ -1,46 +1,82 @@
+import 'package:collection/collection.dart';
+
+import '../blots/abstract/blot.dart';
 import '../blots/inline.dart';
-import 'dart:html';
+import '../platform/dom.dart';
+import '../platform/platform.dart';
 
-class Link extends Inline {
-  Link(HtmlElement domNode) : super(domNode);
+class Link extends InlineBlot {
+  Link(DomElement domNode) : super(domNode);
 
-  static const String blotName = 'link';
-  static const String tagName = 'A';
-  static const String SANITIZED_URL = 'about:blank';
-  static const List<String> PROTOCOL_WHITELIST = ['http', 'https', 'mailto', 'tel', 'sms'];
+  static const String kBlotName = 'link';
+  static const String kTagName = 'A';
+  static const String kSanitizedUrl = 'about:blank';
+  static const int kScope = Scope.INLINE_BLOT;
+  static const List<String> kProtocolWhitelist = [
+    'http',
+    'https',
+    'mailto',
+    'tel',
+    'sms',
+  ];
 
-  static HtmlElement create(String value) {
-    final node = HtmlElement.anchor(); // super.create(value) as HTMLElement;
-    node.setAttribute('href', Link.sanitize(value));
+  static Link create(String value) {
+    final node = domBindings.adapter.document.createElement(kTagName);
+    node.setAttribute('href', sanitize(value));
     node.setAttribute('rel', 'noopener noreferrer');
     node.setAttribute('target', '_blank');
-    return node;
-  }
-
-  static String? formats(HtmlElement domNode) {
-    return domNode.getAttribute('href');
+    return Link(node);
   }
 
   static String sanitize(String url) {
-    return _sanitizeUrl(url, PROTOCOL_WHITELIST) ? url : SANITIZED_URL;
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      return kSanitizedUrl;
+    }
+    final scheme = uri.scheme.isEmpty ? null : uri.scheme.toLowerCase();
+    if (scheme == null) {
+      return url;
+    }
+    final isAllowed =
+        kProtocolWhitelist.firstWhereOrNull((allowed) => allowed == scheme) != null;
+    return isAllowed ? url : kSanitizedUrl;
   }
+
+  static String? getFormat(DomElement node) => node.getAttribute('href');
+
+  @override
+  String get blotName => kBlotName;
+
+  @override
+  int get scope => kScope;
+
+  @override
+  Map<String, dynamic> formats() => {kBlotName: element.getAttribute('href')};
 
   @override
   void format(String name, dynamic value) {
-    if (name != Link.blotName || value == null) {
-      super.format(name, value);
-    } else {
-      domNode.setAttribute('href', Link.sanitize(value.toString()));
+    if (name == kBlotName) {
+      if (value == null) {
+        unwrap();
+      } else {
+        element.setAttribute('href', sanitize(value.toString()));
+      }
+      return;
     }
+    super.format(name, value);
   }
 
   @override
-  Blot clone() => Link(domNode.clone(true) as HtmlElement);
-}
+  Link clone() => Link(element.cloneNode(deep: true));
 
-bool _sanitizeUrl(String url, List<String> protocols) {
-  final anchor = HtmlElement.anchor();
-  anchor.href = url;
-  final protocol = anchor.href.substring(0, anchor.href.indexOf(':'));
-  return protocols.contains(protocol);
+  @override
+  void optimize([
+    List<DomMutationRecord>? mutations,
+    Map<String, dynamic>? context,
+  ]) {
+    super.optimize(mutations, context);
+    if (element.getAttribute('href') == kSanitizedUrl) {
+      unwrap();
+    }
+  }
 }

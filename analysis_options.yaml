@@ -23,7 +23,9 @@ analyzer:
     #todo: ignore
     # Allow importing .template.dart files without an [explicit] analyzer error.
     directives_ordering: ignore
+    prefer_single_quotes: ignore
     uri_has_not_been_generated: ignore
+    use_super_parameters: ignore
 
     # Security exclusions: We are security reviewed separate from these lints.
     # =====================

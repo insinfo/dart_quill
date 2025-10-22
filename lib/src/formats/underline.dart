@@ -1,12 +1,38 @@
+import '../blots/abstract/blot.dart';
 import '../blots/inline.dart';
-import 'dart:html';
+import '../platform/dom.dart';
+import '../platform/platform.dart';
 
-class Underline extends Inline {
-  Underline(HtmlElement domNode) : super(domNode);
+class Underline extends InlineBlot {
+  Underline(DomElement domNode) : super(domNode);
 
-  static const String blotName = 'underline';
-  static const String tagName = 'U';
+  static const String kBlotName = 'underline';
+  static const String kTagName = 'U';
+  static const int kScope = Scope.INLINE_BLOT;
+
+  static Underline create([dynamic value]) {
+    final node = (domBindings.adapter.document).createElement(kTagName);
+    return Underline(node);
+  }
 
   @override
-  Blot clone() => Underline(domNode.clone(true) as HtmlElement);
+  String get blotName => kBlotName;
+
+  @override
+  int get scope => kScope;
+
+  @override
+  Map<String, dynamic> formats() => {kBlotName: true};
+
+  @override
+  void format(String name, dynamic value) {
+    if (name == kBlotName && value == false) {
+      unwrap();
+      return;
+    }
+    super.format(name, value);
+  }
+
+  @override
+  Underline clone() => Underline(element.cloneNode(deep: true));
 }

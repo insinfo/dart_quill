@@ -1,29 +1,42 @@
+import '../blots/abstract/blot.dart';
 import '../blots/inline.dart';
-import 'dart:html';
+import '../platform/dom.dart';
+import '../platform/platform.dart';
 
-class Script extends Inline {
-  Script(HtmlElement domNode) : super(domNode);
+class Script extends InlineBlot {
+  Script(DomElement domNode) : super(domNode);
 
-  static const String blotName = 'script';
-  static const List<String> tagName = ['SUB', 'SUP'];
+  static const String kBlotName = 'script';
+  static const int kScope = Scope.INLINE_BLOT;
+  static const List<String> kTagNames = ['SUB', 'SUP'];
 
-  static HtmlElement create(String value) {
-    if (value == 'super') {
-      return HtmlElement.tag('sup');
-    }
-    if (value == 'sub') {
-      return HtmlElement.tag('sub');
-    }
-    // super.create(value) is not directly translatable as Inline does not have a static create method
-    return HtmlElement.span(); // Placeholder
+  static Script create([dynamic value]) {
+    final document = domBindings.adapter.document;
+    final tag = value == 'super'
+        ? 'SUP'
+        : value == 'sub'
+            ? 'SUB'
+            : 'SPAN';
+    final node = document.createElement(tag);
+    return Script(node);
   }
 
-  static String? formats(HtmlElement domNode) {
-    if (domNode.tagName == 'SUB') return 'sub';
-    if (domNode.tagName == 'SUP') return 'super';
+  static String? getFormat(DomElement node) {
+    final tag = node.tagName.toUpperCase();
+    if (tag == 'SUB') return 'sub';
+    if (tag == 'SUP') return 'super';
     return null;
   }
 
   @override
-  Blot clone() => Script(domNode.clone(true) as HtmlElement);
+  String get blotName => kBlotName;
+
+  @override
+  int get scope => kScope;
+
+  @override
+  Map<String, dynamic> formats() => {kBlotName: getFormat(element)};
+
+  @override
+  Script clone() => Script(element.cloneNode(deep: true));
 }

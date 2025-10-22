@@ -1,30 +1,50 @@
+import '../blots/abstract/blot.dart';
 import '../blots/inline.dart';
-import 'dart:html';
+import '../platform/dom.dart';
+import '../platform/platform.dart';
 
-class Bold extends Inline {
-  Bold(HtmlElement domNode) : super(domNode);
+class Bold extends InlineBlot {
+  Bold(DomElement domNode) : super(domNode);
 
-  static const String blotName = 'bold';
-  static const List<String> tagName = ['STRONG', 'B'];
+  static const String kBlotName = 'bold';
+  static const int kScope = Scope.INLINE_BLOT;
+  static const List<String> kTagNames = ['STRONG', 'B'];
 
-  static Bold create() {
-    return Bold(HtmlElement.tag(tagName[0]));
-  }
-
-  static bool formats() {
-    return true;
+  static Bold create([dynamic value]) {
+    final node = domBindings.adapter.document.createElement(kTagNames.first);
+    return Bold(node);
   }
 
   @override
-  void optimize([dynamic context]) {
-    super.optimize(context);
-    // Placeholder for statics.tagName
-    if (domNode.tagName != tagName[0]) {
-      // Placeholder for replaceWith
-      // replaceWith(statics.blotName);
+  String get blotName => kBlotName;
+
+  @override
+  int get scope => kScope;
+
+  @override
+  Map<String, dynamic> formats() => {kBlotName: true};
+
+  @override
+  void optimize([
+    List<DomMutationRecord>? mutations,
+    Map<String, dynamic>? context,
+  ]) {
+    super.optimize(mutations, context);
+    if (element.tagName != kTagNames.first) {
+      unwrap();
+      parent?.insertBefore(Bold.create(), next);
     }
   }
 
   @override
-  Blot clone() => Bold(domNode.clone(true) as HtmlElement);
+  void format(String name, dynamic value) {
+    if (name == kBlotName && value == false) {
+      unwrap();
+      return;
+    }
+    super.format(name, value);
+  }
+
+  @override
+  Bold clone() => Bold(element.cloneNode(deep: true));
 }

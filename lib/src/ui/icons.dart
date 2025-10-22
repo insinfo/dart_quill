@@ -1,0 +1,1 @@
+final icons = <String, dynamic>{};

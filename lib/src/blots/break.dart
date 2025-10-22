@@ -1,57 +1,41 @@
-import 'dart:html';
+import '../platform/dom.dart';
+import '../platform/platform.dart';
 import 'abstract/blot.dart';
 
 class Break extends EmbedBlot {
-  Break(HtmlElement domNode) : super(domNode);
+  Break(DomElement domNode) : super(domNode);
 
-  static dynamic value_() {
-    return null; // Em Dart, 'undefined' pode ser representado por 'null'
+  static const String kBlotName = 'break';
+  static const String tagName = 'BR';
+  static const int kScope = Scope.BLOCK_BLOT;
+
+  static Break create() {
+    final node = domBindings.adapter.document.createElement(tagName);
+    return Break(node);
   }
 
   @override
-  void optimize([dynamic context]) {
+  String get blotName => kBlotName;
+
+  @override
+  int get scope => kScope;
+
+  @override
+  int length() => 0;
+
+  @override
+  dynamic value() => '';
+
+  @override
+  Break clone() => Break((domNode as DomElement).cloneNode(deep: false));
+
+  @override
+  void optimize([
+    List<DomMutationRecord>? mutations,
+    Map<String, dynamic>? context,
+  ]) {
     if (prev != null || next != null) {
       remove();
     }
   }
-
-  @override
-  int length() {
-    return 0;
-  }
-
-  @override
-  dynamic value() {
-    return '';
-  }
-  
-  static const String blotName = 'break';
-  static const String tagName = 'BR';
-
-  @override
-  Blot clone() => Break(domNode.clone(true) as HtmlElement);
-
-  @override
-  void attach() {}
-
-  @override
-  void detach() {}
-
-  @override
-  void format(String name, value) {}
-
-  @override
-  void formatAt(int index, int length, String name, value) {}
-
-  @override
-  void insertAt(int index, String value, [def]) {}
-
-  @override
-  void deleteAt(int index, int length) {}
-
-  @override
-  List<dynamic> path(int index, [bool inclusive = false]) => [];
-
-  @override
-  int offset(Blot? root) => 0;
 }

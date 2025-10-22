@@ -1,26 +1,34 @@
-import '../blots/block.dart';
+import '../blots/abstract/blot.dart';
+import '../blots/embed.dart';
+import '../platform/dom.dart';
+import '../platform/platform.dart';
 import 'link.dart';
-import 'dart:html';
 
-const List<String> ATTRIBUTES = ['height', 'width'];
+const List<String> kAttributes = ['height', 'width'];
 
-class Video extends BlockEmbed {
-  Video(HtmlElement domNode) : super(domNode);
+class Video extends Embed {
+  Video(DomElement domNode) : super(domNode);
 
-  static const String blotName = 'video';
-  static const String className = 'ql-video';
-  static const String tagName = 'IFRAME';
+  static const String kBlotName = 'video';
+  static const String kClassName = 'ql-video';
+  static const String kTagName = 'IFRAME';
 
-  static HtmlElement create(String value) {
-    final node = HtmlElement.iframe(); // super.create(value) as Element;
+  @override
+  String get blotName => kBlotName;
+
+  @override
+  int get scope => Scope.BLOCK_BLOT;
+
+  static Video create(String value) {
+    final node = domBindings.adapter.document.createElement(kTagName);
     node.setAttribute('frameborder', '0');
     node.setAttribute('allowfullscreen', 'true');
     node.setAttribute('src', Video.sanitize(value));
-    return node;
+    return Video(node);
   }
 
-  static Map<String, String?> formats(HtmlElement domNode) {
-    return ATTRIBUTES.fold<Map<String, String?>>({}, (formats, attribute) {
+  static Map<String, String?> formatsDom(DomElement domNode) {
+    return kAttributes.fold<Map<String, String?>>({}, (formats, attribute) {
       if (domNode.hasAttribute(attribute)) {
         formats[attribute] = domNode.getAttribute(attribute);
       }
@@ -32,17 +40,30 @@ class Video extends BlockEmbed {
     return Link.sanitize(url);
   }
 
-  static String? value(HtmlElement domNode) {
+  static String? valueDom(DomElement domNode) {
     return domNode.getAttribute('src');
   }
 
   @override
+  Map<String, dynamic> formats() {
+    return kAttributes.fold<Map<String, dynamic>>({}, (formats, attribute) {
+      if (element.hasAttribute(attribute)) {
+        formats[attribute] = element.getAttribute(attribute);
+      }
+      return formats;
+    });
+  }
+
+  @override
+  dynamic value() => element.getAttribute('src');
+
+  @override
   void format(String name, dynamic value) {
-    if (ATTRIBUTES.contains(name)) {
+    if (kAttributes.contains(name)) {
       if (value != null) {
-        domNode.setAttribute(name, value.toString());
+        element.setAttribute(name, value.toString());
       } else {
-        domNode.removeAttribute(name);
+        element.removeAttribute(name);
       }
     } else {
       super.format(name, value);
@@ -50,45 +71,10 @@ class Video extends BlockEmbed {
   }
 
   String html() {
-    // Placeholder for value() returning a map with 'video' key
-    // final video = value()['video'];
-    final video = value(); // Assuming value() returns the video string directly
+    final video = value();
     return '<a href="$video">$video</a>';
   }
 
   @override
-  Blot clone() => Video(domNode.clone(true) as HtmlElement);
-
-  @override
-  void attach() {}
-
-  @override
-  void detach() {}
-
-  @override
-  Map<String, dynamic> formats() => {};
-
-  @override
-  void formatAt(int index, int length, String name, value) {}
-
-  @override
-  void insertAt(int index, String value, [def]) {}
-
-  @override
-  void deleteAt(int index, int length) {}
-
-  @override
-  dynamic value() => null;
-
-  @override
-  void optimize([context]) {}
-
-  @override
-  void update([source]) {}
-
-  @override
-  List<dynamic> path(int index, [bool inclusive = false]) => [];
-
-  @override
-  int offset(Blot? root) => 0;
+  Video clone() => Video(element.cloneNode(deep: true));
 }

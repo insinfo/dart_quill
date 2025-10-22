@@ -1,175 +1,71 @@
 import '../blots/abstract/blot.dart';
-import '../blots/cursor.dart';
-import '../blots/scroll.dart';
-import '../core/emitter.dart';
-import 'dart:html';
-import 'package:quill_delta/quill_delta.dart';
-
-// Utility functions (simplified for now)
-bool isEqual(dynamic a, dynamic b) {
-  return a.toString() == b.toString();
-}
-
-bool contains(Node parent, Node descendant) {
-  try {
-    // Firefox inserts inaccessible nodes around video elements
-    descendant.parentNode; // eslint-disable-line @typescript-eslint/no-unused-expressions
-  } catch (e) {
-    return false;
-  }
-  return parent.contains(descendant);
-}
-
-// Type definitions
-class NativeRange {
-  late Node startContainer;
-  late int startOffset;
-  late Node endContainer;
-  late int endOffset;
-  late bool collapsed;
-}
-
-class NormalizedRange {
-  late _RangePosition start;
-  late _RangePosition end;
-  late NativeRange native;
-}
-
-class _RangePosition {
-  late Node node;
-  late int offset;
-}
-
-class Bounds {
-  late double bottom;
-  late double height;
-  late double left;
-  late double right;
-  late double top;
-  late double width;
-}
+import 'emitter.dart';
 
 class Range {
-  int index;
-  int length;
+  final int index;
+  final int length;
 
-  Range(this.index, [this.length = 0]);
+  const Range(this.index, this.length);
 }
 
+/// Selection model decoupled from the browser DOM. UI integrations can
+/// observe selection-change events and synchronise native selections when
+/// needed. This keeps the core editor logic platform agnostic.
 class Selection {
-  late Scroll scroll;
-  late Emitter emitter;
+  Selection(this.scroll, this.emitter);
+
+  final ScrollBlot scroll;
+  final Emitter emitter;
+
+  Range? _range;
   bool composing = false;
-  bool mouseDown = false;
 
-  late HtmlElement root;
-  late Cursor cursor;
-  late Range savedRange;
-  Range? lastRange;
-  NormalizedRange? lastNative;
+  Range? getRange() => _range;
 
-  Selection(Scroll scroll, Emitter emitter) {
-    this.emitter = emitter;
-    this.scroll = scroll;
-    root = scroll.domNode;
-    cursor = Cursor(scroll, HtmlElement.span(), this); // Placeholder for HtmlElement.span()
-    savedRange = Range(0, 0);
-    lastRange = savedRange;
-    lastNative = null;
-
-    // handleComposition(); // Needs implementation
-    // handleDragging(); // Needs implementation
-
-    emitter.listenDOM('selectionchange', document, (e) {
-      if (!mouseDown && !composing) {
-        // setTimeout(update.bind(this, Emitter.sources.USER), 1);
-      }
-    });
-
-    // Placeholder for emitter.on(Emitter.events.SCROLL_BEFORE_UPDATE)
-    // Placeholder for emitter.on(Emitter.events.SCROLL_OPTIMIZE)
-
-    // update(Emitter.sources.SILENT); // Needs implementation
+  void setRange(int index, int length) {
+    final documentLength = scroll.length();
+    final normalizedIndex = index.clamp(0, documentLength);
+    final normalizedLength = length.clamp(0, documentLength - normalizedIndex);
+    final newRange = Range(normalizedIndex, normalizedLength);
+    if (_rangesEqual(_range, newRange)) {
+      return;
+    }
+    final previous = _range;
+    _range = newRange;
+    emitter.emit(EmitterEvents.SCROLL_SELECTION_CHANGE, [newRange, previous]);
   }
 
-  void handleComposition() {
-    // Placeholder
+  void clear() {
+    if (_range == null) return;
+    final previous = _range;
+    _range = null;
+    emitter.emit(EmitterEvents.SCROLL_SELECTION_CHANGE, [null, previous]);
   }
 
-  void handleDragging() {
-    // Placeholder
-  }
+  bool hasFocus() => _range != null;
 
   void focus() {
-    if (hasFocus()) return;
-    root.focus(); // { preventScroll: true } needs to be handled
-    setRange(savedRange); // Needs implementation
+    // No direct DOM handling here; the host application is responsible for
+    // reflecting focus state in the UI if necessary.
   }
 
-  void format(String format, dynamic value) {
-    // Placeholder
-  }
-
-  Bounds? getBounds(int index, [int length = 0]) {
-    // Placeholder
-    return null;
-  }
-
-  NormalizedRange? getNativeRange() {
-    final selection = window.getSelection();
-    if (selection == null || selection.rangeCount <= 0) return null;
-    final nativeRange = selection.getRangeAt(0);
-    if (nativeRange == null) return null;
-    final range = normalizeNative(nativeRange);
-    // debug.info('getNativeRange', range); // Placeholder for debug
-    return range;
-  }
-
-  List<dynamic> getRange() {
-    if (!root.isConnected!) {
-      return [null, null];
+  void format(String name, dynamic value) {
+    final range = _range;
+    if (range == null || range.length == 0) {
+      return;
     }
-    final normalized = getNativeRange();
-    if (normalized == null) return [null, null];
-    final range = normalizedToRange(normalized);
-    return [range, normalized];
+    scroll.formatAt(range.index, range.length, name, value);
   }
 
-  bool hasFocus() {
-    return document.activeElement == root ||
-        (document.activeElement != null && contains(root, document.activeElement!));
+  Map<String, int>? getNativeRange() {
+    final range = _range;
+    if (range == null) return null;
+    return {'index': range.index, 'length': range.length};
   }
 
-  Range normalizedToRange(NormalizedRange range) {
-    // Placeholder
-    return Range(0, 0);
-  }
-
-  NormalizedRange? normalizeNative(NativeRange nativeRange) {
-    // Placeholder
-    return null;
-  }
-
-  List<dynamic> rangeToNative(Range range) {
-    // Placeholder
-    return [null, 0, null, 0];
-  }
-
-  void setNativeRange(
-    Node? startNode,
-    int? startOffset,
-    [Node? endNode = null,
-    int? endOffset = null,
-    bool force = false,]
-  ) {
-    // Placeholder
-  }
-
-  void setRange(Range? range, [dynamic forceOrSource = false, String source = Emitter.sources.API]) {
-    // Placeholder
-  }
-
-  void update([String source = Emitter.sources.USER]) {
-    // Placeholder
+  bool _rangesEqual(Range? a, Range? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null) return false;
+    return a.index == b.index && a.length == b.length;
   }
 }

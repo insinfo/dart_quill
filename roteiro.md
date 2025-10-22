@@ -1,13 +1,15 @@
  Excelente trabalho inicial na tradução do quill-delta. A parte do Delta é a fundação de todo o sistema, e tê-la implementada em Dart é um passo gigantesco.
 
- leia os arquivos da pasta C:\MyDartProjects\dart_quill\quilljs\src e depos leia o roteiro C:\MyDartProjects\dart_quill\roteiro.md e comece a converção dos arquivos para dart em C:\MyDartProjects\dart_quill\lib\src e lembrece que o delta ja esta implementado em C:\MyDartProjects\dart_quill\lib\src\dependencies
+ leia os arquivos da pasta C:\MyDartProjects\dart_quill\quilljs\src 
+ e depoi lei os arquivos da pasta C:\MyDartProjects\dart_quill\lib\src 
+ e depos leia o roteiro C:\MyDartProjects\dart_quill\roteiro.md e comece a converção dos arquivos para dart em C:\MyDartProjects\dart_quill\lib\src e lembrece que o delta ja esta implementado em C:\MyDartProjects\dart_quill\lib\src\dependencies
  para cada arquivo traduzido para dart favor atualizar este roteiro
  sempre rode  dart analyze para corigir os erros
 evite mecher nos arquivo de C:\MyDartProjects\dart_quill\lib\src\dependencies
 
 o que ja esta implementado esta aqui : C:\MyDartProjects\dart_quill\lib\src\dependencies
 a ideia incial é implementar o editor quill em dart para web usando o pacote web: ^1.1.1 para interagir com o DOM
-com uma camada de abstração leve e depois criar um componente ngdart (angularDart) para o editor poder ser embutidos em aplicações angularDart no futoro este componente poderar se implementado para flutter tambem
+com uma camada de abstração leve e depois criar um componente ngdart (angularDart) para o editor poder ser embutidos em aplicações angularDart no futuro este componente poderar se implementado para flutter tambem
 
 
 o ideal é que este roteiro seja atualizado conforme o trabalho for concluido 
@@ -989,3 +991,13 @@ class Quill {
 // componentes de UI para ter uma tradução completa. O código acima
 // fornece a estrutura principal e a tradução de alguns dos arquivos
 // mais importantes.
+
+## Atualização 22/10/2025
+
+- [x] Reescrever `lib/src/blots/abstract/blot.dart`, `inline.dart`, `block.dart`, `break.dart` e `text.dart` com a hierarquia de Parchment (inserção, split, cache básico, `bubbleFormats`).
+- [ ] Finalizar a adaptação de `lib/src/blots/scroll.dart` para o novo contrato (normalização de `insertContents`, batching no `update`, integração com `Registry` e criação de filhos padrão via registro).
+- [ ] Mapear classes e atributos registrados em `Registry` e implementar a camada de atributos (AttributorStore, Attributor) antes de converter `BlockEmbed` e os formatos.
+- [ ] Analisar cada arquivo em `lib/src/formats` e completar a tradução; renomear constantes estáticas (`kBlotName`, `kScope`, `tagName`) para evitar conflitos com os novos getters e substituir acessos diretos a APIs específicas de `DomNode` por `DomElement`.
+- [ ] Revisar `lib/src/core/editor.dart`: a tradução atual ignora boa parte da lógica de normalização/composição de Delta; comparar com `quilljs/src/core/editor.ts` e portar métodos `applyDelta`, `update`, `getFormat`, `getHTML` e helpers de seleção.
+- [ ] Preparar camada de testes em Dart espelhando `quilljs/test/unit` (ex.: começar por `blots/block.spec.ts` → `test/unit/blots/block_test.dart`) reutilizando `test/support/fake_dom.dart`.
+- [ ] Rodar `dart analyze` e `dart test --platform chrome` a cada módulo traduzido para garantir que regressões sejam percebidas cedo.

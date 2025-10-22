@@ -1,71 +1,83 @@
-import 'dart:html';
+import 'dart:convert';
+
+import '../platform/dom.dart';
+import '../platform/platform.dart';
 import 'abstract/blot.dart';
 
 class TextBlot extends LeafBlot {
-  String text;
-  TextBlot(this.text, HtmlElement domNode) : super(domNode);
+  static const String kBlotName = 'text';
+  static const int kScope = Scope.INLINE_BLOT;
+
+  TextBlot(DomText domNode) : super(domNode);
+
+  static TextBlot create([dynamic value]) {
+    final text = value?.toString() ?? '';
+    final node = domBindings.adapter.document.createTextNode(text);
+    return TextBlot(node);
+  }
+
+  DomText get textNode => domNode as DomText;
 
   @override
-  int length() => text.length;
+  String get blotName => TextBlot.kBlotName;
 
   @override
-  dynamic value() => text;
+  int get scope => TextBlot.kScope;
 
   @override
-  Map<String, dynamic> formats() => {};
+  int length() => textNode.data.length;
 
   @override
-  void format(String name, value) {}
+  Map<String, dynamic> formats() => const {};
 
   @override
-  void formatAt(int index, int length, String name, value) {}
+  TextBlot clone() =>
+      TextBlot(domBindings.adapter.document.createTextNode(textNode.data));
 
   @override
-  void insertAt(int index, String value, [def]) {
-    text = text.substring(0, index) + value + text.substring(index);
-    domNode.text = text;
+  String value() => textNode.data;
+
+  @override
+  void insertAt(int index, String value, [dynamic def]) {
+    if (def != null) {
+      throw ArgumentError('Cannot insert embed definition into TextBlot');
+    }
+    final data = textNode.data;
+    if (index < 0 || index > data.length) {
+      throw RangeError.index(index, data, 'index');
+    }
+    textNode.data = data.substring(0, index) + value + data.substring(index);
   }
 
   @override
   void deleteAt(int index, int length) {
-    text = text.substring(0, index) + text.substring(index + length);
-    domNode.text = text;
+    final data = textNode.data;
+    if (index < 0 || index + length > data.length) {
+      throw RangeError.range(index, index, data.length, 'index');
+    }
+    textNode.data = data.replaceRange(index, index + length, '');
   }
 
   @override
-  Blot clone() => TextBlot(text, domNode.clone(true) as HtmlElement);
+  Blot? split(int index, {bool force = false}) {
+    final len = length();
+    if (!force) {
+      if (index <= 0) return this;
+      if (index >= len) return next;
+    }
 
-  @override
-  void attach() {}
+    final clamped = index.clamp(0, len);
+    final left = textNode.data.substring(0, clamped);
+    final right = textNode.data.substring(clamped);
 
-  @override
-  void detach() {}
-
-  @override
-  void optimize([context]) {}
-
-  @override
-  void update([source]) {}
-
-  @override
-  List<dynamic> path(int index, [bool inclusive = false]) => [];
-
-  @override
-  int offset(Blot? root) => 0;
+    textNode.data = left;
+    final newNode = domBindings.adapter.document.createTextNode(right);
+    final newBlot = TextBlot(newNode);
+    parent?.insertBefore(newBlot, next);
+    return newBlot;
+  }
 }
-
-class Text extends TextBlot {
-  Text(String text, HtmlElement domNode) : super(text, domNode);
-}
-
-final Map<String, String> entityMap = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  '\'': '&#39;',
-};
 
 String escapeText(String text) {
-  return text.replaceAllMapped(RegExp(r'[&<>"\']'), (match) => entityMap[match.group(0)]!));
+  return const HtmlEscape().convert(text);
 }

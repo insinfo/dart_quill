@@ -1,72 +1,111 @@
+import 'dart:convert';
+
+import '../blots/abstract/blot.dart';
 import '../blots/block.dart';
-import '../blots/inline.dart';
-import '../blots/text.dart';
 import '../blots/break.dart';
 import '../blots/cursor.dart';
-import '../blots/container.dart';
-import 'dart:html';
+import '../blots/inline.dart';
+import '../blots/text.dart';
+import '../core/quill.dart';
+import '../platform/dom.dart';
+import '../platform/platform.dart';
 
-// Placeholder for Quill
-class Quill {
-  static void register(dynamic blot, [bool overwrite = false]) {}
+String escapeText(String text) {
+  return const HtmlEscape().convert(text);
 }
 
-class CodeBlockContainer extends Container {
-  CodeBlockContainer(HtmlElement domNode) : super(domNode);
+class CodeBlockContainer extends ContainerBlot {
+  CodeBlockContainer(DomElement domNode) : super(domNode);
 
-  static HtmlElement create(String value) {
-    final domNode = HtmlElement.div();
-    domNode.setAttribute('spellcheck', 'false');
-    return domNode;
+  static const String kBlotName = 'code-block-container';
+  static const String kClassName = 'ql-code-block-container';
+  static const String kTagName = 'DIV';
+  static const int kScope = Scope.BLOCK_BLOT;
+  static final List<Type> allowedChildren = [CodeBlock];
+
+  static CodeBlockContainer create([dynamic value]) {
+    final node = domBindings.adapter.document.createElement(kTagName);
+    node.setAttribute('spellcheck', 'false');
+    return CodeBlockContainer(node);
   }
 
+  @override
+  String get blotName => kBlotName;
+
+  @override
+  int get scope => kScope;
+
+  @override
+  dynamic value() => children.map((child) => child.value()).toList();
+
   String code(int index, int length) {
-    // Placeholder for children.map and domNode.innerText
     return children
-        .map((child) => child.length() <= 1 ? '' : (child.domNode as HtmlElement).innerText)
+        .map((child) => child.length() <= 1 ? '' : child.value())
         .join('\n')
         .substring(index, index + length);
   }
 
   String html(int index, int length) {
-    // Placeholder for escapeText
     return '<pre>\n${escapeText(code(index, length))}\n</pre>';
   }
 
-  static const String blotName = 'code-block-container';
-  static const String className = 'ql-code-block-container';
-  static const String tagName = 'DIV';
-  static List<Type> allowedChildren = [CodeBlock]; // Placeholder for CodeBlock
-
   @override
-  Blot clone() => CodeBlockContainer(domNode.clone(true) as HtmlElement);
+  CodeBlockContainer clone() => CodeBlockContainer(element.cloneNode(deep: true));
 }
 
 class CodeBlock extends Block {
-  CodeBlock(HtmlElement domNode) : super(domNode);
+  CodeBlock(DomElement domNode) : super(domNode);
 
-  static const String TAB = '  ';
+  static const String kBlotName = 'code-block';
+  static const String kClassName = 'ql-code-block';
+  static const String kTagName = 'DIV';
+  static const int kScope = Scope.BLOCK_BLOT;
+  static const Type requiredContainer = CodeBlockContainer;
+  static final List<Type> allowedChildren = [TextBlot, Break, Cursor];
 
   static void register() {
     Quill.register(CodeBlockContainer);
   }
 
-  static const String blotName = 'code-block';
-  static const String className = 'ql-code-block';
-  static const String tagName = 'DIV';
-  static Type requiredContainer = CodeBlockContainer;
-  static List<Type> allowedChildren = [TextBlot, Break, Cursor];
+  static CodeBlock create([dynamic value]) {
+    final node = domBindings.adapter.document.createElement(kTagName);
+    return CodeBlock(node);
+  }
 
   @override
-  Blot clone() => CodeBlock(domNode.clone(true) as HtmlElement);
+  String get blotName => kBlotName;
+
+  @override
+  int get scope => kScope;
+
+  @override
+  CodeBlock clone() => CodeBlock(element.cloneNode(deep: true));
+
+  @override
+  Map<String, dynamic> formats() => {kBlotName: true};
 }
 
-class Code extends Inline {
-  Code(HtmlElement domNode) : super(domNode);
+class Code extends InlineBlot {
+  Code(DomElement domNode) : super(domNode);
 
-  static const String blotName = 'code';
-  static const String tagName = 'CODE';
+  static const String kBlotName = 'code';
+  static const String kTagName = 'CODE';
+  static const int kScope = Scope.INLINE_BLOT;
+
+  static Code create([dynamic value]) {
+    final node = domBindings.adapter.document.createElement(kTagName);
+    return Code(node);
+  }
 
   @override
-  Blot clone() => Code(domNode.clone(true) as HtmlElement);
+  String get blotName => kBlotName;
+
+  @override
+  int get scope => kScope;
+
+  @override
+  Map<String, dynamic> formats() => {kBlotName: true};
+
+  @override
+  Code clone() => Code(element.cloneNode(deep: true));
 }
