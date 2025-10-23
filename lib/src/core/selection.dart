@@ -18,9 +18,24 @@ class Selection {
   final Emitter emitter;
 
   Range? _range;
+  Range? savedRange;
   bool composing = false;
 
   Range? getRange() => _range;
+
+  void setSelection(Range range, String source) {
+    if (_rangesEqual(_range, range)) {
+      return;
+    }
+    final previous = _range;
+    _range = range;
+    emitter.emit(EmitterEvents.SELECTION_CHANGE, [range, previous, source]);
+  }
+
+  Map<String, dynamic> getFormat(int index, [int length = 0]) {
+    final range = Range(index, length);
+    return scroll.getFormat(range.index, range.length);
+  }
 
   void setRange(int index, int length) {
     final documentLength = scroll.length();

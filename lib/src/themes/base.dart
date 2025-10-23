@@ -2,16 +2,10 @@ import '../core/quill.dart';
 import '../core/emitter.dart';
 import '../core/theme.dart';
 import '../core/selection.dart';
-import '../modules/clipboard.dart';
-import '../modules/history.dart';
-import '../modules/keyboard.dart';
-import '../modules/uploader.dart';
-import '../ui/color-picker.dart'; // Placeholder
-import '../ui/icon-picker.dart'; // Placeholder
 import '../ui/picker.dart'; // Placeholder
 import '../ui/tooltip.dart'; // Placeholder
-import 'dart:html';
-import 'dart:math' as math;
+import '../platform/platform.dart';
+import '../platform/dom.dart';
 
 // Utility functions (simplified for now)
 Map<String, dynamic> merge(Map<String, dynamic> a, Map<String, dynamic> b) {
@@ -47,23 +41,24 @@ class BaseTheme extends Theme {
   Tooltip? tooltip;
 
   BaseTheme(Quill quill, ThemeOptions options) : super(quill, options) {
-    final listener = (MouseEvent e) {
-      if (!document.body!.contains(quill.root)) {
-        document.body!.removeEventListener('click', listener);
+    final document = domBindings.adapter.document;
+    final listener = (DomEvent e) {
+      if (!document.body.contains(quill.root)) {
+        document.body.removeEventListener('click', listener);
         return;
       }
-      if (tooltip != null && !tooltip!.root.contains(e.target as Node?) && !quill.hasFocus()) {
+      if (tooltip != null && !tooltip!.root.contains(e.target as DomNode?) && !quill.hasFocus()) {
         tooltip!.hide();
       }
       if (pickers != null) {
         pickers!.forEach((picker) {
-          if (!picker.container.contains(e.target as Node?)) {
+          if (!picker.container.contains(e.target as DomNode?)) {
             picker.close();
           }
         });
       }
     };
-    quill.emitter.listenDOM('click', document.body!, listener);
+    document.body.addEventListener('click', listener);
   }
 
   @override
@@ -131,7 +126,7 @@ class BaseTheme extends Theme {
         picker.update();
       });
     };
-    quill.emitter.on(Emitter.events.EDITOR_CHANGE, (type, range, oldRange, source) => updatePickers());
+    quill.emitter.on(EmitterEvents.EDITOR_CHANGE, (type, range, oldRange, source) => updatePickers());
   }
 }
 
@@ -173,9 +168,12 @@ class BaseTooltip extends Tooltip {
     } else if (mode != root.getAttribute('data-mode')) {
       textbox!.value = '';
     }
-    final bounds = quill.getBounds(quill.selection.savedRange.index, quill.selection.savedRange.length);
-    if (bounds != null) {
-      position(bounds);
+    final savedRange = quill.selection.savedRange;
+    if (savedRange != null) {
+      final bounds = quill.getBounds(savedRange.index, savedRange.length);
+      if (bounds != null) {
+        position(bounds);
+      }
     }
     textbox!.select();
     textbox!.setAttribute('placeholder', textbox!.getAttribute('data-$mode') ?? '');
@@ -192,11 +190,11 @@ class BaseTooltip extends Tooltip {
       case 'link':
         final scrollTop = quill.root.scrollTop;
         if (linkRange != null) {
-          quill.formatText(linkRange!.index, linkRange!.length, 'link', value, Emitter.sources.USER);
+          quill.formatText(linkRange!.index, linkRange!.length, 'link', value, source: EmitterSource.USER);
           linkRange = null;
         } else {
           restoreFocus();
-          quill.format('link', value, Emitter.sources.USER);
+          quill.format('link', value, source: EmitterSource.USER);
         }
         quill.root.scrollTop = scrollTop;
         break;
@@ -207,14 +205,14 @@ class BaseTooltip extends Tooltip {
       _formulaCase:
       case 'formula':
         if (value.isEmpty) break;
-        final range = quill.getSelection(true)!;
+        final range = quill.getSelection(focus: true);
         if (range != null) {
           final index = range.index + range.length;
-          quill.insertEmbed(index, root.getAttribute('data-mode')!, value, Emitter.sources.USER);
+          quill.insertEmbed(index, root.getAttribute('data-mode')!, value, source: EmitterSource.USER);
           if (root.getAttribute('data-mode') == 'formula') {
-            quill.insertText(index + 1, ' ', Emitter.sources.USER);
+            quill.insertText(index + 1, ' ', source: EmitterSource.USER);
           }
-          quill.setSelection(index + 2, Emitter.sources.USER);
+          quill.setSelection(Range(index + 2, 0), source: EmitterSource.USER);
         }
         break;
       default:

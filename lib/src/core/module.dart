@@ -1,11 +1,11 @@
 import '../core/quill.dart';
 
 /// Base class for all Quill modules.
-abstract class Module {
+abstract class Module<T> {
   Module(this.quill, this.options);
 
   final Quill quill;
-  final Map<String, dynamic> options;
+  final T options;
 
   /// Called when module is enabled/attached.
   void enable() {}

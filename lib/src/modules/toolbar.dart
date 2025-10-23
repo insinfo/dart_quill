@@ -1,9 +1,9 @@
 import '../core/module.dart';
 import '../core/quill.dart';
 import '../core/selection.dart';
-import '../blots/abstract/blot.dart';
-import 'dart:html';
-import 'package:quill_delta/quill_delta.dart';
+import '../core/emitter.dart';
+import '../platform/platform.dart';
+import '../platform/dom.dart';
 
 // Placeholder for logger
 class Logger {
@@ -16,12 +16,14 @@ final debug = Logger();
 // Type definitions
 typedef Handler = void Function(dynamic value);
 
-class ToolbarConfig extends List<dynamic> {
-  ToolbarConfig() : super();
+// ToolbarConfig is a list of toolbar groups
+class ToolbarConfig {
+  final List<List<dynamic>> groups;
+  ToolbarConfig(this.groups);
 }
 
 class ToolbarProps {
-  final dynamic container; // HTMLElement | ToolbarConfig | null
+  final dynamic container; // DomElement | String selector | ToolbarConfig | null
   final Map<String, Handler>? handlers;
   final int? option;
   final bool? module;
@@ -39,25 +41,27 @@ class ToolbarProps {
 class Toolbar extends Module<ToolbarProps> {
   static final DEFAULTS = ToolbarProps();
 
-  HtmlElement? container;
+  DomElement? container;
   final List<List<dynamic>> controls = []; // [format, input]
   final Map<String, Handler> handlers = {};
 
   Toolbar(Quill quill, ToolbarProps options) : super(quill, options) {
+    final document = domBindings.adapter.document;
+    
     if (options.container is ToolbarConfig) {
-      final containerDiv = HtmlElement.div();
+      final containerDiv = document.createElement('div');
       containerDiv.setAttribute('role', 'toolbar');
       addControls(containerDiv, options.container as ToolbarConfig);
       quill.container?.parentNode?.insertBefore(containerDiv, quill.container);
       container = containerDiv;
     } else if (options.container is String) {
-      container = document.querySelector(options.container as String) as HtmlElement?;
+      container = document.querySelector(options.container as String) as DomElement?;
     } else {
-      container = options.container as HtmlElement?;
+      container = options.container as DomElement?;
     }
 
     if (container == null) {
-      debug.error('Container required for toolbar', options);
+      debug.error('Container required for toolbar');
       return;
     }
     container!.classes.add('ql-toolbar');
@@ -69,11 +73,11 @@ class Toolbar extends Module<ToolbarProps> {
     }
 
     container!.querySelectorAll('button, select').forEach((input) {
-      attach(input as HtmlElement);
+      attach(input as DomElement);
     });
 
-    quill.on(Quill.events.EDITOR_CHANGE, (type, range, oldRange, source) {
-      if (type == Quill.events.EDITOR_CHANGE) {
+    quill.on(EmitterEvents.EDITOR_CHANGE, (type, range, oldRange, source) {
+      if (type == EmitterEvents.EDITOR_CHANGE) {
         update(range as Range?);
       }
     });
@@ -83,12 +87,20 @@ class Toolbar extends Module<ToolbarProps> {
     handlers[format] = handler;
   }
 
-  void attach(HtmlElement input) {
-    var format = input.classes.firstWhere((className) => className.startsWith('ql-'), orElse: () => '');
+  void attach(DomElement input) {
+    // Find format from class names
+    var format = '';
+    for (final className in input.classes.values) {
+      if (className.startsWith('ql-')) {
+        format = className;
+        break;
+      }
+    }
     if (format.isEmpty) return;
     format = format.substring('ql-'.length);
 
-    if (input is ButtonElement) {
+    // Set button type if it's a button element
+    if (input.tagName.toLowerCase() == 'button') {
       input.setAttribute('type', 'button');
     }
 
@@ -98,28 +110,33 @@ class Toolbar extends Module<ToolbarProps> {
     //   return;
     // }
 
-    final eventName = input is SelectElement ? 'change' : 'click';
+    // Determine if this is a select element or button
+    final isSelect = input.tagName.toLowerCase() == 'select';
+    final eventName = isSelect ? 'change' : 'click';
+    
     input.addEventListener(eventName, (e) {
       dynamic value;
-      if (input is SelectElement) {
-        if (input.selectedIndex < 0) return;
-        final selected = input.options[input.selectedIndex];
-        if (selected.hasAttribute('selected')) {
-          value = false;
+      if (isSelect) {
+        // For select elements, get the selected option's value via getAttribute
+        final selected = input.querySelector('option[selected]');
+        if (selected != null) {
+          final optionValue = selected.getAttribute('value');
+          value = (optionValue != null && optionValue.isNotEmpty) ? optionValue : false;
         } else {
-          value = selected.value.isNotEmpty ? selected.value : false;
+          value = false;
         }
       } else {
+        // For buttons, check active state
         if (input.classes.contains('ql-active')) {
           value = false;
         } else {
-          value = input.getAttribute('value') != null ? input.getAttribute('value') : true;
+          value = input.getAttribute('value') ?? true;
         }
         e.preventDefault();
       }
 
       quill.focus();
-      final range = quill.selection.getRange()[0] as Range?;
+      final range = quill.selection.getRange();
       if (range == null) return;
 
       if (handlers[format] != null) {
@@ -131,10 +148,10 @@ class Toolbar extends Module<ToolbarProps> {
         //   if (value == null) return;
         //   quill.updateContents(
         //     Delta()..retain(range.index)..delete(range.length)..insert({format: value}),
-        //     Quill.sources.USER,
+        //     EmitterSource.USER,
         //   );
         // } else {
-          quill.format(format, value, Quill.sources.USER);
+          quill.format(format, value, source: EmitterSource.USER);
         // }
       }
       update(range);
@@ -146,28 +163,36 @@ class Toolbar extends Module<ToolbarProps> {
     final formats = range == null ? <String, dynamic>{} : quill.getFormat(range.index, range.length);
     controls.forEach((pair) {
       final format = pair[0] as String;
-      final input = pair[1] as HtmlElement;
+      final input = pair[1] as DomElement;
 
-      if (input is SelectElement) {
-        OptionElement? option;
+      final isSelect = input.tagName.toLowerCase() == 'select';
+      
+      if (isSelect) {
+        // For select elements, update selected option via attributes
+        DomElement? option;
         if (range == null) {
           option = null;
         } else if (formats[format] == null) {
-          option = input.querySelector('option[selected]') as OptionElement?;
+          option = input.querySelector('option[selected]');
         } else if (formats[format] is! List) {
           var value = formats[format];
           if (value is String) {
             value = value.replaceAll(RegExp(r'"'), r'\"');
           }
-          option = input.querySelector('option[value="$value"]') as OptionElement?;
+          option = input.querySelector('option[value="$value"]');
         }
-        if (option == null) {
-          input.value = '';
-          input.selectedIndex = -1;
-        } else {
-          option.selected = true;
+        
+        // Remove all selected attributes first
+        input.querySelectorAll('option').forEach((opt) {
+          opt.removeAttribute('selected');
+        });
+        
+        // Set selected on the target option
+        if (option != null) {
+          option.setAttribute('selected', 'selected');
         }
       } else {
+        // For buttons, toggle active class
         if (range == null) {
           input.classes.remove('ql-active');
           input.setAttribute('aria-pressed', 'false');
@@ -188,13 +213,14 @@ class Toolbar extends Module<ToolbarProps> {
   }
 }
 
-void addButton(HtmlElement container, String format, [String? value]) {
-  final input = ButtonElement();
+void addButton(DomElement container, String format, [String? value]) {
+  final document = domBindings.adapter.document;
+  final input = document.createElement('button');
   input.setAttribute('type', 'button');
   input.classes.add('ql-$format');
   input.setAttribute('aria-pressed', 'false');
   if (value != null) {
-    input.value = value;
+    input.setAttribute('value', value);
     input.setAttribute('aria-label', '$format: $value');
   } else {
     input.setAttribute('aria-label', format);
@@ -202,12 +228,13 @@ void addButton(HtmlElement container, String format, [String? value]) {
   container.append(input);
 }
 
-void addControls(HtmlElement container, ToolbarConfig groups) {
-  // Assuming groups is always a List<List<dynamic>> or List<dynamic>
-  final actualGroups = (groups.isNotEmpty && groups[0] is List) ? groups as List<List<dynamic>> : [groups as List<dynamic>];
+void addControls(DomElement container, ToolbarConfig groups) {
+  final document = domBindings.adapter.document;
+  // Access the groups property
+  final actualGroups = groups.groups;
 
   actualGroups.forEach((controls) {
-    final group = HtmlElement.span();
+    final group = document.createElement('span');
     group.classes.add('ql-formats');
     controls.forEach((control) {
       if (control is String) {
@@ -226,11 +253,12 @@ void addControls(HtmlElement container, ToolbarConfig groups) {
   });
 }
 
-void addSelect(HtmlElement container, String format, List<dynamic> values) {
-  final input = SelectElement();
+void addSelect(DomElement container, String format, List<dynamic> values) {
+  final document = domBindings.adapter.document;
+  final input = document.createElement('select');
   input.classes.add('ql-$format');
   values.forEach((value) {
-    final option = OptionElement();
+    final option = document.createElement('option');
     if (value != false) {
       option.setAttribute('value', value.toString());
     } else {

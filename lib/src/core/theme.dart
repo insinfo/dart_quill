@@ -1,5 +1,15 @@
-import 'dart:html';
 import 'quill.dart';
+
+/// Options for theme configuration
+class ThemeOptions {
+  final String? theme;
+  final Map<String, dynamic> modules;
+  
+  ThemeOptions({
+    this.theme,
+    this.modules = const {},
+  });
+}
 
 class Theme {
   final Quill quill;
@@ -62,13 +72,8 @@ class Theme {
   }
 
   void _applyStyle(String selector, Map<String, String> rules) {
-    final styleSheet = document.styleSheets![0] as CssStyleSheet;
-    String ruleString = '$selector {';
-    rules.forEach((key, value) {
-      ruleString += '$key: $value;';
-    });
-    ruleString += '}';
-    styleSheet.addRule(selector, ruleString);
+    // Placeholder - styles would be applied via platform-specific mechanism
+    // In a real implementation, this would inject CSS rules into the document
   }
 
   void registerTheme(String name, Map<String, dynamic> theme) {

@@ -1,8 +1,14 @@
 class EmitterSource {
+  const EmitterSource();
+  static const String API = 'api';
+  static const String SILENT = 'silent';
   static const String USER = 'user';
 }
 
 class EmitterEvents {
+  static const String EDITOR_CHANGE = 'editor-change';
+  static const String TEXT_CHANGE = 'text-change';
+  static const String SELECTION_CHANGE = 'selection-change';
   static const String SCROLL_BLOT_MOUNT = 'scroll-blot-mount';
   static const String SCROLL_BLOT_UNMOUNT = 'scroll-blot-unmount';
   static const String SCROLL_EMBED_UPDATE = 'scroll-embed-update';
@@ -48,5 +54,11 @@ class Emitter {
         handler();
       }
     }
+  }
+
+  void listenDOM(String type, dynamic target, Function listener) {
+    // Placeholder for DOM event listening
+    // This should delegate to platform abstraction
+    // For now, this is a stub to fix compilation
   }
 }

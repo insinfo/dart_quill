@@ -309,6 +309,59 @@ class Scroll extends ScrollBlot {
       update(records);
     }
   }
+
+  String? findBlotName(DomNode node) {
+    // Find the blot name for a given DOM node
+    final blot = find(node, bubble: false).key;
+    return blot?.blotName;
+  }
+
+  Map<String, dynamic> getFormat(int index, [int length = 0]) {
+    final formats = <String, dynamic>{};
+    final lines = <Blot>[];
+    
+    if (length == 0) {
+      // Get format at cursor position
+      final lineEntry = line(index);
+      final lineBlot = lineEntry.key;
+      if (lineBlot != null) {
+        lines.add(lineBlot);
+      }
+    } else {
+      // Get format for range
+      final endIndex = index + length;
+      var currentIndex = index;
+      
+      while (currentIndex < endIndex) {
+        final lineEntry = line(currentIndex);
+        final lineBlot = lineEntry.key;
+        if (lineBlot != null) {
+          lines.add(lineBlot);
+          currentIndex += lineBlot.length();
+        } else {
+          break;
+        }
+      }
+    }
+    
+    // Merge formats from all lines
+    for (final lineBlot in lines) {
+      if (lineBlot is Block) {
+        final lineFormats = lineBlot.formats();
+        formats.addAll(lineFormats);
+      }
+    }
+    
+    // Get leaf-level formats
+    final leafEntry = leaf(index);
+    final leafBlot = leafEntry.key;
+    if (leafBlot != null) {
+      final leafFormats = bubbleFormats(leafBlot);
+      formats.addAll(leafFormats);
+    }
+    
+    return formats;
+  }
 }
 
 void insertInlineContents(

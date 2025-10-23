@@ -4,8 +4,7 @@ import '../core/selection.dart';
 import '../blots/block.dart';
 import '../blots/text.dart';
 import '../blots/abstract/blot.dart';
-import 'dart:html';
-import 'package:quill_delta/quill_delta.dart';
+import '../platform/dom.dart';
 
 // Placeholder for logger
 class Logger {
@@ -24,7 +23,7 @@ class Context {
   final String prefix;
   final String suffix;
   final Map<String, dynamic> format;
-  final KeyboardEvent event;
+  final DomEvent event;
   final Block line;
 
   Context({
@@ -50,6 +49,9 @@ class BindingObject {
   RegExp? suffix;
   dynamic format;
   Function? handler;
+  bool? collapsed;
+  bool? empty;
+  int? offset;
 
   BindingObject({
     this.key,
@@ -62,7 +64,27 @@ class BindingObject {
     this.suffix,
     this.format,
     this.handler,
+    this.collapsed,
+    this.empty,
+    this.offset,
   });
+
+  // Helper to set properties from a map, avoiding dynamic invocation issues.
+  void setFromMap(Map<String, dynamic> map) {
+    if (map.containsKey('key')) key = map['key'];
+    if (map.containsKey('shortKey')) shortKey = map['shortKey'];
+    if (map.containsKey('shiftKey')) shiftKey = map['shiftKey'];
+    if (map.containsKey('altKey')) altKey = map['altKey'];
+    if (map.containsKey('metaKey')) metaKey = map['metaKey'];
+    if (map.containsKey('ctrlKey')) ctrlKey = map['ctrlKey'];
+    if (map.containsKey('prefix')) prefix = map['prefix'];
+    if (map.containsKey('suffix')) suffix = map['suffix'];
+    if (map.containsKey('format')) format = map['format'];
+    if (map.containsKey('handler')) handler = map['handler'];
+    if (map.containsKey('collapsed')) collapsed = map['collapsed'];
+    if (map.containsKey('empty')) empty = map['empty'];
+    if (map.containsKey('offset')) offset = map['offset'];
+  }
 }
 
 class NormalizedBinding extends BindingObject {
@@ -77,6 +99,9 @@ class NormalizedBinding extends BindingObject {
     super.suffix,
     super.format,
     super.handler,
+    super.collapsed,
+    super.empty,
+    super.offset,
   });
 }
 
@@ -96,38 +121,59 @@ class Keyboard extends Module<KeyboardOptions> {
   Keyboard(Quill quill, KeyboardOptions options) : super(quill, options) {
     // Simplified constructor for now
     // Add default bindings
-    addBinding(BindingObject(key: 'Enter', shiftKey: null), handler: handleEnter);
-    addBinding(BindingObject(key: 'Enter', metaKey: null, ctrlKey: null, altKey: null), handler: (_) {});
+    addBinding(BindingObject(key: 'Enter', shiftKey: null),
+        handler: handleEnter);
+    addBinding(
+        BindingObject(key: 'Enter', metaKey: null, ctrlKey: null, altKey: null),
+        handler: (_) {});
 
-    // Firefox specific bindings
-    if (window.navigator.userAgent!.contains(RegExp(r'Firefox', caseSensitive: false))) {
-      addBinding(BindingObject(key: 'Backspace'), context: {'collapsed': true}, handler: handleBackspace);
-      addBinding(BindingObject(key: 'Delete'), context: {'collapsed': true}, handler: handleDelete);
-    } else {
-      addBinding(BindingObject(key: 'Backspace'), context: {'collapsed': true, 'prefix': RegExp(r'.?$',)}, handler: handleBackspace);
-      addBinding(BindingObject(key: 'Delete'), context: {'collapsed': true, 'suffix': RegExp(r'.?$',)}, handler: handleDelete);
-    }
-    addBinding(BindingObject(key: 'Backspace'), context: {'collapsed': false}, handler: handleDeleteRange);
-    addBinding(BindingObject(key: 'Delete'), context: {'collapsed': false}, handler: handleDeleteRange);
-    addBinding(BindingObject(key: 'Backspace', altKey: null, ctrlKey: null, metaKey: null, shiftKey: null), context: {'collapsed': true, 'offset': 0}, handler: handleBackspace);
+    // Simplified bindings, removing browser-specific checks
+    addBinding(BindingObject(key: 'Backspace'),
+        context: {'collapsed': true, 'prefix': RegExp(r'.?$',)},
+        handler: handleBackspace);
+    addBinding(BindingObject(key: 'Delete'),
+        context: {'collapsed': true, 'suffix': RegExp(r'.?$',)},
+        handler: handleDelete);
+
+    addBinding(BindingObject(key: 'Backspace'),
+        context: {'collapsed': false}, handler: handleDeleteRange);
+    addBinding(BindingObject(key: 'Delete'),
+        context: {'collapsed': false}, handler: handleDeleteRange);
+    addBinding(
+        BindingObject(
+            key: 'Backspace',
+            altKey: null,
+            ctrlKey: null,
+            metaKey: null,
+            shiftKey: null),
+        context: {'collapsed': true, 'offset': 0},
+        handler: handleBackspace);
 
     listen();
   }
 
-  static bool match(KeyboardEvent evt, BindingObject binding) {
-    if ((['altKey', 'ctrlKey', 'metaKey', 'shiftKey'] as List<String>).any((key) {
-      // @ts-expect-error
-      return (binding[key] != null && binding[key] != evt[key]);
+  static bool match(DomEvent evt, BindingObject binding) {
+    final event = evt.rawEvent as dynamic;
+    // A map to access binding properties by string key
+    final bindingMap = {
+      'altKey': binding.altKey,
+      'ctrlKey': binding.ctrlKey,
+      'metaKey': binding.metaKey,
+      'shiftKey': binding.shiftKey,
+    };
+
+    if (bindingMap.keys.any((key) {
+      return (bindingMap[key] != null && bindingMap[key] != event[key]);
     })) {
       return false;
     }
-    return binding.key == evt.key || binding.key == evt.keyCode;
+    return binding.key == event.key || binding.key == event.keyCode;
   }
 
   void addBinding(dynamic keyBinding, {dynamic context, Function? handler}) {
-    BindingObject binding = normalize(keyBinding)!;
+    BindingObject? binding = normalize(keyBinding);
     if (binding == null) {
-      debug.log('Attempted to add invalid keyboard binding', keyBinding);
+      // debug.log('Attempted to add invalid keyboard binding', keyBinding);
       return;
     }
 
@@ -166,18 +212,22 @@ class Keyboard extends Module<KeyboardOptions> {
 
   void listen() {
     quill.root.addEventListener('keydown', (evt) {
-      final event = evt as KeyboardEvent;
-      if (event.defaultPrevented || event.isComposing!) return;
+      final event = evt;
+      final raw = event.rawEvent as dynamic;
+      if (raw.defaultPrevented || raw.isComposing!) return;
 
-      final isComposing = event.keyCode == 229 && (event.key == 'Enter' || event.key == 'Backspace');
+      final isComposing =
+          raw.keyCode == 229 && (raw.key == 'Enter' || raw.key == 'Backspace');
       if (isComposing) return;
 
-      final matchedBindings = (bindings[event.key] ?? []).toList();
-      if (event.keyCode != null) {
-        matchedBindings.addAll(bindings[event.keyCode] ?? []);
+      final matchedBindings = (bindings[raw.key] ?? []).toList();
+      if (raw.keyCode != null) {
+        matchedBindings.addAll(bindings[raw.keyCode] ?? []);
       }
 
-      final matches = matchedBindings.where((binding) => Keyboard.match(event, binding)).toList();
+      final matches = matchedBindings
+          .where((binding) => Keyboard.match(event, binding))
+          .toList();
       if (matches.isEmpty) return;
 
       // Placeholder for Quill.find
@@ -188,11 +238,11 @@ class Keyboard extends Module<KeyboardOptions> {
       if (range == null || !quill.hasFocus()) return;
 
       // Placeholder for quill.getLine, quill.getLeaf
-      final line = Block(HtmlElement.div()); // Dummy Block
+      final line = Block(quill.root.cloneNode()); // Dummy Block
       final offset = 0;
-      final leafStart = TextBlot('', HtmlElement.span()); // Dummy TextBlot
+      final leafStart = TextBlot.create(''); // Dummy TextBlot
       final offsetStart = 0;
-      final leafEnd = TextBlot('', HtmlElement.span()); // Dummy TextBlot
+      final leafEnd = TextBlot.create(''); // Dummy TextBlot
       final offsetEnd = 0;
 
       final prefixText = leafStart.value().substring(0, offsetStart);
@@ -210,9 +260,12 @@ class Keyboard extends Module<KeyboardOptions> {
       );
 
       final prevented = matches.any((binding) {
-        if (binding.collapsed != null && binding.collapsed != curContext.collapsed) return false;
-        if (binding.empty != null && binding.empty != curContext.empty) return false;
-        if (binding.offset != null && binding.offset != curContext.offset) return false;
+        if (binding.collapsed != null &&
+            binding.collapsed != curContext.collapsed) return false;
+        if (binding.empty != null && binding.empty != curContext.empty)
+          return false;
+        if (binding.offset != null && binding.offset != curContext.offset)
+          return false;
 
         if (binding.format is List) {
           if (!(binding.format as List).every((name) => curContext.format[name] == null)) return false;
@@ -225,9 +278,10 @@ class Keyboard extends Module<KeyboardOptions> {
         }
 
         if (binding.prefix != null && !binding.prefix!.hasMatch(curContext.prefix)) return false;
-        if (binding.suffix != null && !binding.suffix!.hasMatch(curContext.suffix)) return false;
+        if (binding.suffix != null &&
+            !binding.suffix!.hasMatch(curContext.suffix)) return false;
 
-        return binding.handler?.call(this, range, curContext, binding) != true;
+        return binding.handler?.call(range, curContext) != true;
       });
 
       if (prevented) {
@@ -252,20 +306,40 @@ class Keyboard extends Module<KeyboardOptions> {
   void handleEnter(Range range, Context context) {
     // Placeholder
   }
+
+  bool isEqual(dynamic a, dynamic b) {
+    if (a == b) return true;
+    if (a == null || b == null) return false;
+    if (a is Map && b is Map) {
+      if (a.length != b.length) return false;
+      for (final key in a.keys) {
+        if (!b.containsKey(key)) return false;
+        if (!isEqual(a[key], b[key])) return false;
+      }
+      return true;
+    }
+    if (a is List && b is List) {
+      if (a.length != b.length) return false;
+      for (var i = 0; i < a.length; i++) {
+        if (!isEqual(a[i], b[i])) return false;
+      }
+      return true;
+    }
+    return false;
+  }
 }
 
 BindingObject? normalize(dynamic binding) {
   if (binding is String || binding is int) {
     return BindingObject(key: binding);
+  } else if (binding is BindingObject) {
+    return binding;
   } else if (binding is Map) {
     final newBinding = BindingObject();
-    binding.forEach((key, value) {
-      // @ts-expect-error
-      newBinding[key] = value;
-    });
-    if (newBinding.shortKey != null) {
-      // @ts-expect-error
-      newBinding[SHORTKEY] = newBinding.shortKey;
+    newBinding.setFromMap(binding as Map<String, dynamic>);
+
+    if (newBinding.shortKey == true) {
+      newBinding.metaKey = newBinding.shortKey; // Simplified for now
       newBinding.shortKey = null;
     }
     return newBinding;

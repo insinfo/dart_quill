@@ -8,7 +8,7 @@ class Editor {
 
   Editor(this.scroll);
 
-  void applyDelta(Delta delta) {
+  void update(Delta delta, String source) {
     var index = 0;
     delta.operations.forEach((op) {
       if (op.isInsert) {
@@ -33,39 +33,43 @@ class Editor {
         index += op.length!;
       }
     });
+    _update();
   }
 
   void deleteText(int index, int length) {
     scroll.deleteAt(index, length);
-    update();
+    _update();
   }
 
   void formatLine(int index, int length, String name, dynamic value) {
     scroll.formatAt(index, length, name, value);
-    update();
+    _update();
   }
 
-  void formatText(int index, int length, String name, dynamic value) {
+  Delta formatText(int index, int length, String name, dynamic value) {
     scroll.formatAt(index, length, name, value);
-    update();
+    _update();
+    return Delta()..retain(index)..retain(length, {name: value});
   }
 
-  void insertEmbed(int index, String type, dynamic data) {
+  Delta insertEmbed(int index, String type, dynamic data) {
     scroll.insertAt(index, type, data);
-    update();
+    _update();
+    return Delta()..retain(index)..insert({type: data});
   }
 
-  void insertText(int index, String text, [Map<String, dynamic>? formats]) {
+  Delta insertText(int index, String text, [Map<String, dynamic>? formats]) {
     scroll.insertAt(index, text);
     if (formats != null) {
       formats.forEach((name, value) {
         scroll.formatAt(index, text.length, name, value);
       });
     }
-    update();
+    _update();
+    return Delta()..retain(index)..insert(text, formats);
   }
 
-  void update() {
+  void _update() {
     // Build new delta from current document state
     var tempDelta = Delta();
     scroll.children.forEach((child) {
@@ -73,6 +77,10 @@ class Editor {
       tempDelta = tempDelta.concat(childDelta);
     });
     delta = tempDelta;
+  }
+
+  Delta getContents() {
+    return delta;
   }
 
   Delta _buildDelta(dynamic blot) {

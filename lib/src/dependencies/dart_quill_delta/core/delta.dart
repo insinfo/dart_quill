@@ -563,4 +563,20 @@ class Delta {
 
   @override
   String toString() => operations.join('\n');
+
+  String getPlainText(int index, int length) {
+    final iter = DeltaIterator(this);
+    var text = '';
+    var i = 0;
+    while (iter.hasNext && i < index + length) {
+      final op = iter.next();
+      if (op.isInsert && op.data is String) {
+        if (i >= index) {
+          text += op.data as String;
+        }
+      }
+      i += op.length!;
+    }
+    return text;
+  }
 }

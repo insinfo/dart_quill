@@ -538,4 +538,6 @@ abstract class ScrollBlot extends ParentBlot {
     List<DomMutationRecord>? mutations,
     Map<String, dynamic>? context,
   ]);
+
+  Map<String, dynamic> getFormat(int index, [int length = 0]);
 }

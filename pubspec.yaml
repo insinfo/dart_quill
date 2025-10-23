@@ -6,10 +6,11 @@ environment:
   sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
-  quill_delta:
-    git:
-      url: https://github.com/pulyaevskiy/quill-delta-dart.git
-      ref: master
+  
+  # quill_delta:
+  #   git:
+  #     url: https://github.com/pulyaevskiy/quill-delta-dart.git
+  #     ref: master
   ngdart: ^8.0.0-dev.4
   ngforms: any
   ngrouter: any
