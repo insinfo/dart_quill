@@ -174,7 +174,7 @@ class Block extends BlockBlot {
   ]) {
     super.optimize(mutations, context);
     _cache.clear();
-    
+
     // Ensure empty blocks have a break element
     if (children.isEmpty) {
       final br = createDefaultChild();
@@ -203,9 +203,11 @@ class Block extends BlockBlot {
       final cloneBlock = clone();
       if (index == 0) {
         parent?.insertBefore(cloneBlock, this);
-        return cloneBlock;
+        _cache.clear();
+        return this;
       }
       parent?.insertBefore(cloneBlock, next);
+      _cache.clear();
       return cloneBlock;
     }
     final result = super.split(index, force: force);
@@ -232,7 +234,8 @@ class BlockEmbed extends EmbedBlot {
   int get scope => BlockEmbed.kScope;
 
   @override
-  BlockEmbed clone() => BlockEmbed((domNode as DomElement).cloneNode(deep: true));
+  BlockEmbed clone() =>
+      BlockEmbed((domNode as DomElement).cloneNode(deep: true));
 
   @override
   dynamic value() => {};

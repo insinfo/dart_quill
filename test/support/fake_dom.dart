@@ -1,4 +1,6 @@
 import 'package:dart_quill/src/platform/dom.dart';
+import 'package:html/dom.dart' as html_dom;
+import 'package:html/parser.dart' as html_parser;
 
 class FakeDomAdapter implements DomAdapter {
   FakeDomAdapter() : document = FakeDomDocument();
@@ -8,7 +10,8 @@ class FakeDomAdapter implements DomAdapter {
 
   @override
   DomMutationObserver createMutationObserver(
-    void Function(List<DomMutationRecord> records, DomMutationObserver observer) callback,
+    void Function(List<DomMutationRecord> records, DomMutationObserver observer)
+        callback,
   ) {
     return FakeDomMutationObserver(callback);
   }
@@ -25,7 +28,8 @@ class FakeDomDocument implements DomDocument {
   late final FakeDomElement _body;
 
   @override
-  DomElement createElement(String tagName) => FakeDomElement(tagName.toUpperCase(), document: this);
+  DomElement createElement(String tagName) =>
+      FakeDomElement(tagName.toUpperCase(), document: this);
 
   @override
   DomText createTextNode(String value) => FakeDomText(value, document: this);
@@ -85,7 +89,8 @@ class FakeDomNode implements DomNode {
   String get nodeName => _tagName ?? '#node';
 
   @override
-  int get nodeType => _tagName != null ? DomNode.ELEMENT_NODE : DomNode.TEXT_NODE;
+  int get nodeType =>
+      _tagName != null ? DomNode.ELEMENT_NODE : DomNode.TEXT_NODE;
 
   @override
   String? get textContent {
@@ -131,7 +136,7 @@ class FakeDomNode implements DomNode {
       if (index == -1) {
         _children.add(fake);
       } else {
-  final prev = ref.previousSibling;
+        final prev = ref.previousSibling;
         if (prev != null) {
           prev.nextSibling = fake;
           fake.previousSibling = prev;
@@ -169,8 +174,8 @@ class FakeDomNode implements DomNode {
     final index = _children.indexOf(child);
     if (index == -1) return;
     _children.removeAt(index);
-  final prev = child.previousSibling;
-  final next = child.nextSibling;
+    final prev = child.previousSibling;
+    final next = child.nextSibling;
     if (prev != null) {
       prev.nextSibling = next;
     }
@@ -212,11 +217,17 @@ class FakeDomElement extends FakeDomNode implements DomElement {
   DomClassList get classes => _classes;
 
   @override
-  String? get text => _text;
+  String? get text => _text ?? _collectTextFromChildren();
 
   @override
   set text(String? value) {
+    while (firstChild != null) {
+      firstChild!.remove();
+    }
     _text = value;
+    if (value != null && value.isNotEmpty) {
+      append(FakeDomText(value, document: _ownerDocument));
+    }
   }
 
   @override
@@ -361,13 +372,116 @@ class FakeDomElement extends FakeDomNode implements DomElement {
   int get offsetWidth => 100; // Fake width for testing
 
   @override
-  String? get innerHTML => _text;
+  String? get innerHTML {
+    if (internalChildren.isEmpty) {
+      return _text;
+    }
+    final buffer = StringBuffer();
+    for (final child in internalChildren) {
+      _serializeHtmlNode(child, buffer);
+    }
+    return buffer.toString();
+  }
 
   @override
   set innerHTML(String? value) {
-    _text = value;
+    while (firstChild != null) {
+      firstChild!.remove();
+    }
+    _text = null;
+    if (value == null || value.isEmpty) {
+      return;
+    }
+    final fragment = html_parser.parseFragment(value);
+    for (final node in fragment.nodes) {
+      final converted = _convertHtmlNode(node, _ownerDocument);
+      if (converted != null) {
+        append(converted);
+      }
+    }
+  }
+
+  String? _collectTextFromChildren() {
+    if (internalChildren.isEmpty) {
+      return null;
+    }
+    final buffer = StringBuffer();
+    for (final child in internalChildren) {
+      if (child is FakeDomText) {
+        buffer.write(child.data);
+      } else if (child is FakeDomElement) {
+        final nested = child.text;
+        if (nested != null) {
+          buffer.write(nested);
+        }
+      }
+    }
+    return buffer.isEmpty ? null : buffer.toString();
   }
 }
+
+FakeDomNode? _convertHtmlNode(html_dom.Node node, FakeDomDocument document) {
+  if (node is html_dom.Element) {
+    final tagName = node.localName ?? 'div';
+    final element = FakeDomElement(tagName, document: document);
+    for (final entry in node.attributes.entries) {
+      final key = entry.key.toString();
+      final attrValue = entry.value.toString();
+      element.setAttribute(key, attrValue);
+      if (key == 'class') {
+        for (final token in attrValue.split(RegExp(r'\s+'))) {
+          if (token.isNotEmpty) {
+            element.classes.add(token);
+          }
+        }
+      }
+    }
+    for (final child in node.nodes) {
+      final convertedChild = _convertHtmlNode(child, document);
+      if (convertedChild != null) {
+        element.append(convertedChild);
+      }
+    }
+    return element;
+  }
+  if (node is html_dom.Text) {
+    return FakeDomText(node.data, document: document);
+  }
+  return null;
+}
+
+void _serializeHtmlNode(FakeDomNode node, StringBuffer buffer) {
+  if (node is FakeDomText) {
+    buffer.write(node.data);
+    return;
+  }
+  if (node is FakeDomElement) {
+    final tag = node.tagName.toLowerCase();
+    buffer.write('<$tag');
+    if (node._attributes.isNotEmpty) {
+      node._attributes.forEach((key, value) {
+        buffer.write(' $key="$value"');
+      });
+    }
+    buffer.write('>');
+    if (_voidHtmlElements.contains(tag)) {
+      return;
+    }
+    for (final child in node.internalChildren) {
+      _serializeHtmlNode(child, buffer);
+    }
+    buffer.write('</$tag>');
+  }
+}
+
+const Set<String> _voidHtmlElements = {
+  'br',
+  'hr',
+  'img',
+  'input',
+  'meta',
+  'link',
+};
 
 class FakeDomText extends FakeDomNode implements DomText {
   FakeDomText(this._data, {FakeDomDocument? document})
@@ -427,7 +541,8 @@ class FakeDomMutationObserver implements DomMutationObserver {
   void disconnect() {}
 
   @override
-  void observe(DomNode target, {bool? subtree, bool? childList, bool? characterData}) {}
+  void observe(DomNode target,
+      {bool? subtree, bool? childList, bool? characterData}) {}
 
   @override
   List<DomMutationRecord> takeRecords() => const [];
@@ -504,4 +619,3 @@ class FakeDomMutationRecord implements DomMutationRecord {
   @override
   String get type => 'attributes';
 }
-
