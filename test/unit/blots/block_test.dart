@@ -5,20 +5,26 @@ import 'package:test/test.dart';
 
 class TestBlock extends Block {
   TestBlock(DomElement domNode) : super(domNode);
+  
   @override
-  int length() => domNode.text?.length ?? 0;
+  int length() => domNode.textContent?.length ?? 0;
+  
   @override
   void optimize([List<DomMutationRecord>? mutations, Map<String, dynamic>? context]) {}
 
   @override
   void insertAt(int index, String value, [dynamic def]) {
-    final current = domNode.text ?? '';
-    final safeIndex = index.clamp(0, current.length);
-    domNode.text = current.replaceRange(safeIndex, safeIndex, value);
+    // Cast to DomElement to access text property
+    if (domNode is DomElement) {
+      final element = domNode as DomElement;
+      final current = element.text ?? '';
+      final safeIndex = index.clamp(0, current.length);
+      element.text = current.replaceRange(safeIndex, safeIndex, value);
+    }
   }
 
   @override
-  String value() => domNode.text ?? '';
+  String value() => domNode.textContent ?? '';
 }
 
 void main() {

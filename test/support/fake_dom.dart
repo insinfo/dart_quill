@@ -13,7 +13,7 @@ class FakeDomAdapter implements DomAdapter {
     return FakeDomMutationObserver(callback);
   }
 
-  @override
+  // Helper method for creating fake events (not part of DomAdapter interface)
   DomEvent createEvent(String type) => FakeDomEvent(type);
 }
 
@@ -32,6 +32,34 @@ class FakeDomDocument implements DomDocument {
 
   @override
   DomElement get body => _body;
+
+  @override
+  DomElement? querySelector(String selectors) {
+    // Simple implementation: return first matching element by tag name
+    final tag = selectors.toUpperCase();
+    for (final child in _body.internalChildren) {
+      if (child is FakeDomElement && child.tagName == tag) {
+        return child;
+      }
+    }
+    return null;
+  }
+
+  @override
+  List<DomElement> querySelectorAll(String selectors) {
+    // Simple implementation: return all matching elements
+    final results = <DomElement>[];
+    final tag = selectors.toUpperCase();
+    for (final child in _body.internalChildren) {
+      if (child is FakeDomElement && child.tagName == tag) {
+        results.add(child);
+      }
+    }
+    return results;
+  }
+
+  @override
+  DomParser get parser => FakeDomParser();
 }
 
 class FakeDomNode implements DomNode {
@@ -52,6 +80,23 @@ class FakeDomNode implements DomNode {
   Iterable<FakeDomNode> get internalChildren => _children;
 
   String? get rawTagName => _tagName;
+
+  @override
+  String get nodeName => _tagName ?? '#node';
+
+  @override
+  int get nodeType => _tagName != null ? DomNode.ELEMENT_NODE : DomNode.TEXT_NODE;
+
+  @override
+  String? get textContent {
+    if (this is FakeDomText) {
+      return (this as FakeDomText).data;
+    }
+    if (this is FakeDomElement) {
+      return (this as FakeDomElement).text;
+    }
+    return null;
+  }
 
   @override
   List<DomNode> get childNodes => List.unmodifiable(_children);
@@ -241,6 +286,87 @@ class FakeDomElement extends FakeDomNode implements DomElement {
     if (parent == null) return;
     parent.replaceChild(this, node);
   }
+
+  @override
+  bool contains(DomNode? node) {
+    if (node == null) return false;
+    DomNode? current = node;
+    while (current != null) {
+      if (current == this) return true;
+      current = current.parentNode;
+    }
+    return false;
+  }
+
+  @override
+  DomElement? querySelector(String selector) {
+    // Simple implementation for testing
+    if (selector.startsWith('.')) {
+      final className = selector.substring(1);
+      for (final child in internalChildren) {
+        if (child is FakeDomElement && child.classes.contains(className)) {
+          return child;
+        }
+      }
+    } else {
+      final tag = selector.toUpperCase();
+      for (final child in internalChildren) {
+        if (child is FakeDomElement && child.tagName == tag) {
+          return child;
+        }
+      }
+    }
+    return null;
+  }
+
+  @override
+  List<DomElement> querySelectorAll(String selectors) {
+    final results = <DomElement>[];
+    if (selectors.startsWith('.')) {
+      final className = selectors.substring(1);
+      for (final child in internalChildren) {
+        if (child is FakeDomElement && child.classes.contains(className)) {
+          results.add(child);
+        }
+      }
+    } else {
+      final tag = selectors.toUpperCase();
+      for (final child in internalChildren) {
+        if (child is FakeDomElement && child.tagName == tag) {
+          results.add(child);
+        }
+      }
+    }
+    return results;
+  }
+
+  @override
+  String? get className => _classes.values.join(' ');
+
+  @override
+  String? get id => getAttribute('id');
+
+  @override
+  dynamic get style => _FakeStyle(this);
+
+  @override
+  int get scrollTop => 0;
+
+  @override
+  set scrollTop(int value) {
+    // No-op for fake
+  }
+
+  @override
+  int get offsetWidth => 100; // Fake width for testing
+
+  @override
+  String? get innerHTML => _text;
+
+  @override
+  set innerHTML(String? value) {
+    _text = value;
+  }
 }
 
 class FakeDomText extends FakeDomNode implements DomText {
@@ -307,10 +433,49 @@ class FakeDomMutationObserver implements DomMutationObserver {
   List<DomMutationRecord> takeRecords() => const [];
 }
 
+class _FakeStyle {
+  _FakeStyle(this.element);
+  final FakeDomElement element;
+  final Map<String, String> _styles = {};
+
+  void setProperty(String property, String value) {
+    _styles[property] = value;
+  }
+
+  String getPropertyValue(String property) => _styles[property] ?? '';
+
+  // Allow dynamic property access
+  dynamic noSuchMethod(Invocation invocation) {
+    final name = invocation.memberName.toString().split('"')[1];
+    if (invocation.isGetter) {
+      return _styles[name] ?? '';
+    } else if (invocation.isSetter) {
+      final value = invocation.positionalArguments[0];
+      _styles[name.substring(0, name.length - 1)] = value.toString();
+      return null;
+    }
+    return super.noSuchMethod(invocation);
+  }
+}
+
+class FakeDomParser implements DomParser {
+  @override
+  DomDocument parseFromString(String string, String type) {
+    // Simple fake implementation
+    return FakeDomDocument();
+  }
+}
+
 class FakeDomEvent implements DomEvent {
-  FakeDomEvent(this.type);
+  FakeDomEvent(this.type, [this.target]);
   final String type;
   bool defaultPrevented = false;
+
+  @override
+  final DomNode? target;
+
+  @override
+  dynamic get rawEvent => this;
 
   @override
   void preventDefault() {

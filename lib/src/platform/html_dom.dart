@@ -398,6 +398,17 @@ class HtmlDomElement extends _HtmlDomNode implements DomElement {
   set scrollTop(int value) {
     _element.scrollTop = value;
   }
+
+  @override
+  int get offsetWidth => _element.offsetWidth;
+
+  @override
+  String? get innerHTML => _element.innerHtml;
+
+  @override
+  set innerHTML(String? value) {
+    _element.innerHtml = value;
+  }
 }
 
 class HtmlDomText extends _HtmlDomNode implements DomText {

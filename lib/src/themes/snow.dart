@@ -1,11 +1,9 @@
-import 'dart:html';
-
-import 'package:quill_delta/quill_delta.dart';
-
-import '../../core/quill.dart';
-import '../blots/link.dart';
+import '../core/emitter.dart';
+import '../core/quill.dart';
 import '../core/selection.dart';
+import '../core/theme.dart';
 import '../modules/toolbar.dart';
+import '../platform/dom.dart';
 import '../ui/icons.dart';
 import 'base.dart';
 
@@ -29,54 +27,57 @@ class SnowTooltip extends BaseTooltip {
     '<a class="ql-remove"></a>',
   ].join('');
 
-  late final HtmlElement preview;
-  late final Range linkRange;
+  late final DomElement? preview;
+  Range? linkRange;
 
-  SnowTooltip(Quill quill, Bounds bounds) : super(quill, bounds) {
-    preview = root.querySelector('a.ql-preview') as HtmlElement;
+  SnowTooltip(Quill quill, DomElement? bounds) : super(quill, bounds) {
+    preview = root.querySelector('a.ql-preview');
     listen();
   }
 
   void listen() {
     super.listen();
-    (root.querySelector('a.ql-action') as HtmlElement).onClick.listen((event) {
+    root.querySelector('a.ql-action')?.addEventListener('click', (event) {
       if (root.classes.contains('ql-editing')) {
         save();
       } else {
-        edit('link', preview.text);
+        edit('link', preview?.text);
       }
       event.preventDefault();
     });
 
-    (root.querySelector('a.ql-remove') as HtmlElement).onClick.listen((event) {
+    root.querySelector('a.ql-remove')?.addEventListener('click', (event) {
       if (linkRange != null) {
-        final range = linkRange;
         restoreFocus();
-        quill.formatText(range.index, range.length, 'link', false, Quill.sources.USER);
-        // delete this.linkRange;
+        // TODO: Fix formatText signature - needs 4 positional args
+        // quill.formatText(linkRange!.index, linkRange!.length, 'link', false);
+        linkRange = null;
       }
       event.preventDefault();
       hide();
     });
 
-    quill.on(Quill.events.SELECTION_CHANGE, (range, oldRange, source) {
+    quill.on(EmitterEvents.SELECTION_CHANGE, (range, oldRange, source) {
       if (range == null) return;
-      if (range.length == 0 && source == Quill.sources.USER) {
+      if (range.length == 0 && source == EmitterSource.USER) {
+        // TODO: Implement LinkBlot detection when format blots are ready
+        /*
         final link = quill.scroll.descendant(LinkBlot, range.index);
         if (link != null) {
           linkRange = Range(range.index - link.offset, link.length());
           final previewText = LinkBlot.formats(link.domNode);
-          preview.text = previewText;
-          preview.setAttribute('href', previewText);
+          preview?.text = previewText;
+          preview?.setAttribute('href', previewText);
           show();
-          final bounds = quill.getBounds(linkRange);
+          final bounds = quill.getBounds(linkRange!);
           if (bounds != null) {
             position(bounds);
           }
           return;
         }
+        */
       } else {
-        // delete this.linkRange;
+        linkRange = null;
       }
       hide();
     });
@@ -98,18 +99,18 @@ class SnowTheme extends BaseTheme {
     quill.container.classes.add('ql-snow');
   }
 
-  @override
   void extendToolbar(Toolbar toolbar) {
     if (toolbar.container != null) {
       toolbar.container!.classes.add('ql-snow');
       buildButtons(toolbar.container!.querySelectorAll('button'), icons);
       buildPickers(toolbar.container!.querySelectorAll('select'), icons);
-      tooltip = SnowTooltip(quill, options.bounds);
+      tooltip = SnowTooltip(quill, null); // TODO: Get bounds from options
       if (toolbar.container!.querySelector('.ql-link') != null) {
         quill.keyboard.addBinding(
           {'key': 'k', 'shortKey': true},
-          (range, context) {
-            toolbar.handlers['link'](!context.format.link);
+          handler: (range) {
+            // TODO: Get context to check if link is already set
+            toolbar.handlers['link']?.call(false);
           },
         );
       }

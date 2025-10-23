@@ -8,6 +8,25 @@ class Range {
   const Range(this.index, this.length);
 }
 
+/// Represents bounding rectangle information for an element or range.
+class Bounds {
+  final double bottom;
+  final double height;
+  final double left;
+  final double right;
+  final double top;
+  final double width;
+
+  const Bounds({
+    required this.bottom,
+    required this.height,
+    required this.left,
+    required this.right,
+    required this.top,
+    required this.width,
+  });
+}
+
 /// Selection model decoupled from the browser DOM. UI integrations can
 /// observe selection-change events and synchronise native selections when
 /// needed. This keeps the core editor logic platform agnostic.

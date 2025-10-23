@@ -52,10 +52,10 @@ class Toolbar extends Module<ToolbarProps> {
       final containerDiv = document.createElement('div');
       containerDiv.setAttribute('role', 'toolbar');
       addControls(containerDiv, options.container as ToolbarConfig);
-      quill.container?.parentNode?.insertBefore(containerDiv, quill.container);
+      quill.container.parentNode?.insertBefore(containerDiv, quill.container);
       container = containerDiv;
     } else if (options.container is String) {
-      container = document.querySelector(options.container as String) as DomElement?;
+      container = document.querySelector(options.container as String);
     } else {
       container = options.container as DomElement?;
     }
@@ -73,7 +73,7 @@ class Toolbar extends Module<ToolbarProps> {
     }
 
     container!.querySelectorAll('button, select').forEach((input) {
-      attach(input as DomElement);
+      attach(input);
     });
 
     quill.on(EmitterEvents.EDITOR_CHANGE, (type, range, oldRange, source) {

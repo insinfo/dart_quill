@@ -70,6 +70,13 @@ abstract class DomElement extends DomNode {
   /// Get or set the scroll position (vertical).
   int get scrollTop;
   set scrollTop(int value);
+
+  /// Get the element's width including padding and border.
+  int get offsetWidth;
+
+  /// Get or set the HTML content inside the element.
+  String? get innerHTML;
+  set innerHTML(String? value);
 }
 
 /// Abstraction for text nodes.

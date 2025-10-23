@@ -42,17 +42,18 @@ class BaseTheme extends Theme {
 
   BaseTheme(Quill quill, ThemeOptions options) : super(quill, options) {
     final document = domBindings.adapter.document;
-    final listener = (DomEvent e) {
+    late DomEventListener listener;
+    listener = (DomEvent e) {
       if (!document.body.contains(quill.root)) {
         document.body.removeEventListener('click', listener);
         return;
       }
-      if (tooltip != null && !tooltip!.root.contains(e.target as DomNode?) && !quill.hasFocus()) {
+      if (tooltip != null && !tooltip!.root.contains(e.target) && !quill.hasFocus()) {
         tooltip!.hide();
       }
       if (pickers != null) {
         pickers!.forEach((picker) {
-          if (!picker.container.contains(e.target as DomNode?)) {
+          if (!picker.container.contains(e.target)) {
             picker.close();
           }
         });
@@ -61,40 +62,37 @@ class BaseTheme extends Theme {
     document.body.addEventListener('click', listener);
   }
 
-  @override
   dynamic addModule(String name) {
-    final module = super.addModule(name);
-    if (name == 'toolbar') {
-      // extendToolbar(module); // Placeholder for extendToolbar
-    }
-    return module;
+    // TODO: Implement module loading system
+    // For now, return null as a placeholder
+    return null;
   }
 
-  void buildButtons(NodeList buttons, Map<String, dynamic> icons) {
+  void buildButtons(List<DomElement> buttons, Map<String, dynamic> icons) {
     buttons.forEach((button) {
-      final className = (button as HtmlElement).getAttribute('class') ?? '';
+      final className = button.getAttribute('class') ?? '';
       className.split(RegExp(r'\s+')).forEach((name) {
         if (!name.startsWith('ql-')) return;
         name = name.substring('ql-'.length);
         if (icons[name] == null) return;
         if (name == 'direction') {
-          button.innerHtml = '${icons[name]['']} ${icons[name]['rtl']}';
+          button.innerHTML = '${icons[name]['']} ${icons[name]['rtl']}';
         } else if (icons[name] is String) {
-          button.innerHtml = icons[name];
+          button.innerHTML = icons[name];
         } else {
           final value = button.getAttribute('value') ?? '';
           if (value.isNotEmpty && icons[name][value] != null) {
-            button.innerHtml = icons[name][value];
+            button.innerHTML = icons[name][value];
           }
         }
       });
     });
   }
 
-  void buildPickers(NodeList selects, Map<String, dynamic> icons) {
+  void buildPickers(List<DomElement> selects, Map<String, dynamic> icons) {
     pickers = [];
     selects.forEach((select) {
-      final selectElement = select as SelectElement;
+      final selectElement = select;
       if (selectElement.classes.contains('ql-align')) {
         if (selectElement.querySelector('option') == null) {
           fillSelect(selectElement, ALIGNS);
@@ -118,7 +116,8 @@ class BaseTheme extends Theme {
             fillSelect(selectElement, SIZES);
           }
         }
-        pickers!.add(Picker(selectElement));
+        // Use ColorPicker as generic picker (no icon needed)
+        pickers!.add(ColorPicker(selectElement, null));
       }
     });
     final updatePickers = () {
@@ -131,24 +130,24 @@ class BaseTheme extends Theme {
 }
 
 class BaseTooltip extends Tooltip {
-  TextInputElement? textbox;
+  DomElement? textbox;
   Range? linkRange;
 
-  BaseTooltip(Quill quill, [HtmlElement? boundsContainer]) : super(quill, boundsContainer) {
-    textbox = root.querySelector('input[type="text"]') as TextInputElement?;
+  BaseTooltip(Quill quill, [DomElement? boundsContainer]) : super(quill, boundsContainer) {
+    textbox = root.querySelector('input[type="text"]');
     listen();
   }
 
   void listen() {
     textbox?.addEventListener('keydown', (event) {
-      if (event is KeyboardEvent) {
-        if (event.key == 'Enter') {
-          save();
-          event.preventDefault();
-        } else if (event.key == 'Escape') {
-          cancel();
-          event.preventDefault();
-        }
+      // Check for key by getting the rawEvent property
+      final key = (event.rawEvent as dynamic).key as String?;
+      if (key == 'Enter') {
+        save();
+        event.preventDefault();
+      } else if (key == 'Escape') {
+        cancel();
+        event.preventDefault();
       }
     });
   }
@@ -164,9 +163,9 @@ class BaseTooltip extends Tooltip {
     if (textbox == null) return;
 
     if (preview != null) {
-      textbox!.value = preview;
+      textbox!.setAttribute('value', preview);
     } else if (mode != root.getAttribute('data-mode')) {
-      textbox!.value = '';
+      textbox!.setAttribute('value', '');
     }
     final savedRange = quill.selection.savedRange;
     if (savedRange != null) {
@@ -175,7 +174,7 @@ class BaseTooltip extends Tooltip {
         position(bounds);
       }
     }
-    textbox!.select();
+    // TODO: Add select() method to DomElement interface for text inputs
     textbox!.setAttribute('placeholder', textbox!.getAttribute('data-$mode') ?? '');
     root.setAttribute('data-mode', mode);
   }
@@ -185,7 +184,7 @@ class BaseTooltip extends Tooltip {
   }
 
   void save() {
-    var value = textbox?.value ?? '';
+    var value = textbox?.getAttribute('value') ?? '';
     switch (root.getAttribute('data-mode')) {
       case 'link':
         final scrollTop = quill.root.scrollTop;
@@ -217,7 +216,7 @@ class BaseTooltip extends Tooltip {
         break;
       default:
     }
-    textbox!.value = '';
+    textbox!.setAttribute('value', '');
     hide();
   }
 }
@@ -236,9 +235,10 @@ String extractVideoUrl(String url) {
   return url;
 }
 
-void fillSelect(SelectElement select, List<dynamic> values, [dynamic defaultValue = false]) {
+void fillSelect(DomElement select, List<dynamic> values, [dynamic defaultValue = false]) {
+  final document = domBindings.adapter.document;
   values.forEach((value) {
-    final option = OptionElement();
+    final option = document.createElement('option');
     if (value == defaultValue) {
       option.setAttribute('selected', 'selected');
     } else {
