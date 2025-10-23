@@ -27,6 +27,8 @@ class Registry {
     _entries[entry.blotName] = entry;
   }
 
+  Iterable<RegistryEntry> get entries => _entries.values;
+
   bool contains(String name) => _entries.containsKey(name);
 
   RegistryEntry? query(String name, int scope) {
@@ -34,6 +36,41 @@ class Registry {
     if (entry == null) return null;
     if (Scope.matches(entry.scope, scope)) {
       return entry;
+    }
+    return null;
+  }
+
+  RegistryEntry? queryByTagName(String tagName, {int scope = Scope.ANY}) {
+    final upper = tagName.toUpperCase();
+    for (final entry in _entries.values) {
+      if (!Scope.matches(entry.scope, scope)) {
+        continue;
+      }
+      for (final tag in entry.tagNames) {
+        if (tag.toUpperCase() == upper) {
+          return entry;
+        }
+      }
+    }
+    return null;
+  }
+
+  RegistryEntry? queryByClassName(String className, {int scope = Scope.ANY}) {
+    if (className.isEmpty) return null;
+    final tokens = className
+        .split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty)
+        .toList();
+    if (tokens.isEmpty) return null;
+    for (final entry in _entries.values) {
+      if (!Scope.matches(entry.scope, scope)) {
+        continue;
+      }
+      for (final token in tokens) {
+        if (entry.classNames.contains(token)) {
+          return entry;
+        }
+      }
     }
     return null;
   }
@@ -338,12 +375,17 @@ abstract class ParentBlot extends Blot {
       final childLength = child.length();
       final end = offset + childLength;
 
-      if (_matches(child, query)) {
-        return MapEntry(child, index - offset);
-      }
+      final isLastChild = identical(child, children.isNotEmpty ? children.last : null);
+      final containsIndex = index < end || (index == end && isLastChild);
 
-      if (child is ParentBlot && index < end) {
-        return child.descendant(query, index - offset);
+      if (containsIndex) {
+        if (_matches(child, query)) {
+          return MapEntry(child, index - offset);
+        }
+        if (child is ParentBlot) {
+          return child.descendant(query, index - offset);
+        }
+        break;
       }
 
       offset = end;
@@ -406,10 +448,20 @@ abstract class ParentBlot extends Blot {
 
       if (index < end) {
         final remainder = child.split(index - offset, force: force);
-        if (remainder == null) {
-          return child.next?.parent ?? child.parent;
+        if (!force) {
+          return remainder ?? child.next?.parent ?? child.parent;
         }
-        return remainder;
+
+        final splitParent = clone() as ParentBlot;
+        parent?.insertBefore(splitParent, next);
+
+        Blot? move = remainder ?? child.next;
+        while (move != null) {
+          final nextMove = move.next;
+          splitParent.insertBefore(move, null);
+          move = nextMove;
+        }
+        return splitParent;
       }
 
       if (index == end) {

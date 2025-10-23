@@ -29,5 +29,5 @@ class Header extends Block {
   Map<String, dynamic> formats() => {kBlotName: getLevel(element)};
 
   @override
-  Header clone() => Header(element.cloneNode(deep: true));
+  Header clone() => Header(element.cloneNode(deep: false));
 }

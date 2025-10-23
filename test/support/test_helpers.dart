@@ -98,14 +98,60 @@ Scroll createScroll(String html, {Registry? registry, DomElement? container}) {
   if (root is FakeDomElement) {
     root.innerHTML = normalizeHTML(html);
   }
-  
+  final resolvedRegistry = registry ?? createRegistry();
   final scroll = Scroll(
-    registry ?? createRegistry(),
+    resolvedRegistry,
     root,
     emitter: emitter,
   );
-  
+  _hydrateScrollFromDom(scroll, resolvedRegistry);
   return scroll;
+}
+
+void _hydrateScrollFromDom(Scroll scroll, Registry registry) {
+  final root = scroll.domNode;
+  if (root is! DomElement) return;
+  final nodes = List<DomNode>.from(root.childNodes);
+  for (final node in nodes) {
+    final blot = _createBlotFromDomNode(scroll, registry, node);
+    if (blot != null) {
+      scroll.insertBefore(blot, null);
+    }
+  }
+  scroll.optimize();
+}
+
+Blot? _createBlotFromDomNode(Scroll scroll, Registry registry, DomNode node) {
+  if (node is DomText) {
+    final trimmed = node.data.trim();
+    if (trimmed.isEmpty && node.data.isNotEmpty) {
+      // Whitespace between blocks; drop it to avoid phantom text blots.
+      node.remove();
+      return null;
+    }
+    return TextBlot(node);
+  }
+
+  if (node is DomElement) {
+    final registryEntry =
+        registry.queryByTagName(node.tagName, scope: Scope.ANY) ??
+            registry.queryByClassName(node.className ?? '', scope: Scope.ANY);
+
+    final blotName = registryEntry?.blotName ?? Block.kBlotName;
+    final blot = scroll.create(blotName, node);
+    if (blot is ParentBlot) {
+      final children = List<DomNode>.from(node.childNodes);
+      for (final child in children) {
+        final childBlot = _createBlotFromDomNode(scroll, registry, child);
+        if (childBlot != null) {
+          blot.insertBefore(childBlot, null);
+        }
+      }
+    }
+    return blot;
+  }
+
+  return null;
 }
 
 /// Custom matcher for comparing HTML content (innerHTML by default)

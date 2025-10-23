@@ -95,7 +95,7 @@ void main() {
       final firstChild = scroll.domNode.firstChild;
       expect(firstChild, isNotNull);
       if (firstChild is FakeDomElement) {
-        expectHTML(firstChild, '<h1>Well</h1>');
+        expectHTML(firstChild, '<h1>Well</h1>', includeOuterTag: true);
       }
       
       final secondChild = scroll.domNode.childNodes.length > 1 
@@ -103,7 +103,7 @@ void main() {
           : null;
       expect(secondChild, isNotNull);
       if (secondChild is FakeDomElement) {
-        expectHTML(secondChild, '<h1>come</h1>');
+        expectHTML(secondChild, '<h1>come</h1>', includeOuterTag: true);
       }
     });
 

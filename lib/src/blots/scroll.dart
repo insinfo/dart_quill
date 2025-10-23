@@ -66,7 +66,51 @@ class Scroll extends ScrollBlot {
 
   @override
   void deleteAt(int index, int length) {
+    final firstEntry = line(index);
+    final lastEntry = line(index + length);
+    Blot? first = firstEntry.key;
+    var offset = firstEntry.value;
+    final last = lastEntry.key;
+
+    if ((offset <= 0) && index > 0) {
+      final previousEntry = line(index - 1);
+      if (previousEntry.key != null) {
+        first = previousEntry.key;
+        offset = previousEntry.value + 1;
+      }
+    }
+
+    // ignore: avoid_print
+    print(
+      'deleteAt index=$index length=$length first=${first?.runtimeType} '
+      'isFirst=${first != null ? identical(first, children.isNotEmpty ? children.first : null) : false} '
+      'offset=$offset last=${last?.runtimeType} '
+      'isLast=${last != null ? identical(last, children.isNotEmpty ? children.last : null) : false}',
+    );
+
     super.deleteAt(index, length);
+
+    if (first != null && last != null && first != last && offset > 0) {
+      if (first is BlockEmbed || last is BlockEmbed) {
+        optimize([], {});
+        return;
+      }
+
+      Blot? ref;
+      if (last is ParentBlot) {
+        if (last.children.isNotEmpty && last.children.first is Break) {
+          ref = null;
+        } else if (last.children.isNotEmpty) {
+          ref = last.children.first;
+        }
+      }
+
+      if (first is ParentBlot && last is ParentBlot) {
+        first.moveChildren(last, ref);
+        first.remove();
+      }
+    }
+
     optimize([], {});
   }
 
