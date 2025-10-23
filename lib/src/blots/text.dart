@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../platform/dom.dart';
 import '../platform/platform.dart';
 import 'abstract/blot.dart';
+import 'inline.dart';
 
 class TextBlot extends LeafBlot {
   static const String kBlotName = 'text';
@@ -56,6 +57,94 @@ class TextBlot extends LeafBlot {
       throw RangeError.range(index, index, data.length, 'index');
     }
     textNode.data = data.replaceRange(index, index + length, '');
+  }
+
+  @override
+  void formatAt(int index, int length, String name, dynamic value) {
+    if (length <= 0) {
+      return;
+    }
+
+    final inlineEntry = scroll.query(name, Scope.INLINE_BLOT);
+    if (inlineEntry == null) {
+      super.formatAt(index, length, name, value);
+      return;
+    }
+
+    final target = _isolate(index, length);
+    if (value == null || value == false) {
+      _removeInlineFormat(target, name);
+      return;
+    }
+
+    if (_hasAncestorWithFormat(target, name)) {
+      return;
+    }
+
+    final parentToWrap = _highestWrapTarget(target, name);
+    final parent = parentToWrap.parent;
+    if (parent is! ParentBlot) {
+      return;
+    }
+
+    final wrapper = scroll.create(name, value) as ParentBlot;
+    parent.insertBefore(wrapper, parentToWrap);
+    wrapper.appendChild(parentToWrap);
+    wrapper.optimize();
+  }
+
+  TextBlot _isolate(int index, int length) {
+    final endIndex = index + length;
+    split(endIndex);
+    if (index > 0) {
+      final middle = split(index);
+      if (middle is TextBlot) {
+        return middle;
+      }
+    }
+    return this;
+  }
+
+  bool _hasAncestorWithFormat(Blot blot, String name) {
+    Blot? current = blot.parent;
+    while (current is InlineBlot) {
+      if (current.blotName == name) {
+        return true;
+      }
+      current = current.parent;
+    }
+    return false;
+  }
+
+  Blot _highestWrapTarget(Blot blot, String name) {
+    Blot current = blot;
+    InlineBlot? parentInline =
+        current.parent is InlineBlot ? current.parent as InlineBlot : null;
+    while (parentInline != null) {
+      if (parentInline.blotName == name) {
+        return parentInline;
+      }
+      final comparison = InlineBlot.compare(parentInline.blotName, name);
+      if (comparison > 0) {
+        break;
+      }
+      current = parentInline;
+      parentInline = parentInline.parent is InlineBlot
+          ? parentInline.parent as InlineBlot
+          : null;
+    }
+    return current;
+  }
+
+  void _removeInlineFormat(Blot blot, String name) {
+    Blot? current = blot.parent;
+    while (current is InlineBlot) {
+      if (current.blotName == name) {
+        current.unwrap();
+        return;
+      }
+      current = current.parent;
+    }
   }
 
   @override

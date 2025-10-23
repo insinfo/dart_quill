@@ -81,6 +81,43 @@ class Block extends BlockBlot {
   }
 
   @override
+  void format(String name, dynamic value) {
+    final definition = scroll.query(name, Scope.BLOCK);
+    if (definition != null) {
+      final currentFormats = formats();
+      final currentValue = currentFormats[name];
+
+      if ((value == null || value == false)) {
+        if (blotName == Block.kBlotName) {
+          return;
+        }
+        final replacement = scroll.create(Block.kBlotName) as Block;
+        _replaceWithBlock(replacement);
+        _cache.clear();
+        return;
+      }
+
+      if (definition.blotName == blotName && currentValue == value) {
+        return;
+      }
+
+      final replacement = scroll.create(name, value) as Block;
+      _replaceWithBlock(replacement);
+      _cache.clear();
+      return;
+    }
+
+    final attribute = scroll.query(name, Scope.BLOCK_ATTRIBUTE);
+    if (attribute != null) {
+      // Block attributes (e.g., align, list) not yet supported in this port.
+      // Placeholder to avoid silently failing future implementations.
+      return;
+    }
+
+    super.format(name, value);
+  }
+
+  @override
   void formatAt(int index, int length, String name, dynamic value) {
     if (length <= 0) return;
     final definition = scroll.query(name, Scope.BLOCK);
@@ -185,8 +222,18 @@ class Block extends BlockBlot {
     // Remove trailing break if block has other content
     else if (children.length > 1) {
       final last = children.last;
-      if (last is Break && children.length > 1) {
-        // Don't remove the break, it's needed for newline
+      if (last is Break) {
+        last.remove();
+      }
+    }
+
+    // Remove unmanaged DOM nodes (e.g., stray <br> appended directly)
+    final managedNodes = children.map((child) => child.domNode).toSet();
+    for (final node in List<DomNode>.from(element.childNodes)) {
+      if (!managedNodes.contains(node) &&
+          node is DomElement &&
+          node.tagName.toUpperCase() == Break.tagName) {
+        node.remove();
       }
     }
   }
@@ -218,6 +265,25 @@ class Block extends BlockBlot {
   @override
   Blot? createDefaultChild([dynamic value]) {
     return Break.create();
+  }
+
+  void _replaceWithBlock(Block replacement) {
+    final parentBlot = parent;
+    if (parentBlot == null) {
+      return;
+    }
+
+    parentBlot.insertBefore(replacement, next);
+    moveChildren(replacement, null);
+
+    if (replacement.children.isEmpty) {
+      final defaultChild = replacement.createDefaultChild();
+      if (defaultChild != null) {
+        replacement.appendChild(defaultChild);
+      }
+    }
+
+    remove();
   }
 }
 

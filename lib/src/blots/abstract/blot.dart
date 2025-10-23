@@ -261,8 +261,8 @@ abstract class ParentBlot extends Blot {
       final end = offset + childLength;
       if (index < end) {
         final localIndex = index - offset;
-  final removable = math.min(length, childLength - localIndex).toInt();
-  child.deleteAt(localIndex, removable);
+        final removable = math.min(length, childLength - localIndex).toInt();
+        child.deleteAt(localIndex, removable);
         if (child.length() == 0) {
           removeChild(child);
         }
@@ -287,7 +287,8 @@ abstract class ParentBlot extends Blot {
       final end = offset + childLength;
       if (index < end) {
         final localIndex = index - offset;
-  final localLength = math.min(remaining, childLength - localIndex).toInt();
+        final localLength =
+            math.min(remaining, childLength - localIndex).toInt();
         child.formatAt(localIndex, localLength, name, value);
         remaining -= localLength;
         index = end;
@@ -313,7 +314,8 @@ abstract class ParentBlot extends Blot {
     blot.parent?.removeChild(blot);
 
     final previous = targetIndex > 0 ? children[targetIndex - 1] : null;
-    final next = ref ?? (targetIndex < children.length ? children[targetIndex] : null);
+    final next =
+        ref ?? (targetIndex < children.length ? children[targetIndex] : null);
 
     blot.parent = this;
     blot.prev = previous;
@@ -354,7 +356,8 @@ abstract class ParentBlot extends Blot {
     }
   }
 
-  Iterable<T> descendants<T extends Blot>({bool Function(T blot)? predicate}) sync* {
+  Iterable<T> descendants<T extends Blot>(
+      {bool Function(T blot)? predicate}) sync* {
     for (final child in children) {
       if (child is T && (predicate == null || predicate(child))) {
         yield child;
@@ -375,7 +378,8 @@ abstract class ParentBlot extends Blot {
       final childLength = child.length();
       final end = offset + childLength;
 
-      final isLastChild = identical(child, children.isNotEmpty ? children.last : null);
+      final isLastChild =
+          identical(child, children.isNotEmpty ? children.last : null);
       final containsIndex = index < end || (index == end && isLastChild);
 
       if (containsIndex) {
@@ -417,8 +421,8 @@ abstract class ParentBlot extends Blot {
     for (final child in children) {
       final childLength = child.length();
       final end = offset + childLength;
-      final isTarget = index < end ||
-          (inclusive && index == end && child == lastChild);
+      final isTarget =
+          index < end || (inclusive && index == end && child == lastChild);
       if (isTarget) {
         final childOffset = index - offset;
         result.add(MapEntry(child, childOffset));

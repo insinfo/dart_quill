@@ -11,9 +11,10 @@ RegistryEntry headerEntry() {
     blotName: Header.kBlotName,
     scope: Header.kScope,
     create: ([value]) {
-      final element = value is FakeDomElement 
-          ? value 
-          : testAdapter.document.createElement(Header.kTagNames[0]);
+      if (value is FakeDomElement) {
+        return Header(value);
+      }
+      final element = Header.create(value);
       return Header(element);
     },
     tagNames: Header.kTagNames,
@@ -39,7 +40,7 @@ void main() {
   setUpAll(() {
     initializeFakeDom();
   });
-  
+
   // Clean up between tests
   setUp(() {
     // Clear the body of the test adapter's document
@@ -48,9 +49,9 @@ void main() {
       body.firstChild!.remove();
     }
   });
-  
+
   final formats = [headerEntry(), boldEntry()];
-  
+
   group('Block', () {
     test('childless', () {
       final scroll = createScroll('', registry: createRegistry(formats));
@@ -67,7 +68,8 @@ void main() {
     });
 
     test('insert newlines', () {
-      final scroll = createScroll('<p><br></p>', registry: createRegistry(formats));
+      final scroll =
+          createScroll('<p><br></p>', registry: createRegistry(formats));
       scroll.insertAt(0, '\n\n\n');
       expectHTML(
         scroll.domNode as FakeDomElement,
@@ -76,7 +78,8 @@ void main() {
     });
 
     test('insert multiline', () {
-      final scroll = createScroll('<p>Hello World!</p>', registry: createRegistry(formats));
+      final scroll = createScroll('<p>Hello World!</p>',
+          registry: createRegistry(formats));
       scroll.insertAt(6, 'pardon\nthis\n\ninterruption\n');
       expectHTML(
         scroll.domNode as FakeDomElement,
@@ -89,17 +92,18 @@ void main() {
     });
 
     test('insert into formatted', () {
-      final scroll = createScroll('<h1>Welcome</h1>', registry: createRegistry(formats));
+      final scroll =
+          createScroll('<h1>Welcome</h1>', registry: createRegistry(formats));
       scroll.insertAt(3, 'l\n');
-      
+
       final firstChild = scroll.domNode.firstChild;
       expect(firstChild, isNotNull);
       if (firstChild is FakeDomElement) {
         expectHTML(firstChild, '<h1>Well</h1>', includeOuterTag: true);
       }
-      
-      final secondChild = scroll.domNode.childNodes.length > 1 
-          ? scroll.domNode.childNodes[1] 
+
+      final secondChild = scroll.domNode.childNodes.length > 1
+          ? scroll.domNode.childNodes[1]
           : null;
       expect(secondChild, isNotNull);
       if (secondChild is FakeDomElement) {
@@ -108,7 +112,8 @@ void main() {
     });
 
     test('delete line contents', () {
-      final scroll = createScroll('<p>Hello</p><p>World!</p>', registry: createRegistry(formats));
+      final scroll = createScroll('<p>Hello</p><p>World!</p>',
+          registry: createRegistry(formats));
       scroll.deleteAt(0, 5);
       expectHTML(
         scroll.domNode as FakeDomElement,
@@ -117,13 +122,16 @@ void main() {
     });
 
     test('join lines', () {
-      final scroll = createScroll('<h1>Hello</h1><h2>World!</h2>', registry: createRegistry(formats));
+      final scroll = createScroll('<h1>Hello</h1><h2>World!</h2>',
+          registry: createRegistry(formats));
       scroll.deleteAt(5, 1);
       expectHTML(scroll.domNode as FakeDomElement, '<h2>HelloWorld!</h2>');
     });
 
     test('join line with empty', () {
-      final scroll = createScroll('<p>Hello<strong>World</strong></p><p><br></p>', registry: createRegistry(formats));
+      final scroll = createScroll(
+          '<p>Hello<strong>World</strong></p><p><br></p>',
+          registry: createRegistry(formats));
       scroll.deleteAt(10, 1);
       expectHTML(
         scroll.domNode as FakeDomElement,
@@ -132,26 +140,30 @@ void main() {
     });
 
     test('join empty lines', () {
-      final scroll = createScroll('<h1><br></h1><p><br></p>', registry: createRegistry(formats));
+      final scroll = createScroll('<h1><br></h1><p><br></p>',
+          registry: createRegistry(formats));
       scroll.deleteAt(1, 1);
       expectHTML(scroll.domNode as FakeDomElement, '<h1><br></h1>');
     });
 
     test('format empty', () {
-      final scroll = createScroll('<p><br></p>', registry: createRegistry(formats));
+      final scroll =
+          createScroll('<p><br></p>', registry: createRegistry(formats));
       scroll.formatAt(0, 1, 'header', 1);
       expectHTML(scroll.domNode as FakeDomElement, '<h1><br></h1>');
     });
 
     test('format newline', () {
-      final scroll = createScroll('<h1>Hello</h1>', registry: createRegistry(formats));
+      final scroll =
+          createScroll('<h1>Hello</h1>', registry: createRegistry(formats));
       scroll.formatAt(5, 1, 'header', 2);
       expectHTML(scroll.domNode as FakeDomElement, '<h2>Hello</h2>');
     });
 
     test('remove unnecessary break', () {
-      final scroll = createScroll('<p>Test</p>', registry: createRegistry(formats));
-      
+      final scroll =
+          createScroll('<p>Test</p>', registry: createRegistry(formats));
+
       // Add an extra <br> element
       final children = scroll.children;
       if (children.isNotEmpty) {
@@ -162,7 +174,7 @@ void main() {
           element.append(br);
         }
       }
-      
+
       scroll.update();
       expectHTML(scroll.domNode as FakeDomElement, '<p>Test</p>');
     });

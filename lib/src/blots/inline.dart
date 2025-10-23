@@ -60,15 +60,93 @@ abstract class InlineBlot extends ParentBlot {
   }
 
   void unwrap() {
-    if (parent != null) {
-      parent!.removeChild(this);
+    final parentBlot = parent;
+    if (parentBlot is ParentBlot) {
+      final reference = next;
+      moveChildren(parentBlot, reference);
+      parentBlot.removeChild(this);
     }
   }
 
   // wrap intentionally unimplemented in this simplified base.
 
   @override
-  void optimize([List<DomMutationRecord>? mutations, Map<String, dynamic>? context]) {
+  void optimize([
+    List<DomMutationRecord>? mutations,
+    Map<String, dynamic>? context,
+  ]) {
     super.optimize(mutations, context);
+    final parentInline = parent;
+    if (parentInline is InlineBlot &&
+        InlineBlot.compare(blotName, parentInline.blotName) > 0) {
+      _reorderWithParent(parentInline);
+    }
+  }
+
+  void _reorderWithParent(InlineBlot parentInline) {
+    final grandParent = parentInline.parent;
+    if (grandParent is! ParentBlot) {
+      return;
+    }
+
+    final scrollBlot = parentInline.scroll;
+
+    final children = List<Blot>.from(parentInline.children);
+    final index = children.indexOf(this);
+    if (index == -1) {
+      return;
+    }
+
+    final beforeNodes = children.sublist(0, index);
+    final afterNodes = children.sublist(index + 1);
+
+    final reference = parentInline.next;
+
+    // Detach all nodes from parentInline so we can redistribute them.
+    for (final node in beforeNodes) {
+      parentInline.removeChild(node);
+    }
+    parentInline.removeChild(this);
+    for (final node in afterNodes) {
+      parentInline.removeChild(node);
+    }
+
+    // Prepare wrappers in insertion order.
+    final sequence = <Blot>[];
+
+    if (beforeNodes.isNotEmpty) {
+      for (final node in beforeNodes) {
+        parentInline.appendChild(node);
+      }
+      sequence.add(parentInline);
+    }
+
+    final innerWrapper = scrollBlot.create(parentInline.blotName) as ParentBlot;
+    moveChildren(innerWrapper, null);
+    appendChild(innerWrapper);
+    sequence.add(this);
+
+    ParentBlot? afterWrapper;
+    if (afterNodes.isNotEmpty) {
+      afterWrapper = scrollBlot.create(parentInline.blotName) as ParentBlot;
+      for (final node in afterNodes) {
+        afterWrapper.appendChild(node);
+      }
+      sequence.add(afterWrapper);
+    }
+
+    // Ensure parentInline is not left dangling if unused.
+    grandParent.removeChild(parentInline);
+
+    for (final blot in sequence) {
+      grandParent.insertBefore(blot, reference);
+    }
+
+    if (afterWrapper != null) {
+      afterWrapper.optimize();
+    }
+    if (beforeNodes.isNotEmpty) {
+      parentInline.optimize();
+    }
   }
 }

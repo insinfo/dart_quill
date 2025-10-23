@@ -24,7 +24,8 @@ class Scroll extends ScrollBlot {
         super(registry, domNode) {
     element.classes.add(className);
     observer = domBindings.adapter.createMutationObserver(_handleMutations);
-    observer?.observe(domNode, subtree: true, childList: true, characterData: true);
+    observer?.observe(domNode,
+        subtree: true, childList: true, characterData: true);
     optimize([], {});
     enable();
     element.addEventListener('dragstart', handleDragStart);
@@ -80,17 +81,17 @@ class Scroll extends ScrollBlot {
       }
     }
 
-    // ignore: avoid_print
-    print(
-      'deleteAt index=$index length=$length first=${first?.runtimeType} '
-      'isFirst=${first != null ? identical(first, children.isNotEmpty ? children.first : null) : false} '
-      'offset=$offset last=${last?.runtimeType} '
-      'isLast=${last != null ? identical(last, children.isNotEmpty ? children.last : null) : false}',
-    );
-
     super.deleteAt(index, length);
 
     if (first != null && last != null && first != last && offset > 0) {
+      if (last is ParentBlot &&
+          last.children.length == 1 &&
+          last.children.first is Break) {
+        last.remove();
+        optimize([], {});
+        return;
+      }
+
       if (first is BlockEmbed || last is BlockEmbed) {
         optimize([], {});
         return;
@@ -140,7 +141,8 @@ class Scroll extends ScrollBlot {
   void insertBefore(Blot blot, Blot? ref) {
     if (blot.scope == Scope.INLINE_BLOT) {
       final wrapper = _createBlock();
-      wrapper.insertBefore(blot, wrapper.lastChild); // place before trailing break
+      wrapper.insertBefore(
+          blot, wrapper.lastChild); // place before trailing break
       super.insertBefore(wrapper, ref);
     } else {
       super.insertBefore(blot, ref);
@@ -150,7 +152,7 @@ class Scroll extends ScrollBlot {
   bool isEnabled() => element.getAttribute('contenteditable') == 'true';
 
   MapEntry<LeafBlot?, int> leaf(int index) {
-  final segments = path(index, inclusive: false);
+    final segments = path(index, inclusive: false);
     if (segments.isEmpty) {
       return const MapEntry<LeafBlot?, int>(null, -1);
     }
@@ -219,8 +221,8 @@ class Scroll extends ScrollBlot {
   }
 
   @override
-  void update(
-    [List<DomMutationRecord>? mutations,
+  void update([
+    List<DomMutationRecord>? mutations,
     Map<String, dynamic>? context,
   ]) {
     if (_batch != null) {
@@ -229,12 +231,14 @@ class Scroll extends ScrollBlot {
       }
       return;
     }
-    final records = mutations ?? observer?.takeRecords() ?? const <DomMutationRecord>[];
+    final records =
+        mutations ?? observer?.takeRecords() ?? const <DomMutationRecord>[];
     final filtered = records.where((record) {
       final blot = find(record.target, bubble: true).key;
       return blot != null && !isUpdatable(blot);
     }).toList();
     if (filtered.isEmpty) {
+      optimize([], context ?? {});
       return;
     }
     final source = context != null ? context['source'] : EmitterSource.USER;
@@ -364,7 +368,7 @@ class Scroll extends ScrollBlot {
   Map<String, dynamic> getFormat(int index, [int length = 0]) {
     final formats = <String, dynamic>{};
     final lines = <Blot>[];
-    
+
     if (length == 0) {
       // Get format at cursor position
       final lineEntry = line(index);
@@ -376,7 +380,7 @@ class Scroll extends ScrollBlot {
       // Get format for range
       final endIndex = index + length;
       var currentIndex = index;
-      
+
       while (currentIndex < endIndex) {
         final lineEntry = line(currentIndex);
         final lineBlot = lineEntry.key;
@@ -388,7 +392,7 @@ class Scroll extends ScrollBlot {
         }
       }
     }
-    
+
     // Merge formats from all lines
     for (final lineBlot in lines) {
       if (lineBlot is Block) {
@@ -396,7 +400,7 @@ class Scroll extends ScrollBlot {
         formats.addAll(lineFormats);
       }
     }
-    
+
     // Get leaf-level formats
     final leafEntry = leaf(index);
     final leafBlot = leafEntry.key;
@@ -404,7 +408,7 @@ class Scroll extends ScrollBlot {
       final leafFormats = bubbleFormats(leafBlot);
       formats.addAll(leafFormats);
     }
-    
+
     return formats;
   }
 }
@@ -423,7 +427,8 @@ void insertInlineContents(
       final leafResult = parent.descendant((blot) => blot is LeafBlot, index);
       final leaf = leafResult.key;
       final formats = bubbleFormats(leaf);
-      attributes = Delta.diffAttributes(formats, attributes) ?? <String, dynamic>{};
+      attributes =
+          Delta.diffAttributes(formats, attributes) ?? <String, dynamic>{};
     } else if (data is Map) {
       final key = data.keys.first;
       if (key == null) continue;
@@ -434,7 +439,8 @@ void insertInlineContents(
         final leafResult = parent.descendant((blot) => blot is LeafBlot, index);
         final leaf = leafResult.key;
         final formats = bubbleFormats(leaf);
-        attributes = Delta.diffAttributes(formats, attributes) ?? <String, dynamic>{};
+        attributes =
+            Delta.diffAttributes(formats, attributes) ?? <String, dynamic>{};
       }
     }
 

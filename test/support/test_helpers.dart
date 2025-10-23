@@ -26,7 +26,8 @@ String normalizeHTML(String html) {
 }
 
 /// Helper to create RegistryEntry for a blot type
-RegistryEntry _createEntry(String name, int scope, Blot Function([dynamic]) create, 
+RegistryEntry _createEntry(
+    String name, int scope, Blot Function([dynamic]) create,
     {List<String> tagNames = const [], List<String> classNames = const []}) {
   return RegistryEntry(
     blotName: name,
@@ -49,40 +50,58 @@ Registry createRegistry([List<RegistryEntry>? formats]) {
   }
 
   // Register basic blots using testAdapter (FakeDom)
-  registry.register(_createEntry('block', Scope.BLOCK_BLOT, 
-    ([value]) => Block(value is DomElement ? value : testAdapter.document.createElement('p')),
-    tagNames: ['P']));
-  
-  registry.register(_createEntry('break', Scope.INLINE_BLOT,
-    ([value]) => Break(value is DomElement ? value : testAdapter.document.createElement('br')),
-    tagNames: ['BR']));
-  
-  registry.register(_createEntry('cursor', Scope.INLINE_BLOT,
-    ([value]) => Cursor(value is DomElement ? value : testAdapter.document.createElement('span')),
-    tagNames: ['SPAN'], classNames: ['ql-cursor']));
-  
+  registry.register(_createEntry(
+      'block',
+      Scope.BLOCK_BLOT,
+      ([value]) => Block(value is DomElement
+          ? value
+          : testAdapter.document.createElement('p')),
+      tagNames: ['P']));
+
+  registry.register(_createEntry(
+      'break',
+      Scope.INLINE_BLOT,
+      ([value]) => Break(value is DomElement
+          ? value
+          : testAdapter.document.createElement('br')),
+      tagNames: ['BR']));
+
+  registry.register(_createEntry(
+      'cursor',
+      Scope.INLINE_BLOT,
+      ([value]) => Cursor(value is DomElement
+          ? value
+          : testAdapter.document.createElement('span')),
+      tagNames: ['SPAN'],
+      classNames: ['ql-cursor']));
+
   // Note: InlineBlot is abstract, skip registration as it's a base class
-  
-  registry.register(_createEntry('scroll', Scope.BLOCK_BLOT,
-    ([value]) {
-      if (value is! DomElement) throw ArgumentError('Scroll requires DomElement');
-      return Scroll(registry, value, emitter: Emitter());
-    },
-    tagNames: ['DIV']));
-  
-  registry.register(_createEntry('text', Scope.INLINE_BLOT,
-    ([value]) {
-      final text = value is String ? value : '';
-      return TextBlot(testAdapter.document.createTextNode(text));
-    }));
-  
-  registry.register(_createEntry('list-container', Scope.BLOCK_BLOT,
-    ([value]) => ListContainer(value is DomElement ? value : testAdapter.document.createElement('ol')),
-    tagNames: ['OL', 'UL']));
-  
-  registry.register(_createEntry('list', Scope.BLOCK_BLOT,
-    ([value]) => ListItem(value is DomElement ? value : testAdapter.document.createElement('li')),
-    tagNames: ['LI']));
+
+  registry.register(_createEntry('scroll', Scope.BLOCK_BLOT, ([value]) {
+    if (value is! DomElement) throw ArgumentError('Scroll requires DomElement');
+    return Scroll(registry, value, emitter: Emitter());
+  }, tagNames: ['DIV']));
+
+  registry.register(_createEntry('text', Scope.INLINE_BLOT, ([value]) {
+    final text = value is String ? value : '';
+    return TextBlot(testAdapter.document.createTextNode(text));
+  }));
+
+  registry.register(_createEntry(
+      'list-container',
+      Scope.BLOCK_BLOT,
+      ([value]) => ListContainer(value is DomElement
+          ? value
+          : testAdapter.document.createElement('ol')),
+      tagNames: ['OL', 'UL']));
+
+  registry.register(_createEntry(
+      'list',
+      Scope.BLOCK_BLOT,
+      ([value]) => ListItem(value is DomElement
+          ? value
+          : testAdapter.document.createElement('li')),
+      tagNames: ['LI']));
 
   return registry;
 }
@@ -93,7 +112,7 @@ Scroll createScroll(String html, {Registry? registry, DomElement? container}) {
   // Always use testAdapter which is FakeDomAdapter
   final doc = testAdapter.document;
   final root = container ?? doc.body;
-  
+
   // Set innerHTML
   if (root is FakeDomElement) {
     root.innerHTML = normalizeHTML(html);
@@ -157,39 +176,40 @@ Blot? _createBlotFromDomNode(Scroll scroll, Registry registry, DomNode node) {
 /// Custom matcher for comparing HTML content (innerHTML by default)
 class EqualHTML extends Matcher {
   EqualHTML(this.expected, {this.includeOuterTag = false});
-  
+
   final String expected;
   final bool includeOuterTag;
-  
+
   @override
   bool matches(dynamic item, Map<dynamic, dynamic> matchState) {
     if (item is! DomElement) return false;
-    
+
     final actual = _getHTML(item, includeOuterTag: includeOuterTag);
     final normalizedExpected = normalizeHTML(expected);
     final normalizedActual = normalizeHTML(actual);
-    
+
     return normalizedActual == normalizedExpected;
   }
-  
+
   @override
   Description describe(Description description) {
-    return description.add('HTML equals ').addDescriptionOf(normalizeHTML(expected));
+    return description
+        .add('HTML equals ')
+        .addDescriptionOf(normalizeHTML(expected));
   }
-  
+
   @override
   Description describeMismatch(dynamic item, Description mismatchDescription,
       Map<dynamic, dynamic> matchState, bool verbose) {
     if (item is! DomElement) {
       return mismatchDescription.add('is not a DomElement');
     }
-    
-    final actual = normalizeHTML(_getHTML(item, includeOuterTag: includeOuterTag));
-    return mismatchDescription
-        .add('has HTML ')
-        .addDescriptionOf(actual);
+
+    final actual =
+        normalizeHTML(_getHTML(item, includeOuterTag: includeOuterTag));
+    return mismatchDescription.add('has HTML ').addDescriptionOf(actual);
   }
-  
+
   String _getHTML(DomElement element, {bool includeOuterTag = false}) {
     final buffer = StringBuffer();
     if (includeOuterTag) {
@@ -202,14 +222,14 @@ class EqualHTML extends Matcher {
     }
     return buffer.toString();
   }
-  
+
   void _buildHTML(DomNode node, StringBuffer buffer) {
     if (node is DomText) {
       buffer.write(node.data);
     } else if (node is DomElement) {
       final tagName = node.tagName.toLowerCase();
       buffer.write('<$tagName');
-      
+
       // Add attributes
       if (node is FakeDomElement) {
         final attrs = <String, String>{};
@@ -226,25 +246,25 @@ class EqualHTML extends Matcher {
         if (node.id != null && node.id!.isNotEmpty) {
           attrs['id'] = node.id!;
         }
-        
+
         // Write attributes
         attrs.forEach((key, value) {
           buffer.write(' $key="$value"');
         });
       }
-      
+
       buffer.write('>');
-      
+
       // Check if it's a void/self-closing element
       const voidElements = ['br', 'hr', 'img', 'input', 'meta', 'link'];
       final isVoid = voidElements.contains(tagName);
-      
+
       if (!isVoid) {
         // Add children
         for (final child in node.childNodes) {
           _buildHTML(child, buffer);
         }
-        
+
         buffer.write('</$tagName>');
       }
     }
@@ -257,6 +277,7 @@ extension HtmlMatchers on DomElement {
 }
 
 /// Expect that a DomElement's innerHTML equals the expected HTML (default behavior)
-void expectHTML(DomElement element, String expected, {bool includeOuterTag = false}) {
+void expectHTML(DomElement element, String expected,
+    {bool includeOuterTag = false}) {
   expect(element, EqualHTML(expected, includeOuterTag: includeOuterTag));
 }
