@@ -155,6 +155,7 @@ class Scroll extends ScrollBlot {
     Map<String, dynamic>? context,
   ]) {
     if (_batch != null) return;
+    super.optimize(mutations, context);
     final records = mutations ?? const <DomMutationRecord>[];
     final scope = context ?? <String, dynamic>{};
     if (records.isNotEmpty) {
@@ -393,9 +394,11 @@ void insertInlineContents(
       }
     }
 
-    attributes.forEach((name, value) {
-      parent.formatAt(index, opLength, name, value);
-    });
-    index += opLength;
+    if (opLength != null) {
+      attributes.forEach((name, value) {
+        parent.formatAt(index, opLength, name, value);
+      });
+      index += opLength;
+    }
   }
 }

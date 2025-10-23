@@ -122,7 +122,10 @@ abstract class Blot {
   void optimize([
     List<DomMutationRecord>? mutations,
     Map<String, dynamic>? context,
-  ]) {}
+  ]) {
+    // Default implementation does nothing
+    // Subclasses can override to implement specific optimization logic
+  }
 
   List<MapEntry<Blot, int>> path(int index, {bool inclusive = false}) {
     return [MapEntry(this, index)];
@@ -172,6 +175,18 @@ abstract class ParentBlot extends Blot {
   void appendChild(Blot blot) => insertBefore(blot, null);
 
   Blot? createDefaultChild([dynamic value]) => null;
+
+  @override
+  void optimize([
+    List<DomMutationRecord>? mutations,
+    Map<String, dynamic>? context,
+  ]) {
+    super.optimize(mutations, context);
+    // Optimize all children recursively
+    for (final child in List<Blot>.from(children)) {
+      child.optimize(mutations, context);
+    }
+  }
 
   @override
   void insertAt(int index, String value, [dynamic def]) {

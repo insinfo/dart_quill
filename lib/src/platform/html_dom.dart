@@ -2,6 +2,10 @@ import 'dart:html' as html;
 
 import 'dom.dart';
 
+/// Creates the platform-specific DOM adapter
+/// On web platforms, returns HtmlDomAdapter
+DomAdapter createPlatformAdapter() => HtmlDomAdapter();
+
 // Generic wrapper for any native DOM node.
 // We can't have a common base class for HtmlDomElement and HtmlDomText
 // since they need to extend different classes from dart:html.
@@ -79,7 +83,12 @@ class HtmlDomEvent implements DomEvent {
   @override
   DomNode? get target {
     final t = rawEvent.target;
-    return t == null ? null : _HtmlDomNode(t);
+    if (t == null) return null;
+    // EventTarget is the base, Node is more specific - need to check
+    if (t is html.Node) {
+      return _HtmlDomNode(t);
+    }
+    return null;
   }
 }
 
@@ -254,7 +263,7 @@ class HtmlDomParser implements DomParser {
 
 // A wrapper for a parsed document, to distinguish from the main `html.document`.
 class _HtmlDomDocumentWrapper extends HtmlDomDocument {
-  final html.HtmlDocument _doc;
+  final html.Document _doc;
 
   _HtmlDomDocumentWrapper(this._doc);
 
@@ -275,13 +284,19 @@ class _HtmlDomDocumentWrapper extends HtmlDomDocument {
   }
 
   @override
-  DomElement get body => HtmlDomElement(_doc.body!);
+  DomElement get body {
+    // For HtmlDocument we have body, for generic Document we use documentElement
+    if (_doc is html.HtmlDocument) {
+      return HtmlDomElement((_doc as html.HtmlDocument).body!);
+    }
+    return HtmlDomElement(_doc.documentElement!);
+  }
 }
 
 class HtmlDomElement extends _HtmlDomNode implements DomElement {
-  HtmlDomElement(html.HtmlElement element) : super(element);
+  HtmlDomElement(html.Element element) : super(element);
 
-  html.HtmlElement get _element => node as html.HtmlElement;
+  html.Element get _element => node as html.Element;
 
   final Map<DomEventListener, html.EventListener> _listeners = {};
 
@@ -307,7 +322,7 @@ class HtmlDomElement extends _HtmlDomNode implements DomElement {
 
   @override
   DomDocument get ownerDocument =>
-      _HtmlDomDocumentWrapper(_element.ownerDocument as html.HtmlDocument);
+      _HtmlDomDocumentWrapper(_element.ownerDocument!);
 
   @override
   DomClassList get classes => _HtmlDomClassList(_element.classes);

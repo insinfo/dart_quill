@@ -105,10 +105,19 @@ class Block extends BlockBlot {
     }
     if (value.isEmpty) return;
 
+    // Remove break if it's the only child - it will be replaced by text
+    if (children.length == 1 && firstChild is Break) {
+      firstChild?.remove();
+    }
+
     final lines = value.split('\n');
     final text = lines.removeAt(0);
     if (text.isNotEmpty) {
-      if (index < length() - 1 || lastChild == null) {
+      // If block is now empty (after removing break), create a text node directly
+      if (children.isEmpty) {
+        final textNode = TextBlot.create(text);
+        appendChild(textNode);
+      } else if (index < length() - 1 || lastChild == null) {
         final maxIndex = math.max(length() - 1, 0).toInt();
         final targetIndex = math.min(index, maxIndex).toInt();
         super.insertAt(targetIndex, text);
@@ -119,13 +128,16 @@ class Block extends BlockBlot {
       _cache.clear();
     }
 
-    var current = this;
+    var current = this as Blot;
     var cursor = index + text.length;
     for (final line in lines) {
+      if (current is! Block) break;
       final nextBlock = current.split(cursor, force: true);
-      current = (nextBlock is Block) ? nextBlock : current;
-      current.insertAt(0, line);
-      cursor = line.length;
+      if (nextBlock != null) {
+        current = nextBlock;
+        current.insertAt(0, line);
+        cursor = line.length;
+      }
     }
   }
 
@@ -162,6 +174,21 @@ class Block extends BlockBlot {
   ]) {
     super.optimize(mutations, context);
     _cache.clear();
+    
+    // Ensure empty blocks have a break element
+    if (children.isEmpty) {
+      final br = createDefaultChild();
+      if (br != null) {
+        appendChild(br);
+      }
+    }
+    // Remove trailing break if block has other content
+    else if (children.length > 1) {
+      final last = children.last;
+      if (last is Break && children.length > 1) {
+        // Don't remove the break, it's needed for newline
+      }
+    }
   }
 
   @override
@@ -176,7 +203,7 @@ class Block extends BlockBlot {
       final cloneBlock = clone();
       if (index == 0) {
         parent?.insertBefore(cloneBlock, this);
-        return this;
+        return cloneBlock;
       }
       parent?.insertBefore(cloneBlock, next);
       return cloneBlock;
