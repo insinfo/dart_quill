@@ -10,10 +10,31 @@ DomAdapter createPlatformAdapter() => HtmlDomAdapter();
 // We can't have a common base class for HtmlDomElement and HtmlDomText
 // since they need to extend different classes from dart:html.
 // This class provides the common functionality from DomNode interface.
+DomNode _wrapNode(html.Node node) {
+  if (node is html.Element) {
+    return HtmlDomElement(node);
+  }
+  if (node is html.Text) {
+    return HtmlDomText(node);
+  }
+  return _HtmlDomNode(node);
+}
+
 class _HtmlDomNode implements DomNode {
   _HtmlDomNode(this.node);
 
   final html.Node node;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is _HtmlDomNode && other.node == node;
+  }
+
+  @override
+  int get hashCode => node.hashCode;
 
   @override
   String get nodeName => node.nodeName ?? '';
@@ -44,27 +65,27 @@ class _HtmlDomNode implements DomNode {
 
   @override
   List<DomNode> get childNodes =>
-      [for (final child in node.childNodes) _HtmlDomNode(child)];
+    [for (final child in node.childNodes) _wrapNode(child)];
 
   @override
   DomNode? get firstChild =>
-      node.firstChild == null ? null : _HtmlDomNode(node.firstChild!);
+    node.firstChild == null ? null : _wrapNode(node.firstChild!);
 
   @override
   DomNode? get lastChild =>
-      node.lastChild == null ? null : _HtmlDomNode(node.lastChild!);
+    node.lastChild == null ? null : _wrapNode(node.lastChild!);
 
   @override
   DomNode? get nextSibling =>
-      node.nextNode == null ? null : _HtmlDomNode(node.nextNode!);
+    node.nextNode == null ? null : _wrapNode(node.nextNode!);
 
   @override
   DomNode? get parentNode =>
-      node.parentNode == null ? null : _HtmlDomNode(node.parentNode!);
+    node.parentNode == null ? null : _wrapNode(node.parentNode!);
 
   @override
   DomNode? get previousSibling =>
-      node.previousNode == null ? null : _HtmlDomNode(node.previousNode!);
+    node.previousNode == null ? null : _wrapNode(node.previousNode!);
 }
 
 class HtmlDomEvent implements DomEvent {

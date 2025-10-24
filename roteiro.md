@@ -1,115 +1,95 @@
- # Roteiro de Tradução: QuillJS (TypeScript) → Dart
+# Roteiro de Tradução – QuillJS (TypeScript) → Dart
 
-## 📋 Objetivo do Projeto
+## Visão Geral
 
-# Roteiro de Tradução: QuillJS (TypeScript) → Dart
-
-## Objetivo
-
-Portar o editor QuillJS de TypeScript para Dart com uma camada de abstração de plataforma. O código deve rodar em projetos Dart web/AngularDart e manter compatibilidade futura com outras plataformas por meio de adaptadores.
-
-- Fonte original: `quilljs/src`
-- Implementação Dart: `lib/src`
-- Dependências Delta: `lib/src/dependencies`
+Portamos o QuillJS para Dart visando paridade funcional com a base TypeScript, preservando compatibilidade web e abrindo espaço para outros adaptadores via camada `Dom*`. O código-fonte de referência encontra-se em `quilljs/src`, enquanto a implementação Dart reside em `lib/src`.
 
 ---
 
-## Estado Atual
+## Status Atual
 
-| Área | Status | Observações |
-|------|--------|-------------|
-| **Plataforma (DOM)** | ✅ Concluído | Abstrações `Dom*` implementadas e utilizadas pelo restante do código. |
-| **Blots (Parchment)** | ✅ Concluído | Árvores de documento e registry funcionam. |
-| **Formats** | ✅ Concluído | Formatos básicos e embeds convertidos. |
-| **Core** | ✅ Concluído (parcial) | Editor, Quill, Emitter, Selection portados; faltam utilitários (`core.ts`, `composition.ts`, `instances.ts`, `logger.ts`). |
-| **Modules** | ⚠️ Parcial | Clipboard, History, Keyboard, Toolbar, Uploader presentes. Ainda faltam Input, Syntax, Table, TableEmbed, UiNode e NormalizeExternalHTML. |
-| **Themes & UI** | ⚠️ Parcial | Temas Snow/Bubble e componentes base portados, mas sem assets (CSS/SVG) completos e sem suporte de tabela. |
-| **Assets** | ❌ Pendente | Arquivos `.styl` e ícones SVG ainda não convertidos para uso no build Dart. |
-| **Tests** | ❌ Pendente | Apenas dois testes Dart (`block` e `block_embed`). Toda a suíte JS (unit, fuzz, e2e) falta ser portada. |
+| Área | Situação | Observações |
+| --- | --- | --- |
+| Plataforma (DOM) | ✅ Completa | Abstração `Dom*` cobre eventos, seleção, DataTransfer e parser; fake DOM atualizado para testes. |
+| Blots / Formats | ✅ Completa | Todos os blots e formatos principais portados e integrados com Parchment. |
+| Core | ✅ Completa | `logger`, `instances`, `composition`, utilitários e bootstrap integrados em `core/`. |
+| Módulos | ⚠️ Parcial | Clipboard, History, Input, Keyboard, NormalizeExternalHTML, Toolbar e Uploader prontos; módulos de tabela, syntax e UI Node ainda faltam. |
+| Temas & UI | ⚠️ Parcial | Themes Snow/Bubble e componentes de picker básicos portados; assets e UI de tabela pendentes. |
+| Assets (CSS/SVG) | ❌ Pendente | `.styl`, SVGs e templates HTML ainda não migrados nem empacotados para Dart. |
+| Testes | ❌ Pendente | Apenas testes de blots em Dart; suíte JS (unit/fuzz/e2e) ainda não portada. |
 
-`dart analyze` e `webdev build` passam com o conjunto atual, mas o editor não possui paridade de recursos com QuillJS.
-
----
-
-## Lacunas Identificadas
-
-### Núcleo (core)
-- `core.ts`, `quill.ts` (entry points de registro e bootstrap).
-- `core/composition.ts` (suporte a IME/composição de texto).
-- `core/instances.ts` (rastreamento de múltiplos editores).
-- `core/logger.ts` (sistema de logging configurável).
-- `core/utils/createRegistryWithFormats.ts`.
-- `core/utils/scrollRectIntoView.ts`.
-- `types.d.ts` (contratos de tipos expostos).
-
-### Módulos
-- `modules/input.ts` (eventos de entrada/focus/blurring).
-- `modules/syntax.ts` (realce opcional, dependência do toolbar).
-- `modules/table.ts`, `modules/tableEmbed.ts`, `modules/uiNode.ts` (infra de tabelas e UI de contexto).
-- `modules/normalizeExternalHTML` (pipeline de limpeza para clipboard, incluindo `googleDocs.ts` e `msWord.ts`).
-
-### UI e Assets
-- Estilos `.styl` das themes (`core`, `snow`, `bubble`, toolbars).
-- Conjunto completo de ícones SVG utilizados pelo toolbar.
-- Arquivos auxiliares das themes (tooltips, toolbar templates).
-
-### Testes
-- Suíte unitária (blots, core, formats, modules, UI).
-- Suíte fuzz (`test/fuzz`).
-- Suíte e2e (Playwright).
-- Helpers e fixtures de teste (`__helpers__`, `fixtures`, `pageobjects`).
+`dart analyze` está limpo; precisamos ampliar cobertura de testes para garantir regressão mínima.
 
 ---
 
-## Plano de Portabilidade
+## Análise de Paridade (quilljs/src × lib/src)
 
-1. **Fundação de Core Utilitários**
-   - Portar `core/logger.ts` → novo `lib/src/core/logger.dart`.
-   - Portar `core/instances.ts` → gerenciamento estático em Dart.
-   - Implementar `core/composition.ts` (eventos de composição IME).
-   - Converter `core/utils/createRegistryWithFormats.ts` e `scrollRectIntoView.ts`.
-   - Adaptar `lib/dart_quill.dart` para expor API semelhante a `quilljs/src/quill.ts`.
+### Já Portado
+- `core/`: composition, editor, emitter, instances, logger, selection, theme e utilitários.
+- `modules/`: clipboard (com normalizeExternalHTML), history, input, keyboard, toolbar, uploader.
+- `blots/` e `formats/`: equivalentes às versões TypeScript.
+- `themes/`: base, bubble e snow.
+- `ui/`: picker, icon picker, tooltip e ícones iniciais.
 
-2. **Módulos Faltantes**
-   - `modules/input.dart`: gerenciamento de eventos DOM e sincronização de seleção.
-   - `modules/normalize_external_html/`: normalizadores específicos (Google Docs, MS Word).
-   - `modules/table.dart`, `modules/table_embed.dart`, `modules/ui_node.dart`.
-   - `modules/syntax.dart`: manter opcional, mas fornecer stub funcional.
-
-3. **Suporte a Tabelas e UI Avançada**
-   - Integrar módulo de tabela com formatos já existentes (`formats/table.dart`).
-   - Implementar componentes UI complementares (menus contextuais, pickers de tabela).
-
-4. **Assets**
-   - Converter `.styl` para `.css` ou `.scss` utilizáveis em AngularDart/Web.
-   - Copiar SVGs para diretório web e expor via `ui/icons.dart`.
-
-5. **Testes**
-   - Reproduzir helpers de teste (`__helpers__`, fixtures) em `test/support`.
-   - Portar specs unitárias gradualmente, começando por core/blots/formats.
-   - Planejar estratégia para fuzz/e2e (traduzir ou substituir por cobertura semelhante).
-
-6. **Documentação e Exemplos**
-   - Atualizar README com status.
-   - Criar exemplos AngularDart exibindo features portadas.
+### Ainda Necessário
+- `modules/table.ts`, `tableEmbed.ts`, `uiNode.ts`, `syntax.ts` e helpers vinculados.
+- Componentes de UI relacionados a tabela e popovers (ver `quilljs/src/ui` para wrappers adicionais).
+- Processamento completo de assets (`src/assets` → CSS/SVG utilizáveis em Dart).
+- Ferramentas auxiliares do build (`scripts/`, tarefas webpack/babel) não necessárias em Dart, mas referências podem guiar assets.
 
 ---
 
-## Próximos Passos Imediatos
+## Backlog de Implementação
 
-1. Criar utilitários de core ausentes (`logger`, `instances`).
-2. Registrar novos utilitários em `lib/dart_quill.dart` e ajustar bootstrap do editor.
-3. Implementar `modules/input.dart` para capturar eventos de teclado/mouse/focus.
-4. Trazer pipeline `normalizeExternalHTML` para garantir paridade do Clipboard.
-5. Preparar estrutura de testes unitários (helpers + primeira bateria de specs portadas).
+1. **Módulos Restantes**
+   - Portar `table`, `tableEmbed` e `uiNode` respeitando integração com `formats/table.dart`.
+   - Implementar `syntax` (prover dependência opcional ou stub disciplinado).
 
-Cada entrega deve incluir atualização deste roteiro e execução de `dart analyze`, `dart test` (quando aplicável) e `webdev build` para garantir integridade contínua.
+2. **Interface & Assets**
+   - Converter `.styl` para CSS/SCSS utilizável no build Web.
+   - Migrar SVGs do toolbar, ícones e sprites.
+   - Revisar `ui/` para cobrir componentes faltantes (menus contextuais, tabelas).
+
+3. **Integração & Refino**
+   - Revisar `module initialization` para incluir novos módulos.
+   - Garantir compatibilidade com APIs externas (ex: `Quill.import`, `register`).
+
+4. **Testes**
+   - Portar unit tests priorizando módulos recém-portados (Clipboard/NormalizeExternalHTML, Input, Keyboard).
+   - Recriar helpers (`__helpers__`), fixtures e mocks em `test/support`.
+   - Definir abordagem para fuzz e e2e (possível substituição por testes de integração Dart/Web).
+
+---
+
+## Próximos Passos (Imediatos)
+
+1. Portar bateria inicial de testes unitários: iniciar por NormalizeExternalHTML (Google Docs / MS Word) usando `FakeDomDocument.fromHtml`.
+2. Estender helpers de teste para cobrir módulos (clipboard, keyboard, history).
+3. Mapear estrutura de testes JS (`quilljs/test`) e estabelecer plano incremental de migração.
+4. Planejar port do módulo de tabelas após validação dos testes de clipboard.
+5. Investigar estratégia de conversão de assets (`styles/*.styl`, `ui/icons`) para pipeline Dart.
 
 ---
 
 ## Histórico Resumido
+- Camada DOM evoluída com suporte a `beforeinput`, DataTransfer e normalização de HTML externo.
+- Portados utilitários de core (logger, composition, instances) e integrados ao `Quill` Dart.
+- Clipboard agora aplica `normalizeExternalHTML` com normalizadores Google Docs e MS Word.
+- Fake DOM aprimorado com `documentElement`, seleção por atributo e parser auxiliar, viabilizando novos testes.
 
-- Portadas as camadas principais: plataforma, blots, formats, core básico, módulos essenciais, temas base.
-- Corrigido `Clipboard` para usar abstrações e `Delta` corretamente (build atual passa).
-- AngularDart host funcional (`web/` + `lib/src/app`).
-- Identificadas lacunas de paridade com QuillJS; próximas etapas priorizam utilidades de core e módulos restantes.
+---
+
+## Métricas & Qualidade
+- `dart analyze` ✅
+- Testes automatizados atuais: somente `test/unit/blots/*`; necessidade de ampliar cobertura para módulos e core.
+- Atualizar este roteiro a cada entrega significativa (novo módulo, suíte de testes, assets convertidos).
+
+---
+
+## Pendências Globais
+- ☑️ Normalização de HTML externa
+- 🔲 Módulo de tabelas (table, tableEmbed, uiNode)
+- 🔲 Syntax highlighting opcional
+- 🔲 Assets (CSS/SVG) e integração visual
+- 🔲 Portabilidade da suíte de testes (unit, fuzz, e2e)
+- 🔲 Documentação de API paritária

@@ -30,6 +30,12 @@ class FakeDomDocument implements DomDocument {
     _documentElement.append(_body);
   }
 
+  factory FakeDomDocument.fromHtml(String html) {
+    final document = FakeDomDocument();
+    document._loadFromHtml(html);
+    return document;
+  }
+
   late final FakeDomElement _documentElement;
   late final FakeDomElement _body;
 
@@ -88,6 +94,45 @@ class FakeDomDocument implements DomDocument {
 
   @override
   DomParser get parser => FakeDomParser();
+
+  void _loadFromHtml(String html) {
+    final parsed = html_parser.parse(html);
+    final parsedHtml = parsed.documentElement;
+    final root = _documentElement;
+    final body = _body;
+
+    // Clear existing tree while preserving body instance.
+    while (root.firstChild != null) {
+      root.firstChild!.remove();
+    }
+    while (body.firstChild != null) {
+      body.firstChild!.remove();
+    }
+
+    // Copy attributes from parsed <html> element.
+    if (parsedHtml != null) {
+      for (final entry in parsedHtml.attributes.entries) {
+        root.setAttribute(entry.key.toString(), entry.value.toString());
+      }
+      // Append converted head if present.
+      final head = parsed.head;
+      if (head != null) {
+        final convertedHead = _convertHtmlNode(head, this);
+        if (convertedHead != null) {
+          root.append(convertedHead);
+        }
+      }
+    }
+
+    // Re-append body and populate with parsed contents.
+    root.append(body);
+    final parsedBody = parsed.body;
+    if (parsedBody != null) {
+      body.innerHTML = parsedBody.innerHtml;
+    } else {
+      body.innerHTML = parsedHtml?.innerHtml;
+    }
+  }
 }
 
 class _SelectorMatcher {
@@ -111,13 +156,30 @@ class _SelectorMatcher {
   String? value;
 
   void _parseAttribute(String fragment) {
-    final regex = RegExp(r'^\[(\w[\w-]*)\s*(\*=|\^=|=)?\s*"?([^"\]]*)"?\]$');
-    final match = regex.firstMatch(fragment.trim());
-    if (match != null) {
-      attribute = match.group(1);
-      operatorSymbol = match.group(2);
-      value = match.group(3);
+    var inner = fragment.trim();
+    if (!inner.startsWith('[') || !inner.endsWith(']')) {
+      return;
     }
+    inner = inner.substring(1, inner.length - 1).trim();
+    if (inner.isEmpty) {
+      return;
+    }
+
+    final opMatch = RegExp(r'(\*=|\^=|=)').firstMatch(inner);
+    if (opMatch == null) {
+      attribute = inner;
+      return;
+    }
+
+    attribute = inner.substring(0, opMatch.start).trim();
+    operatorSymbol = opMatch.group(0);
+    var rawValue = inner.substring(opMatch.end).trim();
+    if (rawValue.length >= 2 &&
+        ((rawValue.startsWith('"') && rawValue.endsWith('"')) ||
+            (rawValue.startsWith("'") && rawValue.endsWith("'")))) {
+      rawValue = rawValue.substring(1, rawValue.length - 1);
+    }
+    value = rawValue;
   }
 
   bool matches(FakeDomElement element) {
@@ -709,8 +771,9 @@ class _FakeStyle {
 class FakeDomParser implements DomParser {
   @override
   DomDocument parseFromString(String string, String type) {
-    // Simple fake implementation
-    return FakeDomDocument();
+    // Parse the incoming HTML into a new fake document so clipboard tests
+    // can traverse the expected structure.
+    return FakeDomDocument.fromHtml(string);
   }
 }
 

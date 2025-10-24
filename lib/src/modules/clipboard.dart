@@ -15,13 +15,7 @@ import '../formats/table.dart';
 import '../modules/keyboard.dart';
 import '../formats/abstract/attributor.dart';
 import '../platform/dom.dart';
-
-// Placeholder for normalizeExternalHTML
-class NormalizeExternalHTML {
-  void normalize(DomDocument doc) {}
-}
-
-final normalizeExternalHTML = NormalizeExternalHTML();
+import 'normalize_external_html/index.dart';
 
 // Placeholder for logger
 class Logger {
