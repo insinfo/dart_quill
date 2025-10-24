@@ -267,6 +267,11 @@ class FakeDomElement extends FakeDomNode implements DomElement {
   @override
   Map<String, String> get dataset => _dataset;
 
+    @override
+    void select() {
+    _dataset['selected'] = 'true';
+    }
+
   @override
   void appendText(String value) {
     append(FakeDomText(value, document: _ownerDocument));

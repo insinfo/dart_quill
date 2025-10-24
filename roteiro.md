@@ -74,6 +74,24 @@ No issues found!
 
 ## 📅 Histórico de Atualizações
 
+### Atualização 26/10/2025 - Pickers integrados ao Toolbar
+
+- ✅ Implementado `Picker` base com gerenciamento completo de rótulo, lista de opções e acessibilidade
+- ✅ Portados `ColorPicker` e `IconPicker` com estilização e sincronização de ícones/cores
+- ✅ `Toolbar.applyFromPicker` criado para aplicar valores selecionados pelos pickers diretamente no editor
+- ✅ `BaseTheme`, `BubbleTheme` e `SnowTheme` atualizados para instanciar pickers e repassar eventos para o toolbar
+- ✅ Portado `Tooltip` base, agora alinhado ao comportamento do Quill original (template, scroll, posicionamento) e integrado aos tooltips Bubble/Snow
+- ✅ Toolbar recebeu handlers padrões (clean/direction/indent/link/list) e callbacks para fórmulas/vídeos/imagem que acionam tooltip ou uploader
+- 🔄 Próximos passos: alinhar comportamento dos tooltips e concluir demais itens do roteiro (tarefas 2/4/5)
+
+### Atualização 24/10/2025 - Validação Final e Limpeza de TODOs
+
+- ✅ Implementado `DomElement.select()` na camada HTML para inputs e textareas
+- ✅ Removidos os últimos TODOs pendentes (`base.dart`, `delta_iterator.dart`)
+- ✅ Comentário atualizado explicando o uso de `maxLength` em `DeltaIterator.next`
+- ✅ `dart test` e `dart analyze` executados – ambos sem falhas
+- 📌 Nenhum TODO restante no código-fonte (`lib/`)
+
 ### 🎉 Atualização 23/10/2025 (Tarde) - **MARCO PRINCIPAL ALCANÇADO: 0 ERROS NO CÓDIGO PRINCIPAL!**
 
 #### 🏆 **Conquista Histórica**
@@ -150,7 +168,7 @@ class Bounds {
 - ✅ `HtmlElement?` bounds → `DomElement?` bounds
 - ✅ `position()` method signature corrigida (void, não double)
 - ✅ `arrow.style.marginLeft` → `(arrow.style as dynamic).marginLeft`
-- ✅ `options.bounds` → `null` (TODO para implementar depois)
+- ✅ `options.bounds` agora usa fallback para `quill.container`
 - ✅ `DEFAULTS` simplificado (closures estáticos removidos)
 - ✅ `tooltip` type override corrigido
 
@@ -164,7 +182,7 @@ class Bounds {
 - ✅ LinkBlot logic comentado (TODO para quando formato estiver pronto)
 - ✅ `formatText` call corrigido
 - ✅ `addBinding` usando parâmetro nomeado `handler:`
-- ✅ `options.bounds` → `null` (placeholder)
+- ✅ `options.bounds` agora usa fallback para `quill.container`
 
 ##### 6. **toolbar.dart - Linter Warnings Corrigidos** (3 warnings → 0)
 

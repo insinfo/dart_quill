@@ -1,0 +1,22 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background-color: #f9fafc;
+}
+
+.app-shell {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.ql-toolbar {
+  border: 1px solid #dcdfe6;
+  border-bottom: none;
+  background-color: #ffffff;
+}
+
+.ql-container {
+  border: 1px solid #dcdfe6;
+  background-color: #ffffff;
+  min-height: 200px;
+}

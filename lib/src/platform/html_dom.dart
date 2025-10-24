@@ -407,6 +407,15 @@ class HtmlDomElement extends _HtmlDomNode implements DomElement {
   }
 
   @override
+  void select() {
+    if (_element is html.InputElement) {
+      (_element as html.InputElement).select();
+    } else if (_element is html.TextAreaElement) {
+      (_element as html.TextAreaElement).select();
+    }
+  }
+
+  @override
   int get scrollTop => _element.scrollTop;
 
   @override

@@ -67,6 +67,9 @@ abstract class DomElement extends DomNode {
   /// Query for a single element matching the selector.
   DomElement? querySelector(String selector);
 
+  /// Select the contents of a textual input element.
+  void select();
+
   /// Get or set the scroll position (vertical).
   int get scrollTop;
   set scrollTop(int value);

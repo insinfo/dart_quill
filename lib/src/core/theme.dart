@@ -1,23 +1,43 @@
+import '../platform/dom.dart';
 import 'quill.dart';
 
 /// Options for theme configuration
 class ThemeOptions {
   final String? theme;
+  final DomElement? bounds;
   final Map<String, dynamic> modules;
-  
+
   ThemeOptions({
     this.theme,
-    this.modules = const {},
-  });
+    this.bounds,
+    Map<String, dynamic>? modules,
+  }) : modules = modules != null
+            ? Map<String, dynamic>.from(modules)
+            : <String, dynamic>{};
+
+  ThemeOptions copyWith({
+    String? theme,
+    DomElement? bounds,
+    Map<String, dynamic>? modules,
+  }) {
+    return ThemeOptions(
+      theme: theme ?? this.theme,
+      bounds: bounds ?? this.bounds,
+      modules: modules ?? Map<String, dynamic>.from(this.modules),
+    );
+  }
 }
 
 class Theme {
   final Quill quill;
-  final Map<String, dynamic> options;
+  final ThemeOptions options;
+  final Map<String, dynamic> modules = {};
   final Map<String, dynamic> _styles = {};
   final Map<String, dynamic> _themes = {};
 
-  Theme(this.quill, this.options) {
+  Theme(this.quill, ThemeOptions options)
+      : options = options,
+        super() {
     _initStyles();
   }
 
@@ -92,9 +112,32 @@ class Theme {
   }
 
   void init() {
-    // Initialize any additional theme settings
-    if (options.containsKey('theme')) {
-      applyTheme(options['theme']);
+    // Apply named theme styles if available
+    final themeName = options.theme;
+    if (themeName != null) {
+      applyTheme(themeName);
     }
+
+    options.modules.forEach((name, config) {
+      if (config == null || config == false) {
+        return;
+      }
+      addModule(name);
+    });
+  }
+
+  dynamic addModule(String name) {
+    if (modules.containsKey(name)) {
+      return modules[name];
+    }
+    final module = Quill.createModule(
+      quill,
+      name,
+      options.modules[name] == true ? <String, dynamic>{} : options.modules[name],
+    );
+    if (module != null) {
+      modules[name] = module;
+    }
+    return module;
   }
 }

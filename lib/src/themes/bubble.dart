@@ -4,6 +4,7 @@ import '../core/quill.dart';
 import '../core/theme.dart';
 import '../modules/toolbar.dart';
 import '../platform/dom.dart';
+import '../ui/icons.dart';
 import 'base.dart';
 
 // Utility functions (simplified for now)
@@ -27,7 +28,8 @@ const TOOLBAR_CONFIG = <List<dynamic>>[
 class BubbleTooltip extends BaseTooltip {
   static const String TEMPLATE = '<span class="ql-tooltip-arrow"></span><div class="ql-tooltip-editor"><input type="text" data-formula="e=mc^2" data-link="https://quilljs.com" data-video="Embed URL"><a class="ql-close"></a></div>';
 
-  BubbleTooltip(Quill quill, [DomElement? bounds]) : super(quill, bounds) {
+  BubbleTooltip(Quill quill, [DomElement? bounds])
+      : super(quill, TEMPLATE, bounds) {
     quill.on(EmitterEvents.EDITOR_CHANGE, (type, range, oldRange, source) {
       if (type != EmitterEvents.SELECTION_CHANGE) return;
       if (range != null && range.length > 0 && source == EmitterSource.USER) {
@@ -52,8 +54,9 @@ class BubbleTooltip extends BaseTooltip {
         //   }
         // }
       } else if (quill.hasFocus()) {
-        // TODO: Check if textbox has focus using platform abstraction
-        hide();
+        if (!isEditing) {
+          hide();
+        }
       }
     });
   }
@@ -84,47 +87,71 @@ class BubbleTooltip extends BaseTooltip {
   }
 
   @override
-  void position(Map<String, dynamic> bounds) {
-    super.position(bounds);
-    // TODO: Calculate shift based on bounds and viewport
-    final shift = 0; // Placeholder
+  double position(Map<String, dynamic> bounds) {
+  final baseShift = super.position(bounds);
+  final container = boundsContainer;
+    final containerWidth = container.offsetWidth.toDouble();
+  final tooltipWidth = root.offsetWidth.toDouble();
+  final left = _extract(bounds['left']);
+  final rawWidth = _extract(bounds['width']);
+  final effectiveWidth = rawWidth == 0 ? tooltipWidth : rawWidth;
+  final center = left + effectiveWidth / 2;
+    final idealLeft = center - tooltipWidth / 2;
+    final maxLeft = containerWidth > tooltipWidth
+        ? containerWidth - tooltipWidth
+        : 0;
+    final clampedLeft = idealLeft.clamp(0, maxLeft.toDouble());
+    final style = root.style as dynamic;
+    style.left = '${clampedLeft}px';
+
+    final arrowShift = idealLeft - clampedLeft;
     final arrow = root.querySelector('.ql-tooltip-arrow');
     if (arrow != null) {
       final style = arrow.style as dynamic;
       style.marginLeft = '';
-      if (shift != 0) {
-        style.marginLeft = '${-1 * shift - arrow.offsetWidth / 2}px';
+      if (baseShift != 0 || arrowShift != 0) {
+        final totalShift = baseShift + arrowShift;
+        style.marginLeft = '${-totalShift - arrow.offsetWidth / 2}px';
       }
     }
+
+    return baseShift;
+  }
+
+  double _extract(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    return 0;
   }
 }
 
 class BubbleTheme extends BaseTheme {
   BubbleTheme(Quill quill, ThemeOptions options) : super(quill, options) {
-    if (options.modules['toolbar'] != null && options.modules['toolbar']['container'] == null) {
-      options.modules['toolbar']['container'] = TOOLBAR_CONFIG;
+    final toolbarModule = options.modules['toolbar'];
+    if (toolbarModule is Map<String, dynamic>) {
+      toolbarModule.putIfAbsent('container', () => TOOLBAR_CONFIG);
+    } else if (toolbarModule == null) {
+      options.modules['toolbar'] = <String, dynamic>{
+        'container': TOOLBAR_CONFIG,
+      };
     }
     quill.container.classes.add('ql-bubble');
   }
 
+  @override
   void extendToolbar(Toolbar toolbar) {
-    // TODO: Get bounds container from options or use default
-    final bubbleTooltip = BubbleTooltip(quill, null);
+    final bubbleTooltip = BubbleTooltip(quill, options.bounds ?? quill.container);
     tooltip = bubbleTooltip;
     if (toolbar.container != null) {
       bubbleTooltip.root.append(toolbar.container!);
-      // Placeholder for buildButtons and buildPickers
-      // buildButtons(toolbar.container!.querySelectorAll('button'), icons);
-      // buildPickers(toolbar.container!.querySelectorAll('select'), icons);
+      buildButtons(toolbar.container!.querySelectorAll('button'), icons);
+      buildPickers(toolbar, toolbar.container!.querySelectorAll('select'), icons);
     }
+    super.extendToolbar(toolbar);
   }
 
-  // TODO: Implement DEFAULTS properly - cannot access instance in static initializer
-  static final DEFAULTS = <String, dynamic>{
-    'toolbar': <String, dynamic>{
-      'handlers': <String, dynamic>{
-        // Handlers need to be created at runtime, not in static context
-      },
-    },
-  };
+  static Map<String, dynamic> defaults() => {
+        'toolbar': Toolbar.DEFAULTS,
+      };
 }

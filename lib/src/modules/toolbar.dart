@@ -72,6 +72,8 @@ class Toolbar extends Module<ToolbarProps> {
       });
     }
 
+    _registerBuiltInHandlers();
+
     container!.querySelectorAll('button, select').forEach((input) {
       attach(input);
     });
@@ -210,6 +212,132 @@ class Toolbar extends Module<ToolbarProps> {
         }
       }
     });
+  }
+
+  void applyFromPicker(DomElement _select, String format, String? value) {
+    dynamic resolvedValue = value;
+    if (resolvedValue == null || (resolvedValue is String && resolvedValue.isEmpty)) {
+      resolvedValue = false;
+    }
+
+    quill.focus();
+    final range = quill.selection.getRange();
+    if (range == null) {
+      return;
+    }
+
+    final handler = handlers[format];
+    if (handler != null) {
+      handler(resolvedValue);
+    } else {
+      quill.format(format, resolvedValue, source: EmitterSource.USER);
+    }
+
+    update(range);
+  }
+
+  void _registerBuiltInHandlers() {
+    if (!handlers.containsKey('clean')) {
+      addHandler('clean', (_) {
+        final range = quill.getSelection();
+        if (range == null) return;
+        if (range.length == 0) {
+          final formats = quill.getFormat(range.index, range.length);
+          for (final entry in formats.entries) {
+            quill.format(entry.key, false, source: EmitterSource.USER);
+          }
+        } else {
+          final formats = quill.getFormat(range.index, range.length);
+          for (final entry in formats.entries) {
+            quill.formatText(range.index, range.length, entry.key, false, source: EmitterSource.USER);
+          }
+        }
+      });
+    }
+
+    if (!handlers.containsKey('direction')) {
+      addHandler('direction', (value) {
+        final range = quill.getSelection();
+        if (range == null) return;
+        final formats = quill.getFormat(range.index, range.length);
+        final align = formats['align'];
+        if (value == 'rtl' && (align == null || align == false)) {
+          quill.format('align', 'right', source: EmitterSource.USER);
+        } else if ((value == null || value == false) && align == 'right') {
+          quill.format('align', false, source: EmitterSource.USER);
+        }
+        quill.format('direction', value, source: EmitterSource.USER);
+      });
+    }
+
+    if (!handlers.containsKey('indent')) {
+      addHandler('indent', (value) {
+        final range = quill.getSelection();
+        if (range == null) return;
+        final formats = quill.getFormat(range.index, range.length);
+        final currentIndent = int.tryParse('${formats['indent'] ?? 0}') ?? 0;
+        int modifier = 0;
+        if (value == '+1') {
+          modifier = 1;
+        } else if (value == '-1') {
+          modifier = -1;
+        }
+        if (formats['direction'] == 'rtl') {
+          modifier *= -1;
+        }
+        final target = currentIndent + modifier;
+        if (target <= 0) {
+          quill.format('indent', false, source: EmitterSource.USER);
+        } else {
+          quill.format('indent', target, source: EmitterSource.USER);
+        }
+      });
+    }
+
+    if (!handlers.containsKey('link')) {
+      addHandler('link', (value) {
+        final range = quill.getSelection();
+        if (range == null) return;
+        final formats = quill.getFormat(range.index, range.length);
+        final hasLink = formats.containsKey('link');
+        if (value == null || value == true) {
+          if (hasLink) {
+            quill.format('link', false, source: EmitterSource.USER);
+          }
+          if (!hasLink) {
+            final theme = quill.theme;
+            final dynamic tooltip = (theme as dynamic).tooltip;
+            if (tooltip != null) {
+              try {
+                tooltip.edit('link');
+              } catch (_) {
+                // Ignore when tooltip does not support edit.
+              }
+            }
+          }
+          return;
+        }
+        quill.format('link', value, source: EmitterSource.USER);
+      });
+    }
+
+    if (!handlers.containsKey('list')) {
+      addHandler('list', (value) {
+        final range = quill.getSelection();
+        if (range == null) return;
+        final formats = quill.getFormat(range.index, range.length);
+        if (value == 'check') {
+          final current = formats['list'];
+          if (current == 'checked' || current == 'unchecked') {
+            quill.format('list', false, source: EmitterSource.USER);
+          } else {
+            quill.format('list', 'unchecked', source: EmitterSource.USER);
+          }
+          return;
+        }
+        quill.format('list', value, source: EmitterSource.USER);
+      });
+    }
   }
 }
 

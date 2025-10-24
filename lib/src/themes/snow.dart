@@ -2,6 +2,8 @@ import '../core/emitter.dart';
 import '../core/quill.dart';
 import '../core/selection.dart';
 import '../core/theme.dart';
+import '../formats/link.dart';
+import '../modules/keyboard.dart';
 import '../modules/toolbar.dart';
 import '../platform/dom.dart';
 import '../ui/icons.dart';
@@ -30,7 +32,8 @@ class SnowTooltip extends BaseTooltip {
   late final DomElement? preview;
   Range? linkRange;
 
-  SnowTooltip(Quill quill, DomElement? bounds) : super(quill, bounds) {
+  SnowTooltip(Quill quill, DomElement? bounds)
+      : super(quill, TEMPLATE, bounds) {
     preview = root.querySelector('a.ql-preview');
     listen();
   }
@@ -49,8 +52,13 @@ class SnowTooltip extends BaseTooltip {
     root.querySelector('a.ql-remove')?.addEventListener('click', (event) {
       if (linkRange != null) {
         restoreFocus();
-        // TODO: Fix formatText signature - needs 4 positional args
-        // quill.formatText(linkRange!.index, linkRange!.length, 'link', false);
+        quill.formatText(
+          linkRange!.index,
+          linkRange!.length,
+          'link',
+          false,
+          source: EmitterSource.USER,
+        );
         linkRange = null;
       }
       event.preventDefault();
@@ -60,22 +68,32 @@ class SnowTooltip extends BaseTooltip {
     quill.on(EmitterEvents.SELECTION_CHANGE, (range, oldRange, source) {
       if (range == null) return;
       if (range.length == 0 && source == EmitterSource.USER) {
-        // TODO: Implement LinkBlot detection when format blots are ready
-        /*
-        final link = quill.scroll.descendant(LinkBlot, range.index);
-        if (link != null) {
-          linkRange = Range(range.index - link.offset, link.length());
-          final previewText = LinkBlot.formats(link.domNode);
-          preview?.text = previewText;
-          preview?.setAttribute('href', previewText);
+        final entry = quill.scroll.descendant((blot) => blot is Link, range.index);
+        final linkBlot = entry.key as Link?;
+        if (linkBlot != null) {
+          final linkIndex = quill.scroll.offset(linkBlot);
+          final length = linkBlot.length();
+          linkRange = Range(linkIndex, length);
+          final formats = linkBlot.formats();
+          final href = formats[Link.kBlotName] as String?;
+          if (href != null) {
+            preview?.setAttribute('href', href);
+            if (preview != null) {
+              preview!.text = href;
+            }
+          } else {
+            preview?.removeAttribute('href');
+            if (preview != null) {
+              preview!.text = '';
+            }
+          }
           show();
-          final bounds = quill.getBounds(linkRange!);
+          final bounds = quill.getBounds(linkIndex, length);
           if (bounds != null) {
             position(bounds);
           }
           return;
         }
-        */
       } else {
         linkRange = null;
       }
@@ -92,28 +110,40 @@ class SnowTooltip extends BaseTooltip {
 
 class SnowTheme extends BaseTheme {
   SnowTheme(Quill quill, ThemeOptions options) : super(quill, options) {
-    if (options.modules['toolbar'] != null &&
-        options.modules['toolbar']['container'] == null) {
-      options.modules['toolbar']['container'] = TOOLBAR_CONFIG;
+    final existingToolbar = options.modules['toolbar'];
+    if (existingToolbar is Map<String, dynamic>) {
+      existingToolbar.putIfAbsent('container', () => TOOLBAR_CONFIG);
+    } else if (existingToolbar == null) {
+      options.modules['toolbar'] = <String, dynamic>{
+        'container': TOOLBAR_CONFIG,
+      };
     }
     quill.container.classes.add('ql-snow');
   }
 
+  @override
   void extendToolbar(Toolbar toolbar) {
     if (toolbar.container != null) {
       toolbar.container!.classes.add('ql-snow');
       buildButtons(toolbar.container!.querySelectorAll('button'), icons);
-      buildPickers(toolbar.container!.querySelectorAll('select'), icons);
-      tooltip = SnowTooltip(quill, null); // TODO: Get bounds from options
+  buildPickers(toolbar, toolbar.container!.querySelectorAll('select'), icons);
+      tooltip = SnowTooltip(quill, options.bounds ?? quill.container);
       if (toolbar.container!.querySelector('.ql-link') != null) {
         quill.keyboard.addBinding(
           {'key': 'k', 'shortKey': true},
-          handler: (range) {
-            // TODO: Get context to check if link is already set
-            toolbar.handlers['link']?.call(false);
+          handler: (Range range, Context _) {
+            final formats = quill.getFormat(range.index, range.length);
+            final hasLink = formats.containsKey(Link.kBlotName);
+            if (hasLink) {
+              quill.format(Link.kBlotName, false, source: EmitterSource.USER);
+            } else {
+              toolbar.handlers['link']?.call(null);
+            }
+            return true;
           },
         );
       }
+      super.extendToolbar(toolbar);
     }
   }
 }

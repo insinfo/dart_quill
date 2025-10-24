@@ -118,7 +118,8 @@ class Clipboard extends Module<ClipboardOptions> {
   void dangerouslyPasteHTML(dynamic indexOrHtml, [String? html, String source = EmitterSource.API]) {
     if (indexOrHtml is String) {
       final delta = convert(html: indexOrHtml, text: '');
-      quill.setContents(delta, source: html); // html is actually source here
+      final resolvedSource = html ?? source;
+      quill.setContents(delta, source: resolvedSource);
       quill.setSelection(Range(0, 0), source: EmitterSource.SILENT);
     } else if (indexOrHtml is int) {
       final paste = convert(html: html, text: '');
@@ -217,14 +218,45 @@ class Clipboard extends Module<ClipboardOptions> {
   }
 }
 
+Operation _cloneOperation(Operation op) {
+  if (op.isInsert) {
+    return Operation.insert(op.data, op.attributes);
+  }
+  if (op.isRetain) {
+    return Operation.retain(op.length, op.attributes);
+  }
+  return Operation.delete(op.length ?? 0);
+}
+
 Delta applyFormat(Delta delta, String format, dynamic value, Scroll scroll) {
-  return Delta.from(delta.map((op) {
-    final newAttributes = op.attributes ?? <String, dynamic>{};
-    if (newAttributes[format] == null) {
-      newAttributes[format] = value;
+  final hasRegistryFormat = scroll.query(format, Scope.ANY) != null ||
+      ATTRIBUTE_ATTRIBUTORS.containsKey(format) ||
+      STYLE_ATTRIBUTORS.containsKey(format);
+  if (!hasRegistryFormat) {
+    return delta;
+  }
+
+  final result = Delta();
+  for (final op in delta.operations) {
+    if (!op.isInsert) {
+      result.push(_cloneOperation(op));
+      continue;
     }
-    return Operation.insert(op.data, newAttributes);
-  }));
+
+    final existing = op.attributes ?? const <String, dynamic>{};
+    if (existing.containsKey(format) && existing[format] != null) {
+      result.push(_cloneOperation(op));
+      continue;
+    }
+
+    final merged = <String, dynamic>{};
+    if (value != null && value != false) {
+      merged[format] = value;
+    }
+    merged.addAll(existing);
+    result.insert(op.data, merged.isEmpty ? null : merged);
+  }
+  return result;
 }
 
 bool deltaEndsWith(Delta delta, String text) {
@@ -293,7 +325,7 @@ Matcher createMatchAlias(String format) {
       final newAttributes = op.attributes ?? <String, dynamic>{};
       newAttributes[format] = true;
       return Operation.insert(op.data, newAttributes);
-    }));
+    }).toList());
   };
 }
 
@@ -322,11 +354,11 @@ Delta matchAttributor(DomNode node, Delta delta, Scroll scroll) {
   }
 
   if (formats.isNotEmpty) {
-    return Delta.from(delta.map((op) {
-      final newAttributes = op.attributes ?? <String, dynamic>{};
-      newAttributes.addAll(formats);
-      return Operation.insert(op.data, newAttributes);
-    }));
+    var transformed = delta;
+    formats.forEach((name, value) {
+      transformed = applyFormat(transformed, name, value, scroll);
+    });
+    return transformed;
   }
   return delta;
 }
@@ -338,7 +370,7 @@ Delta matchBlot(DomNode node, Delta delta, Scroll scroll) {
     if (blot is EmbedBlot) {
       final value = blot.value;
       return Delta()
-        ..insert({blotName: value}, (blot as Embed).formats);
+        ..insert({blotName: value}, (blot as Embed).formats());
     } else if (blot is BlockBlot) {
       // This should not happen, as block blots are handled by other matchers
     }
@@ -363,29 +395,46 @@ Delta matchIgnore(DomNode node, Delta delta, Scroll scroll) {
 }
 
 Delta matchIndent(DomNode node, Delta delta, Scroll scroll) {
-  final blotEntry = scroll.find(node);
-  if (blotEntry.key is Block) {
-    final blot = blotEntry.key as Block;
-    final formats = blot.formats();
-    final indent = formats['indent'];
-    if (indent != null) {
-      return Delta.from(delta.map((op) {
-        final newAttributes = op.attributes ?? <String, dynamic>{};
-        newAttributes['indent'] = indent;
-        return Operation.insert(op.data, newAttributes);
-      }));
-    }
+  final match = scroll.find(node).key;
+  if (match is! Block || !deltaEndsWith(delta, '\n')) {
+    return delta;
   }
-  return delta;
+
+  var indentLevel = -1;
+  DomNode? current = node.parentNode;
+  while (current != null) {
+    final tag = (current is DomElement) ? current.tagName.toUpperCase() : '';
+    if (tag == 'OL' || tag == 'UL') {
+      indentLevel += 1;
+    }
+    current = current.parentNode;
+  }
+
+  if (indentLevel <= 0) {
+    return delta;
+  }
+
+  final composed = Delta();
+  for (final op in delta.operations) {
+    if (!op.isInsert) {
+      composed.push(_cloneOperation(op));
+      continue;
+    }
+    final attrs = op.attributes ?? const <String, dynamic>{};
+    if (attrs['indent'] is num) {
+      composed.push(_cloneOperation(op));
+      continue;
+    }
+    final merged = <String, dynamic>{'indent': indentLevel};
+    merged.addAll(attrs);
+    composed.insert(op.data, merged);
+  }
+  return composed;
 }
 
 Delta matchList(DomNode node, Delta delta, Scroll scroll) {
   final format = node.nodeName == 'OL' ? 'ordered' : 'bullet';
-  return Delta.from(delta.map((op) {
-    final newAttributes = op.attributes ?? <String, dynamic>{};
-    newAttributes['list'] = format;
-    return Operation.insert(op.data, newAttributes);
-  }));
+  return applyFormat(delta, 'list', format, scroll);
 }
 
 Delta matchNewline(DomNode node, Delta delta, Scroll scroll) {
@@ -450,14 +499,15 @@ Delta matchStyles(DomNode node, Delta delta, Scroll scroll) {
     }
   }
 
-  if (formats.isNotEmpty) {
-    return Delta.from(delta.map((op) {
-      final newAttributes = op.attributes ?? <String, dynamic>{};
-      newAttributes.addAll(formats);
-      return Operation.insert(op.data, newAttributes);
-    }));
+  if (formats.isEmpty) {
+    return delta;
   }
-  return delta;
+
+  var transformed = delta;
+  formats.forEach((name, value) {
+    transformed = applyFormat(transformed, name, value, scroll);
+  });
+  return transformed;
 }
 
 Delta matchTable(DomNode node, Delta delta, Scroll scroll) {
@@ -465,11 +515,7 @@ Delta matchTable(DomNode node, Delta delta, Scroll scroll) {
   if (table != null) {
     final tableBlot = scroll.find(table);
     if (tableBlot.key is! TableBlot) {
-      return Delta.from(delta.map((op) {
-        final newAttributes = op.attributes ?? <String, dynamic>{};
-        newAttributes['table'] = (table as DomElement?)?.id;
-        return Operation.insert(op.data, newAttributes);
-      }));
+      return applyFormat(delta, 'table', (table as DomElement?)?.id, scroll);
     }
   }
   return delta;

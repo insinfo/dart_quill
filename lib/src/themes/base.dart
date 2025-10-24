@@ -1,11 +1,16 @@
-import '../core/quill.dart';
 import '../core/emitter.dart';
-import '../core/theme.dart';
+import '../core/quill.dart';
 import '../core/selection.dart';
-import '../ui/picker.dart'; // Placeholder
-import '../ui/tooltip.dart'; // Placeholder
-import '../platform/platform.dart';
+import '../core/theme.dart';
+import '../modules/clipboard.dart';
+import '../modules/history.dart';
+import '../modules/keyboard.dart';
+import '../modules/toolbar.dart';
+import '../modules/uploader.dart';
 import '../platform/dom.dart';
+import '../platform/platform.dart';
+import '../ui/picker.dart';
+import '../ui/tooltip.dart';
 
 // Utility functions (simplified for now)
 Map<String, dynamic> merge(Map<String, dynamic> a, Map<String, dynamic> b) {
@@ -62,9 +67,251 @@ class BaseTheme extends Theme {
     document.body.addEventListener('click', listener);
   }
 
+  @override
   dynamic addModule(String name) {
-    // TODO: Implement module loading system
-    // For now, return null as a placeholder
+    if (modules.containsKey(name)) {
+      return modules[name];
+    }
+
+    final config = options.modules[name];
+    switch (name) {
+      case 'toolbar':
+        final toolbarOptions = _normalizeToolbarOptions(config);
+        final toolbar = Toolbar(quill, toolbarOptions);
+        modules[name] = toolbar;
+        extendToolbar(toolbar);
+        _registerToolbarHandlers(toolbar);
+        return toolbar;
+      case 'keyboard':
+        options.modules[name] = _normalizeKeyboardOptions(config);
+        break;
+      case 'history':
+        options.modules[name] = _normalizeHistoryOptions(config);
+        break;
+      case 'clipboard':
+        options.modules[name] = _normalizeClipboardOptions(config);
+        break;
+      case 'uploader':
+        options.modules[name] = _normalizeUploaderOptions(config);
+        break;
+      default:
+        break;
+    }
+    final module = super.addModule(name);
+    return module;
+  }
+
+  void extendToolbar(Toolbar toolbar) {}
+
+  void _registerToolbarHandlers(Toolbar toolbar) {
+    if (!toolbar.handlers.containsKey('formula')) {
+      toolbar.addHandler('formula', (_) {
+        final currentTooltip = tooltip;
+        if (currentTooltip is BaseTooltip) {
+          currentTooltip.edit('formula');
+        }
+      });
+    }
+    if (!toolbar.handlers.containsKey('video')) {
+      toolbar.addHandler('video', (_) {
+        final currentTooltip = tooltip;
+        if (currentTooltip is BaseTooltip) {
+          currentTooltip.edit('video');
+        }
+      });
+    }
+    if (!toolbar.handlers.containsKey('image')) {
+      toolbar.addHandler('image', (_) {
+        final container = toolbar.container;
+        if (container == null) {
+          return;
+        }
+
+        final uploader = _ensureUploaderModule();
+        if (uploader == null) {
+          return;
+        }
+
+        DomElement? fileInput =
+            container.querySelector('input.ql-image[type="file"]');
+        if (fileInput == null) {
+          final document = container.ownerDocument;
+          fileInput = document.createElement('input');
+          fileInput.setAttribute('type', 'file');
+          fileInput.classes.add('ql-image');
+          if (uploader.options.mimetypes.isNotEmpty) {
+            fileInput.setAttribute(
+              'accept',
+              uploader.options.mimetypes.join(', '),
+            );
+          }
+          final style = fileInput.style as dynamic;
+          style.display = 'none';
+          container.append(fileInput);
+
+          final capturedInput = fileInput;
+          fileInput.addEventListener('change', (event) {
+            final range = quill.getSelection(focus: true);
+            if (range == null) {
+              return;
+            }
+
+            final currentUploader = _ensureUploaderModule();
+            if (currentUploader == null) {
+              return;
+            }
+
+            final rawEvent = event.rawEvent;
+            dynamic fileList;
+            if (rawEvent != null) {
+              try {
+                fileList = (rawEvent as dynamic).target?.files;
+              } catch (_) {
+                fileList = null;
+              }
+            }
+
+            final files = <dynamic>[];
+            if (fileList is Iterable) {
+              for (final file in fileList) {
+                files.add(file);
+              }
+            } else if (fileList != null) {
+              files.add(fileList);
+            }
+
+            currentUploader.upload(range, files);
+
+            try {
+              (rawEvent as dynamic).target?.value = '';
+            } catch (_) {
+              capturedInput.setAttribute('value', '');
+            }
+          });
+        }
+
+        try {
+          final dynamic nativeInput = fileInput;
+          nativeInput.click();
+        } catch (_) {
+          // Ignore environments where programmatic click is unavailable.
+        }
+      });
+    }
+  }
+
+  Uploader? _ensureUploaderModule() {
+    final existing = modules['uploader'];
+    if (existing is Uploader) {
+      return existing;
+    }
+    final uploaderOptions = _normalizeUploaderOptions(options.modules['uploader']);
+    final uploader = Uploader(quill, uploaderOptions);
+    modules['uploader'] = uploader;
+    options.modules['uploader'] = uploaderOptions;
+    return uploader;
+  }
+
+  ToolbarProps _normalizeToolbarOptions(dynamic config) {
+    if (config is ToolbarProps) {
+      return config;
+    }
+
+    dynamic container;
+    Map<String, Handler>? handlers;
+
+    if (config is ToolbarConfig) {
+      container = config;
+    } else if (config is List) {
+      container = ToolbarConfig(
+        config
+            .map<List<dynamic>>((group) => List<dynamic>.from(group as Iterable))
+            .toList(),
+      );
+    } else if (config is Map) {
+      if (config.containsKey('container')) {
+        container = config['container'];
+      }
+      final rawHandlers = config['handlers'];
+      if (rawHandlers is Map) {
+        handlers = rawHandlers.map((key, value) {
+          if (value is Handler) {
+            return MapEntry(key as String, value);
+          }
+          throw ArgumentError('Toolbar handler for "$key" must be a Handler');
+        });
+      }
+    } else if (config != null) {
+      container = config;
+    }
+
+    if (container is List) {
+      container = ToolbarConfig(
+        container
+            .map<List<dynamic>>((group) => List<dynamic>.from(group as Iterable))
+            .toList(),
+      );
+    }
+
+    return ToolbarProps(
+      container: container,
+      handlers: handlers,
+    );
+  }
+
+  KeyboardOptions _normalizeKeyboardOptions(dynamic config) {
+    if (config is KeyboardOptions) {
+      return config;
+    }
+    if (config is Map<String, dynamic>) {
+      return KeyboardOptions(
+        bindings: Map<String, dynamic>.from(
+          config['bindings'] is Map<String, dynamic>
+              ? config['bindings'] as Map<String, dynamic>
+              : const {},
+        ),
+      );
+    }
+    return KeyboardOptions(bindings: {});
+  }
+
+  HistoryOptions _normalizeHistoryOptions(dynamic config) {
+    if (config is HistoryOptions) {
+      return config;
+    }
+    if (config is Map) {
+      return HistoryOptions(
+        delay: (config['delay'] as int?) ?? HistoryOptions().delay,
+        maxStack: (config['maxStack'] as int?) ?? HistoryOptions().maxStack,
+        userOnly: (config['userOnly'] as bool?) ?? HistoryOptions().userOnly,
+      );
+    }
+    return HistoryOptions();
+  }
+
+  ClipboardOptions _normalizeClipboardOptions(dynamic config) {
+    if (config is ClipboardOptions) {
+      return config;
+    }
+    if (config is Map) {
+      final matchers = config['matchers'];
+      return ClipboardOptions(
+        matchers: matchers is List ? List<dynamic>.from(matchers) : const [],
+      );
+    }
+    return ClipboardOptions();
+  }
+
+  UploaderOptions _normalizeUploaderOptions(dynamic config) {
+    return UploaderOptions.fromConfig(config);
+  }
+
+  String? _detectFormat(DomElement element) {
+    for (final className in element.classes.values) {
+      if (className.startsWith('ql-')) {
+        return className.substring('ql-'.length);
+      }
+    }
     return null;
   }
 
@@ -89,51 +336,63 @@ class BaseTheme extends Theme {
     });
   }
 
-  void buildPickers(List<DomElement> selects, Map<String, dynamic> icons) {
+  void buildPickers(
+      Toolbar toolbar, List<DomElement> selects, Map<String, dynamic> icons) {
     pickers = [];
     selects.forEach((select) {
-      final selectElement = select;
-      if (selectElement.classes.contains('ql-align')) {
-        if (selectElement.querySelector('option') == null) {
-          fillSelect(selectElement, ALIGNS);
+      final format = _detectFormat(select);
+      if (format == null) {
+        return;
+      }
+
+      Picker picker;
+      if (select.classes.contains('ql-align')) {
+        if (select.querySelector('option') == null) {
+          fillSelect(select, ALIGNS);
         }
-        if (icons['align'] is Map) {
-          pickers!.add(IconPicker(selectElement, icons['align'] as Map<String, String>));
+        picker = IconPicker(select, icons['align'] as Map<String, String>? ?? {});
+      } else if (select.classes.contains('ql-background') || select.classes.contains('ql-color')) {
+        final pickerFormat = select.classes.contains('ql-background') ? 'background' : 'color';
+        if (select.querySelector('option') == null) {
+          fillSelect(select, COLORS, pickerFormat == 'background');
         }
-      } else if (selectElement.classes.contains('ql-background') || selectElement.classes.contains('ql-color')) {
-        final format = selectElement.classes.contains('ql-background') ? 'background': 'color';
-        if (selectElement.querySelector('option') == null) {
-          fillSelect(selectElement, COLORS, format == 'background');
-        }
-        pickers!.add(ColorPicker(selectElement, icons[format] as String));
+        picker = ColorPicker(select, icons[pickerFormat] as String?);
       } else {
-        if (selectElement.querySelector('option') == null) {
-          if (selectElement.classes.contains('ql-font')) {
-            fillSelect(selectElement, FONTS);
-          } else if (selectElement.classes.contains('ql-header')) {
-            fillSelect(selectElement, HEADERS);
-          } else if (selectElement.classes.contains('ql-size')) {
-            fillSelect(selectElement, SIZES);
+        if (select.querySelector('option') == null) {
+          if (select.classes.contains('ql-font')) {
+            fillSelect(select, FONTS);
+          } else if (select.classes.contains('ql-header')) {
+            fillSelect(select, HEADERS);
+          } else if (select.classes.contains('ql-size')) {
+            fillSelect(select, SIZES);
           }
         }
-        // Use ColorPicker as generic picker (no icon needed)
-        pickers!.add(ColorPicker(selectElement, null));
+        picker = Picker(select);
       }
+
+      picker.onSelected = (value) {
+        toolbar.applyFromPicker(select, format, value);
+      };
+      pickers!.add(picker);
     });
+
     final updatePickers = () {
       pickers!.forEach((picker) {
         picker.update();
       });
     };
-    quill.emitter.on(EmitterEvents.EDITOR_CHANGE, (type, range, oldRange, source) => updatePickers());
+    quill.emitter
+        .on(EmitterEvents.EDITOR_CHANGE, (type, range, oldRange, source) => updatePickers());
   }
 }
 
 class BaseTooltip extends Tooltip {
   DomElement? textbox;
   Range? linkRange;
+  bool _editing = false;
 
-  BaseTooltip(Quill quill, [DomElement? boundsContainer]) : super(quill, boundsContainer) {
+  BaseTooltip(Quill quill, String template, [DomElement? boundsContainer])
+      : super(quill, boundsContainer, template) {
     textbox = root.querySelector('input[type="text"]');
     listen();
   }
@@ -158,8 +417,9 @@ class BaseTooltip extends Tooltip {
   }
 
   void edit([String mode = 'link', String? preview]) {
-    root.classes.remove('ql-hidden');
+    show();
     root.classes.add('ql-editing');
+    _editing = true;
     if (textbox == null) return;
 
     if (preview != null) {
@@ -167,6 +427,7 @@ class BaseTooltip extends Tooltip {
     } else if (mode != root.getAttribute('data-mode')) {
       textbox!.setAttribute('value', '');
     }
+    textbox!.select();
     final savedRange = quill.selection.savedRange;
     if (savedRange != null) {
       final bounds = quill.getBounds(savedRange.index, savedRange.length);
@@ -174,7 +435,6 @@ class BaseTooltip extends Tooltip {
         position(bounds);
       }
     }
-    // TODO: Add select() method to DomElement interface for text inputs
     textbox!.setAttribute('placeholder', textbox!.getAttribute('data-$mode') ?? '');
     root.setAttribute('data-mode', mode);
   }
@@ -182,6 +442,8 @@ class BaseTooltip extends Tooltip {
   void restoreFocus() {
     quill.focus(preventScroll: true);
   }
+
+  bool get isEditing => _editing;
 
   void save() {
     var value = textbox?.getAttribute('value') ?? '';
@@ -218,6 +480,12 @@ class BaseTooltip extends Tooltip {
     }
     textbox!.setAttribute('value', '');
     hide();
+  }
+
+  @override
+  void hide() {
+    _editing = false;
+    super.hide();
   }
 }
 
