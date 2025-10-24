@@ -40,12 +40,20 @@ class TextBlot extends LeafBlot {
 
   @override
   void insertAt(int index, String value, [dynamic def]) {
-    if (def != null) {
-      throw ArgumentError('Cannot insert embed definition into TextBlot');
-    }
     final data = textNode.data;
     if (index < 0 || index > data.length) {
       throw RangeError.index(index, data, 'index');
+    }
+
+    if (def != null) {
+      final parentBlot = parent;
+      if (parentBlot is! ParentBlot) {
+        throw ArgumentError('Cannot insert embed into TextBlot without parent');
+      }
+      final ref = split(index);
+      final embed = scroll.create(value, def);
+      parentBlot.insertBefore(embed, ref);
+      return;
     }
     textNode.data = data.substring(0, index) + value + data.substring(index);
   }

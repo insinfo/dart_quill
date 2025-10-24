@@ -1,12 +1,12 @@
 import '../blots/abstract/blot.dart';
-import '../blots/embed.dart';
+import '../blots/block.dart';
 import '../platform/dom.dart';
 import '../platform/platform.dart';
 import 'link.dart';
 
 const List<String> kAttributes = ['height', 'width'];
 
-class Video extends Embed {
+class Video extends BlockEmbed {
   Video(DomElement domNode) : super(domNode);
 
   static const String kBlotName = 'video';
@@ -21,6 +21,7 @@ class Video extends Embed {
 
   static Video create(String value) {
     final node = domBindings.adapter.document.createElement(kTagName);
+    node.classes.add(kClassName);
     node.setAttribute('frameborder', '0');
     node.setAttribute('allowfullscreen', 'true');
     node.setAttribute('src', Video.sanitize(value));

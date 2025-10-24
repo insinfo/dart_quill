@@ -253,6 +253,8 @@ class FakeDomElement extends FakeDomNode implements DomElement {
 
   @override
   bool hasAttribute(String name) => _attributes.containsKey(name);
+  
+  Map<String, String> get attributes => Map.unmodifiable(_attributes);
 
   @override
   void removeAttribute(String name) {
@@ -458,10 +460,36 @@ void _serializeHtmlNode(FakeDomNode node, StringBuffer buffer) {
   if (node is FakeDomElement) {
     final tag = node.tagName.toLowerCase();
     buffer.write('<$tag');
-    if (node._attributes.isNotEmpty) {
-      node._attributes.forEach((key, value) {
-        buffer.write(' $key="$value"');
-      });
+    const attributeOrder = [
+      'src',
+      'href',
+      'class',
+      'id',
+      'frameborder',
+      'allowfullscreen',
+      'width',
+      'height',
+      'alt',
+    ];
+    for (final name in attributeOrder) {
+      if (name == 'class') {
+        final className = node.className;
+        if (className != null && className.isNotEmpty) {
+          buffer.write(' class="$className"');
+        }
+        continue;
+      }
+      if (name == 'id') {
+        final id = node.id;
+        if (id != null && id.isNotEmpty) {
+          buffer.write(' id="$id"');
+        }
+        continue;
+      }
+      final value = node.getAttribute(name);
+      if (value != null) {
+        buffer.write(' $name="$value"');
+      }
     }
     buffer.write('>');
     if (_voidHtmlElements.contains(tag)) {

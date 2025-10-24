@@ -136,6 +136,46 @@ class Block extends BlockBlot {
   @override
   void insertAt(int index, String value, [dynamic def]) {
     if (def != null) {
+      final definition = scroll.query(value, Scope.ANY);
+      if (definition != null) {
+        if (definition.scope == Scope.BLOCK_BLOT) {
+          final parentBlot = parent;
+          if (parentBlot is ParentBlot) {
+            final blockLength = length();
+            final clampedIndex = math.max(0, math.min(index, blockLength));
+            final isAfterBlock = index >= blockLength;
+            final isLineEnd = !isAfterBlock &&
+                clampedIndex >= math.max(0, blockLength - _newlineLength);
+            final isStart = clampedIndex <= 0;
+
+            Blot? ref;
+            if (!isStart && !isAfterBlock && !isLineEnd) {
+              ref = split(clampedIndex, force: true);
+            } else if (isLineEnd) {
+              ref = split(clampedIndex, force: true);
+            } else if (isAfterBlock) {
+              ref = next;
+            } else {
+              ref = this;
+            }
+
+            final embed = scroll.create(value, def);
+            parentBlot.insertBefore(embed, ref);
+            _cache.clear();
+            return;
+          }
+        }
+
+        if (definition.scope == Scope.INLINE_BLOT) {
+          if (children.length == 1 && firstChild is Break) {
+            final embed = scroll.create(value, def);
+            insertBefore(embed, firstChild);
+            _cache.clear();
+            return;
+          }
+        }
+      }
+
       super.insertAt(index, value, def);
       _cache.clear();
       return;
@@ -305,4 +345,38 @@ class BlockEmbed extends EmbedBlot {
 
   @override
   dynamic value() => {};
+
+  @override
+  void insertAt(int index, String value, [dynamic def]) {
+    if (def != null) {
+      final parentBlot = parent;
+      if (parentBlot is! ParentBlot) {
+        return;
+      }
+      final embed = scroll.create(value, def);
+      final ref = index <= 0 ? this : next;
+      parentBlot.insertBefore(embed, ref);
+      return;
+    }
+
+    final parentBlot = parent;
+    if (parentBlot is! ParentBlot) {
+      return;
+    }
+
+    final lines = value.split('\n');
+    final text = lines.isNotEmpty ? lines.removeLast() : '';
+    final ref = split(index);
+
+    for (final line in lines) {
+      final block = scroll.create(Block.kBlotName) as Block;
+      block.insertAt(0, line);
+      parentBlot.insertBefore(block, ref);
+    }
+
+    if (text.isNotEmpty) {
+      final textBlot = scroll.create(TextBlot.kBlotName, text);
+      parentBlot.insertBefore(textBlot, ref);
+    }
+  }
 }

@@ -31,7 +31,8 @@ RegistryEntry imageEntry() {
         return Image(value);
       }
       final src = value is String ? value : '';
-      return Image(Image.create(src));
+      final node = Image.create(src);
+      return Image(node);
     },
     tagNames: [Image.kTagName],
   );

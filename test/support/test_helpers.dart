@@ -232,25 +232,38 @@ class EqualHTML extends Matcher {
 
       // Add attributes
       if (node is FakeDomElement) {
-        final attrs = <String, String>{};
-        // Collect attributes
-        if (node.getAttribute('src') != null) {
-          attrs['src'] = node.getAttribute('src')!;
-        }
-        if (node.getAttribute('href') != null) {
-          attrs['href'] = node.getAttribute('href')!;
-        }
-        if (node.className != null && node.className!.isNotEmpty) {
-          attrs['class'] = node.className!;
-        }
-        if (node.id != null && node.id!.isNotEmpty) {
-          attrs['id'] = node.id!;
-        }
+        const attributeOrder = [
+          'src',
+          'href',
+          'class',
+          'id',
+          'frameborder',
+          'allowfullscreen',
+          'width',
+          'height',
+          'alt',
+        ];
 
-        // Write attributes
-        attrs.forEach((key, value) {
-          buffer.write(' $key="$value"');
-        });
+        for (final name in attributeOrder) {
+          if (name == 'class') {
+            final className = node.className;
+            if (className != null && className.isNotEmpty) {
+              buffer.write(' class="$className"');
+            }
+            continue;
+          }
+          if (name == 'id') {
+            final id = node.id;
+            if (id != null && id.isNotEmpty) {
+              buffer.write(' id="$id"');
+            }
+            continue;
+          }
+          final value = node.getAttribute(name);
+          if (value != null) {
+            buffer.write(' $name="$value"');
+          }
+        }
       }
 
       buffer.write('>');

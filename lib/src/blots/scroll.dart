@@ -124,6 +124,16 @@ class Scroll extends ScrollBlot {
   @override
   void insertAt(int index, String value, [dynamic def]) {
     if (index >= length()) {
+      if (def != null) {
+        final definition = query(value, Scope.ANY);
+        if (definition != null && definition.scope == Scope.BLOCK_BLOT) {
+          final embed = create(value, def);
+          insertBefore(embed, null);
+          optimize([], {});
+          return;
+        }
+      }
+
       final block = _appendBlock();
       final insertionIndex = block.length() - 1;
       if (def == null && value.endsWith('\n')) {
