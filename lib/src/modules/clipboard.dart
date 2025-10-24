@@ -321,11 +321,7 @@ Delta traverse(
 
 Matcher createMatchAlias(String format) {
   return (DomNode node, Delta delta, Scroll scroll) {
-    return Delta.from(delta.map((op) {
-      final newAttributes = op.attributes ?? <String, dynamic>{};
-      newAttributes[format] = true;
-      return Operation.insert(op.data, newAttributes);
-    }).toList());
+    return applyFormat(delta, format, true, scroll);
   };
 }
 

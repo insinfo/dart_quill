@@ -3,6 +3,7 @@ library dart_quill;
 export 'src/app/quill_editor_component.dart';
 export 'src/core/initialization.dart' show initializeQuill;
 export 'src/core/quill.dart';
+export 'src/core/logger.dart' show DebugLevel, logger, setLoggerLevel;
 export 'src/core/theme.dart';
 export 'src/modules/toolbar.dart';
 export 'src/modules/uploader.dart';

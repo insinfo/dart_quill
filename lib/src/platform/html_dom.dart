@@ -95,8 +95,25 @@ class HtmlDomEvent implements DomEvent {
 class HtmlDomInputEvent extends HtmlDomEvent implements DomInputEvent {
   HtmlDomInputEvent(super.rawEvent);
 
+  dynamic get _event => rawEvent as dynamic;
+
   @override
-  String? get inputType => (rawEvent as dynamic).inputType;
+  String? get inputType => _event.inputType as String?;
+
+  @override
+  String? get data => _event.data as String?;
+
+  @override
+  DomDataTransfer? get dataTransfer {
+    final transfer = _event.dataTransfer;
+    if (transfer == null) {
+      return null;
+    }
+    if (transfer is html.DataTransfer) {
+      return HtmlDomDataTransfer(transfer);
+    }
+    return null;
+  }
 }
 
 class HtmlDomMutationObserver implements DomMutationObserver {
@@ -216,6 +233,9 @@ class HtmlDomAdapter implements DomAdapter {
     observer = HtmlDomMutationObserver(nativeObserver);
     return observer;
   }
+
+  @override
+  String? get userAgent => html.window.navigator.userAgent;
 }
 
 class HtmlDomDocument implements DomDocument {
@@ -243,6 +263,9 @@ class HtmlDomDocument implements DomDocument {
 
   @override
   DomElement get body => HtmlDomElement(html.document.body!);
+
+  @override
+  DomElement get documentElement => HtmlDomElement(html.document.documentElement!);
 
   @override
   DomParser get parser => HtmlDomParser();
@@ -291,6 +314,9 @@ class _HtmlDomDocumentWrapper extends HtmlDomDocument {
     }
     return HtmlDomElement(_doc.documentElement!);
   }
+
+  @override
+  DomElement get documentElement => HtmlDomElement(_doc.documentElement!);
 }
 
 class HtmlDomElement extends _HtmlDomNode implements DomElement {
@@ -424,7 +450,24 @@ class HtmlDomElement extends _HtmlDomNode implements DomElement {
   }
 
   @override
+  int get scrollLeft => _element.scrollLeft;
+
+  @override
+  set scrollLeft(int value) {
+    _element.scrollLeft = value;
+  }
+
+  @override
   int get offsetWidth => _element.offsetWidth;
+
+  @override
+  int get offsetHeight => _element.offsetHeight;
+
+  @override
+  int get clientWidth => _element.clientWidth;
+
+  @override
+  int get clientHeight => _element.clientHeight;
 
   @override
   String? get innerHTML => _element.innerHtml;

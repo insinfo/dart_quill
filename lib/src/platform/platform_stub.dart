@@ -16,6 +16,9 @@ class _StubDomAdapter implements DomAdapter {
   ) {
     throw UnsupportedError('DOM operations are not supported on this platform.');
   }
+
+  @override
+  String? get userAgent => null;
 }
 
 /// Creates the platform-specific DOM adapter

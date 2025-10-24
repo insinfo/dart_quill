@@ -3,10 +3,14 @@ import '../blots/scroll.dart';
 import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
 import '../modules/clipboard.dart';
 import '../modules/history.dart';
+import '../modules/input.dart';
 import '../modules/keyboard.dart';
 import '../platform/dom.dart';
+import 'composition.dart';
 import 'editor.dart';
 import 'emitter.dart';
+import 'instances.dart';
+import 'logger.dart' as quill_logger;
 import 'selection.dart';
 import 'theme.dart';
 
@@ -70,10 +74,12 @@ class Quill {
   final Emitter emitter;
   late final Editor editor;
   late final Selection selection;
+  late final Composition composition;
   late final Theme theme;
   late final Keyboard keyboard;
   late final Clipboard clipboard;
   late final History history;
+  late final Input input;
 
   static final Map<String, RegistryEntry> _formatRegistry = {};
   static final Map<String, ModuleFactory> _moduleRegistry = {};
@@ -84,6 +90,12 @@ class Quill {
   static const sources = EmitterSource();
 
   static Iterable<RegistryEntry> get registeredFormats => _formatRegistry.values;
+
+  static void debugMode(quill_logger.DebugLevel? level) {
+    quill_logger.setLoggerLevel(level);
+  }
+
+  static Quill? find(DomNode node) => quillInstances.get<Quill>(node);
 
   static void register(dynamic definition, [bool overwrite = false]) {
     if (definition is RegistryEntry) {
@@ -140,6 +152,7 @@ class Quill {
     }
     editor = Editor(scroll);
     selection = Selection(scroll, emitter);
+    composition = Composition(scroll, emitter);
 
     final mergedOptions = _mergeThemeOptions(options);
     final themeBuilder = _resolveThemeBuilder(mergedOptions.theme);
@@ -163,7 +176,14 @@ class Quill {
         : History(this, HistoryOptions());
     theme.modules['history'] = history;
 
+  final inputModule = theme.addModule('input');
+  input = (inputModule is Input)
+    ? inputModule
+    : Input(this, const InputOptions());
+  theme.modules['input'] = input;
+
     theme.init();
+    quillInstances.register<Quill>(container, this);
   }
 
   DomElement addContainer(String className, [DomElement? refNode]) {
@@ -297,6 +317,7 @@ ThemeOptions _mergeThemeOptions(ThemeOptions? options) {
     'keyboard': <String, dynamic>{},
     'history': <String, dynamic>{},
     'clipboard': <String, dynamic>{},
+    'input': <String, dynamic>{},
     'uploader': <String, dynamic>{},
   };
   if (options != null) {

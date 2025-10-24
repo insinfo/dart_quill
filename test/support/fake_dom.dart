@@ -18,13 +18,19 @@ class FakeDomAdapter implements DomAdapter {
 
   // Helper method for creating fake events (not part of DomAdapter interface)
   DomEvent createEvent(String type) => FakeDomEvent(type);
+
+  @override
+  String? get userAgent => 'fake-user-agent';
 }
 
 class FakeDomDocument implements DomDocument {
   FakeDomDocument() {
+    _documentElement = FakeDomElement('HTML', document: this);
     _body = FakeDomElement('BODY', document: this);
+    _documentElement.append(_body);
   }
 
+  late final FakeDomElement _documentElement;
   late final FakeDomElement _body;
 
   @override
@@ -38,32 +44,109 @@ class FakeDomDocument implements DomDocument {
   DomElement get body => _body;
 
   @override
+  DomElement get documentElement => _documentElement;
+
+  @override
   DomElement? querySelector(String selectors) {
-    // Simple implementation: return first matching element by tag name
-    final tag = selectors.toUpperCase();
-    for (final child in _body.internalChildren) {
-      if (child is FakeDomElement && child.tagName == tag) {
-        return child;
+    final matcher = _SelectorMatcher(selectors);
+    return _findFirst(_documentElement, matcher);
+  }
+
+  @override
+  List<DomElement> querySelectorAll(String selectors) {
+    final matcher = _SelectorMatcher(selectors);
+    final results = <DomElement>[];
+    void traverse(FakeDomNode node) {
+      if (node is FakeDomElement) {
+        if (matcher.matches(node)) {
+          results.add(node);
+        }
+        for (final child in node.internalChildren) {
+          traverse(child);
+        }
+      }
+    }
+
+    traverse(_documentElement);
+    return results;
+  }
+
+  FakeDomElement? _findFirst(FakeDomElement root, _SelectorMatcher matcher) {
+    if (matcher.matches(root)) {
+      return root;
+    }
+    for (final child in root.internalChildren) {
+      if (child is FakeDomElement) {
+        final result = _findFirst(child, matcher);
+        if (result != null) {
+          return result;
+        }
       }
     }
     return null;
   }
 
   @override
-  List<DomElement> querySelectorAll(String selectors) {
-    // Simple implementation: return all matching elements
-    final results = <DomElement>[];
-    final tag = selectors.toUpperCase();
-    for (final child in _body.internalChildren) {
-      if (child is FakeDomElement && child.tagName == tag) {
-        results.add(child);
-      }
+  DomParser get parser => FakeDomParser();
+}
+
+class _SelectorMatcher {
+  _SelectorMatcher(String selector) {
+    final trimmed = selector.trim();
+    final bracketIndex = trimmed.indexOf('[');
+    if (trimmed.startsWith('[')) {
+      tag = null;
+      _parseAttribute(trimmed);
+    } else if (bracketIndex == -1) {
+      tag = trimmed.toUpperCase();
+    } else {
+      tag = trimmed.substring(0, bracketIndex).toUpperCase();
+      _parseAttribute(trimmed.substring(bracketIndex));
     }
-    return results;
   }
 
-  @override
-  DomParser get parser => FakeDomParser();
+  String? tag;
+  String? attribute;
+  String? operatorSymbol;
+  String? value;
+
+  void _parseAttribute(String fragment) {
+    final regex = RegExp(r'^\[(\w[\w-]*)\s*(\*=|\^=|=)?\s*"?([^"\]]*)"?\]$');
+    final match = regex.firstMatch(fragment.trim());
+    if (match != null) {
+      attribute = match.group(1);
+      operatorSymbol = match.group(2);
+      value = match.group(3);
+    }
+  }
+
+  bool matches(FakeDomElement element) {
+    if (tag != null && element.tagName != tag) {
+      return false;
+    }
+    if (attribute == null) {
+      return true;
+    }
+    final attrValue = attribute == 'class'
+        ? element.className ?? ''
+        : element.getAttribute(attribute!);
+    if (attrValue == null) {
+      return false;
+    }
+    if (operatorSymbol == null) {
+      return true;
+    }
+    switch (operatorSymbol) {
+      case '*=':
+        return attrValue.contains(value ?? '');
+      case '^=':
+        return attrValue.startsWith(value ?? '');
+      case '=':
+        return attrValue == (value ?? '');
+      default:
+        return false;
+    }
+  }
 }
 
 class FakeDomNode implements DomNode {
@@ -376,7 +459,24 @@ class FakeDomElement extends FakeDomNode implements DomElement {
   }
 
   @override
+  int get scrollLeft => 0;
+
+  @override
+  set scrollLeft(int value) {
+    // No-op for fake
+  }
+
+  @override
   int get offsetWidth => 100; // Fake width for testing
+
+  @override
+  int get offsetHeight => 24; // Fake height for testing
+
+  @override
+  int get clientWidth => 100;
+
+  @override
+  int get clientHeight => 24;
 
   @override
   String? get innerHTML {
@@ -628,6 +728,46 @@ class FakeDomEvent implements DomEvent {
   @override
   void preventDefault() {
     defaultPrevented = true;
+  }
+}
+
+class FakeDomInputEvent extends FakeDomEvent implements DomInputEvent {
+  FakeDomInputEvent({
+    required String type,
+    DomNode? target,
+    this.inputType,
+    this.data,
+    DomDataTransfer? dataTransfer,
+  })  : _dataTransfer = dataTransfer,
+        super(type, target);
+
+  @override
+  final String? inputType;
+
+  @override
+  final String? data;
+
+  final DomDataTransfer? _dataTransfer;
+
+  @override
+  DomDataTransfer? get dataTransfer => _dataTransfer;
+}
+
+class FakeDomDataTransfer implements DomDataTransfer {
+  FakeDomDataTransfer([Map<String, String>? initial])
+      : _data = initial != null ? Map<String, String>.from(initial) : <String, String>{};
+
+  final Map<String, String> _data;
+
+  @override
+  List<DomFile> get files => const [];
+
+  @override
+  String? getData(String format) => _data[format];
+
+  @override
+  void setData(String format, String data) {
+    _data[format] = data;
   }
 }
 

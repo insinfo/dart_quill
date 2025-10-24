@@ -1,6 +1,8 @@
 import '../core/module.dart';
 import '../core/quill.dart';
 import '../core/selection.dart';
+import '../core/emitter.dart';
+import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
 import '../blots/block.dart';
 import '../blots/text.dart';
 import '../blots/abstract/blot.dart';
@@ -348,7 +350,16 @@ BindingObject? normalize(dynamic binding) {
 }
 
 void deleteRange({required Quill quill, required Range range}) {
-  // Placeholder
+  if (range.length <= 0) {
+    return;
+  }
+
+  final delta = Delta()
+    ..retain(range.index)
+    ..delete(range.length);
+
+  quill.updateContents(delta, source: EmitterSource.USER);
+  quill.setSelection(Range(range.index, 0), source: EmitterSource.SILENT);
 }
 
 int? tableSide(dynamic table, Blot row, Blot cell, int offset) {

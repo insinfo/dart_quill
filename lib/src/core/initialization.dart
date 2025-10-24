@@ -16,6 +16,7 @@ import '../formats/underline.dart';
 import '../modules/clipboard.dart';
 import '../modules/history.dart';
 import '../modules/keyboard.dart';
+import '../modules/input.dart';
 import '../modules/uploader.dart';
 import '../platform/platform.dart';
 import '../themes/bubble.dart';
@@ -51,6 +52,11 @@ void _registerModules() {
   Quill.registerModule('clipboard', (quill, options) {
     final resolved = _resolveClipboardOptions(options);
     return Clipboard(quill, resolved);
+  });
+
+  Quill.registerModule('input', (quill, options) {
+    final resolved = _resolveInputOptions(options);
+    return Input(quill, resolved);
   });
 
   Quill.registerModule('uploader', (quill, options) {
@@ -246,4 +252,11 @@ ClipboardOptions _resolveClipboardOptions(dynamic options) {
     }
   }
   return ClipboardOptions();
+}
+
+InputOptions _resolveInputOptions(dynamic options) {
+  if (options is InputOptions) {
+    return options;
+  }
+  return InputOptions.fromConfig(options);
 }

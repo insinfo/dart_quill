@@ -1,3 +1,5 @@
+import '../platform/dom.dart';
+
 class EmitterSource {
   const EmitterSource();
   static const String API = 'api';
@@ -16,6 +18,10 @@ class EmitterEvents {
   static const String SCROLL_BEFORE_UPDATE = 'scroll-before-update';
   static const String SCROLL_UPDATE = 'scroll-update';
   static const String SCROLL_SELECTION_CHANGE = 'scroll-selection-change';
+  static const String COMPOSITION_BEFORE_START = 'composition-before-start';
+  static const String COMPOSITION_START = 'composition-start';
+  static const String COMPOSITION_BEFORE_END = 'composition-before-end';
+  static const String COMPOSITION_END = 'composition-end';
 }
 
 class Emitter {
@@ -23,6 +29,7 @@ class Emitter {
   static EmitterSource get sources => EmitterSource();
 
   final Map<String, List<Function>> _handlers = {};
+  final Map<String, List<_DomListener>> _domListeners = {};
 
   void on(String event, Function handler) {
     _handlers.putIfAbsent(event, () => []).add(handler);
@@ -56,9 +63,29 @@ class Emitter {
     }
   }
 
-  void listenDOM(String type, dynamic target, Function listener) {
-    // Placeholder for DOM event listening
-    // This should delegate to platform abstraction
-    // For now, this is a stub to fix compilation
+  void listenDOM(String type, DomElement target, Function listener) {
+    final listeners = _domListeners.putIfAbsent(type, () => <_DomListener>[]);
+    listeners.add(_DomListener(node: target, handler: listener));
   }
+
+  void handleDOM(String type, DomEvent event, [List<dynamic> args = const []]) {
+    final listeners = _domListeners[type];
+    if (listeners == null) {
+      return;
+    }
+    final target = event.target;
+    for (final entry in List<_DomListener>.from(listeners)) {
+      if (entry.node == target || entry.node.contains(target)) {
+        final positional = <dynamic>[event, ...args];
+        Function.apply(entry.handler, positional);
+      }
+    }
+  }
+}
+
+class _DomListener {
+  _DomListener({required this.node, required this.handler});
+
+  final DomElement node;
+  final Function handler;
 }

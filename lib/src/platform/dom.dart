@@ -74,8 +74,21 @@ abstract class DomElement extends DomNode {
   int get scrollTop;
   set scrollTop(int value);
 
+  /// Get or set the scroll position (horizontal).
+  int get scrollLeft;
+  set scrollLeft(int value);
+
   /// Get the element's width including padding and border.
   int get offsetWidth;
+
+  /// Get the element's height including padding and border.
+  int get offsetHeight;
+
+  /// Get the element's client width (inside padding).
+  int get clientWidth;
+
+  /// Get the element's client height (inside padding).
+  int get clientHeight;
 
   /// Get or set the HTML content inside the element.
   String? get innerHTML;
@@ -95,6 +108,7 @@ abstract class DomDocument {
   DomElement? querySelector(String selectors);
   List<DomElement> querySelectorAll(String selectors);
   DomElement get body;
+  DomElement get documentElement;
   DomParser get parser;
 }
 
@@ -136,6 +150,8 @@ abstract class DomEvent {
 /// DOM input event abstraction.
 abstract class DomInputEvent extends DomEvent {
   String? get inputType;
+  String? get data;
+  DomDataTransfer? get dataTransfer;
 }
 
 /// DOM clipboard event abstraction.
@@ -163,6 +179,7 @@ abstract class DomAdapter {
   DomMutationObserver createMutationObserver(
       void Function(List<DomMutationRecord> mutations, DomMutationObserver observer)
           callback);
+  String? get userAgent;
 }
 
 
