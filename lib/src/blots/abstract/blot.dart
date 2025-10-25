@@ -268,7 +268,7 @@ abstract class ParentBlot extends Blot {
         }
         final remaining = length - removable;
         if (remaining > 0) {
-          deleteAt(index + removable, remaining);
+          deleteAt(index, remaining);
         }
         return;
       }

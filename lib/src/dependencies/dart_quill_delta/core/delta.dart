@@ -565,18 +565,38 @@ class Delta {
   String toString() => operations.join('\n');
 
   String getPlainText(int index, int length) {
-    final iter = DeltaIterator(this);
-    var text = '';
-    var i = 0;
-    while (iter.hasNext && i < index + length) {
-      final op = iter.next();
-      if (op.isInsert && op.data is String) {
-        if (i >= index) {
-          text += op.data as String;
-        }
-      }
-      i += op.length!;
+    if (length <= 0) {
+      return '';
     }
-    return text;
+
+    final iter = DeltaIterator(this);
+    final buffer = StringBuffer();
+    var offset = 0;
+    var remaining = length;
+
+    while (iter.hasNext && remaining > 0) {
+      final op = iter.next();
+      final opLength = op.length ?? 0;
+
+      if (!op.isInsert || op.data is! String) {
+        offset += opLength;
+        continue;
+      }
+
+      final text = op.data as String;
+      final localIndex = math.max(index - offset, 0);
+      if (localIndex >= opLength) {
+        offset += opLength;
+        continue;
+      }
+
+      final take = math.min(opLength - localIndex, remaining);
+      buffer.write(text.substring(localIndex, localIndex + take));
+
+      remaining -= take;
+      offset += opLength;
+    }
+
+    return buffer.toString();
   }
 }

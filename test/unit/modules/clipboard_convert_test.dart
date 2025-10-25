@@ -63,8 +63,8 @@ void main() {
     });
 
     test('intentional whitespace', () {
-      final delta =
-          _clipboard().convert(html: '<span>0&nbsp;<strong>1</strong>&nbsp;2</span>');
+      final delta = _clipboard()
+          .convert(html: '<span>0&nbsp;<strong>1</strong>&nbsp;2</span>');
       expectDelta(
         delta,
         Delta()
@@ -75,11 +75,11 @@ void main() {
     });
 
     test('consecutive intentional whitespace', () {
-      final delta = _clipboard().convert(html: '<strong>&nbsp;&nbsp;1&nbsp;&nbsp;</strong>');
+      final delta = _clipboard()
+          .convert(html: '<strong>&nbsp;&nbsp;1&nbsp;&nbsp;</strong>');
       expectDelta(
         delta,
-        Delta()
-          ..insert('  1  ', {'bold': true}),
+        Delta()..insert('  1  ', {'bold': true}),
       );
     });
 
@@ -99,13 +99,14 @@ void main() {
     });
 
     test('newlines between inline elements', () {
-      final delta = _clipboard().convert(html: '<span>foo</span>\n<span>bar</span>');
+      final delta =
+          _clipboard().convert(html: '<span>foo</span>\n<span>bar</span>');
       expectDelta(delta, Delta()..insert('foo bar'));
     });
 
     test('multiple newlines between inline elements', () {
-      final delta =
-          _clipboard().convert(html: '<span>foo</span>\n\n\n\n<span>bar</span>');
+      final delta = _clipboard()
+          .convert(html: '<span>foo</span>\n\n\n\n<span>bar</span>');
       expectDelta(delta, Delta()..insert('foo bar'));
     });
 
@@ -137,7 +138,8 @@ void main() {
     });
 
     test('empty block', () {
-      final delta = _clipboard().convert(html: '<h1>Test</h1><h2></h2><p>Body</p>');
+      final delta =
+          _clipboard().convert(html: '<h1>Test</h1><h2></h2><p>Body</p>');
       expectDelta(
         delta,
         Delta()
@@ -162,6 +164,77 @@ void main() {
       );
     });
 
+    test('nested list', () {
+      final delta = _clipboard().convert(
+        html: '<ol><li>One</li><li class="ql-indent-1">Alpha</li></ol>',
+      );
+      expectDelta(
+        delta,
+        Delta()
+          ..insert('One\n', {'list': 'ordered'})
+          ..insert('Alpha\n', {'list': 'ordered', 'indent': 1}),
+      );
+    });
+
+    test('html nested list', () {
+      final delta = _clipboard().convert(
+        html:
+            '<ol><li>One<ol><li>Alpha</li><li>Beta<ol><li>I</li></ol></li></ol></li></ol>',
+      );
+      expectDelta(
+        delta,
+        Delta()
+          ..insert('One\n', {'list': 'ordered'})
+          ..insert('Alpha\n', {'list': 'ordered', 'indent': 1})
+          ..insert('Beta\n', {'list': 'ordered', 'indent': 1})
+          ..insert('I\n', {'list': 'ordered', 'indent': 2}),
+      );
+    });
+
+    test('html nested bullet', () {
+      final delta = _clipboard().convert(
+        html:
+            '<ul><li>One<ul><li>Alpha</li><li>Beta<ul><li>I</li></ul></li></ul></li></ul>',
+      );
+      expectDelta(
+        delta,
+        Delta()
+          ..insert('One\n', {'list': 'bullet'})
+          ..insert('Alpha\n', {'list': 'bullet', 'indent': 1})
+          ..insert('Beta\n', {'list': 'bullet', 'indent': 1})
+          ..insert('I\n', {'list': 'bullet', 'indent': 2}),
+      );
+    });
+
+    test('html nested checklist', () {
+      final delta = _clipboard().convert(
+        html:
+            '<ul><li data-list="checked">One<ul><li data-list="checked">Alpha</li><li data-list="checked">Beta<ul><li data-list="checked">I</li></ul></li></ul></li></ul>',
+      );
+      expectDelta(
+        delta,
+        Delta()
+          ..insert('One\n', {'list': 'checked'})
+          ..insert('Alpha\n', {'list': 'checked', 'indent': 1})
+          ..insert('Beta\n', {'list': 'checked', 'indent': 1})
+          ..insert('I\n', {'list': 'checked', 'indent': 2}),
+      );
+    });
+
+    test('html partial list', () {
+      final delta = _clipboard().convert(
+        html:
+            '<ol><li><ol><li><ol><li>iiii</li></ol></li><li>bbbb</li></ol></li><li>2222</li></ol>',
+      );
+      expectDelta(
+        delta,
+        Delta()
+          ..insert('iiii\n', {'list': 'ordered', 'indent': 2})
+          ..insert('bbbb\n', {'list': 'ordered', 'indent': 1})
+          ..insert('2222\n', {'list': 'ordered'}),
+      );
+    });
+
     test('pre', () {
       const html = '<pre> 01 \n 23 </pre>';
       final clipboard = _clipboard();
@@ -177,13 +250,14 @@ void main() {
 
     test('pre with newline node', () {
       const html = '<pre><span> 01 </span>\n<span> 23 </span></pre>';
-      final delta = _clipboard().convert(html: html, formats: {'code-block': true});
+      final delta =
+          _clipboard().convert(html: html, formats: {'code-block': true});
       expectDelta(delta, Delta()..insert(' 01 \n 23 ', {'code-block': true}));
     });
 
     test('ignore empty elements except paragraphs', () {
-      final delta =
-          _clipboard().convert(html: '<div>hello<div></div>my<p></p>world</div>');
+      final delta = _clipboard()
+          .convert(html: '<div>hello<div></div>my<p></p>world</div>');
       expectDelta(delta, Delta()..insert('hello\nmy\n\nworld'));
     });
   });

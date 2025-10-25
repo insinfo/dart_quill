@@ -412,8 +412,13 @@ class Scroll extends ScrollBlot {
     }
 
     // Get leaf-level formats
-    final leafEntry = leaf(index);
-    final leafBlot = leafEntry.key;
+    var leafEntry = leaf(index);
+    var leafBlot = leafEntry.key;
+    if (length == 0 && (leafBlot == null || leafBlot.length() == 0) && index > 0) {
+      leafEntry = leaf(index - 1);
+      leafBlot = leafEntry.key;
+    }
+
     if (leafBlot != null) {
       final leafFormats = bubbleFormats(leafBlot);
       formats.addAll(leafFormats);

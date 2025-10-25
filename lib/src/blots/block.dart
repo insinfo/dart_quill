@@ -15,9 +15,11 @@ Delta blockDelta(Block block, {bool filter = true}) {
     if (leaf.length() == 0) {
       continue;
     }
-    delta.insert(leaf.value(), bubbleFormats(leaf, filter: filter));
+    final leafFormats = bubbleFormats(leaf, filter: filter);
+    delta.insert(leaf.value(), leafFormats.isEmpty ? null : leafFormats);
   }
-  delta.insert('\n', bubbleFormats(block, filter: filter));
+  final lineFormats = bubbleFormats(block, filter: filter);
+  delta.insert('\n', lineFormats.isEmpty ? null : lineFormats);
   return delta;
 }
 
@@ -76,6 +78,11 @@ class Block extends BlockBlot {
 
   @override
   void deleteAt(int index, int length) {
+    if (index == 0 && length >= this.length()) {
+      remove();
+      _cache.clear();
+      return;
+    }
     super.deleteAt(index, length);
     _cache.clear();
   }

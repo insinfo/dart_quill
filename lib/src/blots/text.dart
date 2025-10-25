@@ -148,7 +148,44 @@ class TextBlot extends LeafBlot {
     Blot? current = blot.parent;
     while (current is InlineBlot) {
       if (current.blotName == name) {
-        current.unwrap();
+        final inline = current;
+        final parent = inline.parent;
+        if (parent is! ParentBlot) {
+          return;
+        }
+
+        final children = List<Blot>.from(inline.children);
+        final index = children.indexOf(blot);
+        if (index == -1) {
+          return;
+        }
+
+        final inlineNext = inline.next;
+        final afterChildren = children.sublist(index + 1);
+
+        // Lift the isolated blot out of its inline wrapper while keeping
+        // leading and trailing content formatted.
+
+        for (final child in afterChildren) {
+          inline.removeChild(child);
+        }
+
+        ParentBlot? suffix;
+        if (afterChildren.isNotEmpty) {
+          suffix = inline.scroll.create(inline.blotName) as ParentBlot;
+          parent.insertBefore(suffix, inlineNext);
+          for (final child in afterChildren) {
+            suffix.appendChild(child);
+          }
+        }
+
+        inline.removeChild(blot);
+        final reference = suffix ?? inlineNext;
+        parent.insertBefore(blot, reference);
+
+        if (inline.children.isEmpty) {
+          inline.remove();
+        }
         return;
       }
       current = current.parent;

@@ -41,6 +41,7 @@ String deltaToSemanticHTML(Delta delta) {
             _SemanticSegment(data.substring(cursor, nextIndex), attributes),
           );
         }
+        cursor = nextIndex;
         if (newlineIndex == -1) {
           break;
         }
@@ -206,7 +207,10 @@ class Quill {
   }
 
   String getSemanticHTML([int index = 0, int length = 0]) {
-    final delta = getContents().slice(index, length);
+    final contents = getContents();
+    final delta = length <= 0
+        ? contents.slice(index)
+        : contents.slice(index, index + length);
     return deltaToSemanticHTML(delta);
   }
 
@@ -215,8 +219,11 @@ class Quill {
   }
 
   void setContents(Delta delta, {String source = EmitterSource.API}) {
-    final change = getContents().diff(delta);
-    editor.update(change, source);
+    final currentLength = scroll.length();
+    if (currentLength > 0) {
+      editor.update(Delta()..delete(currentLength), source);
+    }
+    editor.update(delta, source);
   }
 
   void updateContents(Delta delta, {String source = EmitterSource.API}) {

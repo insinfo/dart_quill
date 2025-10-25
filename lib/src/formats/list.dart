@@ -71,7 +71,7 @@ class ListContainer extends ContainerBlot {
 class ListItem extends BlockBlot {
   ListItem(DomElement domNode) : super(domNode);
 
-  static const String kBlotName = 'list-item';
+  static const String kBlotName = 'list';
   static const String kTagName = 'LI';
   static const int kScope = Scope.BLOCK_BLOT;
   static const Type requiredContainer = ListContainer;
@@ -92,9 +92,9 @@ class ListItem extends BlockBlot {
 
   @override
   Map<String, dynamic> formats() {
-  final Map<String, dynamic> parentFormats = parent is ListContainer
-    ? (parent as ListContainer).formats()
-    : const <String, dynamic>{};
+    final Map<String, dynamic> parentFormats = parent is ListContainer
+        ? (parent as ListContainer).formats()
+        : const <String, dynamic>{};
     final marker = element.dataset['list'];
     if (marker == 'checked' || marker == 'unchecked') {
       return {
@@ -109,7 +109,7 @@ class ListItem extends BlockBlot {
 
   @override
   void format(String name, dynamic value) {
-    if (name != 'list') {
+    if (name != kBlotName) {
       super.format(name, value);
       return;
     }
@@ -128,7 +128,8 @@ class ListItem extends BlockBlot {
   }
 
   @override
-  void optimize([List<DomMutationRecord>? mutations, Map<String, dynamic>? context]) {
+  void optimize(
+      [List<DomMutationRecord>? mutations, Map<String, dynamic>? context]) {
     super.optimize(mutations, context);
 
     // Ensure proper container
@@ -144,16 +145,18 @@ class ListItem extends BlockBlot {
     if (parent != null && parent is ListContainer) {
       if (prev != null && prev is ListItem) {
         final prevParent = prev!.parent;
-        if (prevParent != null && prevParent != parent && 
-            prevParent is ListContainer && 
+        if (prevParent != null &&
+            prevParent != parent &&
+            prevParent is ListContainer &&
             prevParent.formats()['list'] == parent.formats()['list']) {
           parent.mergeWith(prevParent);
         }
       }
       if (next != null && next is ListItem) {
         final nextParent = next!.parent;
-        if (nextParent != null && nextParent != parent && 
-            nextParent is ListContainer && 
+        if (nextParent != null &&
+            nextParent != parent &&
+            nextParent is ListContainer &&
             nextParent.formats()['list'] == parent.formats()['list']) {
           parent.mergeWith(nextParent);
         }

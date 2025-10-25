@@ -354,11 +354,34 @@ void deleteRange({required Quill quill, required Range range}) {
     return;
   }
 
+  final blockFormats = <String, dynamic>{};
+  final lineEntry = quill.scroll.line(range.index);
+  final lineBlot = lineEntry.key;
+  if (lineBlot != null) {
+    final formats = lineBlot.formats();
+    formats.forEach((name, value) {
+      final definition = quill.scroll.query(name, Scope.BLOCK);
+      if (definition != null) {
+        blockFormats[name] = value;
+      }
+    });
+  }
+
   final delta = Delta()
     ..retain(range.index)
     ..delete(range.length);
 
   quill.updateContents(delta, source: EmitterSource.USER);
+  if (blockFormats.isNotEmpty) {
+    final targetEntry = quill.scroll.line(range.index);
+    final targetLine = targetEntry.key;
+    if (targetLine != null) {
+      blockFormats.forEach((name, value) {
+        targetLine.format(name, value);
+      });
+      targetLine.optimize();
+    }
+  }
   quill.setSelection(Range(range.index, 0), source: EmitterSource.SILENT);
 }
 

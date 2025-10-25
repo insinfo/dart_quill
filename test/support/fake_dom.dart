@@ -398,7 +398,7 @@ class FakeDomElement extends FakeDomNode implements DomElement {
 
   @override
   bool hasAttribute(String name) => _attributes.containsKey(name);
-  
+
   Map<String, String> get attributes => Map.unmodifiable(_attributes);
 
   @override
@@ -412,10 +412,10 @@ class FakeDomElement extends FakeDomNode implements DomElement {
   @override
   Map<String, String> get dataset => _dataset;
 
-    @override
-    void select() {
+  @override
+  void select() {
     _dataset['selected'] = 'true';
-    }
+  }
 
   @override
   void appendText(String value) {
@@ -484,22 +484,24 @@ class FakeDomElement extends FakeDomNode implements DomElement {
 
   @override
   List<DomElement> querySelectorAll(String selectors) {
+    final matcher = _SelectorMatcher(selectors);
     final results = <DomElement>[];
-    if (selectors.startsWith('.')) {
-      final className = selectors.substring(1);
-      for (final child in internalChildren) {
-        if (child is FakeDomElement && child.classes.contains(className)) {
-          results.add(child);
+
+    void traverse(FakeDomNode node) {
+      if (node is FakeDomElement) {
+        if (matcher.matches(node)) {
+          results.add(node);
         }
-      }
-    } else {
-      final tag = selectors.toUpperCase();
-      for (final child in internalChildren) {
-        if (child is FakeDomElement && child.tagName == tag) {
-          results.add(child);
+        for (final child in node.internalChildren) {
+          traverse(child);
         }
       }
     }
+
+    for (final child in internalChildren) {
+      traverse(child);
+    }
+
     return results;
   }
 
@@ -681,10 +683,16 @@ const Set<String> _voidHtmlElements = {
 class FakeDomText extends FakeDomNode implements DomText {
   FakeDomText(this._data, {FakeDomDocument? document})
       : _ownerDocument = document ?? FakeDomDocument(),
-        super('#text');
+        super(null);
 
   final FakeDomDocument _ownerDocument;
   String _data;
+
+  @override
+  String get nodeName => '#text';
+
+  @override
+  int get nodeType => DomNode.TEXT_NODE;
 
   @override
   String get data => _data;
@@ -816,14 +824,53 @@ class FakeDomInputEvent extends FakeDomEvent implements DomInputEvent {
   DomDataTransfer? get dataTransfer => _dataTransfer;
 }
 
-class FakeDomDataTransfer implements DomDataTransfer {
-  FakeDomDataTransfer([Map<String, String>? initial])
-      : _data = initial != null ? Map<String, String>.from(initial) : <String, String>{};
+class FakeDomClipboardEvent extends FakeDomEvent implements DomClipboardEvent {
+  FakeDomClipboardEvent({
+    required String type,
+    DomNode? target,
+    DomDataTransfer? clipboardData,
+  })  : _clipboardData = clipboardData ?? FakeDomDataTransfer(),
+        super(type, target);
 
-  final Map<String, String> _data;
+  DomDataTransfer? _clipboardData;
 
   @override
-  List<DomFile> get files => const [];
+  DomDataTransfer? get clipboardData => _clipboardData;
+
+  set clipboardData(DomDataTransfer? value) {
+    _clipboardData = value;
+  }
+}
+
+class FakeDomFile implements DomFile {
+  FakeDomFile({
+    required this.name,
+    this.type = '',
+    this.size = 0,
+  });
+
+  @override
+  final String name;
+
+  @override
+  final String type;
+
+  @override
+  final int size;
+}
+
+class FakeDomDataTransfer implements DomDataTransfer {
+  FakeDomDataTransfer([Map<String, String>? initial, Iterable<DomFile>? files])
+      : _data = initial != null
+            ? Map<String, String>.from(initial)
+            : <String, String>{},
+        _files = files != null ? List<DomFile>.from(files) : <DomFile>[];
+
+  final Map<String, String> _data;
+  final List<DomFile> _files;
+
+  @override
+  List<DomFile> get files => List.unmodifiable(_files);
 
   @override
   String? getData(String format) => _data[format];
@@ -832,6 +879,14 @@ class FakeDomDataTransfer implements DomDataTransfer {
   void setData(String format, String data) {
     _data[format] = data;
   }
+
+  void setFiles(Iterable<DomFile> files) {
+    _files
+      ..clear()
+      ..addAll(files);
+  }
+
+  Map<String, String> get data => Map.unmodifiable(_data);
 }
 
 class FakeDomMutationRecord implements DomMutationRecord {
