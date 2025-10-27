@@ -23,7 +23,8 @@ class ToolbarConfig {
 }
 
 class ToolbarProps {
-  final dynamic container; // DomElement | String selector | ToolbarConfig | null
+  final dynamic
+      container; // DomElement | String selector | ToolbarConfig | null
   final Map<String, Handler>? handlers;
   final int? option;
   final bool? module;
@@ -40,6 +41,7 @@ class ToolbarProps {
 
 class Toolbar extends Module<ToolbarProps> {
   static final DEFAULTS = ToolbarProps();
+  static const Set<String> _blockSelectFormats = {'header'};
 
   DomElement? container;
   final List<List<dynamic>> controls = []; // [format, input]
@@ -47,7 +49,7 @@ class Toolbar extends Module<ToolbarProps> {
 
   Toolbar(Quill quill, ToolbarProps options) : super(quill, options) {
     final document = domBindings.adapter.document;
-    
+
     if (options.container is ToolbarConfig) {
       final containerDiv = document.createElement('div');
       containerDiv.setAttribute('role', 'toolbar');
@@ -74,14 +76,23 @@ class Toolbar extends Module<ToolbarProps> {
 
     _registerBuiltInHandlers();
 
-    container!.querySelectorAll('button, select').forEach((input) {
-      attach(input);
-    });
+    void attachDescendants(DomElement element) {
+      for (final node in element.childNodes) {
+        if (node is! DomElement) {
+          continue;
+        }
+        final tag = node.tagName.toLowerCase();
+        if (tag == 'button' || tag == 'select') {
+          attach(node);
+        }
+        attachDescendants(node);
+      }
+    }
+
+    attachDescendants(container!);
 
     quill.on(EmitterEvents.EDITOR_CHANGE, (type, range, oldRange, source) {
-      if (type == EmitterEvents.EDITOR_CHANGE) {
-        update(range as Range?);
-      }
+      update(quill.selection.getRange());
     });
   }
 
@@ -115,7 +126,7 @@ class Toolbar extends Module<ToolbarProps> {
     // Determine if this is a select element or button
     final isSelect = input.tagName.toLowerCase() == 'select';
     final eventName = isSelect ? 'change' : 'click';
-    
+
     input.addEventListener(eventName, (e) {
       dynamic value;
       if (isSelect) {
@@ -123,7 +134,9 @@ class Toolbar extends Module<ToolbarProps> {
         final selected = input.querySelector('option[selected]');
         if (selected != null) {
           final optionValue = selected.getAttribute('value');
-          value = (optionValue != null && optionValue.isNotEmpty) ? optionValue : false;
+          value = (optionValue != null && optionValue.isNotEmpty)
+              ? optionValue
+              : false;
         } else {
           value = false;
         }
@@ -132,7 +145,14 @@ class Toolbar extends Module<ToolbarProps> {
         if (input.classes.contains('ql-active')) {
           value = false;
         } else {
-          value = input.getAttribute('value') ?? true;
+          final rawValue = input.getAttribute('value');
+          if (rawValue == null) {
+            value = true;
+          } else if (rawValue.isEmpty) {
+            value = false;
+          } else {
+            value = rawValue;
+          }
         }
         e.preventDefault();
       }
@@ -153,7 +173,7 @@ class Toolbar extends Module<ToolbarProps> {
         //     EmitterSource.USER,
         //   );
         // } else {
-          quill.format(format, value, source: EmitterSource.USER);
+        quill.format(format, value, source: EmitterSource.USER);
         // }
       }
       update(range);
@@ -162,34 +182,48 @@ class Toolbar extends Module<ToolbarProps> {
   }
 
   void update(Range? range) {
-    final formats = range == null ? <String, dynamic>{} : quill.getFormat(range.index, range.length);
+    final formats = range == null
+        ? <String, dynamic>{}
+        : quill.getFormat(range.index, range.length);
     controls.forEach((pair) {
       final format = pair[0] as String;
       final input = pair[1] as DomElement;
 
       final isSelect = input.tagName.toLowerCase() == 'select';
-      
+
       if (isSelect) {
-        // For select elements, update selected option via attributes
         DomElement? option;
+        final options = input.querySelectorAll('option');
+        final hasConflict = range != null && _hasSelectConflict(format, range);
+
+        DomElement? findOption(bool Function(DomElement option) predicate) {
+          for (final candidate in options) {
+            if (predicate(candidate)) {
+              return candidate;
+            }
+          }
+          return null;
+        }
+
         if (range == null) {
           option = null;
-        } else if (formats[format] == null) {
-          option = input.querySelector('option[selected]');
+        } else if (hasConflict) {
+          option = null;
+        } else if (!formats.containsKey(format)) {
+          option = findOption((opt) => opt.getAttribute('value') == null);
         } else if (formats[format] is! List) {
           var value = formats[format];
           if (value is String) {
             value = value.replaceAll(RegExp(r'"'), r'\"');
           }
-          option = input.querySelector('option[value="$value"]');
+          final expected = value?.toString() ?? '';
+          option = findOption((opt) => opt.getAttribute('value') == expected);
         }
-        
-        // Remove all selected attributes first
-        input.querySelectorAll('option').forEach((opt) {
+
+        for (final opt in options) {
           opt.removeAttribute('selected');
-        });
-        
-        // Set selected on the target option
+        }
+
         if (option != null) {
           option.setAttribute('selected', 'selected');
         }
@@ -200,9 +234,11 @@ class Toolbar extends Module<ToolbarProps> {
           input.setAttribute('aria-pressed', 'false');
         } else if (input.hasAttribute('value')) {
           final value = formats[format];
-          final isActive = value == input.getAttribute('value') ||
-              (value != null && value.toString() == input.getAttribute('value')) ||
-              (value == null && input.getAttribute('value') == null);
+          final attrValue = input.getAttribute('value');
+          final attrIsDefault = attrValue == null || attrValue.isEmpty;
+          final isActive = value == attrValue ||
+              (value != null && value.toString() == attrValue) ||
+              (value == null && attrIsDefault);
           input.classes.toggle('ql-active', isActive);
           input.setAttribute('aria-pressed', isActive.toString());
         } else {
@@ -214,9 +250,47 @@ class Toolbar extends Module<ToolbarProps> {
     });
   }
 
+  bool _hasSelectConflict(String format, Range range) {
+    if (range.length == 0) {
+      return false;
+    }
+    if (!_blockSelectFormats.contains(format)) {
+      return false;
+    }
+    return _hasBlockFormatConflict(range, format);
+  }
+
+  bool _hasBlockFormatConflict(Range range, String format) {
+    final lines = quill.scroll.lines(range.index, range.length);
+    if (lines.length <= 1) {
+      return false;
+    }
+    dynamic referenceValue;
+    var isFirst = true;
+    for (final line in lines) {
+      dynamic lineValue;
+      try {
+        final formats = (line as dynamic).formats();
+        lineValue = formats[format];
+      } catch (_) {
+        lineValue = null;
+      }
+      if (isFirst) {
+        referenceValue = lineValue;
+        isFirst = false;
+        continue;
+      }
+      if (lineValue != referenceValue) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   void applyFromPicker(DomElement _select, String format, String? value) {
     dynamic resolvedValue = value;
-    if (resolvedValue == null || (resolvedValue is String && resolvedValue.isEmpty)) {
+    if (resolvedValue == null ||
+        (resolvedValue is String && resolvedValue.isEmpty)) {
       resolvedValue = false;
     }
 
@@ -249,7 +323,8 @@ class Toolbar extends Module<ToolbarProps> {
         } else {
           final formats = quill.getFormat(range.index, range.length);
           for (final entry in formats.entries) {
-            quill.formatText(range.index, range.length, entry.key, false, source: EmitterSource.USER);
+            quill.formatText(range.index, range.length, entry.key, false,
+                source: EmitterSource.USER);
           }
         }
       });
@@ -341,15 +416,16 @@ class Toolbar extends Module<ToolbarProps> {
   }
 }
 
-void addButton(DomElement container, String format, [String? value]) {
+void addButton(DomElement container, String format, [dynamic value]) {
   final document = domBindings.adapter.document;
   final input = document.createElement('button');
   input.setAttribute('type', 'button');
   input.classes.add('ql-$format');
   input.setAttribute('aria-pressed', 'false');
   if (value != null) {
-    input.setAttribute('value', value);
-    input.setAttribute('aria-label', '$format: $value');
+    final stringValue = value.toString();
+    input.setAttribute('value', stringValue);
+    input.setAttribute('aria-label', '$format: $stringValue');
   } else {
     input.setAttribute('aria-label', format);
   }
@@ -373,7 +449,7 @@ void addControls(DomElement container, ToolbarConfig groups) {
         if (value is List) {
           addSelect(group, format, value);
         } else {
-          addButton(group, format, value as String?);
+          addButton(group, format, value);
         }
       }
     });

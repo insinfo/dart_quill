@@ -20,3 +20,7 @@ body {
   background-color: #ffffff;
   min-height: 200px;
 }
+
+.ql-container .ql-editor {
+  min-height: 180px;
+}

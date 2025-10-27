@@ -35,6 +35,23 @@ class Emitter {
     _handlers.putIfAbsent(event, () => []).add(handler);
   }
 
+  void once(String event, Function handler) {
+    void wrapper([dynamic arg1, dynamic arg2, dynamic arg3]) {
+      off(event, wrapper);
+      if (arg3 != null) {
+        handler(arg1, arg2, arg3);
+      } else if (arg2 != null) {
+        handler(arg1, arg2);
+      } else if (arg1 != null) {
+        handler(arg1);
+      } else {
+        handler();
+      }
+    }
+
+    on(event, wrapper);
+  }
+
   void off(String event, [Function? handler]) {
     if (handler == null) {
       _handlers.remove(event);
@@ -46,12 +63,15 @@ class Emitter {
     }
   }
 
-  void emit(String event, [dynamic data1, dynamic data2, dynamic data3]) {
+  void emit(String event,
+      [dynamic data1, dynamic data2, dynamic data3, dynamic data4]) {
     final handlers = _handlers[event];
     if (handlers == null) return;
 
     for (var handler in handlers) {
-      if (data3 != null) {
+      if (data4 != null) {
+        handler(data1, data2, data3, data4);
+      } else if (data3 != null) {
         handler(data1, data2, data3);
       } else if (data2 != null) {
         handler(data1, data2);

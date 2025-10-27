@@ -7,6 +7,35 @@ import 'package:quiver/core.dart';
 import 'operation.dart';
 import 'delta_iterator.dart';
 
+typedef EmbedCompose = dynamic Function(
+  dynamic a,
+  dynamic b, {
+  bool keepNull,
+});
+
+typedef EmbedTransform = dynamic Function(
+  dynamic a,
+  dynamic b,
+  bool priority,
+);
+
+typedef EmbedInvert = dynamic Function(
+  dynamic change,
+  dynamic base,
+);
+
+class EmbedHandler {
+  const EmbedHandler({
+    required this.compose,
+    required this.transform,
+    required this.invert,
+  });
+
+  final EmbedCompose compose;
+  final EmbedTransform transform;
+  final EmbedInvert invert;
+}
+
 /// Delta represents a document or a modification of a document as a sequence of
 /// insert, delete and retain operations.
 ///
@@ -14,6 +43,19 @@ import 'delta_iterator.dart';
 /// "document delta". When delta includes also "retain" or "delete" operations
 /// it is a "change delta".
 class Delta {
+  static final Map<String, EmbedHandler> _embedHandlers = {};
+
+  static void registerEmbed(String key, EmbedHandler handler) {
+    if (key.isEmpty) {
+      throw ArgumentError('Embed key must not be empty');
+    }
+    _embedHandlers[key] = handler;
+  }
+
+  static void unregisterEmbed(String key) {
+    _embedHandlers.remove(key);
+  }
+
   /// Creates new empty [Delta].
   factory Delta() => Delta._(<Operation>[]);
 
@@ -26,6 +68,183 @@ class Delta {
   /// Creates new [Delta] from a List of Operation
   factory Delta.fromOperations(List<Operation> operations) =>
       Delta._(operations.toList());
+
+  static Map<String, dynamic> _filterAttributes(
+    Map<String, dynamic>? attributes, {
+    required bool embed,
+  }) {
+    if (attributes == null || attributes.isEmpty) {
+      return <String, dynamic>{};
+    }
+    final result = <String, dynamic>{};
+    attributes.forEach((key, value) {
+      final isEmbed = _embedHandlers.containsKey(key);
+      if (embed == isEmbed) {
+        result[key] = value;
+      }
+    });
+    return result;
+  }
+
+  static Map<String, dynamic>? _mergeAttributes(
+    Map<String, dynamic>? a,
+    Map<String, dynamic>? b,
+  ) {
+    if ((a == null || a.isEmpty) && (b == null || b.isEmpty)) {
+      return null;
+    }
+    final result = <String, dynamic>{};
+    if (a != null) {
+      result.addAll(a);
+    }
+    if (b != null) {
+      result.addAll(b);
+    }
+    return result.isEmpty ? null : result;
+  }
+
+  static Map<String, dynamic>? _mapOrNull(Map<String, dynamic> input) {
+    return input.isEmpty ? null : input;
+  }
+
+  static dynamic _cloneData(dynamic value) {
+    if (value is Delta) {
+      return Delta.from(value);
+    }
+    if (value is List) {
+      return value.map(_cloneData).toList();
+    }
+    if (value is Map) {
+      return value.map((key, dynamic val) => MapEntry(key, _cloneData(val)));
+    }
+    return value;
+  }
+
+  static Map<String, dynamic>? _composeEmbedAttributes(
+    Map<String, dynamic>? a,
+    Map<String, dynamic>? b, {
+    required bool keepNull,
+  }) {
+    final aEmbed = _filterAttributes(a, embed: true);
+    final bEmbed = _filterAttributes(b, embed: true);
+    if (aEmbed.isEmpty && bEmbed.isEmpty) {
+      return null;
+    }
+    final result = <String, dynamic>{};
+    final keys = <String>{...aEmbed.keys, ...bEmbed.keys};
+    for (final key in keys) {
+      final handler = _embedHandlers[key];
+      if (handler == null) {
+        continue;
+      }
+      final composed = handler.compose(
+        aEmbed[key],
+        bEmbed[key],
+        keepNull: keepNull,
+      );
+      if (composed != null) {
+        result[key] = composed;
+      }
+    }
+    return result.isEmpty ? null : result;
+  }
+
+  static Map<String, dynamic>? _composeEmbedData(
+    dynamic data,
+    Map<String, dynamic> embedAttributes, {
+    required bool keepNull,
+  }) {
+    if (embedAttributes.isEmpty || data is! Map) {
+      return null;
+    }
+    var mutated = false;
+    final cloned = data.map((dynamic key, dynamic value) => MapEntry(
+          key is String ? key : key.toString(),
+          _cloneData(value),
+        ));
+    embedAttributes.forEach((key, value) {
+      final handler = _embedHandlers[key];
+      if (handler == null) {
+        return;
+      }
+      mutated = true;
+      final result = handler.compose(
+        cloned[key],
+        value,
+        keepNull: keepNull,
+      );
+      if (result == null) {
+        cloned.remove(key);
+      } else {
+        cloned[key] = result;
+      }
+    });
+    return mutated ? cloned : null;
+  }
+
+  static Map<String, dynamic>? _transformEmbedAttributes(
+    Map<String, dynamic>? a,
+    Map<String, dynamic>? b,
+    bool priority,
+  ) {
+    final aEmbed = _filterAttributes(a, embed: true);
+    final bEmbed = _filterAttributes(b, embed: true);
+    if (aEmbed.isEmpty && bEmbed.isEmpty) {
+      return null;
+    }
+    final result = <String, dynamic>{};
+    final keys = <String>{...aEmbed.keys, ...bEmbed.keys};
+    for (final key in keys) {
+      final handler = _embedHandlers[key];
+      if (handler == null) {
+        continue;
+      }
+      final transformed = handler.transform(
+        aEmbed[key],
+        bEmbed[key],
+        priority,
+      );
+      if (transformed != null) {
+        result[key] = transformed;
+      }
+    }
+    return result.isEmpty ? null : result;
+  }
+
+  static Map<String, dynamic> _invertEmbedAttributes(
+    Map<String, dynamic>? attributes,
+    Operation baseOp,
+  ) {
+    final attrEmbed = _filterAttributes(attributes, embed: true);
+    if (attrEmbed.isEmpty) {
+      return <String, dynamic>{};
+    }
+    final baseEmbedAttrs =
+        _filterAttributes(baseOp.attributes, embed: true);
+    Map<String, dynamic>? baseData;
+    if (baseOp.isInsert && baseOp.data is Map) {
+      baseData = (baseOp.data as Map).map(
+        (dynamic key, dynamic value) =>
+            MapEntry(key is String ? key : key.toString(), _cloneData(value)),
+      );
+    }
+    final result = <String, dynamic>{};
+    attrEmbed.forEach((key, value) {
+      final handler = _embedHandlers[key];
+      if (handler == null) {
+        return;
+      }
+      final baseValue =
+          baseData != null && baseData.containsKey(key)
+              ? baseData[key]
+              : baseEmbedAttrs[key];
+      final inverted = handler.invert(value, baseValue);
+      if (inverted != null) {
+        result[key] = inverted;
+      }
+    });
+    return result;
+  }
 
   // Placeholder char for embed in diff()
   static final String _kNullCharacter = String.fromCharCode(0);
@@ -261,18 +480,46 @@ class Delta {
     assert(thisOp.length == otherOp.length);
 
     if (otherOp.isRetain) {
-      final attributes = composeAttributes(
-        thisOp.attributes,
-        otherOp.attributes,
-        keepNull: thisOp.isRetain,
+      final keepNull = thisOp.isRetain;
+      final thisAttributes = thisOp.attributes;
+      final otherAttributes = otherOp.attributes;
+      final thisRegular = _filterAttributes(thisAttributes, embed: false);
+      final otherRegular = _filterAttributes(otherAttributes, embed: false);
+      final regularAttributes = composeAttributes(
+        thisRegular.isEmpty ? null : thisRegular,
+        otherRegular.isEmpty ? null : otherRegular,
+        keepNull: keepNull,
       );
       if (thisOp.isRetain) {
-        return Operation.retain(thisOp.length, attributes);
+        final embedAttributes = _composeEmbedAttributes(
+          thisAttributes,
+          otherAttributes,
+          keepNull: keepNull,
+        );
+        final merged = _mergeAttributes(regularAttributes, embedAttributes);
+        return Operation.retain(thisOp.length, merged);
       } else if (thisOp.isInsert) {
-        return Operation.insert(thisOp.data, attributes);
-      } else {
-        throw StateError('Unreachable');
+        final otherEmbed =
+            _filterAttributes(otherAttributes, embed: true);
+        var data = thisOp.data;
+        if (otherEmbed.isNotEmpty) {
+          final composedData = _composeEmbedData(
+            thisOp.data,
+            otherEmbed,
+            keepNull: keepNull,
+          );
+          if (composedData != null) {
+            data = composedData;
+          }
+        }
+        final thisEmbed = _filterAttributes(thisAttributes, embed: true);
+        final merged = _mergeAttributes(
+          regularAttributes,
+          thisEmbed.isEmpty ? null : thisEmbed,
+        );
+        return Operation.insert(data, merged);
       }
+      throw StateError('Unreachable');
     } else {
       // otherOp == delete && thisOp in [retain, insert]
       assert(otherOp.isDelete);
@@ -415,10 +662,22 @@ class Delta {
       return otherOp;
     } else {
       // Retain otherOp which is either retain or insert.
-      return Operation.retain(
-        length,
-        transformAttributes(thisOp.attributes, otherOp.attributes, priority),
+      final thisAttributes = thisOp.attributes;
+      final otherAttributes = otherOp.attributes;
+      final thisRegular = _filterAttributes(thisAttributes, embed: false);
+      final otherRegular = _filterAttributes(otherAttributes, embed: false);
+      final regularAttributes = transformAttributes(
+        thisRegular.isEmpty ? null : thisRegular,
+        otherRegular.isEmpty ? null : otherRegular,
+        priority,
       );
+      final embedAttributes = _transformEmbedAttributes(
+        thisAttributes,
+        otherAttributes,
+        priority,
+      );
+      final merged = _mergeAttributes(regularAttributes, embedAttributes);
+      return Operation.retain(length, merged);
     }
   }
 
@@ -496,10 +755,17 @@ class Delta {
           if (op.isDelete) {
             inverted.push(baseOp);
           } else if (op.isRetain && op.isNotPlain) {
-            final invertAttr =
-                invertAttributes(op.attributes, baseOp.attributes);
-            inverted.retain(
-                baseOp.length!, invertAttr.isEmpty ? null : invertAttr);
+            final regularInvert = invertAttributes(
+              _mapOrNull(_filterAttributes(op.attributes, embed: false)),
+              _mapOrNull(
+                  _filterAttributes(baseOp.attributes, embed: false)),
+            );
+            final embedInvert = _invertEmbedAttributes(op.attributes, baseOp);
+            final merged = _mergeAttributes(
+              _mapOrNull(regularInvert),
+              _mapOrNull(embedInvert),
+            );
+            inverted.retain(baseOp.length!, merged);
           }
         });
         baseIndex += length;

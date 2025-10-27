@@ -61,7 +61,8 @@ String deltaToSemanticHTML(Delta delta) {
     }
   }
 
-  if (currentLine.segments.isNotEmpty || currentLine.blockAttributes.isNotEmpty) {
+  if (currentLine.segments.isNotEmpty ||
+      currentLine.blockAttributes.isNotEmpty) {
     lines.add(currentLine);
   }
 
@@ -90,7 +91,8 @@ class Quill {
   static final Emitter events = Emitter();
   static const sources = EmitterSource();
 
-  static Iterable<RegistryEntry> get registeredFormats => _formatRegistry.values;
+  static Iterable<RegistryEntry> get registeredFormats =>
+      _formatRegistry.values;
 
   static void debugMode(quill_logger.DebugLevel? level) {
     quill_logger.setLoggerLevel(level);
@@ -107,17 +109,20 @@ class Quill {
       _formatRegistry[name] = definition;
       return;
     }
-    throw ArgumentError('Unsupported registration type: ${definition.runtimeType}');
+    throw ArgumentError(
+        'Unsupported registration type: ${definition.runtimeType}');
   }
 
-  static void registerModule(String name, ModuleFactory factory, {bool overwrite = false}) {
+  static void registerModule(String name, ModuleFactory factory,
+      {bool overwrite = false}) {
     if (!overwrite && _moduleRegistry.containsKey(name)) {
       return;
     }
     _moduleRegistry[name] = factory;
   }
 
-  static void registerTheme(String name, ThemeBuilder builder, {bool overwrite = false}) {
+  static void registerTheme(String name, ThemeBuilder builder,
+      {bool overwrite = false}) {
     if (!overwrite && _themeRegistry.containsKey(name)) {
       return;
     }
@@ -177,11 +182,11 @@ class Quill {
         : History(this, HistoryOptions());
     theme.modules['history'] = history;
 
-  final inputModule = theme.addModule('input');
-  input = (inputModule is Input)
-    ? inputModule
-    : Input(this, const InputOptions());
-  theme.modules['input'] = input;
+    final inputModule = theme.addModule('input');
+    input = (inputModule is Input)
+        ? inputModule
+        : Input(this, const InputOptions());
+    theme.modules['input'] = input;
 
     theme.init();
     quillInstances.register<Quill>(container, this);
@@ -206,6 +211,10 @@ class Quill {
     return editor.getContents();
   }
 
+  dynamic getModule(String name) {
+    return theme.modules[name];
+  }
+
   String getSemanticHTML([int index = 0, int length = 0]) {
     final contents = getContents();
     final delta = length <= 0
@@ -215,19 +224,50 @@ class Quill {
   }
 
   String getText([int index = 0, int length = 0]) {
-    return getContents().getPlainText(index, length);
+    final contents = getContents();
+    final documentLength = _deltaLength(contents);
+    final effectiveLength = length <= 0
+        ? (documentLength - index).clamp(0, documentLength)
+        : length;
+    return contents.getPlainText(index, effectiveLength);
   }
 
   void setContents(Delta delta, {String source = EmitterSource.API}) {
+    final before = getContents();
     final currentLength = scroll.length();
+    var change = Delta();
     if (currentLength > 0) {
-      editor.update(Delta()..delete(currentLength), source);
+      final deleteDelta = Delta()..delete(currentLength);
+      editor.update(deleteDelta, source);
+      change = change.concat(deleteDelta);
     }
-    editor.update(delta, source);
+    if (delta.operations.isNotEmpty) {
+      editor.update(delta, source);
+      change = change.concat(delta);
+    }
+    if (change.operations.isEmpty) return;
+    emitter.emit(EmitterEvents.TEXT_CHANGE, change, before, source);
+    emitter.emit(
+      EmitterEvents.EDITOR_CHANGE,
+      EmitterEvents.TEXT_CHANGE,
+      change,
+      before,
+      source,
+    );
   }
 
   void updateContents(Delta delta, {String source = EmitterSource.API}) {
+    if (delta.operations.isEmpty) return;
+    final before = getContents();
     editor.update(delta, source);
+    emitter.emit(EmitterEvents.TEXT_CHANGE, delta, before, source);
+    emitter.emit(
+      EmitterEvents.EDITOR_CHANGE,
+      EmitterEvents.TEXT_CHANGE,
+      delta,
+      before,
+      source,
+    );
   }
 
   Map<String, dynamic> getFormat(int index, [int length = 0]) {
@@ -260,6 +300,7 @@ class Quill {
   void format(String name, dynamic value, {String source = EmitterSource.API}) {
     final range = selection.getRange();
     if (range == null) return;
+    final before = getContents();
     if (range.length == 0) {
       // Format at cursor position
       scroll.formatAt(range.index, 1, name, value);
@@ -267,26 +308,64 @@ class Quill {
       // Format selection
       scroll.formatAt(range.index, range.length, name, value);
     }
-    editor.update(Delta()..retain(range.index)..retain(range.length, {name: value}), source);
+    final change = Delta()
+      ..retain(range.index)
+      ..retain(range.length, {name: value});
+    editor.update(change, source);
+    emitter.emit(EmitterEvents.TEXT_CHANGE, change, before, source);
+    emitter.emit(
+      EmitterEvents.EDITOR_CHANGE,
+      EmitterEvents.TEXT_CHANGE,
+      change,
+      before,
+      source,
+    );
   }
 
   void setSelection(Range range, {String source = EmitterSource.API}) {
     selection.setSelection(range, source);
   }
 
-  void formatText(int index, int length, String name, dynamic value, {String source = EmitterSource.API}) {
+  void formatText(int index, int length, String name, dynamic value,
+      {String source = EmitterSource.API}) {
+    final before = getContents();
     final change = editor.formatText(index, length, name, value);
-    emitter.emit(EmitterEvents.TEXT_CHANGE, [change, Delta(), source]);
+    emitter.emit(EmitterEvents.TEXT_CHANGE, change, before, source);
+    emitter.emit(
+      EmitterEvents.EDITOR_CHANGE,
+      EmitterEvents.TEXT_CHANGE,
+      change,
+      before,
+      source,
+    );
   }
 
-  void insertEmbed(int index, String embed, dynamic value, {String source = EmitterSource.API}) {
+  void insertEmbed(int index, String embed, dynamic value,
+      {String source = EmitterSource.API}) {
+    final before = getContents();
     final change = editor.insertEmbed(index, embed, value);
-    emitter.emit(EmitterEvents.TEXT_CHANGE, [change, Delta(), source]);
+    emitter.emit(EmitterEvents.TEXT_CHANGE, change, before, source);
+    emitter.emit(
+      EmitterEvents.EDITOR_CHANGE,
+      EmitterEvents.TEXT_CHANGE,
+      change,
+      before,
+      source,
+    );
   }
 
-  void insertText(int index, String text, {Map<String, dynamic>? formats, String source = EmitterSource.API}) {
+  void insertText(int index, String text,
+      {Map<String, dynamic>? formats, String source = EmitterSource.API}) {
+    final before = getContents();
     final change = editor.insertText(index, text, formats ?? {});
-    emitter.emit(EmitterEvents.TEXT_CHANGE, [change, Delta(), source]);
+    emitter.emit(EmitterEvents.TEXT_CHANGE, change, before, source);
+    emitter.emit(
+      EmitterEvents.EDITOR_CHANGE,
+      EmitterEvents.TEXT_CHANGE,
+      change,
+      before,
+      source,
+    );
   }
 
   Map<String, dynamic>? getBounds(int index, [int length = 0]) {
@@ -336,6 +415,13 @@ ThemeOptions _mergeThemeOptions(ThemeOptions? options) {
     );
   }
   return ThemeOptions(modules: modules);
+}
+
+int _deltaLength(Delta delta) {
+  return delta.operations.fold<int>(
+    0,
+    (length, op) => length + (op.length ?? 0),
+  );
 }
 
 String _renderSegments(List<_SemanticSegment> segments) {
@@ -468,7 +554,8 @@ String _renderLines(List<_SemanticLine> lines) {
 
     if (listType != null) {
       _adjustListStack(buffer, listStack, '$listType', indent);
-      final listItemAttrs = _collectBlockAttributes(blockAttrs, forListItem: true);
+      final listItemAttrs =
+          _collectBlockAttributes(blockAttrs, forListItem: true);
       buffer.write('<li$listItemAttrs>');
       if (listType == 'checked' || listType == 'unchecked') {
         final checkedAttr = listType == 'checked' ? ' checked="checked"' : '';
@@ -504,7 +591,8 @@ String _renderLines(List<_SemanticLine> lines) {
   return buffer.toString();
 }
 
-void _adjustListStack(StringBuffer buffer, List<_ListState> stack, String listType, int indent) {
+void _adjustListStack(
+    StringBuffer buffer, List<_ListState> stack, String listType, int indent) {
   while (stack.length > indent + 1) {
     final closed = stack.removeLast();
     buffer.write('</${closed.tag}>');
@@ -574,7 +662,8 @@ int _parseIndent(dynamic value) {
   return int.tryParse('$value') ?? 0;
 }
 
-String _collectBlockAttributes(Map<String, dynamic> attrs, {bool forListItem = false}) {
+String _collectBlockAttributes(Map<String, dynamic> attrs,
+    {bool forListItem = false}) {
   final classes = <String>[];
   final styles = <String>[];
 

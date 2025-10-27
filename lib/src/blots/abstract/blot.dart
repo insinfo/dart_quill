@@ -174,6 +174,9 @@ abstract class Blot {
   }
 
   MapEntry<Blot?, int> find(dynamic query, {bool bubble = false}) {
+    if (query is DomNode && domNode == query) {
+      return MapEntry(this, 0);
+    }
     if (bubble && parent != null) {
       return parent!.find(query, bubble: true);
     }
@@ -219,9 +222,13 @@ abstract class ParentBlot extends Blot {
     Map<String, dynamic>? context,
   ]) {
     super.optimize(mutations, context);
-    // Optimize all children recursively
-    for (final child in List<Blot>.from(children)) {
+    final snapshot = List<Blot>.from(children);
+    for (final child in snapshot) {
       child.optimize(mutations, context);
+    }
+
+    for (final child in List<Blot>.from(children)) {
+      _ensureChildDomParent(child, mutations, context);
     }
   }
 
@@ -354,6 +361,66 @@ abstract class ParentBlot extends Blot {
     for (final child in toMove) {
       target.insertBefore(child, ref);
     }
+  }
+
+  void _ensureChildDomParent(
+    Blot child,
+    List<DomMutationRecord>? mutations,
+    Map<String, dynamic>? context,
+  ) {
+    if (child.parent != this) {
+      return;
+    }
+    final domParent = child.domNode.parentNode;
+    if (domParent == element) {
+      return;
+    }
+
+    if (domParent == null) {
+      element.append(child.domNode);
+      return;
+    }
+
+    if (domParent is! DomElement) {
+      element.append(child.domNode);
+      return;
+    }
+
+    ParentBlot? wrapperBlot;
+    for (final candidate in children) {
+      if (candidate is ParentBlot && identical(candidate.domNode, domParent)) {
+        wrapperBlot = candidate;
+        break;
+      }
+    }
+
+    if (wrapperBlot == null) {
+      final scrollBlot = scroll;
+      final registry = scrollBlot.registry;
+      var entry = registry.queryByTagName(domParent.tagName, scope: Scope.ANY);
+      entry ??= registry.queryByClassName(domParent.className ?? '',
+          scope: Scope.ANY);
+
+      if (entry == null) {
+        element.insertBefore(child.domNode, domParent);
+        domParent.remove();
+        return;
+      }
+
+      final created = scrollBlot.create(entry.blotName, domParent);
+      if (created is! ParentBlot) {
+        element.insertBefore(child.domNode, domParent);
+        domParent.remove();
+        return;
+      }
+
+      wrapperBlot = created;
+      insertBefore(wrapperBlot, child);
+    }
+
+    removeChild(child);
+    wrapperBlot.insertBefore(child, null);
+    wrapperBlot.optimize(mutations, context);
   }
 
   Iterable<T> descendants<T extends Blot>(

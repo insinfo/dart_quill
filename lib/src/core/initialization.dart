@@ -13,10 +13,13 @@ import '../formats/list.dart';
 import '../formats/script.dart';
 import '../formats/strike.dart';
 import '../formats/underline.dart';
+import '../formats/table.dart';
+import '../formats/video.dart';
 import '../modules/clipboard.dart';
 import '../modules/history.dart';
 import '../modules/keyboard.dart';
 import '../modules/input.dart';
+import '../modules/table.dart';
 import '../modules/uploader.dart';
 import '../platform/platform.dart';
 import '../themes/bubble.dart';
@@ -65,10 +68,17 @@ void _registerModules() {
         : UploaderOptions.fromConfig(options);
     return Uploader(quill, resolved);
   });
+
+  Quill.registerModule('table', (quill, options) {
+    final resolved =
+        options is TableOptions ? options : TableOptions.fromConfig(options);
+    return Table(quill, resolved);
+  });
 }
 
 void _registerThemes() {
-  Quill.registerTheme('bubble', (quill, options) => BubbleTheme(quill, options));
+  Quill.registerTheme(
+      'bubble', (quill, options) => BubbleTheme(quill, options));
   Quill.registerTheme('snow', (quill, options) => SnowTheme(quill, options));
 }
 
@@ -109,7 +119,7 @@ void _registerFormats() {
       blotName: Bold.kBlotName,
       scope: Bold.kScope,
       tagNames: Bold.kTagNames,
-      create: ([dynamic _]) => Bold.create(),
+      create: Bold.create,
     ),
     RegistryEntry(
       blotName: Italic.kBlotName,
@@ -199,6 +209,40 @@ void _registerFormats() {
       create: ([dynamic value]) {
         final node = Image.create(value);
         return Image(node);
+      },
+    ),
+    RegistryEntry(
+      blotName: TableContainer.kBlotName,
+      scope: TableContainer.kScope,
+      tagNames: const [TableContainer.kTagName],
+      create: ([dynamic value]) => TableContainer.create(value),
+    ),
+    RegistryEntry(
+      blotName: TableBody.kBlotName,
+      scope: TableBody.kScope,
+      tagNames: const [TableBody.kTagName],
+      create: ([dynamic value]) => TableBody.create(value),
+    ),
+    RegistryEntry(
+      blotName: TableRow.kBlotName,
+      scope: TableRow.kScope,
+      tagNames: const [TableRow.kTagName],
+      create: ([dynamic value]) => TableRow.create(value),
+    ),
+    RegistryEntry(
+      blotName: TableCell.kBlotName,
+      scope: TableCell.kScope,
+      tagNames: const [TableCell.kTagName],
+      create: ([dynamic value]) => TableCell.create(value),
+    ),
+    RegistryEntry(
+      blotName: Video.kBlotName,
+      scope: Scope.BLOCK_BLOT,
+      tagNames: const [Video.kTagName],
+      classNames: const [Video.kClassName],
+      create: ([dynamic value]) {
+        final source = value?.toString() ?? '';
+        return Video.create(source);
       },
     ),
   ];

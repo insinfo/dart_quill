@@ -1,5 +1,6 @@
 import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
 
+import '../blots/abstract/blot.dart';
 import '../blots/scroll.dart';
 import '../core/emitter.dart';
 import '../core/module.dart';
@@ -13,13 +14,41 @@ class History extends Module<HistoryOptions> {
   late final Stack stack;
   late int lastRecorded;
   late bool ignoreChange;
+  Range? currentRange;
 
   History(Quill quill, HistoryOptions options) : super(quill, options) {
-    stack = Stack(undo: [], redo: []);
+    stack = Stack(undo: <StackItem>[], redo: <StackItem>[]);
     lastRecorded = 0;
     ignoreChange = false;
+    currentRange = null;
 
-    quill.on(EmitterEvents.EDITOR_CHANGE, _handleEditorChange);
+    quill.on(
+      EmitterEvents.SELECTION_CHANGE,
+      (dynamic range, dynamic _oldRange, dynamic source) {
+        if (source == EmitterSource.SILENT) {
+          return;
+        }
+        if (range is Range) {
+          currentRange = range;
+        }
+      },
+    );
+
+    quill.on(
+      EmitterEvents.TEXT_CHANGE,
+      (dynamic delta, dynamic oldDelta, dynamic source) {
+        final change = delta as Delta;
+        final previous = oldDelta as Delta;
+        if (!ignoreChange) {
+          if (!options.userOnly || source == EmitterSource.USER) {
+            record(change, previous);
+          } else {
+            transform(change);
+          }
+        }
+        currentRange = transformRange(currentRange, change);
+      },
+    );
 
     quill.keyboard.addBinding(
       BindingObject(key: 'Z', shortKey: true),
@@ -57,22 +86,6 @@ class History extends Module<HistoryOptions> {
     });
   }
 
-  void _handleEditorChange(
-    String eventName,
-    dynamic delta,
-    dynamic oldDelta,
-    String source,
-  ) {
-    if (ignoreChange) return;
-    if (eventName == EmitterEvents.TEXT_CHANGE) {
-      if (!options.userOnly || source == EmitterSource.USER) {
-        record(delta as Delta, oldDelta as Delta);
-      } else {
-        transform(delta as Delta);
-      }
-    }
-  }
-
   void change(String source, String dest) {
     final sourceStack = source == 'undo' ? stack.undo : stack.redo;
     final destStack = dest == 'undo' ? stack.undo : stack.redo;
@@ -81,19 +94,23 @@ class History extends Module<HistoryOptions> {
       return;
     }
 
-    final delta = sourceStack.removeLast();
+    final item = sourceStack.removeLast();
+    final delta = item.delta;
     final base = quill.getContents();
     final inverse = delta.invert(base);
-    destStack.add(inverse);
+    destStack.add(
+      StackItem(
+        delta: inverse,
+        range: transformRange(item.range, inverse),
+      ),
+    );
 
     lastRecorded = 0;
     ignoreChange = true;
     quill.updateContents(delta, source: EmitterSource.USER);
     ignoreChange = false;
 
-    final index =
-        getLastChangeIndex(quill.scroll, delta);
-    quill.setSelection(Range(index, 0), source: EmitterSource.SILENT);
+    _restoreSelection(item);
   }
 
   void clear() {
@@ -110,18 +127,20 @@ class History extends Module<HistoryOptions> {
 
     stack.redo.clear();
     var undoDelta = change.invert(before);
+    var undoRange = currentRange;
     final timestamp = DateTime.now().millisecondsSinceEpoch;
 
     if (lastRecorded + options.delay > timestamp && stack.undo.isNotEmpty) {
       final last = stack.undo.removeLast();
-      undoDelta = undoDelta.compose(last);
+      undoDelta = undoDelta.compose(last.delta);
+      undoRange = last.range;
     } else {
       lastRecorded = timestamp;
     }
 
     if (undoDelta.operations.isEmpty) return;
 
-    stack.undo.add(undoDelta);
+    stack.undo.add(StackItem(delta: undoDelta, range: undoRange));
 
     if (stack.undo.length > options.maxStack) {
       stack.undo.removeAt(0);
@@ -133,23 +152,29 @@ class History extends Module<HistoryOptions> {
   }
 
   void transform(Delta delta) {
-    for (var i = 0; i < stack.undo.length; i++) {
-      stack.undo[i] = delta.transform(stack.undo[i], true);
-    }
-    for (var i = 0; i < stack.redo.length; i++) {
-      stack.redo[i] = delta.transform(stack.redo[i], true);
-    }
+    _transformStack(stack.undo, delta);
+    _transformStack(stack.redo, delta);
   }
 
   void undo() {
     change('undo', 'redo');
   }
+
+  void _restoreSelection(StackItem stackItem) {
+    final range = stackItem.range;
+    if (range != null) {
+      quill.setSelection(range, source: EmitterSource.USER);
+      return;
+    }
+    final index = getLastChangeIndex(quill.scroll, stackItem.delta);
+    quill.setSelection(Range(index, 0), source: EmitterSource.USER);
+  }
 }
 
 class HistoryOptions {
-  final int delay;
-  final int maxStack;
-  final bool userOnly;
+  int delay;
+  int maxStack;
+  bool userOnly;
 
   HistoryOptions({
     this.delay = 1000,
@@ -159,19 +184,91 @@ class HistoryOptions {
 }
 
 class Stack {
-  final List<Delta> undo;
-  final List<Delta> redo;
-
   Stack({required this.undo, required this.redo});
+
+  final List<StackItem> undo;
+  final List<StackItem> redo;
+}
+
+class StackItem {
+  StackItem({required this.delta, this.range});
+
+  final Delta delta;
+  final Range? range;
 }
 
 int getLastChangeIndex(Scroll scroll, Delta delta) {
-  final lastOp = delta.operations.last;
-  if (lastOp.key == 'delete') {
-    return delta.length;
+  if (delta.operations.isEmpty) return 0;
+  final deleteLength = delta.operations.fold<int>(
+    0,
+    (length, op) => length + (op.isDelete ? (op.length ?? 0) : 0),
+  );
+  var changeIndex = _deltaLength(delta) - deleteLength;
+  if (_endsWithNewlineChange(scroll, delta)) {
+    changeIndex -= 1;
   }
-  if (lastOp.key == 'retain' && lastOp.data == null) {
-    return delta.length;
-  }
-  return delta.length - (lastOp.data as String).length;
+  return changeIndex < 0 ? 0 : changeIndex;
 }
+
+void _transformStack(List<StackItem> stack, Delta delta) {
+  var remoteDelta = delta;
+  for (var i = stack.length - 1; i >= 0; i--) {
+    final item = stack[i];
+    final transformedDelta = remoteDelta.transform(item.delta, true);
+    final transformedRange = transformRange(item.range, remoteDelta);
+    remoteDelta = item.delta.transform(remoteDelta, false);
+    if (transformedDelta.operations.isEmpty) {
+      stack.removeAt(i);
+      continue;
+    }
+    stack[i] = StackItem(delta: transformedDelta, range: transformedRange);
+  }
+}
+
+int _deltaLength(Delta delta) {
+  return delta.operations.fold<int>(
+    0,
+    (length, op) => length + (op.length ?? 0),
+  );
+}
+
+bool _endsWithNewlineChange(Scroll scroll, Delta delta) {
+  if (delta.operations.isEmpty) return false;
+  final lastOp = delta.operations.last;
+  if (lastOp.isInsert) {
+    final data = lastOp.data;
+    if (data is String) {
+      return data.endsWith('\n');
+    }
+  }
+  final attributes = lastOp.attributes;
+  if (attributes == null || attributes.isEmpty) {
+    return false;
+  }
+  for (final name in attributes.keys) {
+    if (scroll.query(name, Scope.BLOCK) != null ||
+        scroll.query(name, Scope.BLOCK_ATTRIBUTE) != null ||
+        _knownBlockAttributes.contains(name)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+Range? transformRange(Range? range, Delta delta) {
+  if (range == null) return null;
+  final start = delta.transformPosition(range.index);
+  final end = delta.transformPosition(range.index + range.length);
+  return Range(start, end - start);
+}
+
+const Set<String> _knownBlockAttributes = <String>{
+  'align',
+  'direction',
+  'indent',
+  'list',
+  'header',
+  'blockquote',
+  'code-block',
+  'table',
+};

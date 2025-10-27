@@ -1,5 +1,4 @@
 import 'package:ngdart/angular.dart';
-import 'package:ngforms/angular_forms.dart';
 
 import 'quill_editor_component.dart';
 
@@ -8,15 +7,10 @@ import 'quill_editor_component.dart';
   template: '''
     <div class="app-shell">
       <h1>Welcome to {{title}}</h1>
-      <quill-editor [(value)]="content" placeholder="Start writing..."></quill-editor>
-      <section class="preview">
-        <h2>Preview</h2>
-        <pre>{{content}}</pre>
-      </section>
+      <quill-editor placeholder="Start writing..."></quill-editor>
     </div>
   ''',
   directives: [
-    formDirectives,
     QuillEditorComponent,
   ],
   styles: [
@@ -29,15 +23,9 @@ import 'quill_editor_component.dart';
       display: block;
       margin-bottom: 1rem;
     }
-    .preview pre {
-      background: #f5f5f5;
-      padding: 0.75rem;
-      border-radius: 4px;
-    }
     '''
   ],
 )
 class AppComponent {
   var title = 'Dart Quill';
-  String content = '';
 }

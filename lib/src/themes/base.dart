@@ -316,24 +316,67 @@ class BaseTheme extends Theme {
   }
 
   void buildButtons(List<DomElement> buttons, Map<String, dynamic> icons) {
-    buttons.forEach((button) {
-      final className = button.getAttribute('class') ?? '';
-      className.split(RegExp(r'\s+')).forEach((name) {
-        if (!name.startsWith('ql-')) return;
-        name = name.substring('ql-'.length);
-        if (icons[name] == null) return;
-        if (name == 'direction') {
-          button.innerHTML = '${icons[name]['']} ${icons[name]['rtl']}';
-        } else if (icons[name] is String) {
-          button.innerHTML = icons[name];
-        } else {
+    for (final button in buttons) {
+      final classAttr = button.getAttribute('class');
+      if (classAttr == null || classAttr.isEmpty) {
+        continue;
+      }
+
+      final classes = classAttr.split(RegExp(r'\s+'));
+      var assigned = false;
+
+      for (final cls in classes) {
+        if (!cls.startsWith('ql-')) {
+          continue;
+        }
+        final format = cls.substring('ql-'.length);
+        final iconEntry = icons[format];
+        if (iconEntry == null) {
+          continue;
+        }
+
+        if (format == 'direction' && iconEntry is Map) {
+          final ltr = iconEntry['']?.toString() ?? '';
+          final rtl = iconEntry['rtl']?.toString() ?? '';
+          final combined = [ltr, rtl].where((part) => part.isNotEmpty).join(' ');
+          if (combined.isNotEmpty) {
+            button.innerHTML = combined;
+            assigned = true;
+            break;
+          }
+        } else if (iconEntry is String) {
+          button.innerHTML = iconEntry;
+          assigned = true;
+          break;
+        } else if (iconEntry is Map) {
           final value = button.getAttribute('value') ?? '';
-          if (value.isNotEmpty && icons[name][value] != null) {
-            button.innerHTML = icons[name][value];
+          if (value.isNotEmpty) {
+            final mapped = iconEntry[value];
+            if (mapped != null) {
+              button.innerHTML = mapped.toString();
+              assigned = true;
+              break;
+            }
+          }
+          final fallback = iconEntry[''] ?? iconEntry[false];
+          if (!assigned && fallback != null) {
+            button.innerHTML = fallback.toString();
+            assigned = true;
+            break;
           }
         }
-      });
-    });
+      }
+
+      if (!assigned) {
+        final label = button.getAttribute('aria-label');
+        if (label != null && label.isNotEmpty) {
+          final fallback = label.split(':').last.trim();
+          if (fallback.isNotEmpty) {
+            button.innerHTML = fallback.substring(0, 1).toUpperCase();
+          }
+        }
+      }
+    }
   }
 
   void buildPickers(

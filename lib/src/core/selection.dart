@@ -48,7 +48,14 @@ class Selection {
     }
     final previous = _range;
     _range = range;
-    emitter.emit(EmitterEvents.SELECTION_CHANGE, [range, previous, source]);
+    emitter.emit(EmitterEvents.SELECTION_CHANGE, range, previous, source);
+    emitter.emit(
+      EmitterEvents.EDITOR_CHANGE,
+      EmitterEvents.SELECTION_CHANGE,
+      range,
+      previous,
+      source,
+    );
   }
 
   Map<String, dynamic> getFormat(int index, [int length = 0]) {
@@ -66,14 +73,21 @@ class Selection {
     }
     final previous = _range;
     _range = newRange;
-    emitter.emit(EmitterEvents.SCROLL_SELECTION_CHANGE, [newRange, previous]);
+    emitter.emit(EmitterEvents.SCROLL_SELECTION_CHANGE, newRange, previous);
   }
 
   void clear() {
     if (_range == null) return;
     final previous = _range;
     _range = null;
-    emitter.emit(EmitterEvents.SCROLL_SELECTION_CHANGE, [null, previous]);
+    emitter.emit(EmitterEvents.SCROLL_SELECTION_CHANGE, null, previous);
+    emitter.emit(
+      EmitterEvents.EDITOR_CHANGE,
+      EmitterEvents.SELECTION_CHANGE,
+      null,
+      previous,
+      EmitterSource.API,
+    );
   }
 
   bool hasFocus() => _range != null;

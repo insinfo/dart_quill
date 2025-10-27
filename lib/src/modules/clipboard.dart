@@ -2,18 +2,19 @@ import 'dart:math' as math;
 
 import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
 
+import '../blots/abstract/blot.dart';
 import '../blots/scroll.dart';
 import '../core/emitter.dart';
 import '../core/module.dart';
 import '../core/quill.dart';
 import '../core/selection.dart';
-import '../blots/abstract/blot.dart';
-//import '../blots/embed.dart';
+import '../formats/abstract/attributor.dart';
 import '../formats/code.dart';
 import '../formats/header.dart';
-import '../formats/table.dart';
+import '../formats/image.dart';
+import '../formats/link.dart';
+import '../formats/video.dart';
 import '../modules/keyboard.dart';
-import '../formats/abstract/attributor.dart';
 import '../platform/dom.dart';
 import 'normalize_external_html/index.dart';
 
@@ -25,15 +26,31 @@ class Logger {
 
 final debug = Logger();
 
+// Track clipboard-specific attributors per scroll instance so applyFormat can
+// determine which custom formats are allowed when converting HTML.
+final _clipboardAttributors = Expando<List<Attributor>>('_clipboardAttributors');
+final _clipboardAttributorsByName =
+    Expando<Map<String, Attributor>>('_clipboardAttributorsByName');
+
+List<Attributor> _attributorsForScroll(Scroll scroll) {
+  return _clipboardAttributors[scroll] ?? const <Attributor>[];
+}
+
+Map<String, Attributor> _attributorMapForScroll(Scroll scroll) {
+  return _clipboardAttributorsByName[scroll] ?? const <String, Attributor>{};
+}
+
 // Type definitions
 typedef Selector = dynamic; // String | DomNode.TEXT_NODE | DomNode.ELEMENT_NODE
 typedef Matcher = Delta Function(DomNode node, Delta delta, Scroll scroll);
 
 class ClipboardOptions {
   final List<dynamic> matchers;
+  final List<Attributor> attributors;
 
-  ClipboardOptions({
+  const ClipboardOptions({
     this.matchers = const [],
+    this.attributors = const [],
   });
 }
 
@@ -57,15 +74,18 @@ final CLIPBOARD_CONFIG = <List<dynamic>>[
   ['style', matchIgnore],
 ];
 
-final ATTRIBUTE_ATTRIBUTORS = <String, Attributor>{}; // Placeholder
-final STYLE_ATTRIBUTORS = <String, Attributor>{}; // Placeholder
-
 class Clipboard extends Module<ClipboardOptions> {
   static final DEFAULTS = ClipboardOptions();
 
   final List<List<dynamic>> matchers = [];
 
   Clipboard(Quill quill, ClipboardOptions options) : super(quill, options) {
+    final attributors = List<Attributor>.from(options.attributors);
+    _clipboardAttributors[quill.scroll] = attributors;
+    _clipboardAttributorsByName[quill.scroll] = {
+      for (final attributor in attributors) attributor.attrName: attributor,
+    };
+
     quill.root.addEventListener(
         'copy', (e) => onCaptureCopy(e as DomClipboardEvent, false));
     quill.root.addEventListener(
@@ -263,10 +283,9 @@ Operation _cloneOperation(Operation op) {
 }
 
 Delta applyFormat(Delta delta, String format, dynamic value, Scroll scroll) {
-  final hasRegistryFormat = scroll.query(format, Scope.ANY) != null ||
-      ATTRIBUTE_ATTRIBUTORS.containsKey(format) ||
-      STYLE_ATTRIBUTORS.containsKey(format);
-  if (!hasRegistryFormat) {
+  final hasRegistryFormat = scroll.query(format, Scope.ANY) != null;
+  final hasAttributor = _attributorMapForScroll(scroll).containsKey(format);
+  if (!hasRegistryFormat && !hasAttributor) {
     return delta;
   }
 
@@ -512,45 +531,94 @@ Matcher createMatchAlias(String format) {
   };
 }
 
+bool _isVideoElement(DomElement element) {
+  final tag = element.tagName.toUpperCase();
+  if (tag == Video.kTagName) {
+    return true;
+  }
+  return element.classes.contains(Video.kClassName);
+}
+
+bool _isBlockEmbedElement(DomElement element) {
+  return _isVideoElement(element);
+}
+
 Delta matchAttributor(DomNode node, Delta delta, Scroll scroll) {
+  if (node is! DomElement) {
+    return delta;
+  }
+
+  final attributors = _attributorsForScroll(scroll);
+  if (attributors.isEmpty) {
+    return delta;
+  }
+
   final formats = <String, dynamic>{};
-  final element = node as DomElement;
-  final classes = element.className?.split(RegExp(r'\s+')) ?? [];
-  final styleAttr = element.getAttribute('style');
-  final styles =
-      styleAttr?.split(';').map((s) => s.trim()).where((s) => s.isNotEmpty) ??
-          [];
-
-  for (final name in classes) {
-    final attributor = ATTRIBUTE_ATTRIBUTORS[name];
-    if (attributor != null) {
-      formats.addAll(attributor.value(node));
+  for (final attributor in attributors) {
+    final value = attributor.value(node);
+    if (value == null) {
+      continue;
     }
-  }
-
-  for (final style in styles) {
-    final parts = style.split(':');
-    if (parts.length < 2) continue;
-    final name = parts[0].trim();
-    final attributor = STYLE_ATTRIBUTORS[name];
-    if (attributor != null) {
-      formats.addAll(attributor.value(node));
+    if (value is String && value.isEmpty) {
+      continue;
     }
+    formats[attributor.attrName] = value;
   }
 
-  if (formats.isNotEmpty) {
-    var transformed = delta;
-    formats.forEach((name, value) {
-      transformed = applyFormat(transformed, name, value, scroll);
-    });
-    return transformed;
+  if (formats.isEmpty) {
+    return delta;
   }
-  return delta;
+
+  var transformed = delta;
+  formats.forEach((name, value) {
+    transformed = applyFormat(transformed, name, value, scroll);
+  });
+  return transformed;
 }
 
 Delta matchBlot(DomNode node, Delta delta, Scroll scroll) {
   if (node is! DomElement) {
     return delta;
+  }
+
+  final tag = node.tagName.toUpperCase();
+
+  if (tag == Image.kTagName) {
+    final value = Image.getValue(node);
+    if (value == null || value.isEmpty) {
+      return delta;
+    }
+    final attrs = <String, dynamic>{};
+    Image.getAttributes(node).forEach((key, attrValue) {
+      if (attrValue != null && attrValue.isNotEmpty) {
+        attrs[key] = attrValue;
+      }
+    });
+    return Delta()
+      ..insert({Image.kBlotName: value}, attrs.isEmpty ? null : attrs);
+  }
+
+  if (_isVideoElement(node)) {
+    final src = Video.valueDom(node);
+    if (src == null || src.isEmpty) {
+      return delta;
+    }
+    final formats = <String, dynamic>{};
+    Video.formatsDom(node).forEach((key, attrValue) {
+      if (attrValue != null && attrValue.isNotEmpty) {
+        formats[key] = attrValue;
+      }
+    });
+    return Delta()
+      ..insert({Video.kBlotName: src}, formats.isEmpty ? null : formats);
+  }
+
+  if (tag == Link.kTagName) {
+    final href = Link.getFormat(node);
+    if (href == null || href.isEmpty) {
+      return delta;
+    }
+    return applyFormat(delta, Link.kBlotName, href, scroll);
   }
 
   if (Header.kTagNames.contains(node.tagName)) {
@@ -649,8 +717,10 @@ Delta matchNewline(DomNode node, Delta delta, Scroll scroll) {
   }
 
   final hasContent = node.childNodes.isNotEmpty;
-  if (isLine(node, scroll) &&
-      (hasContent || (node is DomElement && node.tagName == 'P'))) {
+  final isParagraph = node is DomElement && node.tagName == 'P';
+  final isTableCell = node is DomElement &&
+      (node.tagName == 'TD' || node.tagName == 'TH');
+  if (isLine(node, scroll) && (hasContent || isParagraph || isTableCell)) {
     delta.insert('\n');
     return delta;
   }
@@ -663,6 +733,10 @@ Delta matchNewline(DomNode node, Delta delta, Scroll scroll) {
         return delta;
       }
       if (nextSibling is DomElement) {
+        if (_isBlockEmbedElement(nextSibling)) {
+          delta.insert('\n');
+          return delta;
+        }
         nextSibling = nextSibling.firstChild;
         continue;
       }
@@ -729,14 +803,33 @@ Delta matchStyles(DomNode node, Delta delta, Scroll scroll) {
 }
 
 Delta matchTable(DomNode node, Delta delta, Scroll scroll) {
-  final table = node.parentNode?.parentNode;
-  if (table != null) {
-    final tableBlot = scroll.find(table);
-    if (tableBlot.key is! TableBlot) {
-      return applyFormat(delta, 'table', (table as DomElement?)?.id, scroll);
+  if (node is! DomElement) {
+    return delta;
+  }
+
+  DomElement? table;
+  final parent = node.parentNode;
+  if (parent is DomElement && parent.tagName.toUpperCase() == 'TABLE') {
+    table = parent;
+  } else if (parent is DomElement) {
+    final grandParent = parent.parentNode;
+    if (grandParent is DomElement &&
+        grandParent.tagName.toUpperCase() == 'TABLE') {
+      table = grandParent;
     }
   }
-  return delta;
+
+  if (table == null) {
+    return delta;
+  }
+
+  final rows = table.querySelectorAll('tr');
+  final rowIndex = rows.indexOf(node) + 1;
+  if (rowIndex <= 0) {
+    return delta;
+  }
+
+  return applyFormat(delta, 'table', rowIndex, scroll);
 }
 
 Delta matchText(DomNode node, Delta delta, Scroll scroll) {

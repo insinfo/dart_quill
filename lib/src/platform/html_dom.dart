@@ -1,4 +1,5 @@
 import 'dart:html' as html;
+import 'dart:js_util' as js_util;
 
 import 'dom.dart';
 
@@ -107,6 +108,12 @@ class HtmlDomEvent implements DomEvent {
     if (t == null) return null;
     // EventTarget is the base, Node is more specific - need to check
     if (t is html.Node) {
+      if (t is html.Element) {
+        return HtmlDomElement(t);
+      }
+      if (t is html.Text) {
+        return HtmlDomText(t);
+      }
       return _HtmlDomNode(t);
     }
     return null;
@@ -116,20 +123,33 @@ class HtmlDomEvent implements DomEvent {
 class HtmlDomInputEvent extends HtmlDomEvent implements DomInputEvent {
   HtmlDomInputEvent(super.rawEvent);
 
-  dynamic get _event => rawEvent as dynamic;
+  @override
+  String? get inputType {
+    final event = rawEvent;
+    if (!js_util.hasProperty(event, 'inputType')) {
+      return null;
+    }
+    final value = js_util.getProperty(event, 'inputType');
+    return value == null ? null : value.toString();
+  }
 
   @override
-  String? get inputType => _event.inputType as String?;
-
-  @override
-  String? get data => _event.data as String?;
+  String? get data {
+    final event = rawEvent;
+    if (!js_util.hasProperty(event, 'data')) {
+      return null;
+    }
+    final value = js_util.getProperty(event, 'data');
+    return value == null ? null : value.toString();
+  }
 
   @override
   DomDataTransfer? get dataTransfer {
-    final transfer = _event.dataTransfer;
-    if (transfer == null) {
+    final event = rawEvent;
+    if (!js_util.hasProperty(event, 'dataTransfer')) {
       return null;
     }
+    final transfer = js_util.getProperty(event, 'dataTransfer');
     if (transfer is html.DataTransfer) {
       return HtmlDomDataTransfer(transfer);
     }

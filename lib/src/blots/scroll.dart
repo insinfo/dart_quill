@@ -414,7 +414,9 @@ class Scroll extends ScrollBlot {
     // Get leaf-level formats
     var leafEntry = leaf(index);
     var leafBlot = leafEntry.key;
-    if (length == 0 && (leafBlot == null || leafBlot.length() == 0) && index > 0) {
+    if (length == 0 &&
+        (leafBlot == null || leafBlot.length() == 0) &&
+        index > 0) {
       leafEntry = leaf(index - 1);
       leafBlot = leafEntry.key;
     }
@@ -425,6 +427,55 @@ class Scroll extends ScrollBlot {
     }
 
     return formats;
+  }
+
+  int? indexFromDomNode(DomNode? node, int nativeOffset) {
+    if (node == null) {
+      return null;
+    }
+    final result = find(node, bubble: true);
+    final blot = result.key;
+    if (blot == null) {
+      return null;
+    }
+
+    var base = this.offset(blot);
+
+    if (blot is LeafBlot) {
+      final clamped = _clampOffset(nativeOffset, blot.length());
+      return base + clamped;
+    }
+
+    if (node is DomElement) {
+      final children = node.childNodes;
+      final limit = _clampOffset(nativeOffset, children.length);
+      for (var i = 0; i < limit; i++) {
+        final child = children[i];
+        base += _lengthOfDomNode(child);
+      }
+      return base;
+    }
+
+    return base;
+  }
+
+  int _lengthOfDomNode(DomNode node) {
+    final result = find(node, bubble: true);
+    final blot = result.key;
+    if (blot == null) {
+      return 0;
+    }
+    return blot.length();
+  }
+
+  int _clampOffset(int value, int max) {
+    if (value <= 0) {
+      return 0;
+    }
+    if (value >= max) {
+      return max;
+    }
+    return value;
   }
 }
 

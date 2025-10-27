@@ -22,7 +22,7 @@ void initializeFakeDom() {
 
 /// Normalize HTML by removing newlines and extra spaces
 String normalizeHTML(String html) {
-  return html.replaceAll(RegExp(r'\n\s*'), '');
+  return html.replaceAll(RegExp(r'\r?\n\s*'), '').trim();
 }
 
 /// Helper to create RegistryEntry for a blot type
@@ -237,6 +237,11 @@ class EqualHTML extends Matcher {
           'href',
           'class',
           'id',
+          'type',
+          'value',
+          'aria-label',
+          'aria-pressed',
+          'selected',
           'frameborder',
           'allowfullscreen',
           'width',

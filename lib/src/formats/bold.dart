@@ -11,6 +11,9 @@ class Bold extends InlineBlot {
   static const List<String> kTagNames = ['STRONG', 'B'];
 
   static Bold create([dynamic value]) {
+    if (value is DomElement) {
+      return Bold(value);
+    }
     final node = domBindings.adapter.document.createElement(kTagNames.first);
     return Bold(node);
   }
@@ -31,8 +34,29 @@ class Bold extends InlineBlot {
   ]) {
     super.optimize(mutations, context);
     if (element.tagName != kTagNames.first) {
-      unwrap();
-      parent?.insertBefore(Bold.create(), next);
+      final parentBlot = parent;
+      if (parentBlot is ParentBlot) {
+        final replacement = scroll.create(kBlotName) as ParentBlot;
+        parentBlot.insertBefore(replacement, next);
+        moveChildren(replacement, null);
+        remove();
+        replacement.optimize(mutations, context);
+        return;
+      }
+    }
+
+    final previous = prev;
+    if (previous is Bold && previous.parent == parent) {
+      moveChildren(previous, null);
+      remove();
+      previous.optimize(mutations, context);
+      return;
+    }
+
+    final nextBold = next;
+    if (nextBold is Bold && nextBold.parent == parent) {
+      nextBold.moveChildren(this, null);
+      nextBold.remove();
     }
   }
 
