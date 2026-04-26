@@ -684,12 +684,21 @@ String _collectBlockAttributes(Map<String, dynamic> attrs,
     classes.add('ql-list-${_escapeAttribute('${attrs['list']}')}');
   }
 
+  final dataAttributes = <String>[];
+  final codeLanguage = attrs['code-block'];
+  if (codeLanguage is String && codeLanguage.isNotEmpty) {
+    dataAttributes.add('data-language="${_escapeAttribute(codeLanguage)}"');
+  }
+
   final buffer = StringBuffer();
   if (classes.isNotEmpty) {
     buffer.write(' class="${classes.join(' ')}"');
   }
   if (styles.isNotEmpty) {
     buffer.write(' style="${styles.join('; ')}"');
+  }
+  if (dataAttributes.isNotEmpty) {
+    buffer.write(' ${dataAttributes.join(' ')}');
   }
   return buffer.toString();
 }

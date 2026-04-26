@@ -19,7 +19,9 @@ import '../modules/clipboard.dart';
 import '../modules/history.dart';
 import '../modules/keyboard.dart';
 import '../modules/input.dart';
+import '../modules/syntax.dart';
 import '../modules/table.dart';
+import '../modules/ui_node.dart';
 import '../modules/uploader.dart';
 import '../platform/platform.dart';
 import '../themes/bubble.dart';
@@ -73,6 +75,16 @@ void _registerModules() {
     final resolved =
         options is TableOptions ? options : TableOptions.fromConfig(options);
     return Table(quill, resolved);
+  });
+
+  Quill.registerModule('syntax', (quill, options) {
+    final resolved =
+        options is SyntaxOptions ? options : SyntaxOptions.fromConfig(options);
+    return Syntax(quill, resolved);
+  });
+
+  Quill.registerModule('uiNode', (quill, options) {
+    return UINode(quill, const {});
   });
 }
 

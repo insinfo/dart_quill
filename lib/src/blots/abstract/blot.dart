@@ -189,6 +189,9 @@ abstract class ParentBlot extends Blot {
 
   final List<Blot> children = [];
 
+  /// Optional UI node (e.g. `.ql-ui` marker element prepended by list blots).
+  DomElement? uiNode;
+
   DomElement get element => domNode as DomElement;
 
   Blot? get firstChild => children.isNotEmpty ? children.first : null;
