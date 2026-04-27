@@ -212,6 +212,10 @@ class Scroll extends ScrollBlot {
   ]) {
     if (_batch != null) return;
     super.optimize(mutations, context);
+    if (children.isEmpty) {
+      final block = _createBlock();
+      appendChild(block);
+    }
     final records = mutations ?? const <DomMutationRecord>[];
     final scope = context ?? <String, dynamic>{};
     if (records.isNotEmpty) {

@@ -21,17 +21,19 @@ class QuillEditorComponent implements AfterViewInit {
 
   static const List<List<dynamic>> _defaultToolbar = [
     [
-      {'header': '1'},
-      {'header': '2'},
-      {'header': '3'},
-      {'header': false},
+      {
+        'header': [false, '1', '2', '3']
+      },
+      {'font': []},
     ],
-    ['bold', 'italic', 'underline', 'strike'],
+    ['bold', 'italic', 'underline'],
     [
       {'list': 'ordered'},
       {'list': 'bullet'},
+      {'align': []},
     ],
-    ['link', 'image', 'code'],
+    ['link', 'image', 'video'],
+    ['formula', 'code-block'],
     ['clean'],
   ];
 

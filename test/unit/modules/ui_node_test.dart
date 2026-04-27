@@ -1,4 +1,3 @@
-import 'package:dart_quill/src/blots/abstract/blot.dart';
 import 'package:dart_quill/src/modules/ui_node.dart';
 import 'package:test/test.dart';
 

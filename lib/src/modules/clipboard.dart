@@ -28,7 +28,8 @@ final debug = Logger();
 
 // Track clipboard-specific attributors per scroll instance so applyFormat can
 // determine which custom formats are allowed when converting HTML.
-final _clipboardAttributors = Expando<List<Attributor>>('_clipboardAttributors');
+final _clipboardAttributors =
+    Expando<List<Attributor>>('_clipboardAttributors');
 final _clipboardAttributorsByName =
     Expando<Map<String, Attributor>>('_clipboardAttributorsByName');
 
@@ -150,7 +151,7 @@ class Clipboard extends Module<ClipboardOptions> {
   void dangerouslyPasteHTML(dynamic indexOrHtml,
       [String? html, String source = EmitterSource.API]) {
     if (indexOrHtml is String) {
-  final delta = convert(html: indexOrHtml, text: '');
+      final delta = convert(html: indexOrHtml, text: '');
       final resolvedSource = html ?? source;
       quill.setContents(delta, source: resolvedSource);
       quill.setSelection(Range(0, 0), source: EmitterSource.SILENT);
@@ -167,7 +168,7 @@ class Clipboard extends Module<ClipboardOptions> {
   void onCaptureCopy(DomClipboardEvent e, bool isCut) {
     if (e.defaultPrevented) return;
     e.preventDefault();
-    final range = quill.selection.getRange();
+    final range = quill.getSelection();
     if (range == null) return;
     final result = onCopy(range, isCut);
     e.clipboardData?.setData('text/plain', result['text']);
@@ -180,14 +181,17 @@ class Clipboard extends Module<ClipboardOptions> {
   String normalizeURIList(String urlList) {
     return urlList
         .split(RegExp(r'\r?\n'))
-        .where((url) => url[0] != '#')
+        .where((url) => url.isNotEmpty && url[0] != '#')
         .join('\n');
   }
 
   void onCapturePaste(DomClipboardEvent e) {
     if (e.defaultPrevented || !quill.isEnabled()) return;
     e.preventDefault();
-    final range = quill.getSelection(focus: true)!;
+    final range = quill.getSelection(focus: true) ?? quill.selection.savedRange;
+    if (range == null) {
+      return;
+    }
     final html = e.clipboardData?.getData('text/html');
     var text = e.clipboardData?.getData('text/plain');
     if (html == null && text == null) {
@@ -234,8 +238,7 @@ class Clipboard extends Module<ClipboardOptions> {
 
     final insertedLength = _deltaInsertLength(pastedDelta);
     final newIndex = range.index + insertedLength;
-    quill.setSelection(Range(newIndex, 0),
-        source: EmitterSource.SILENT);
+    quill.setSelection(Range(newIndex, 0), source: EmitterSource.SILENT);
     // quill.scrollSelectionIntoView(); // Placeholder
   }
 
@@ -718,8 +721,8 @@ Delta matchNewline(DomNode node, Delta delta, Scroll scroll) {
 
   final hasContent = node.childNodes.isNotEmpty;
   final isParagraph = node is DomElement && node.tagName == 'P';
-  final isTableCell = node is DomElement &&
-      (node.tagName == 'TD' || node.tagName == 'TH');
+  final isTableCell =
+      node is DomElement && (node.tagName == 'TD' || node.tagName == 'TH');
   if (isLine(node, scroll) && (hasContent || isParagraph || isTableCell)) {
     delta.insert('\n');
     return delta;

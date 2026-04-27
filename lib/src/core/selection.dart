@@ -48,6 +48,7 @@ class Selection {
     }
     final previous = _range;
     _range = range;
+    savedRange = range;
     emitter.emit(EmitterEvents.SELECTION_CHANGE, range, previous, source);
     emitter.emit(
       EmitterEvents.EDITOR_CHANGE,
@@ -73,6 +74,7 @@ class Selection {
     }
     final previous = _range;
     _range = newRange;
+    savedRange = newRange;
     emitter.emit(EmitterEvents.SCROLL_SELECTION_CHANGE, newRange, previous);
   }
 

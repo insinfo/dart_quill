@@ -1,7 +1,55 @@
+import 'dart:async';
 import 'dart:html' as html;
 import 'dart:js_util' as js_util;
 
 import 'dom.dart';
+
+final html.NodeValidator _quillHtmlValidator =
+    html.NodeValidatorBuilder.common()
+      ..allowSvg()
+      ..allowNavigation(_QuillUriPolicy())
+      ..allowImages(_QuillUriPolicy())
+      ..allowElement(
+        'input',
+        attributes: [
+          'type',
+          'data-formula',
+          'data-link',
+          'data-video',
+        ],
+      )
+      ..allowElement(
+        'a',
+        attributes: [
+          'class',
+          'href',
+          'rel',
+          'target',
+        ],
+        uriAttributes: ['href'],
+        uriPolicy: _QuillUriPolicy(),
+      );
+
+class _QuillUriPolicy implements html.UriPolicy {
+  @override
+  bool allowsUri(String uri) {
+    final parsed = Uri.tryParse(uri);
+    if (parsed == null) {
+      return false;
+    }
+    if (!parsed.hasScheme) {
+      return true;
+    }
+    return const {
+      'about',
+      'data',
+      'http',
+      'https',
+      'mailto',
+      'tel',
+    }.contains(parsed.scheme.toLowerCase());
+  }
+}
 
 /// Creates the platform-specific DOM adapter
 /// On web platforms, returns HtmlDomAdapter
@@ -54,9 +102,9 @@ class _HtmlDomNode implements DomNode {
   @override
   void insertBefore(DomNode node, DomNode? ref) {
     this.node.insertBefore(
-      (node as _HtmlDomNode).node,
-      ref == null ? null : (ref as _HtmlDomNode).node,
-    );
+          (node as _HtmlDomNode).node,
+          ref == null ? null : (ref as _HtmlDomNode).node,
+        );
   }
 
   @override
@@ -66,27 +114,27 @@ class _HtmlDomNode implements DomNode {
 
   @override
   List<DomNode> get childNodes =>
-    [for (final child in node.childNodes) _wrapNode(child)];
+      [for (final child in node.childNodes) _wrapNode(child)];
 
   @override
   DomNode? get firstChild =>
-    node.firstChild == null ? null : _wrapNode(node.firstChild!);
+      node.firstChild == null ? null : _wrapNode(node.firstChild!);
 
   @override
   DomNode? get lastChild =>
-    node.lastChild == null ? null : _wrapNode(node.lastChild!);
+      node.lastChild == null ? null : _wrapNode(node.lastChild!);
 
   @override
   DomNode? get nextSibling =>
-    node.nextNode == null ? null : _wrapNode(node.nextNode!);
+      node.nextNode == null ? null : _wrapNode(node.nextNode!);
 
   @override
   DomNode? get parentNode =>
-    node.parentNode == null ? null : _wrapNode(node.parentNode!);
+      node.parentNode == null ? null : _wrapNode(node.parentNode!);
 
   @override
   DomNode? get previousSibling =>
-    node.previousNode == null ? null : _wrapNode(node.previousNode!);
+      node.previousNode == null ? null : _wrapNode(node.previousNode!);
 }
 
 class HtmlDomEvent implements DomEvent {
@@ -100,6 +148,11 @@ class HtmlDomEvent implements DomEvent {
   @override
   void preventDefault() {
     rawEvent.preventDefault();
+  }
+
+  @override
+  void stopPropagation() {
+    rawEvent.stopPropagation();
   }
 
   @override
@@ -182,7 +235,9 @@ class HtmlDomMutationObserver implements DomMutationObserver {
 
   @override
   List<DomMutationRecord> takeRecords() {
-    return [for (final record in _native.takeRecords()) HtmlDomMutationRecord(record)];
+    return [
+      for (final record in _native.takeRecords()) HtmlDomMutationRecord(record)
+    ];
   }
 }
 
@@ -198,16 +253,21 @@ class HtmlDomMutationRecord implements DomMutationRecord {
   String get type => _native.type!;
 
   @override
-  List<DomNode> get addedNodes => [for (final node in _native.addedNodes!) _HtmlDomNode(node)];
+  List<DomNode> get addedNodes =>
+      [for (final node in _native.addedNodes!) _HtmlDomNode(node)];
 
   @override
-  List<DomNode> get removedNodes => [for (final node in _native.removedNodes!) _HtmlDomNode(node)];
+  List<DomNode> get removedNodes =>
+      [for (final node in _native.removedNodes!) _HtmlDomNode(node)];
 
   @override
-  DomNode? get previousSibling => _native.previousSibling == null ? null : _HtmlDomNode(_native.previousSibling!);
+  DomNode? get previousSibling => _native.previousSibling == null
+      ? null
+      : _HtmlDomNode(_native.previousSibling!);
 
   @override
-  DomNode? get nextSibling => _native.nextSibling == null ? null : _HtmlDomNode(_native.nextSibling!);
+  DomNode? get nextSibling =>
+      _native.nextSibling == null ? null : _HtmlDomNode(_native.nextSibling!);
 }
 
 class HtmlDomClipboardEvent extends HtmlDomEvent implements DomClipboardEvent {
@@ -218,6 +278,30 @@ class HtmlDomClipboardEvent extends HtmlDomEvent implements DomClipboardEvent {
     final data = (rawEvent as html.ClipboardEvent).clipboardData;
     return data == null ? null : HtmlDomDataTransfer(data);
   }
+}
+
+class HtmlDomKeyboardEvent extends HtmlDomEvent implements DomKeyboardEvent {
+  HtmlDomKeyboardEvent(super.rawEvent);
+
+  html.KeyboardEvent get _keyboardEvent => rawEvent as html.KeyboardEvent;
+
+  @override
+  String get key => _keyboardEvent.key ?? '';
+
+  @override
+  int? get keyCode => _keyboardEvent.keyCode;
+
+  @override
+  bool get altKey => _keyboardEvent.altKey;
+
+  @override
+  bool get ctrlKey => _keyboardEvent.ctrlKey;
+
+  @override
+  bool get metaKey => _keyboardEvent.metaKey;
+
+  @override
+  bool get shiftKey => _keyboardEvent.shiftKey;
 }
 
 class HtmlDomDataTransfer implements DomDataTransfer {
@@ -265,7 +349,8 @@ class HtmlDomAdapter implements DomAdapter {
 
   @override
   DomMutationObserver createMutationObserver(
-      void Function(List<DomMutationRecord> mutations, DomMutationObserver observer)
+      void Function(
+              List<DomMutationRecord> mutations, DomMutationObserver observer)
           callback) {
     late HtmlDomMutationObserver observer;
     final nativeObserver = html.MutationObserver((mutations, nativeObserver) {
@@ -277,6 +362,214 @@ class HtmlDomAdapter implements DomAdapter {
 
   @override
   String? get userAgent => html.window.navigator.userAgent;
+
+  @override
+  void focus(DomElement element) {
+    final native = (element as _HtmlDomNode).node;
+    if (native is html.HtmlElement) {
+      native.focus();
+    } else if (native is html.Element) {
+      js_util.callMethod(native, 'focus', const []);
+    }
+  }
+
+  @override
+  DomSelectionRange? getSelectionRange(DomElement root) {
+    final rootNode = (root as _HtmlDomNode).node;
+    if (rootNode is! html.Element) {
+      return null;
+    }
+    final selection = html.window.getSelection();
+    final rangeCount = selection?.rangeCount ?? 0;
+    if (rangeCount <= 0) {
+      return null;
+    }
+    final range = selection!.getRangeAt(0);
+    final startContainer = range.startContainer;
+    final endContainer = range.endContainer;
+    if (!_containsOrIs(rootNode, startContainer) ||
+        !_containsOrIs(rootNode, endContainer)) {
+      return null;
+    }
+
+    final start = _textOffset(rootNode, startContainer, range.startOffset);
+    final end = range.collapsed
+        ? start
+        : _textOffset(rootNode, endContainer, range.endOffset);
+    final normalizedStart = start < end ? start : end;
+    final normalizedEnd = start < end ? end : start;
+    return DomSelectionRange(normalizedStart, normalizedEnd - normalizedStart);
+  }
+
+  @override
+  void setSelectionRange(DomElement root, int index, int length) {
+    final rootNode = (root as _HtmlDomNode).node;
+    if (rootNode is! html.Element) {
+      return;
+    }
+    final selection = html.window.getSelection();
+    if (selection == null) {
+      return;
+    }
+
+    final start = _findTextPosition(rootNode, index);
+    final end = _findTextPosition(rootNode, index + length);
+    final nativeRange = html.document.createRange();
+    nativeRange.setStart(start.node, start.offset);
+    nativeRange.setEnd(end.node, end.offset);
+    selection
+      ..removeAllRanges()
+      ..addRange(nativeRange);
+  }
+
+  @override
+  Map<String, dynamic>? getBounds(DomElement root, int index, int length) {
+    final rootNode = (root as _HtmlDomNode).node;
+    if (rootNode is! html.Element) {
+      return null;
+    }
+
+    final start = _findTextPosition(rootNode, index);
+    final end = _findTextPosition(rootNode, index + length);
+    final nativeRange = html.document.createRange();
+    nativeRange.setStart(start.node, start.offset);
+    nativeRange.setEnd(end.node, end.offset);
+
+    html.Rectangle<num>? rect;
+    if (length > 0) {
+      rect = nativeRange.getBoundingClientRect();
+    } else {
+      final clientRects = nativeRange.getClientRects();
+      if (clientRects.isNotEmpty) {
+        rect = clientRects.first;
+      }
+      rect ??= nativeRange.getBoundingClientRect();
+    }
+
+    if (rect.width == 0 && rect.height == 0) {
+      return null;
+    }
+
+    final container = rootNode.parent;
+    final containerRect =
+        container?.getBoundingClientRect() ?? rootNode.getBoundingClientRect();
+    return {
+      'left': rect.left - containerRect.left,
+      'right': rect.right - containerRect.left,
+      'top': rect.top - containerRect.top,
+      'bottom': rect.bottom - containerRect.top,
+      'width': rect.width,
+      'height': rect.height,
+    };
+  }
+
+  @override
+  Future<String?> readFileAsDataUrl(dynamic file) {
+    final nativeFile = file is HtmlDomFile
+        ? file._native
+        : file is html.File
+            ? file
+            : null;
+    if (nativeFile == null) {
+      return Future.value(null);
+    }
+
+    final completer = Completer<String?>();
+    final reader = html.FileReader();
+    reader.onLoad.first.then((_) {
+      final result = reader.result;
+      completer.complete(result == null ? null : result.toString());
+    });
+    reader.onError.first.then((_) {
+      if (!completer.isCompleted) {
+        completer.complete(null);
+      }
+    });
+    reader.readAsDataUrl(nativeFile);
+    return completer.future;
+  }
+}
+
+bool _containsOrIs(html.Node root, html.Node node) {
+  if (identical(root, node)) {
+    return true;
+  }
+  if (root is html.Element) {
+    return root.contains(node);
+  }
+  return false;
+}
+
+int _textOffset(html.Node root, html.Node target, int targetOffset) {
+  var offset = 0;
+  var found = false;
+
+  void visit(html.Node node) {
+    if (found) {
+      return;
+    }
+    if (identical(node, target)) {
+      if (node is html.Text) {
+        offset += targetOffset.clamp(0, node.data?.length ?? 0);
+      } else {
+        final children = node.childNodes;
+        final limit = targetOffset.clamp(0, children.length);
+        for (var i = 0; i < limit; i++) {
+          offset += children[i].text?.length ?? 0;
+        }
+      }
+      found = true;
+      return;
+    }
+    if (node is html.Text) {
+      offset += node.data?.length ?? 0;
+      return;
+    }
+    for (final child in node.childNodes) {
+      visit(child);
+      if (found) {
+        return;
+      }
+    }
+  }
+
+  visit(root);
+  return offset;
+}
+
+({html.Node node, int offset}) _findTextPosition(html.Node root, int index) {
+  final target = index < 0 ? 0 : index;
+  var remaining = target;
+  html.Text? lastText;
+
+  ({html.Node node, int offset})? visit(html.Node node) {
+    if (node is html.Text) {
+      lastText = node;
+      final length = node.data?.length ?? 0;
+      if (remaining <= length) {
+        return (node: node, offset: remaining);
+      }
+      remaining -= length;
+      return null;
+    }
+    for (final child in node.childNodes) {
+      final found = visit(child);
+      if (found != null) {
+        return found;
+      }
+    }
+    return null;
+  }
+
+  final found = visit(root);
+  if (found != null) {
+    return found;
+  }
+  final text = lastText;
+  if (text != null) {
+    return (node: text, offset: text.data?.length ?? 0);
+  }
+  return (node: root, offset: root.childNodes.length);
 }
 
 class HtmlDomDocument implements DomDocument {
@@ -306,7 +599,8 @@ class HtmlDomDocument implements DomDocument {
   DomElement get body => HtmlDomElement(html.document.body!);
 
   @override
-  DomElement get documentElement => HtmlDomElement(html.document.documentElement!);
+  DomElement get documentElement =>
+      HtmlDomElement(html.document.documentElement!);
 
   @override
   DomParser get parser => HtmlDomParser();
@@ -344,14 +638,17 @@ class _HtmlDomDocumentWrapper extends HtmlDomDocument {
 
   @override
   List<DomElement> querySelectorAll(String selectors) {
-    return _doc.querySelectorAll(selectors).map((e) => HtmlDomElement(e)).toList();
+    return _doc
+        .querySelectorAll(selectors)
+        .map((e) => HtmlDomElement(e))
+        .toList();
   }
 
   @override
   DomElement get body {
     // For HtmlDocument we have body, for generic Document we use documentElement
     if (_doc is html.HtmlDocument) {
-      return HtmlDomElement((_doc as html.HtmlDocument).body!);
+      return HtmlDomElement(_doc.body!);
     }
     return HtmlDomElement(_doc.documentElement!);
   }
@@ -424,6 +721,8 @@ class HtmlDomElement extends _HtmlDomNode implements DomElement {
         listener(HtmlDomInputEvent(event));
       } else if (['copy', 'cut', 'paste'].contains(type)) {
         listener(HtmlDomClipboardEvent(event));
+      } else if (['keydown', 'keyup', 'keypress'].contains(type)) {
+        listener(HtmlDomKeyboardEvent(event));
       } else {
         listener(HtmlDomEvent(event));
       }
@@ -457,7 +756,10 @@ class HtmlDomElement extends _HtmlDomNode implements DomElement {
 
   @override
   List<DomElement> querySelectorAll(String selectors) {
-    return _element.querySelectorAll(selectors).map((e) => HtmlDomElement(e as html.HtmlElement)).toList();
+    return _element
+        .querySelectorAll(selectors)
+        .map((e) => HtmlDomElement(e as html.HtmlElement))
+        .toList();
   }
 
   @override
@@ -480,6 +782,11 @@ class HtmlDomElement extends _HtmlDomNode implements DomElement {
     } else if (_element is html.TextAreaElement) {
       (_element as html.TextAreaElement).select();
     }
+  }
+
+  @override
+  void click() {
+    _element.click();
   }
 
   @override
@@ -515,7 +822,28 @@ class HtmlDomElement extends _HtmlDomNode implements DomElement {
 
   @override
   set innerHTML(String? value) {
-    _element.innerHtml = value;
+    // ignore: unsafe_html
+    _element.setInnerHtml(value, validator: _quillHtmlValidator);
+  }
+
+  @override
+  String get value {
+    if (_element is html.InputElement) {
+      return (_element as html.InputElement).value ?? '';
+    }
+    if (_element is html.TextAreaElement) {
+      return (_element as html.TextAreaElement).value ?? '';
+    }
+    return '';
+  }
+
+  @override
+  set value(String? val) {
+    if (_element is html.InputElement) {
+      (_element as html.InputElement).value = val;
+    } else if (_element is html.TextAreaElement) {
+      (_element as html.TextAreaElement).value = val;
+    }
   }
 }
 

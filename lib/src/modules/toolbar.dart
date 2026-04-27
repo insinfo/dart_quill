@@ -158,7 +158,7 @@ class Toolbar extends Module<ToolbarProps> {
       }
 
       quill.focus();
-      final range = quill.selection.getRange();
+      final range = quill.getSelection(focus: true);
       if (range == null) return;
 
       if (handlers[format] != null) {
@@ -295,7 +295,7 @@ class Toolbar extends Module<ToolbarProps> {
     }
 
     quill.focus();
-    final range = quill.selection.getRange();
+    final range = quill.getSelection(focus: true);
     if (range == null) {
       return;
     }

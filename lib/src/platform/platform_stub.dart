@@ -6,16 +6,36 @@ import 'dom.dart';
 class _StubDomAdapter implements DomAdapter {
   @override
   DomDocument get document => throw UnsupportedError(
-    'DOM operations are not supported on this platform. '
-    'Use a FakeDomAdapter in tests or run on web platform.'
-  );
+      'DOM operations are not supported on this platform. '
+      'Use a FakeDomAdapter in tests or run on web platform.');
 
   @override
   DomMutationObserver createMutationObserver(
-    void Function(List<DomMutationRecord> records, DomMutationObserver observer) callback,
+    void Function(List<DomMutationRecord> records, DomMutationObserver observer)
+        callback,
   ) {
-    throw UnsupportedError('DOM operations are not supported on this platform.');
+    throw UnsupportedError(
+        'DOM operations are not supported on this platform.');
   }
+
+  @override
+  void focus(DomElement element) {
+    throw UnsupportedError(
+        'DOM operations are not supported on this platform.');
+  }
+
+  @override
+  DomSelectionRange? getSelectionRange(DomElement root) => null;
+
+  @override
+  void setSelectionRange(DomElement root, int index, int length) {}
+
+  @override
+  Map<String, dynamic>? getBounds(DomElement root, int index, int length) =>
+      null;
+
+  @override
+  Future<String?> readFileAsDataUrl(dynamic file) async => null;
 
   @override
   String? get userAgent => null;

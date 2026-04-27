@@ -51,7 +51,7 @@ class Picker {
         toggle();
         event.preventDefault();
       } else if (key == 'Escape') {
-        close();
+        escape();
         event.preventDefault();
       }
     });
@@ -80,6 +80,11 @@ class Picker {
     _optionsContainer.setAttribute('aria-hidden', 'true');
   }
 
+  void escape() {
+    close();
+    label.select();
+  }
+
   void update() {
     DomElement? item;
     DomElement? option;
@@ -87,7 +92,9 @@ class Picker {
     final dynamic nativeSelect = select as dynamic;
     try {
       final selectedIndex = nativeSelect.selectedIndex as int?;
-      if (selectedIndex != null && selectedIndex >= 0 && selectedIndex < _items.length) {
+      if (selectedIndex != null &&
+          selectedIndex >= 0 &&
+          selectedIndex < _items.length) {
         item = _items[selectedIndex];
         option = _options[selectedIndex];
       }
@@ -107,8 +114,9 @@ class Picker {
 
     _selectItem(item, trigger: false);
 
-  final initialOption = select.querySelector('option[selected]');
-  final isActive = option != null && (initialOption == null || option != initialOption);
+    final initialOption = select.querySelector('option[selected]');
+    final isActive =
+        option != null && (initialOption == null || option != initialOption);
     label.classes.toggle('ql-active', isActive);
   }
 
@@ -146,9 +154,10 @@ class Picker {
       item.setAttribute('tabindex', '0');
 
       final rawValue = option.getAttribute('value');
-      final normalizedValue = (rawValue == null || rawValue.isEmpty || rawValue == 'false')
-          ? null
-          : rawValue;
+      final normalizedValue =
+          (rawValue == null || rawValue.isEmpty || rawValue == 'false')
+              ? null
+              : rawValue;
       if (normalizedValue != null) {
         item.setAttribute('data-value', normalizedValue);
       }
@@ -165,7 +174,7 @@ class Picker {
           _selectItem(item);
           event.preventDefault();
         } else if (key == 'Escape') {
-          close();
+          escape();
           event.preventDefault();
         }
       });
@@ -276,7 +285,8 @@ class Picker {
     }
   }
 
-  void decorateItem(DomElement item, DomElement option, String? value, int index) {}
+  void decorateItem(
+      DomElement item, DomElement option, String? value, int index) {}
 
   void decorateLabel(DomElement element) {}
 
@@ -290,7 +300,8 @@ class ColorPicker extends Picker {
   }
 
   @override
-  void decorateItem(DomElement item, DomElement option, String? value, int index) {
+  void decorateItem(
+      DomElement item, DomElement option, String? value, int index) {
     final style = item.style as dynamic;
     style.backgroundColor = value ?? '';
     if (index < 7) {
@@ -303,7 +314,8 @@ class ColorPicker extends Picker {
     final colorLabels = label.querySelectorAll('.ql-color-label');
     if (colorLabels.isEmpty) {
       final style = label.style as dynamic;
-      style.borderBottom = value != null && value.isNotEmpty ? '2px solid $value' : '';
+      style.borderBottom =
+          value != null && value.isNotEmpty ? '2px solid $value' : '';
       return;
     }
 
@@ -330,7 +342,8 @@ class IconPicker extends Picker {
         item.innerHTML = icon;
       }
     }
-    _defaultItem = container.querySelector('.ql-selected') ?? (items.isNotEmpty ? items.first : null);
+    _defaultItem = container.querySelector('.ql-selected') ??
+        (items.isNotEmpty ? items.first : null);
     _selectItem(_defaultItem, trigger: false);
   }
 

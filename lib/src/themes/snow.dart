@@ -47,6 +47,7 @@ class SnowTooltip extends BaseTooltip {
         edit('link', preview?.text);
       }
       event.preventDefault();
+      event.stopPropagation();
     });
 
     root.querySelector('a.ql-remove')?.addEventListener('click', (event) {
@@ -62,10 +63,12 @@ class SnowTooltip extends BaseTooltip {
         linkRange = null;
       }
       event.preventDefault();
+      event.stopPropagation();
       hide();
     });
 
     quill.on(EmitterEvents.SELECTION_CHANGE, (range, oldRange, source) {
+      if (isEditing) return;
       if (range == null) return;
       if (range.length == 0 && source == EmitterSource.USER) {
         final entry = quill.scroll.descendant((blot) => blot is Link, range.index);

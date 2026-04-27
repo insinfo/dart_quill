@@ -1,8 +1,11 @@
 import 'dart:async';
 
 import '../core/module.dart';
+import '../core/emitter.dart';
 import '../core/quill.dart';
 import '../core/selection.dart';
+import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
+import '../platform/platform.dart';
 
 typedef UploadHandler = FutureOr<void> Function(
   Quill quill,
@@ -56,10 +59,9 @@ class UploaderOptions {
 }
 
 class Uploader extends Module<UploaderOptions> {
-  Uploader(Quill quill, UploaderOptions options)
-      : super(quill, options);
+  Uploader(Quill quill, UploaderOptions options) : super(quill, options);
 
-  FutureOr<void> upload(Range range, Iterable<dynamic> rawFiles) {
+  FutureOr<void> upload(Range range, Iterable<dynamic> rawFiles) async {
     final accepted = <dynamic>[];
     for (final file in rawFiles) {
       if (options.mimetypes.isEmpty) {
@@ -78,6 +80,25 @@ class Uploader extends Module<UploaderOptions> {
     if (handler != null) {
       return handler(quill, range, accepted);
     }
-    return null;
+
+    if (range.length > 0) {
+      quill.updateContents(
+        Delta()
+          ..retain(range.index)
+          ..delete(range.length),
+        source: EmitterSource.USER,
+      );
+    }
+
+    var index = range.index;
+    for (final file in accepted) {
+      final dataUrl = await domBindings.adapter.readFileAsDataUrl(file);
+      if (dataUrl == null || dataUrl.isEmpty) {
+        continue;
+      }
+      quill.insertEmbed(index, 'image', dataUrl, source: EmitterSource.USER);
+      index += 1;
+    }
+    quill.setSelection(Range(index, 0), source: EmitterSource.SILENT);
   }
 }

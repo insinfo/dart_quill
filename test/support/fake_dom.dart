@@ -8,6 +8,8 @@ class FakeDomAdapter implements DomAdapter {
   @override
   final FakeDomDocument document;
 
+  DomSelectionRange? selectionRange;
+
   @override
   DomMutationObserver createMutationObserver(
     void Function(List<DomMutationRecord> records, DomMutationObserver observer)
@@ -18,6 +20,41 @@ class FakeDomAdapter implements DomAdapter {
 
   // Helper method for creating fake events (not part of DomAdapter interface)
   DomEvent createEvent(String type) => FakeDomEvent(type);
+
+  @override
+  void focus(DomElement element) {
+    if (element is FakeDomElement) {
+      element.setAttribute('data-focused', 'true');
+    }
+  }
+
+  @override
+  DomSelectionRange? getSelectionRange(DomElement root) => selectionRange;
+
+  @override
+  void setSelectionRange(DomElement root, int index, int length) {
+    selectionRange = DomSelectionRange(index, length);
+  }
+
+  @override
+  Map<String, dynamic>? getBounds(DomElement root, int index, int length) {
+    return {
+      'left': index * 8.0,
+      'right': (index + length) * 8.0,
+      'top': 0.0,
+      'bottom': 20.0,
+      'width': length * 8.0,
+      'height': 20.0,
+    };
+  }
+
+  @override
+  Future<String?> readFileAsDataUrl(dynamic file) async {
+    if (file is FakeDomFile && file.type.startsWith('image/')) {
+      return 'data:${file.type};base64,';
+    }
+    return null;
+  }
 
   @override
   String? get userAgent => 'fake-user-agent';
@@ -418,6 +455,11 @@ class FakeDomElement extends FakeDomNode implements DomElement {
   }
 
   @override
+  void click() {
+    _dataset['clicked'] = 'true';
+  }
+
+  @override
   void appendText(String value) {
     append(FakeDomText(value, document: _ownerDocument));
   }
@@ -569,6 +611,18 @@ class FakeDomElement extends FakeDomNode implements DomElement {
       if (converted != null) {
         append(converted);
       }
+    }
+  }
+
+  @override
+  String get value => _attributes['value'] ?? '';
+
+  @override
+  set value(String? val) {
+    if (val == null) {
+      _attributes.remove('value');
+    } else {
+      _attributes['value'] = val;
     }
   }
 
@@ -800,6 +854,37 @@ class FakeDomEvent implements DomEvent {
   void preventDefault() {
     defaultPrevented = true;
   }
+
+  @override
+  void stopPropagation() {
+    // No-op for fake implementation.
+  }
+}
+
+class FakeDomKeyboardEvent extends FakeDomEvent implements DomKeyboardEvent {
+  FakeDomKeyboardEvent({
+    required String type,
+    DomNode? target,
+    required this.key,
+    this.keyCode,
+    this.altKey = false,
+    this.ctrlKey = false,
+    this.metaKey = false,
+    this.shiftKey = false,
+  }) : super(type, target);
+
+  @override
+  final String key;
+  @override
+  final int? keyCode;
+  @override
+  final bool altKey;
+  @override
+  final bool ctrlKey;
+  @override
+  final bool metaKey;
+  @override
+  final bool shiftKey;
 }
 
 class FakeDomInputEvent extends FakeDomEvent implements DomInputEvent {

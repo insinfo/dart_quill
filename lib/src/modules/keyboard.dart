@@ -16,7 +16,8 @@ class Logger {
 
 final debug = Logger();
 
-const String SHORTKEY = 'metaKey'; // Simplified for now, assuming Mac-like behavior
+const String SHORTKEY =
+    'metaKey'; // Simplified for now, assuming Mac-like behavior
 
 class Context {
   final bool collapsed;
@@ -131,10 +132,20 @@ class Keyboard extends Module<KeyboardOptions> {
 
     // Simplified bindings, removing browser-specific checks
     addBinding(BindingObject(key: 'Backspace'),
-        context: {'collapsed': true, 'prefix': RegExp(r'.?$',)},
+        context: {
+          'collapsed': true,
+          'prefix': RegExp(
+            r'.?$',
+          )
+        },
         handler: handleBackspace);
     addBinding(BindingObject(key: 'Delete'),
-        context: {'collapsed': true, 'suffix': RegExp(r'.?$',)},
+        context: {
+          'collapsed': true,
+          'suffix': RegExp(
+            r'.?$',
+          )
+        },
         handler: handleDelete);
 
     addBinding(BindingObject(key: 'Backspace'),
@@ -151,25 +162,32 @@ class Keyboard extends Module<KeyboardOptions> {
         context: {'collapsed': true, 'offset': 0},
         handler: handleBackspace);
 
+    addBinding(BindingObject(key: 'z', shortKey: true),
+        handler: (Range range, Context context) {
+      quill.history.undo();
+    });
+    addBinding(BindingObject(key: 'y', shortKey: true),
+        handler: (Range range, Context context) {
+      quill.history.redo();
+    });
+    addBinding(BindingObject(key: 'z', shortKey: true, shiftKey: true),
+        handler: (Range range, Context context) {
+      quill.history.redo();
+    });
+
     listen();
   }
 
   static bool match(DomEvent evt, BindingObject binding) {
-    final event = evt.rawEvent as dynamic;
-    // A map to access binding properties by string key
-    final bindingMap = {
-      'altKey': binding.altKey,
-      'ctrlKey': binding.ctrlKey,
-      'metaKey': binding.metaKey,
-      'shiftKey': binding.shiftKey,
-    };
+    if (evt is! DomKeyboardEvent) return false;
+    final event = evt;
 
-    if (bindingMap.keys.any((key) {
-      return (bindingMap[key] != null && bindingMap[key] != event[key]);
-    })) {
-      return false;
-    }
-    return binding.key == event.key || binding.key == event.keyCode;
+    if (binding.altKey != null && binding.altKey != event.altKey) return false;
+    if (binding.ctrlKey != null && binding.ctrlKey != event.ctrlKey) return false;
+    if (binding.metaKey != null && binding.metaKey != event.metaKey) return false;
+    if (binding.shiftKey != null && binding.shiftKey != event.shiftKey) return false;
+
+    return binding.key == event.key || binding.key == event.keyCode?.toString();
   }
 
   void addBinding(dynamic keyBinding, {dynamic context, Function? handler}) {
@@ -239,23 +257,35 @@ class Keyboard extends Module<KeyboardOptions> {
       final range = quill.getSelection();
       if (range == null || !quill.hasFocus()) return;
 
-      // Placeholder for quill.getLine, quill.getLeaf
-      final line = Block(quill.root.cloneNode()); // Dummy Block
-      final offset = 0;
-      final leafStart = TextBlot.create(''); // Dummy TextBlot
-      final offsetStart = 0;
-      final leafEnd = TextBlot.create(''); // Dummy TextBlot
-      final offsetEnd = 0;
+      final lineEntry = quill.getLine(range.index);
+      final line = lineEntry.key;
+      final lineOffset = lineEntry.value;
 
-      final prefixText = leafStart.value().substring(0, offsetStart);
-      final suffixText = leafEnd.value().substring(offsetEnd);
+      if (line == null || line is! Block) return;
+
+      final leafStartEntry = quill.getLeaf(range.index);
+      final leafStart = leafStartEntry.key;
+      final offsetStart = leafStartEntry.value;
+
+      final leafEndEntry = range.length == 0
+          ? leafStartEntry
+          : quill.getLeaf(range.index + range.length);
+      final leafEnd = leafEndEntry.key;
+      final offsetEnd = leafEndEntry.value;
+
+      final prefixText = (leafStart is TextBlot)
+          ? leafStart.value().substring(0, offsetStart)
+          : '';
+      final suffixText = (leafEnd is TextBlot)
+          ? leafEnd.value().substring(offsetEnd)
+          : '';
 
       final curContext = Context(
         collapsed: range.length == 0,
         empty: range.length == 0 && line.length() <= 1,
         format: quill.getFormat(range.index, range.length),
         line: line,
-        offset: offset,
+        offset: lineOffset,
         prefix: prefixText,
         suffix: suffixText,
         event: event,
@@ -270,20 +300,28 @@ class Keyboard extends Module<KeyboardOptions> {
           return false;
 
         if (binding.format is List) {
-          if (!(binding.format as List).every((name) => curContext.format[name] == null)) return false;
+          if (!(binding.format as List)
+              .every((name) => curContext.format[name] == null)) return false;
         } else if (binding.format is Map) {
           if (!(binding.format as Map).keys.every((name) {
-            if (binding.format[name] == true) return curContext.format[name] != null;
-            if (binding.format[name] == false) return curContext.format[name] == null;
+            if (binding.format[name] == true)
+              return curContext.format[name] != null;
+            if (binding.format[name] == false)
+              return curContext.format[name] == null;
             return isEqual(binding.format[name], curContext.format[name]);
           })) return false;
         }
 
-        if (binding.prefix != null && !binding.prefix!.hasMatch(curContext.prefix)) return false;
+        if (binding.prefix != null &&
+            !binding.prefix!.hasMatch(curContext.prefix)) return false;
         if (binding.suffix != null &&
             !binding.suffix!.hasMatch(curContext.suffix)) return false;
 
-        return binding.handler?.call(range, curContext) != true;
+        final handler = binding.handler;
+        if (handler == null) {
+          return false;
+        }
+        return _invokeHandler(handler, range, curContext) != true;
       });
 
       if (prevented) {
@@ -293,21 +331,77 @@ class Keyboard extends Module<KeyboardOptions> {
   }
 
   void handleBackspace(Range range, Context context) {
-    // Placeholder
+    if (range.length > 0) {
+      deleteRange(quill: quill, range: range);
+      quill.focus();
+      return;
+    }
+    if (range.index <= 0) {
+      return;
+    }
+    final length = _endsWithAstralSymbol(context.prefix) ? 2 : 1;
+    final deleteIndex = (range.index - length).clamp(0, range.index);
+    quill.updateContents(
+      Delta()
+        ..retain(deleteIndex)
+        ..delete(range.index - deleteIndex),
+      source: EmitterSource.USER,
+    );
+    quill.setSelection(Range(deleteIndex, 0), source: EmitterSource.SILENT);
+    quill.focus();
   }
 
   void handleDelete(Range range, Context context) {
-    // Placeholder
+    if (range.length > 0) {
+      deleteRange(quill: quill, range: range);
+      quill.focus();
+      return;
+    }
+    final length = _startsWithAstralSymbol(context.suffix) ? 2 : 1;
+    if (range.index >= quill.scroll.length() - length) {
+      return;
+    }
+    quill.updateContents(
+      Delta()
+        ..retain(range.index)
+        ..delete(length),
+      source: EmitterSource.USER,
+    );
+    quill.setSelection(Range(range.index, 0), source: EmitterSource.SILENT);
+    quill.focus();
   }
 
-  void handleDeleteRange(Range range) {
+  void handleDeleteRange(Range range, Context context) {
     deleteRange(quill: quill, range: range);
     quill.focus();
   }
 
-  void handleEnter(Range range, Context context) {
-    // Placeholder
+  bool handleEnter(Range range, Context context) {
+    quill.updateContents(
+      Delta()
+        ..retain(range.index)
+        ..delete(range.length)
+        ..insert('\n'),
+      source: EmitterSource.USER,
+    );
+    quill.setSelection(Range(range.index + 1, 0), source: EmitterSource.SILENT);
+    quill.focus();
+    return false;
   }
+
+  dynamic _invokeHandler(Function handler, Range range, Context context) {
+    try {
+      return Function.apply(handler, [range, context]);
+    } on NoSuchMethodError {
+      return Function.apply(handler, [range]);
+    }
+  }
+
+  bool _endsWithAstralSymbol(String value) =>
+      RegExp(r'[\uD800-\uDBFF][\uDC00-\uDFFF]$').hasMatch(value);
+
+  bool _startsWithAstralSymbol(String value) =>
+      RegExp(r'^[\uD800-\uDBFF][\uDC00-\uDFFF]').hasMatch(value);
 
   bool isEqual(dynamic a, dynamic b) {
     if (a == b) return true;

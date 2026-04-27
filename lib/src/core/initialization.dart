@@ -5,6 +5,7 @@ import '../blots/cursor.dart';
 import '../blots/text.dart';
 import '../formats/bold.dart';
 import '../formats/code.dart';
+import '../formats/formula.dart';
 import '../formats/header.dart';
 import '../formats/image.dart';
 import '../formats/italic.dart';
@@ -222,6 +223,14 @@ void _registerFormats() {
         final node = Image.create(value);
         return Image(node);
       },
+    ),
+    RegistryEntry(
+      blotName: Formula.kBlotName,
+      scope: Formula.kScope,
+      tagNames: const [Formula.kTagName],
+      classNames: const [Formula.kClassName],
+      create: ([dynamic value]) =>
+          Formula(Formula.create(value?.toString() ?? '')),
     ),
     RegistryEntry(
       blotName: TableContainer.kBlotName,

@@ -6,6 +6,7 @@ import '../modules/history.dart';
 import '../modules/input.dart';
 import '../modules/keyboard.dart';
 import '../platform/dom.dart';
+import '../platform/platform.dart';
 import 'composition.dart';
 import 'editor.dart';
 import 'emitter.dart';
@@ -151,6 +152,9 @@ class Quill {
     root = doc.createElement('div');
     root.classes.add('ql-editor');
     container.append(root);
+    root.addEventListener('mousedown', (_) => domBindings.adapter.focus(root));
+    root.addEventListener('mouseup', (_) => _syncNativeSelection());
+    root.addEventListener('keyup', (_) => _syncNativeSelection());
 
     scroll = Scroll(Registry(), root, emitter: emitter);
     for (final entry in _formatRegistry.values) {
@@ -270,15 +274,24 @@ class Quill {
     );
   }
 
+  MapEntry<Blot?, int> getLine(int index) {
+    return scroll.line(index);
+  }
+
+  MapEntry<LeafBlot?, int> getLeaf(int index) {
+    return scroll.leaf(index);
+  }
+
   Map<String, dynamic> getFormat(int index, [int length = 0]) {
     return selection.getFormat(index, length);
   }
 
   Range? getSelection({bool focus = false}) {
+    final nativeRange = _syncNativeSelection();
     if (focus) {
       this.focus();
     }
-    return selection.getRange();
+    return nativeRange ?? selection.getRange();
   }
 
   bool isEnabled() {
@@ -287,7 +300,13 @@ class Quill {
 
   void focus({bool preventScroll = false}) {
     final previousScrollTop = preventScroll ? root.scrollTop : null;
+    _syncNativeSelection();
+    domBindings.adapter.focus(root);
     selection.focus();
+    final range = selection.getRange() ?? selection.savedRange;
+    if (range != null) {
+      domBindings.adapter.setSelectionRange(root, range.index, range.length);
+    }
     if (preventScroll && previousScrollTop != null) {
       root.scrollTop = previousScrollTop;
     }
@@ -298,7 +317,7 @@ class Quill {
   }
 
   void format(String name, dynamic value, {String source = EmitterSource.API}) {
-    final range = selection.getRange();
+    final range = getSelection();
     if (range == null) return;
     final before = getContents();
     if (range.length == 0) {
@@ -324,6 +343,7 @@ class Quill {
 
   void setSelection(Range range, {String source = EmitterSource.API}) {
     selection.setSelection(range, source);
+    domBindings.adapter.setSelectionRange(root, range.index, range.length);
   }
 
   void formatText(int index, int length, String name, dynamic value,
@@ -368,7 +388,26 @@ class Quill {
     );
   }
 
+  Range? _syncNativeSelection({String source = EmitterSource.USER}) {
+    final nativeRange = domBindings.adapter.getSelectionRange(root);
+    if (nativeRange == null) {
+      return null;
+    }
+    final documentLength = scroll.length();
+    final normalizedIndex = nativeRange.index.clamp(0, documentLength);
+    final normalizedLength =
+        nativeRange.length.clamp(0, documentLength - normalizedIndex);
+    final range = Range(normalizedIndex, normalizedLength);
+    selection.setSelection(range, source);
+    return range;
+  }
+
   Map<String, dynamic>? getBounds(int index, [int length = 0]) {
+    final platformBounds = domBindings.adapter.getBounds(root, index, length);
+    if (platformBounds != null) {
+      return platformBounds;
+    }
+
     final lineEntry = scroll.line(index);
     final line = lineEntry.key;
     if (line == null) {

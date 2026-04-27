@@ -2,7 +2,7 @@ import 'package:dart_quill/src/modules/keyboard.dart';
 import 'package:dart_quill/src/platform/dom.dart';
 import 'package:test/test.dart';
 
-class _TestKeyboardEvent implements DomEvent {
+class _TestKeyboardEvent implements DomKeyboardEvent {
   _TestKeyboardEvent({
     required this.key,
     this.shiftKey = false,
@@ -11,12 +11,18 @@ class _TestKeyboardEvent implements DomEvent {
     this.altKey = false,
   });
 
+  @override
   final String key;
+  @override
   final bool shiftKey;
+  @override
   final bool metaKey;
+  @override
   final bool ctrlKey;
+  @override
   final bool altKey;
 
+  @override
   int? get keyCode => null;
 
   bool _defaultPrevented = false;
@@ -30,25 +36,15 @@ class _TestKeyboardEvent implements DomEvent {
   }
 
   @override
+  void stopPropagation() {
+    // No-op for test implementation.
+  }
+
+  @override
   DomNode? get target => null;
 
   @override
   dynamic get rawEvent => this;
-
-  dynamic operator [](Object? name) {
-    switch (name) {
-      case 'shiftKey':
-        return shiftKey;
-      case 'metaKey':
-        return metaKey;
-      case 'ctrlKey':
-        return ctrlKey;
-      case 'altKey':
-        return altKey;
-      default:
-        return null;
-    }
-  }
 }
 
 _TestKeyboardEvent _createKeyboardEvent(

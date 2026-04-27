@@ -3,7 +3,7 @@ description: A web app that uses AngularDart
 version: 1.0.0
 publish_to: none
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: ^3.6.0
 
 dependencies:
   

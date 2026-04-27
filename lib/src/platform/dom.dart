@@ -70,6 +70,9 @@ abstract class DomElement extends DomNode {
   /// Select the contents of a textual input element.
   void select();
 
+  /// Dispatch a trusted click when supported by the platform element.
+  void click();
+
   /// Get or set the scroll position (vertical).
   int get scrollTop;
   set scrollTop(int value);
@@ -93,6 +96,10 @@ abstract class DomElement extends DomNode {
   /// Get or set the HTML content inside the element.
   String? get innerHTML;
   set innerHTML(String? value);
+
+  /// Get or set the value of an input or textarea element.
+  String get value;
+  set value(String? val);
 }
 
 /// Abstraction for text nodes.
@@ -112,7 +119,6 @@ abstract class DomDocument {
   DomParser get parser;
 }
 
-
 /// Represents a class list on an element (usually `classList`).
 abstract class DomClassList {
   Iterable<String> get values;
@@ -124,7 +130,8 @@ abstract class DomClassList {
 
 /// Represents a mutation observer abstraction.
 abstract class DomMutationObserver {
-  void observe(DomNode target, {bool? subtree, bool? childList, bool? characterData});
+  void observe(DomNode target,
+      {bool? subtree, bool? childList, bool? characterData});
   void disconnect();
   List<DomMutationRecord> takeRecords();
 }
@@ -143,6 +150,7 @@ abstract class DomMutationRecord {
 abstract class DomEvent {
   bool get defaultPrevented;
   void preventDefault();
+  void stopPropagation();
   dynamic get rawEvent;
   DomNode? get target;
 }
@@ -159,11 +167,29 @@ abstract class DomClipboardEvent extends DomEvent {
   DomDataTransfer? get clipboardData;
 }
 
+/// DOM keyboard event abstraction.
+abstract class DomKeyboardEvent extends DomEvent {
+  String get key;
+  int? get keyCode;
+  bool get altKey;
+  bool get ctrlKey;
+  bool get metaKey;
+  bool get shiftKey;
+}
+
 /// DOM data transfer abstraction.
 abstract class DomDataTransfer {
   List<DomFile> get files;
   String? getData(String format);
   void setData(String format, String data);
+}
+
+/// A text selection expressed as plain-text offsets inside an editor root.
+class DomSelectionRange {
+  const DomSelectionRange(this.index, this.length);
+
+  final int index;
+  final int length;
 }
 
 /// DOM file abstraction.
@@ -177,11 +203,16 @@ abstract class DomFile {
 abstract class DomAdapter {
   DomDocument get document;
   DomMutationObserver createMutationObserver(
-      void Function(List<DomMutationRecord> mutations, DomMutationObserver observer)
+      void Function(
+              List<DomMutationRecord> mutations, DomMutationObserver observer)
           callback);
+  DomSelectionRange? getSelectionRange(DomElement root);
+  void setSelectionRange(DomElement root, int index, int length);
+  Map<String, dynamic>? getBounds(DomElement root, int index, int length);
+  Future<String?> readFileAsDataUrl(dynamic file);
+  void focus(DomElement element);
   String? get userAgent;
 }
-
 
 /// Represents a parser for DOM.
 abstract class DomParser {

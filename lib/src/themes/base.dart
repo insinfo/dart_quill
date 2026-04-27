@@ -28,11 +28,41 @@ Map<String, dynamic> merge(Map<String, dynamic> a, Map<String, dynamic> b) {
 const List<dynamic> ALIGNS = [false, 'center', 'right', 'justify'];
 
 const List<String> COLORS = [
-  '#000000', '#e60000', '#ff9900', '#ffff00', '#008a00', '#0066cc', '#9933ff', '#ffffff',
-  '#facccc', '#ffebcc', '#ffffcc', '#cce8cc', '#cce0f5', '#ebd6ff', '#bbbbbb', '#f06666',
-  '#ffc266', '#ffff66', '#66b966', '#66a3e0', '#c285ff', '#888888', '#a10000', '#b26b00',
-  '#b2b200', '#006100', '#0047b2', '#6b24b2', '#444444', '#5c0000', '#663d00', '#666600',
-  '#003700', '#002966', '#3d1466',
+  '#000000',
+  '#e60000',
+  '#ff9900',
+  '#ffff00',
+  '#008a00',
+  '#0066cc',
+  '#9933ff',
+  '#ffffff',
+  '#facccc',
+  '#ffebcc',
+  '#ffffcc',
+  '#cce8cc',
+  '#cce0f5',
+  '#ebd6ff',
+  '#bbbbbb',
+  '#f06666',
+  '#ffc266',
+  '#ffff66',
+  '#66b966',
+  '#66a3e0',
+  '#c285ff',
+  '#888888',
+  '#a10000',
+  '#b26b00',
+  '#b2b200',
+  '#006100',
+  '#0047b2',
+  '#6b24b2',
+  '#444444',
+  '#5c0000',
+  '#663d00',
+  '#666600',
+  '#003700',
+  '#002966',
+  '#3d1466',
 ];
 
 const List<dynamic> FONTS = [false, 'serif', 'monospace'];
@@ -53,7 +83,9 @@ class BaseTheme extends Theme {
         document.body.removeEventListener('click', listener);
         return;
       }
-      if (tooltip != null && !tooltip!.root.contains(e.target) && !quill.hasFocus()) {
+      if (tooltip != null &&
+          !tooltip!.root.contains(e.target) &&
+          !quill.hasFocus()) {
         tooltip!.hide();
       }
       if (pickers != null) {
@@ -190,12 +222,7 @@ class BaseTheme extends Theme {
           });
         }
 
-        try {
-          final dynamic nativeInput = fileInput;
-          nativeInput.click();
-        } catch (_) {
-          // Ignore environments where programmatic click is unavailable.
-        }
+        fileInput.click();
       });
     }
   }
@@ -205,7 +232,8 @@ class BaseTheme extends Theme {
     if (existing is Uploader) {
       return existing;
     }
-    final uploaderOptions = _normalizeUploaderOptions(options.modules['uploader']);
+    final uploaderOptions =
+        _normalizeUploaderOptions(options.modules['uploader']);
     final uploader = Uploader(quill, uploaderOptions);
     modules['uploader'] = uploader;
     options.modules['uploader'] = uploaderOptions;
@@ -225,7 +253,8 @@ class BaseTheme extends Theme {
     } else if (config is List) {
       container = ToolbarConfig(
         config
-            .map<List<dynamic>>((group) => List<dynamic>.from(group as Iterable))
+            .map<List<dynamic>>(
+                (group) => List<dynamic>.from(group as Iterable))
             .toList(),
       );
     } else if (config is Map) {
@@ -248,7 +277,8 @@ class BaseTheme extends Theme {
     if (container is List) {
       container = ToolbarConfig(
         container
-            .map<List<dynamic>>((group) => List<dynamic>.from(group as Iterable))
+            .map<List<dynamic>>(
+                (group) => List<dynamic>.from(group as Iterable))
             .toList(),
       );
     }
@@ -338,7 +368,8 @@ class BaseTheme extends Theme {
         if (format == 'direction' && iconEntry is Map) {
           final ltr = iconEntry['']?.toString() ?? '';
           final rtl = iconEntry['rtl']?.toString() ?? '';
-          final combined = [ltr, rtl].where((part) => part.isNotEmpty).join(' ');
+          final combined =
+              [ltr, rtl].where((part) => part.isNotEmpty).join(' ');
           if (combined.isNotEmpty) {
             button.innerHTML = combined;
             assigned = true;
@@ -393,9 +424,17 @@ class BaseTheme extends Theme {
         if (select.querySelector('option') == null) {
           fillSelect(select, ALIGNS);
         }
-        picker = IconPicker(select, icons['align'] as Map<String, String>? ?? {});
-      } else if (select.classes.contains('ql-background') || select.classes.contains('ql-color')) {
-        final pickerFormat = select.classes.contains('ql-background') ? 'background' : 'color';
+        final alignIcons = icons['align'];
+        picker = IconPicker(
+          select,
+          alignIcons is Map
+              ? Map<String, String>.from(alignIcons)
+              : const <String, String>{},
+        );
+      } else if (select.classes.contains('ql-background') ||
+          select.classes.contains('ql-color')) {
+        final pickerFormat =
+            select.classes.contains('ql-background') ? 'background' : 'color';
         if (select.querySelector('option') == null) {
           fillSelect(select, COLORS, pickerFormat == 'background');
         }
@@ -424,8 +463,8 @@ class BaseTheme extends Theme {
         picker.update();
       });
     };
-    quill.emitter
-        .on(EmitterEvents.EDITOR_CHANGE, (type, range, oldRange, source) => updatePickers());
+    quill.emitter.on(EmitterEvents.EDITOR_CHANGE,
+        (type, range, oldRange, source) => updatePickers());
   }
 }
 
@@ -466,9 +505,9 @@ class BaseTooltip extends Tooltip {
     if (textbox == null) return;
 
     if (preview != null) {
-      textbox!.setAttribute('value', preview);
+      textbox!.value = preview;
     } else if (mode != root.getAttribute('data-mode')) {
-      textbox!.setAttribute('value', '');
+      textbox!.value = '';
     }
     textbox!.select();
     final savedRange = quill.selection.savedRange;
@@ -478,7 +517,8 @@ class BaseTooltip extends Tooltip {
         position(bounds);
       }
     }
-    textbox!.setAttribute('placeholder', textbox!.getAttribute('data-$mode') ?? '');
+    textbox!
+        .setAttribute('placeholder', textbox!.getAttribute('data-$mode') ?? '');
     root.setAttribute('data-mode', mode);
   }
 
@@ -489,12 +529,13 @@ class BaseTooltip extends Tooltip {
   bool get isEditing => _editing;
 
   void save() {
-    var value = textbox?.getAttribute('value') ?? '';
+    var value = textbox?.value ?? '';
     switch (root.getAttribute('data-mode')) {
       case 'link':
         final scrollTop = quill.root.scrollTop;
         if (linkRange != null) {
-          quill.formatText(linkRange!.index, linkRange!.length, 'link', value, source: EmitterSource.USER);
+          quill.formatText(linkRange!.index, linkRange!.length, 'link', value,
+              source: EmitterSource.USER);
           linkRange = null;
         } else {
           restoreFocus();
@@ -512,7 +553,8 @@ class BaseTooltip extends Tooltip {
         final range = quill.getSelection(focus: true);
         if (range != null) {
           final index = range.index + range.length;
-          quill.insertEmbed(index, root.getAttribute('data-mode')!, value, source: EmitterSource.USER);
+          quill.insertEmbed(index, root.getAttribute('data-mode')!, value,
+              source: EmitterSource.USER);
           if (root.getAttribute('data-mode') == 'formula') {
             quill.insertText(index + 1, ' ', source: EmitterSource.USER);
           }
@@ -521,7 +563,7 @@ class BaseTooltip extends Tooltip {
         break;
       default:
     }
-    textbox!.setAttribute('value', '');
+    textbox!.value = '';
     hide();
   }
 
@@ -533,20 +575,24 @@ class BaseTooltip extends Tooltip {
 }
 
 String extractVideoUrl(String url) {
-  var match =
-      RegExp(r'^(?:(https?):\/\/)?(?:(?:www|m)\.)?youtube\.com\/watch.*v=([a-zA-Z0-9_-]+)').firstMatch(url) ??
-          RegExp(r'^(?:(https?):\/\/)?(?:(?:www|m)\.)?youtu\.be\/([a-zA-Z0-9_-]+)').firstMatch(url);
+  var match = RegExp(
+              r'^(?:(https?):\/\/)?(?:(?:www|m)\.)?youtube\.com\/watch.*v=([a-zA-Z0-9_-]+)')
+          .firstMatch(url) ??
+      RegExp(r'^(?:(https?):\/\/)?(?:(?:www|m)\.)?youtu\.be\/([a-zA-Z0-9_-]+)')
+          .firstMatch(url);
   if (match != null) {
     return '${match.group(1) ?? 'https'}://www.youtube.com/embed/${match.group(2)}?showinfo=0';
   }
-  match = RegExp(r'^(?:(https?):\/\/)?(?:www\.)?vimeo\.com\/(\d+)').firstMatch(url);
+  match =
+      RegExp(r'^(?:(https?):\/\/)?(?:www\.)?vimeo\.com\/(\d+)').firstMatch(url);
   if (match != null) {
     return '${match.group(1) ?? 'https'}://player.vimeo.com/video/${match.group(2)}/';
   }
   return url;
 }
 
-void fillSelect(DomElement select, List<dynamic> values, [dynamic defaultValue = false]) {
+void fillSelect(DomElement select, List<dynamic> values,
+    [dynamic defaultValue = false]) {
   final document = domBindings.adapter.document;
   values.forEach((value) {
     final option = document.createElement('option');

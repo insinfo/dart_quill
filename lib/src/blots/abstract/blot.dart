@@ -273,7 +273,10 @@ abstract class ParentBlot extends Blot {
         final localIndex = index - offset;
         final removable = math.min(length, childLength - localIndex).toInt();
         child.deleteAt(localIndex, removable);
-        if (child.length() == 0) {
+        if (child.length() == 0 ||
+            (child is LeafBlot &&
+                localIndex == 0 &&
+                removable == childLength)) {
           removeChild(child);
         }
         final remaining = length - removable;
@@ -639,7 +642,8 @@ abstract class LeafBlot extends Blot {
 
   @override
   void deleteAt(int index, int length) {
-    throw UnsupportedError('Cannot delete from ${runtimeType}');
+    // LeafBlots are atomic (except TextBlot which overrides this).
+    // The parent handles removal if the deletion covers the entire blot.
   }
 
   @override
