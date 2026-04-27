@@ -125,7 +125,7 @@ class Toolbar extends Module<ToolbarProps> {
 
     // Determine if this is a select element or button
     final isSelect = input.tagName.toLowerCase() == 'select';
-    final eventName = isSelect ? 'change' : 'click';
+    final eventName = isSelect ? 'change' : 'mousedown';
 
     input.addEventListener(eventName, (e) {
       dynamic value;

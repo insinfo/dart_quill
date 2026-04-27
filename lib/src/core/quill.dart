@@ -1,5 +1,6 @@
 import '../blots/abstract/blot.dart';
 import '../blots/scroll.dart';
+import '../blots/text.dart';
 import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
 import '../modules/clipboard.dart';
 import '../modules/history.dart';
@@ -287,10 +288,10 @@ class Quill {
   }
 
   Range? getSelection({bool focus = false}) {
-    final nativeRange = _syncNativeSelection();
     if (focus) {
       this.focus();
     }
+    final nativeRange = _syncNativeSelection();
     return nativeRange ?? selection.getRange();
   }
 
@@ -298,14 +299,46 @@ class Quill {
     return !root.hasAttribute('disabled');
   }
 
+  MapEntry<DomNode, int>? _domPosition(int index) {
+    final entries = scroll.path(index, inclusive: true);
+    LeafBlot? leaf;
+    int leafOffset = 0;
+    for (var i = entries.length - 1; i >= 0; i--) {
+      final blot = entries[i].key;
+      if (blot is LeafBlot) {
+        leaf = blot;
+        leafOffset = entries[i].value;
+        break;
+      }
+    }
+    if (leaf == null) {
+      final allLeaves = scroll.descendants<LeafBlot>();
+      if (allLeaves.isNotEmpty) {
+        leaf = allLeaves.last;
+        leafOffset = leaf.length();
+      } else {
+        return null;
+      }
+    }
+    if (leaf is TextBlot) {
+      final maxOffset = leaf.length();
+      return MapEntry(leaf.textNode, leafOffset.clamp(0, maxOffset));
+    }
+    return MapEntry(leaf.domNode, 0);
+  }
+
   void focus({bool preventScroll = false}) {
     final previousScrollTop = preventScroll ? root.scrollTop : null;
-    _syncNativeSelection();
     domBindings.adapter.focus(root);
     selection.focus();
     final range = selection.getRange() ?? selection.savedRange;
     if (range != null) {
-      domBindings.adapter.setSelectionRange(root, range.index, range.length);
+      final start = _domPosition(range.index);
+      final end = _domPosition(range.index + range.length);
+      if (start != null && end != null) {
+        domBindings.adapter.setSelectionByNodes(
+            start.key, start.value, end.key, end.value);
+      }
     }
     if (preventScroll && previousScrollTop != null) {
       root.scrollTop = previousScrollTop;
@@ -319,31 +352,17 @@ class Quill {
   void format(String name, dynamic value, {String source = EmitterSource.API}) {
     final range = getSelection();
     if (range == null) return;
-    final before = getContents();
-    if (range.length == 0) {
-      // Format at cursor position
-      scroll.formatAt(range.index, 1, name, value);
-    } else {
-      // Format selection
-      scroll.formatAt(range.index, range.length, name, value);
-    }
-    final change = Delta()
-      ..retain(range.index)
-      ..retain(range.length, {name: value});
-    editor.update(change, source);
-    emitter.emit(EmitterEvents.TEXT_CHANGE, change, before, source);
-    emitter.emit(
-      EmitterEvents.EDITOR_CHANGE,
-      EmitterEvents.TEXT_CHANGE,
-      change,
-      before,
-      source,
-    );
+    formatText(range.index, range.length, name, value, source: source);
   }
 
   void setSelection(Range range, {String source = EmitterSource.API}) {
     selection.setSelection(range, source);
-    domBindings.adapter.setSelectionRange(root, range.index, range.length);
+    final start = _domPosition(range.index);
+    final end = _domPosition(range.index + range.length);
+    if (start != null && end != null) {
+      domBindings.adapter.setSelectionByNodes(
+          start.key, start.value, end.key, end.value);
+    }
   }
 
   void formatText(int index, int length, String name, dynamic value,
@@ -358,6 +377,9 @@ class Quill {
       before,
       source,
     );
+    if (source == EmitterSource.USER) {
+      setSelection(Range(index, length), source: source);
+    }
   }
 
   void insertEmbed(int index, String embed, dynamic value,
@@ -372,6 +394,9 @@ class Quill {
       before,
       source,
     );
+    if (source == EmitterSource.USER) {
+      setSelection(Range(index + 1, 0), source: source);
+    }
   }
 
   void insertText(int index, String text,
@@ -386,6 +411,28 @@ class Quill {
       before,
       source,
     );
+    if (source == EmitterSource.USER) {
+      setSelection(Range(index + text.length, 0), source: source);
+    }
+  }
+
+  void deleteText(int index, int length, {String source = EmitterSource.API}) {
+    final before = getContents();
+    final change = Delta()
+      ..retain(index)
+      ..delete(length);
+    editor.deleteText(index, length);
+    emitter.emit(EmitterEvents.TEXT_CHANGE, change, before, source);
+    emitter.emit(
+      EmitterEvents.EDITOR_CHANGE,
+      EmitterEvents.TEXT_CHANGE,
+      change,
+      before,
+      source,
+    );
+    if (source == EmitterSource.USER) {
+      setSelection(Range(index, 0), source: source);
+    }
   }
 
   Range? _syncNativeSelection({String source = EmitterSource.USER}) {

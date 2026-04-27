@@ -37,6 +37,12 @@ class FakeDomAdapter implements DomAdapter {
   }
 
   @override
+  void setSelectionByNodes(
+      DomNode startNode, int startOffset, DomNode endNode, int endOffset) {
+    // No-op for fake implementation.
+  }
+
+  @override
   Map<String, dynamic>? getBounds(DomElement root, int index, int length) {
     return {
       'left': index * 8.0,

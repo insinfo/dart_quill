@@ -543,7 +543,7 @@ abstract class ParentBlot extends Blot {
 
       if (index == end) {
         final splitParent = clone() as ParentBlot;
-        parent?.insertBefore(splitParent, child.next);
+        parent?.insertBefore(splitParent, next);
         final tail = List<Blot>.from(children.skip(i + 1));
         for (final tailChild in tail) {
           splitParent.appendChild(tailChild);

@@ -31,6 +31,10 @@ class _StubDomAdapter implements DomAdapter {
   void setSelectionRange(DomElement root, int index, int length) {}
 
   @override
+  void setSelectionByNodes(
+      DomNode startNode, int startOffset, DomNode endNode, int endOffset) {}
+
+  @override
   Map<String, dynamic>? getBounds(DomElement root, int index, int length) =>
       null;
 

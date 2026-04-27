@@ -423,6 +423,23 @@ class HtmlDomAdapter implements DomAdapter {
   }
 
   @override
+  void setSelectionByNodes(
+      DomNode startNode, int startOffset, DomNode endNode, int endOffset) {
+    final selection = html.window.getSelection();
+    if (selection == null) {
+      return;
+    }
+    final nativeStart = (startNode as _HtmlDomNode).node;
+    final nativeEnd = (endNode as _HtmlDomNode).node;
+    final nativeRange = html.document.createRange();
+    nativeRange.setStart(nativeStart, startOffset);
+    nativeRange.setEnd(nativeEnd, endOffset);
+    selection
+      ..removeAllRanges()
+      ..addRange(nativeRange);
+  }
+
+  @override
   Map<String, dynamic>? getBounds(DomElement root, int index, int length) {
     final rootNode = (root as _HtmlDomNode).node;
     if (rootNode is! html.Element) {

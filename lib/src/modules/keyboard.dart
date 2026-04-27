@@ -377,14 +377,20 @@ class Keyboard extends Module<KeyboardOptions> {
   }
 
   bool handleEnter(Range range, Context context) {
-    quill.updateContents(
-      Delta()
-        ..retain(range.index)
-        ..delete(range.length)
-        ..insert('\n'),
-      source: EmitterSource.USER,
-    );
-    quill.setSelection(Range(range.index + 1, 0), source: EmitterSource.SILENT);
+    if (range.length > 0) {
+      quill.deleteText(range.index, range.length, source: EmitterSource.USER);
+    }
+
+    final lineFormats = <String, dynamic>{};
+    context.format.forEach((name, value) {
+      if (quill.scroll.registry.query(name, Scope.BLOCK) != null &&
+          value is! List) {
+        lineFormats[name] = value;
+      }
+    });
+
+    quill.insertText(range.index, '\n',
+        formats: lineFormats, source: EmitterSource.USER);
     quill.focus();
     return false;
   }
