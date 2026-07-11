@@ -156,7 +156,7 @@ Ordem de port (dependências primeiro):
 - [ ] F5.5 `utils/clipboard-matchers.ts` (110 l.) + `modules/clipboard.ts` (61 l.) → matchers `td,th`/`tr`/`col`/`table` e `TableClipboard.getTableDelta`.
 - [ ] F5.6 `ui/cell-selection.ts` (811 l.) → seleção multi-célula, copy/cut/paste de células, navegação por setas, WHITE_LIST. Incluir patch SALI (null-guard em `onCapturePaste`).
 - [ ] F5.7 `ui/operate-line.ts` (463 l.) → redimensionamento de colunas/linhas/tabela. Incluir patch SALI (`quill.update(USER)` no mouseup).
-- [ ] F5.8 `ui/table-menus.ts` (1059 l.) → **parcial:** mini-toolbar contextual entregue para inserir/apagar linha/coluna/tabela; ainda faltam merge/split, header row, copiar tabela e menus de propriedades completos.
+- [ ] F5.8 `ui/table-menus.ts` (1059 l.) → **parcial:** mini-toolbar contextual entregue para inserir/apagar linha/coluna/tabela e merge/split horizontal da célula ativa com `colspan`; ainda faltam merge retangular/rowspan, header row, copiar tabela e menus de propriedades completos.
 - [ ] F5.9 `ui/table-properties-form.ts` (791 l.) → diálogo de propriedades. **Substituir `@jaames/iro`** por color-picker próprio simples (paleta 15 cores + input hex + roda opcional canvas) — sem dep JS.
 - [ ] F5.10 `ui/toolbar-table.ts` (133 l.) + `modules/toolbar.ts` (283 l.) → **grid 10×10 e dropdown entregues**; ainda falta roteamento de formatos para seleção multicélula, dependente de F5.6.
 - [ ] F5.11 `language/` → i18n com pt_BR/en_US primeiro (16 locales no total, ~60 chaves).
@@ -164,6 +164,8 @@ Ordem de port (dependências primeiro):
 - [ ] F5.13 Testes: port dos cenários da suíte JS do plugin + testes de Delta roundtrip de tabela.
 
 **Testes portados/adicionados em 2026-07-11:** a árvore `referencias/quilljs/test` foi incluída como fonte normativa para testes core/unit/e2e (table, toolbar, clipboard, history e fuzz). O repositório do table-better não distribui testes equivalentes junto de `src`; foram criados testes unitários Dart e E2E Puppeteer para o seletor 10×10, inserção dimensional, toolbar contextual, ícones Tabler e isolamento contra CSS Limitless. O E2E gera o bundle com Webdev e o serve em porta efêmera com Shelf. Estado verificado: 203 testes unitários + 2 E2E passando.
+
+**Incremento seguinte:** merge/split horizontal, balanceamento por colunas lógicas e validação do tema Tabler no demo plain-Dart cobertos; estado atual: 204 unitários + 3 E2E.
 
 ### F5A — Manipulação de imagens estilo Word (pendente, ~1-2 semanas)
 - [x] F5A.1 Base de atributos Delta/DOM entregue (2026-07-11): largura, altura, `data-image-wrap`, tipo de âncora e campos X/Y reconhecidos pelo blot. Modos avançados `square`, `tight`, `behind` e `in-front` ainda pendentes.

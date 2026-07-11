@@ -54,6 +54,7 @@ void main() {
 
   final options = ThemeOptions(
     theme: 'snow',
+    iconTheme: QuillIconTheme.tabler,
     modules: modules,
   );
 
@@ -66,6 +67,8 @@ void main() {
 
 void _addButton(web.Element parent, String label, void Function() onClick) {
   final button = web.document.createElement('button');
+  button.setAttribute('type', 'button');
+  button.className = 'btn btn-primary btn-sm';
   button.textContent = label;
   button.addEventListener(
     'click',

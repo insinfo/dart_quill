@@ -77,6 +77,13 @@ class Table extends Module<TableOptions> {
       ),
       ('row-remove', 'Excluir linha', 'table-delete-row', deleteRow),
       ('column-remove', 'Excluir coluna', 'table-delete-column', deleteColumn),
+      (
+        'arrow-merge',
+        'Mesclar com a célula à direita',
+        'table-merge',
+        mergeCellRight
+      ),
+      ('arrows-split', 'Dividir célula', 'table-split', splitCell),
       ('table-off', 'Excluir tabela', 'table-delete', deleteTable),
     ];
     for (final action in actions) {
@@ -226,6 +233,50 @@ class Table extends Module<TableOptions> {
       Range(normalizedOffset, 0),
       source: EmitterSource.SILENT,
     );
+  }
+
+  /// Merges the active cell with its immediate right sibling.
+  ///
+  /// This is the single-cell foundation used by table-better's rectangular
+  /// multi-cell merge operation. The resulting logical width is persisted as
+  /// HTML `colspan`.
+  void mergeCellRight() {
+    final cell = _activeCell ?? _getTable(quill.selection.getRange()).cell;
+    final row = cell?.row();
+    if (cell == null || row == null) return;
+    final offset = cell.cellOffset();
+    if (offset < 0 || offset + 1 >= row.children.length) return;
+    final right = row.children[offset + 1];
+    if (right is! TableCell) return;
+    final span = cell.colspan + right.colspan;
+    final rightText = right.element.text ?? '';
+    if (rightText.isNotEmpty) {
+      final insertionIndex = cell.length() > 0 ? cell.length() - 1 : 0;
+      cell.insertAt(insertionIndex, rightText);
+    }
+    right.remove();
+    cell.setSpan(colspan: span, rowspan: cell.rowspan);
+    _activeCell = cell;
+    _activeCellElement = cell.element;
+    updateContextToolbar();
+  }
+
+  /// Splits a horizontally merged cell back into individual cells.
+  void splitCell() {
+    final cell = _activeCell ?? _getTable(quill.selection.getRange()).cell;
+    final row = cell?.row();
+    if (cell == null || row == null || cell.colspan <= 1) return;
+    final span = cell.colspan;
+    final ref = cell.next;
+    cell.setSpan(rowspan: cell.rowspan);
+    for (var index = 1; index < span; index++) {
+      final newCell = TableCell.create(cell.rowId);
+      row.insertBefore(newCell, ref);
+      newCell.optimize();
+    }
+    _activeCell = cell;
+    _activeCellElement = cell.element;
+    updateContextToolbar();
   }
 
   void insertColumnLeft() {

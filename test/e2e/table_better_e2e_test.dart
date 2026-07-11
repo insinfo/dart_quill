@@ -21,6 +21,7 @@ void main() {
         'run',
         'webdev',
         'build',
+        '--no-release',
         '--output',
         'web:build/e2e',
         '--',
@@ -59,6 +60,11 @@ void main() {
     final tableButtons = await page.evaluate<int>(
         '() => document.querySelectorAll("button.ql-table").length');
     expect(tableButtons, 1, reason: body);
+    final usesBundledTabler = await page.evaluate<bool>('''() =>
+      document.querySelector('.ql-container.ql-icons-tabler') != null &&
+      document.querySelector('button.ql-table i.ti-table') != null
+    ''');
+    expect(usesBundledTabler, isTrue);
     await page.click('.ql-editor');
     await page.click('button.ql-table');
     final visible = await page.$eval<bool>(
@@ -111,10 +117,41 @@ void main() {
       };
     }''');
     expect(result['visible'], isTrue, reason: '$result');
-    expect(result['count'], 7);
+    expect(result['count'], 9);
     expect(result['icons'], isTrue);
     expect(result['width'], '28px');
     expect(result['borderWidth'], '0px');
     expect(result['boxShadow'], 'none');
+  });
+
+  test('context toolbar merges and splits the active cell', () async {
+    final hasTable = await page.evaluate<bool>(
+        '() => document.querySelector(".ql-editor td") != null');
+    if (!hasTable) {
+      await page.click('.ql-editor');
+      await page.click('button.ql-table');
+      await page.click(
+        '.ql-table-select-list span[data-row="2"][data-column="3"]',
+      );
+    }
+    await page.click('.ql-editor td');
+    await page.click('[data-table-action="table-merge"]');
+
+    var shape = await page.evaluate<Map<String, dynamic>>('''() => {
+      const row = document.querySelector('.ql-editor tr');
+      const first = row.querySelector('td');
+      return { cells: row.querySelectorAll('td').length, colspan: first.colSpan };
+    }''');
+    expect(shape['cells'], 2);
+    expect(shape['colspan'], 2);
+
+    await page.click('[data-table-action="table-split"]');
+    shape = await page.evaluate<Map<String, dynamic>>('''() => {
+      const row = document.querySelector('.ql-editor tr');
+      const first = row.querySelector('td');
+      return { cells: row.querySelectorAll('td').length, colspan: first.colSpan };
+    }''');
+    expect(shape['cells'], 3);
+    expect(shape['colspan'], 1);
   });
 }

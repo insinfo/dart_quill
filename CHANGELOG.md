@@ -1,6 +1,8 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- Horizontal cell merge/split actions with persisted `colspan` and logical-column-aware table balancing.
+- Puppeteer coverage for merge/split and for the plain-Dart demo's bundled Tabler icon theme.
 - Shelf/Webdev-backed Puppeteer E2E coverage for the table grid and contextual toolbar, including computed-style assertions against Limitless CSS interference.
 - A quill-table-better-style 10 × 10 table picker with progressive hover selection and a live rows × columns label.
 - A contextual mini-toolbar positioned above the active table cell, with Tabler controls for row/column insertion and deletion.
@@ -20,6 +22,9 @@
 - `example/ngdart` editor component wired to the public `dart_quill` package and the `package:web` DOM layer.
 
 ### Changed
+- Updated the root `web/` demo to load bundled Snow, Limitless integration, and Tabler icon assets through `packages/dart_quill/assets/`.
+- Enabled `QuillIconTheme.tabler` in the plain-Dart demo so it matches the AngularDart example.
+- Excluded generated `build/**` output from static analysis.
 - Replaced the permanently visible table action buttons with a single table dropdown and contextual cell toolbar, matching the interaction model of the reference `quill-table-better` plugin.
 - Enabled the image resize module by default and added table actions to the plain Dart and AngularDart demo toolbars.
 - Enabled the basic table module in the default module set.
@@ -50,6 +55,7 @@
 - AngularDart example compilation issues caused by missing package wiring and invalid host element typing.
 
 ### Tests
+- 204 unit tests and 3 Puppeteer E2E scenarios passing after the merge/split port.
 - Port/audit source expanded to `referencias/quilljs/test` for upstream unit, E2E, and fuzz scenarios.
 - 203 unit tests and 2 Puppeteer E2E tests passing; AngularDart analysis/build also clean.
 - Added unit coverage for image selection, all eight handles, persisted layout metadata, resizing, and minimum dimensions.

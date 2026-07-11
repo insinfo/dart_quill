@@ -8,6 +8,7 @@ analyzer:
   #   strict-casts: true
   #   strict-raw-types: true
   exclude:
+    - build/**
     # Requires ngdart, which consumers add themselves; not part of the lib build.
     #- example/ngdart/**
     # Reference sources are kept only for comparison and should not be analyzed.

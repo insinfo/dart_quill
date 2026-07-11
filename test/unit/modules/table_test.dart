@@ -31,11 +31,38 @@ void main() {
                 element.classes.contains('ql-table-context-toolbar'))
             .single;
         final actions = contextToolbar.querySelectorAll('button');
-        expect(actions, hasLength(7));
+        expect(actions, hasLength(9));
         expect(contextToolbar.getAttribute('role'), 'toolbar');
         expect(actions.first.getAttribute('title'), 'Inserir linha acima');
         expect(actions.last.getAttribute('title'), 'Excluir tabela');
         expect(actions.first.innerHTML, contains('ti-row-insert-top'));
+      });
+
+      test('merge right and split preserve logical column count', () {
+        final quill = _createQuill('''
+          <table><tbody>
+            <tr><td>a1</td><td>a2</td><td>a3</td></tr>
+            <tr><td>b1</td><td>b2</td><td>b3</td></tr>
+          </tbody></table>
+        ''');
+        final table = quill.getModule('table') as Table;
+        quill.setSelection(const Range(0, 0));
+
+        table.mergeCellRight();
+
+        final rows = quill.root.querySelectorAll('tr');
+        final firstRowCells = rows.first.querySelectorAll('td');
+        expect(firstRowCells, hasLength(2));
+        expect(firstRowCells.first.getAttribute('colspan'), '2');
+        expect(firstRowCells.first.text, contains('a1'));
+        expect(firstRowCells.first.text, contains('a2'));
+        expect(rows.last.querySelectorAll('td'), hasLength(3));
+
+        table.splitCell();
+
+        final splitCells = rows.first.querySelectorAll('td');
+        expect(splitCells, hasLength(3));
+        expect(splitCells.first.hasAttribute('colspan'), isFalse);
       });
 
       test('empty', () {

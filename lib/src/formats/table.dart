@@ -57,10 +57,18 @@ class TableContainer extends Container {
       return;
     }
     final maxColumns = tableRows.fold<int>(0, (max, row) {
-      return row.children.length > max ? row.children.length : max;
+      final columns = row.children.whereType<TableCell>().fold<int>(
+            0,
+            (sum, cell) => sum + cell.colspan,
+          );
+      return columns > max ? columns : max;
     });
     for (final row in tableRows) {
-      final missing = maxColumns - row.children.length;
+      final logicalColumns = row.children.whereType<TableCell>().fold<int>(
+            0,
+            (sum, cell) => sum + cell.colspan,
+          );
+      final missing = maxColumns - logicalColumns;
       if (missing <= 0) {
         continue;
       }
@@ -78,11 +86,11 @@ class TableContainer extends Container {
 
   List<TableCell?> cells(int column) {
     return rows()
-        .map((row) =>
-            column >= 0 && column < row.children.length &&
-                    row.children[column] is TableCell
-                ? row.children[column] as TableCell
-                : null)
+        .map((row) => column >= 0 &&
+                column < row.children.length &&
+                row.children[column] is TableCell
+            ? row.children[column] as TableCell
+            : null)
         .toList(growable: false);
   }
 
@@ -114,10 +122,10 @@ class TableContainer extends Container {
     }
     final id = tableId();
     final row = TableRow.create();
-    final templateRow = body.children.isNotEmpty &&
-            body.children.first is TableRow
-        ? body.children.first as TableRow
-        : null;
+    final templateRow =
+        body.children.isNotEmpty && body.children.first is TableRow
+            ? body.children.first as TableRow
+            : null;
     final columnCount = templateRow?.children.length ?? 0;
     for (var i = 0; i < columnCount; i++) {
       row.appendChild(TableCell.create(id));
@@ -229,6 +237,25 @@ class TableCell extends Block {
 
   String? get rowId => element.getAttribute('data-row');
 
+  int get colspan =>
+      int.tryParse(element.getAttribute('colspan') ?? '')?.clamp(1, 1000) ?? 1;
+
+  int get rowspan =>
+      int.tryParse(element.getAttribute('rowspan') ?? '')?.clamp(1, 1000) ?? 1;
+
+  void setSpan({int colspan = 1, int rowspan = 1}) {
+    if (colspan > 1) {
+      element.setAttribute('colspan', '$colspan');
+    } else {
+      element.removeAttribute('colspan');
+    }
+    if (rowspan > 1) {
+      element.setAttribute('rowspan', '$rowspan');
+    } else {
+      element.removeAttribute('rowspan');
+    }
+  }
+
   int cellOffset() => parent?.childOffset(this) ?? -1;
 
   TableRow? row() => parent is TableRow ? parent as TableRow : null;
@@ -245,6 +272,8 @@ class TableCell extends Block {
       return {
         ...formats,
         'table': rowValue,
+        if (colspan > 1) 'colspan': colspan,
+        if (rowspan > 1) 'rowspan': rowspan,
       };
     }
     return formats;
@@ -266,5 +295,3 @@ class TableCell extends Block {
   @override
   TableCell clone() => TableCell(element.cloneNode(deep: true));
 }
-
-
