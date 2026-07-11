@@ -1,5 +1,11 @@
 import '../../platform/dom.dart';
 
+// Scope bit constants duplicated from blots/abstract/blot.dart to avoid a
+// layering cycle (Registry imports this file).
+const int _kScopeInline = 0x0002;
+const int _kScopeBlock = 0x0004;
+const int _kScopeAttribute = 0x0100;
+
 abstract class Attributor {
   final String attrName;
   final String keyName;
@@ -7,12 +13,95 @@ abstract class Attributor {
 
   Attributor(this.attrName, this.keyName, this.config);
 
+  /// Mirrors parchment's Attributor scope resolution: the level bits from the
+  /// config combined with the ATTRIBUTE type bit.
+  int get scope {
+    final configScope = config['scope'];
+    if (configScope is int) {
+      return (configScope & (_kScopeInline | _kScopeBlock)) | _kScopeAttribute;
+    }
+    return _kScopeAttribute;
+  }
+
   bool canAdd(DomElement domNode, dynamic value) => true;
   dynamic value(DomElement domNode) => domNode.getAttribute(keyName);
-  void add(DomElement domNode, dynamic value) => domNode.setAttribute(keyName, value.toString());
+  bool add(DomElement domNode, dynamic value) {
+    if (!canAdd(domNode, value)) return false;
+    domNode.setAttribute(keyName, value.toString());
+    return true;
+  }
+
   void remove(DomElement domNode) => domNode.removeAttribute(keyName);
 
-  static List<String> keys(DomElement domNode) => [];
+  static List<String> keys(DomElement domNode) => domNode.attributeNames;
+}
+
+/// Per-element store of applied attributors, mirroring parchment's
+/// `AttributorStore`. Built lazily because Dart blots only gain access to the
+/// registry once attached to a scroll.
+class AttributorStore {
+  AttributorStore(this.domNode);
+
+  final DomElement domNode;
+  final Map<String, Attributor> _attributes = {};
+  bool _built = false;
+
+  void attribute(Attributor attribute, dynamic value) {
+    if (value != null && value != false) {
+      if (attribute.add(domNode, value)) {
+        if (attribute.value(domNode) != null) {
+          _attributes[attribute.attrName] = attribute;
+        } else {
+          _attributes.remove(attribute.attrName);
+        }
+      }
+    } else {
+      attribute.remove(domNode);
+      _attributes.remove(attribute.attrName);
+    }
+  }
+
+  /// Rebuilds the store from the element's attributes/classes/styles,
+  /// resolving each key through [queryAttributor]
+  /// (name → Attributor at ATTRIBUTE scope).
+  void build(Attributor? Function(String name) queryAttributor) {
+    _attributes.clear();
+    _built = true;
+    final names = <String>[
+      ...Attributor.keys(domNode),
+      ...ClassAttributor.keys(domNode),
+      ...StyleAttributor.keys(domNode),
+    ];
+    for (final name in names) {
+      final attr = queryAttributor(name);
+      if (attr != null) {
+        _attributes[attr.attrName] = attr;
+      }
+    }
+  }
+
+  void ensureBuilt(Attributor? Function(String name) queryAttributor) {
+    if (!_built) {
+      build(queryAttributor);
+    }
+  }
+
+  void copy(void Function(String name, dynamic value) format) {
+    for (final entry in _attributes.entries) {
+      format(entry.key, entry.value.value(domNode));
+    }
+  }
+
+  Map<String, dynamic> values() {
+    final result = <String, dynamic>{};
+    _attributes.forEach((name, attribute) {
+      final value = attribute.value(domNode);
+      if (value != null) {
+        result[name] = value;
+      }
+    });
+    return result;
+  }
 }
 
 abstract class ClassAttributor extends Attributor {
@@ -33,9 +122,11 @@ abstract class ClassAttributor extends Attributor {
   }
 
   @override
-  void add(DomElement domNode, dynamic value) {
+  bool add(DomElement domNode, dynamic value) {
+    if (!canAdd(domNode, value)) return false;
     remove(domNode);
     domNode.classes.add('$keyName-$value');
+    return true;
   }
 
   @override
@@ -66,10 +157,12 @@ abstract class StyleAttributor extends Attributor {
   }
 
   @override
-  void add(DomElement domNode, dynamic value) {
+  bool add(DomElement domNode, dynamic value) {
+    if (!canAdd(domNode, value)) return false;
     final styles = _parseInlineStyles(domNode);
     styles[keyName] = value.toString();
     _writeInlineStyles(domNode, styles);
+    return true;
   }
 
   @override

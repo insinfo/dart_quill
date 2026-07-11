@@ -445,6 +445,9 @@ class FakeDomElement extends FakeDomNode implements DomElement {
   Map<String, String> get attributes => Map.unmodifiable(_attributes);
 
   @override
+  List<String> get attributeNames => _attributes.keys.toList();
+
+  @override
   void removeAttribute(String name) {
     _attributes.remove(name);
     if (name.startsWith('data-')) {

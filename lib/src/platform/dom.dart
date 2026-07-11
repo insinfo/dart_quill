@@ -50,6 +50,9 @@ abstract class DomElement extends DomNode {
   bool hasAttribute(String name);
   void removeAttribute(String name);
 
+  /// Names of all attributes present on the element.
+  List<String> get attributeNames;
+
   void addEventListener(String type, DomEventListener listener);
   void removeEventListener(String type, DomEventListener listener);
 

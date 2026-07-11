@@ -1,5 +1,4 @@
 import 'package:collection/collection.dart';
-import 'package:quiver/core.dart';
 
 /// Decoder function to convert raw `data` object into a user-defined data type.
 ///
@@ -151,11 +150,11 @@ class Operation {
   @override
   int get hashCode {
     if (_attributes != null && _attributes.isNotEmpty) {
-      final attrsHash =
-          hashObjects(_attributes.entries.map((e) => hash2(e.key, e.value)));
-      return hash3(key, value, attrsHash);
+      final attrsHash = Object.hashAll(
+          _attributes.entries.map((e) => Object.hash(e.key, e.value)));
+      return Object.hash(key, value, attrsHash);
     }
-    return hash2(key, value);
+    return Object.hash(key, value);
   }
 
   @override

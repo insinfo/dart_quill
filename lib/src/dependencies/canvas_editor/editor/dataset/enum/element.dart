@@ -1,0 +1,21 @@
+enum ElementType {
+  text,
+  image,
+  table,
+  hyperlink,
+  superscript,
+  subscript,
+  separator,
+  pageBreak,
+  control,
+  area,
+  checkbox,
+  radio,
+  latex,
+  tab,
+  date,
+  label,
+  block,
+  title,
+  list
+}

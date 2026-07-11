@@ -82,7 +82,7 @@ class CodeBlock extends Block {
   CodeBlock clone() => CodeBlock(element.cloneNode(deep: true));
 
   @override
-  Map<String, dynamic> formats() => {kBlotName: true};
+  Map<String, dynamic> formats() => {...super.formats(), kBlotName: true};
 }
 
 class Code extends InlineBlot {

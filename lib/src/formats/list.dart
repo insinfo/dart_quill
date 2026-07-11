@@ -1,4 +1,5 @@
 import '../blots/abstract/blot.dart';
+import '../blots/block.dart';
 import '../platform/dom.dart';
 import '../platform/platform.dart';
 
@@ -9,18 +10,10 @@ class ListContainer extends ContainerBlot {
   static const int kScope = Scope.BLOCK_BLOT;
 
   static ListContainer create(String value) {
-    final tag = value == 'ordered' ? 'ol' : 'ul';
-    final node = domBindings.adapter.document.createElement(tag.toUpperCase());
-    node.dataset['list'] = tag;
-    return ListContainer(node);
-  }
-
-  static ListContainer? wrap(Blot blot) {
-    if (blot.parent is ListContainer) {
-      return null;
-    }
-    final node = domBindings.adapter.document.createElement('OL');
-    node.dataset['list'] = 'ordered';
+    final type = (value == 'ordered' || value == 'bullet') ? value : 'ordered';
+    final tag = type == 'ordered' ? 'OL' : 'UL';
+    final node = domBindings.adapter.document.createElement(tag);
+    node.dataset['list'] = type;
     return ListContainer(node);
   }
 
@@ -68,7 +61,9 @@ class ListContainer extends ContainerBlot {
   }
 }
 
-class ListItem extends BlockBlot {
+// Mirrors quill's list.ts where ListItem extends Block, so line-level
+// machinery (isLine, getFormat, newline accounting) treats it as a line.
+class ListItem extends Block {
   ListItem(DomElement domNode) : super(domNode);
 
   static const String kBlotName = 'list';
@@ -78,9 +73,10 @@ class ListItem extends BlockBlot {
 
   static ListItem create(String value) {
     final node = domBindings.adapter.document.createElement(kTagName);
-    if (value == 'checked' || value == 'unchecked') {
-      node.dataset['list'] = value;
-    }
+    // The type is kept on the item until optimize() wraps it into the
+    // matching ListContainer (ordered/bullet move to the container;
+    // checked/unchecked stay on the item).
+    node.dataset['list'] = value;
     return ListItem(node);
   }
 
@@ -98,13 +94,14 @@ class ListItem extends BlockBlot {
     final marker = element.dataset['list'];
     if (marker == 'checked' || marker == 'unchecked') {
       return {
+        ...super.formats(),
         'list': {
           'type': parentFormats['list'],
           'checked': marker == 'checked',
         }
       };
     }
-    return parentFormats;
+    return {...super.formats(), ...parentFormats};
   }
 
   @override
@@ -132,12 +129,19 @@ class ListItem extends BlockBlot {
       [List<DomMutationRecord>? mutations, Map<String, dynamic>? context]) {
     super.optimize(mutations, context);
 
-    // Ensure proper container
+    // Ensure proper container: mirror parchment's wrap() — the container is
+    // inserted into the tree BEFORE the item is moved into it.
     final parent = this.parent;
     if (parent != null && parent is! ListContainer) {
-      final container = ListContainer.wrap(this);
-      if (container != null) {
-        container.appendChild(this);
+      final marker = element.dataset['list'];
+      final type =
+          (marker == 'ordered' || marker == 'bullet') ? marker! : 'ordered';
+      final container = ListContainer.create(type);
+      parent.insertBefore(container, this);
+      container.appendChild(this);
+      if (marker == 'ordered' || marker == 'bullet') {
+        element.dataset.remove('list');
+        element.removeAttribute('data-list');
       }
     }
 
@@ -171,9 +175,4 @@ class ListItem extends BlockBlot {
 
   @override
   ListItem clone() => ListItem(element.cloneNode(deep: true));
-
-  @override
-  int length() {
-    return super.length() + 1; // Account for the list marker
-  }
 }

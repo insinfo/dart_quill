@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../formats/abstract/attributor.dart';
 import '../platform/dom.dart';
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
 import 'abstract/blot.dart';
@@ -60,6 +61,20 @@ class Block extends BlockBlot {
 
   final Map<String, dynamic> _cache = <String, dynamic>{};
 
+  /// Applied block-level attributors (align, indent, direction, ...),
+  /// mirroring parchment BlockBlot's `attributes: AttributorStore`.
+  late final AttributorStore attributes = AttributorStore(element);
+
+  Attributor? _lookupAttributor(String name) {
+    if (!isAttached) return null;
+    return scroll.registry.queryAttributor(name, Scope.ATTRIBUTE);
+  }
+
+  void _ensureAttributesBuilt() {
+    if (!isAttached) return;
+    attributes.ensureBuilt(_lookupAttributor);
+  }
+
   @override
   String get blotName => Block.kBlotName;
 
@@ -108,16 +123,21 @@ class Block extends BlockBlot {
         return;
       }
 
-      final replacement = scroll.create(name, value) as Block;
-      _replaceWithBlock(replacement);
-      _cache.clear();
+      // The replacement may be any block-scoped parent (e.g. ListItem),
+      // not necessarily a Block subclass.
+      final replacement = scroll.create(name, value);
+      if (replacement is ParentBlot) {
+        _replaceWithBlock(replacement);
+        _cache.clear();
+      }
       return;
     }
 
-    final attribute = scroll.query(name, Scope.BLOCK_ATTRIBUTE);
+    final attribute = scroll.queryAttributor(name, Scope.BLOCK_ATTRIBUTE);
     if (attribute != null) {
-      // Block attributes (e.g., align, list) not yet supported in this port.
-      // Placeholder to avoid silently failing future implementations.
+      _ensureAttributesBuilt();
+      attributes.attribute(attribute, value);
+      _cache.clear();
       return;
     }
 
@@ -125,10 +145,18 @@ class Block extends BlockBlot {
   }
 
   @override
+  Map<String, dynamic> formats() {
+    if (!isAttached) return const {};
+    _ensureAttributesBuilt();
+    return attributes.values();
+  }
+
+  @override
   void formatAt(int index, int length, String name, dynamic value) {
     if (length <= 0) return;
-    final definition = scroll.query(name, Scope.BLOCK);
-    if (definition != null) {
+    final isBlockFormat = scroll.query(name, Scope.BLOCK) != null ||
+        scroll.queryAttributor(name, Scope.BLOCK_ATTRIBUTE) != null;
+    if (isBlockFormat) {
       if (index + length == this.length()) {
         format(name, value);
       }
@@ -251,6 +279,14 @@ class Block extends BlockBlot {
     _cache.clear();
   }
 
+  // Mirrors block.ts `path(index) { return super.path(index, true); }` —
+  // inclusive resolution lets a zero-length Break on an empty line be found
+  // by scroll.leaf(), which caret placement depends on.
+  @override
+  List<MapEntry<Blot, int>> path(int index, {bool inclusive = false}) {
+    return super.path(index, inclusive: true);
+  }
+
   @override
   void optimize([
     List<DomMutationRecord>? mutations,
@@ -314,7 +350,7 @@ class Block extends BlockBlot {
     return Break.create();
   }
 
-  void _replaceWithBlock(Block replacement) {
+  void _replaceWithBlock(ParentBlot replacement) {
     final parentBlot = parent;
     if (parentBlot == null) {
       return;
@@ -322,6 +358,8 @@ class Block extends BlockBlot {
 
     parentBlot.insertBefore(replacement, next);
     moveChildren(replacement, null);
+    _ensureAttributesBuilt();
+    attributes.copy((name, value) => replacement.format(name, value));
 
     if (replacement.children.isEmpty) {
       final defaultChild = replacement.createDefaultChild();

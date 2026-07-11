@@ -9,7 +9,7 @@ class IndentAttributor extends ClassAttributor {
   });
 
   @override
-  void add(DomElement node, dynamic value) {
+  bool add(DomElement node, dynamic value) {
     int normalizedValue = 0;
     if (value == '+1' || value == '-1') {
       final indent = this.value(node) ?? 0;
@@ -19,9 +19,9 @@ class IndentAttributor extends ClassAttributor {
     }
     if (normalizedValue == 0) {
       remove(node);
-    } else {
-      super.add(node, normalizedValue.toString());
+      return true;
     }
+    return super.add(node, normalizedValue.toString());
   }
 
   @override

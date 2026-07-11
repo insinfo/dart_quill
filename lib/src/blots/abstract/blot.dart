@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../../formats/abstract/attributor.dart';
 import '../../platform/dom.dart';
 
 typedef BlotPredicate = bool Function(Blot blot);
@@ -22,12 +23,33 @@ class RegistryEntry {
 
 class Registry {
   final Map<String, RegistryEntry> _entries = {};
+  // Attributors are looked up both by attrName (format name) and keyName
+  // (DOM attribute/class/style key), mirroring parchment's Registry.
+  final Map<String, Attributor> _attributors = {};
 
   void register(RegistryEntry entry) {
     _entries[entry.blotName] = entry;
   }
 
+  void registerAttributor(Attributor attributor) {
+    _attributors[attributor.attrName] = attributor;
+    _attributors[attributor.keyName] = attributor;
+  }
+
   Iterable<RegistryEntry> get entries => _entries.values;
+
+  Iterable<Attributor> get attributors => _attributors.values.toSet();
+
+  /// Finds an attributor registered under [name] (attrName or keyName) whose
+  /// scope matches [scope].
+  Attributor? queryAttributor(String name, [int scope = Scope.ANY]) {
+    final attributor = _attributors[name];
+    if (attributor == null) return null;
+    if (scope == Scope.ANY || Scope.matches(attributor.scope, scope)) {
+      return attributor;
+    }
+    return null;
+  }
 
   bool contains(String name) => _entries.containsKey(name);
 
@@ -441,6 +463,37 @@ abstract class ParentBlot extends Blot {
     }
   }
 
+  /// Descendants of type [T] intersecting the range [index, index+length),
+  /// mirroring parchment's `ParentBlot.descendants(criteria, index, length)`.
+  List<T> descendantsAt<T extends Blot>(int index, int length,
+      {bool Function(T blot)? predicate}) {
+    final result = <T>[];
+    var lengthLeft = length;
+    var offset = 0;
+    for (final child in children) {
+      final childLength = child.length();
+      final end = offset + childLength;
+      if (end > index && offset < index + length) {
+        final childIndex = math.max(0, index - offset);
+        final visited =
+            math.min(end, index + length) - math.max(offset, index);
+        if (child is T && (predicate == null || predicate(child))) {
+          result.add(child);
+        }
+        if (child is ParentBlot) {
+          result.addAll(child.descendantsAt<T>(childIndex, lengthLeft,
+              predicate: predicate));
+        }
+        lengthLeft -= math.max(0, visited).toInt();
+      }
+      offset = end;
+      if (offset >= index + length) {
+        break;
+      }
+    }
+    return result;
+  }
+
   MapEntry<Blot?, int> descendant(dynamic query, int index) {
     if (index < 0) {
       return const MapEntry(null, -1);
@@ -494,8 +547,12 @@ abstract class ParentBlot extends Blot {
     for (final child in children) {
       final childLength = child.length();
       final end = offset + childLength;
-      final isTarget =
-          index < end || (inclusive && index == end && child == lastChild);
+      // Inclusive boundary matching mirrors parchment's LinkedList.find:
+      // prefer the earlier child unless the next sibling is zero-length.
+      final isTarget = index < end ||
+          (inclusive &&
+              index == end &&
+              (child.next == null || child.next!.length() != 0));
       if (isTarget) {
         final childOffset = index - offset;
         result.add(MapEntry(child, childOffset));
@@ -661,6 +718,26 @@ abstract class LeafBlot extends Blot {
   List<MapEntry<Blot, int>> path(int index, {bool inclusive = false}) {
     return [MapEntry(this, index)];
   }
+
+  /// Maps an offset within this leaf to a native (DOM node, offset) pair,
+  /// mirroring parchment's `LeafBlot.position`. Non-text leaves resolve to
+  /// their parent element with a child offset, which is how carets are
+  /// placed next to embeds and line breaks.
+  MapEntry<DomNode, int> position(int index, [bool inclusive = false]) {
+    final parentBlot = parent;
+    if (parentBlot == null) {
+      return MapEntry(domNode, 0);
+    }
+    final childNodes = parentBlot.element.childNodes;
+    var offset = childNodes.indexOf(domNode);
+    if (offset < 0) {
+      offset = 0;
+    }
+    if (index > 0) {
+      offset += 1;
+    }
+    return MapEntry(parentBlot.domNode, offset);
+  }
 }
 
 abstract class EmbedBlot extends LeafBlot {
@@ -676,6 +753,9 @@ abstract class ScrollBlot extends ParentBlot {
   DomMutationObserver? observer;
 
   RegistryEntry? query(String name, int scope) => registry.query(name, scope);
+
+  Attributor? queryAttributor(String name, [int scope = Scope.ANY]) =>
+      registry.queryAttributor(name, scope);
 
   Blot create(String name, [dynamic value]) => registry.create(name, value);
 

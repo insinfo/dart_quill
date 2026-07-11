@@ -39,6 +39,11 @@ class TextBlot extends LeafBlot {
   String value() => textNode.data;
 
   @override
+  MapEntry<DomNode, int> position(int index, [bool inclusive = false]) {
+    return MapEntry(domNode, index);
+  }
+
+  @override
   void insertAt(int index, String value, [dynamic def]) {
     final data = textNode.data;
     if (index < 0 || index > data.length) {

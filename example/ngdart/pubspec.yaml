@@ -1,0 +1,17 @@
+name: dart_quill_ngdart_example
+description: AngularDart example for dart_quill.
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  dart_quill:
+    path: ../..
+  ngdart: 8.0.0-dev.4
+  web: ^1.1.1
+
+dev_dependencies:
+  build_runner: ^2.4.12
+  build_web_compilers: ^4.0.11
+  lints: ^5.0.0

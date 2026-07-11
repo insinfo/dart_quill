@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import '../blots/abstract/blot.dart';
+import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
 import 'emitter.dart';
 
 class Range {
@@ -6,6 +9,37 @@ class Range {
   final int length;
 
   const Range(this.index, this.length);
+}
+
+/// Shifts [range] by a document [change], mirroring `shiftRange` in
+/// quill's selection.ts. Positions are transformed through the delta;
+/// user-sourced changes at the exact position do not push the caret.
+Range shiftRangeByDelta(Range range, Delta change, String source) {
+  // JS: transformPosition(pos, priority = source !== 'user'); Dart's `force`
+  // is the negation of JS `priority` (force pushes past same-position insert).
+  final force = source == EmitterSource.USER;
+  final start = change.transformPosition(range.index, force: force);
+  final end =
+      change.transformPosition(range.index + range.length, force: force);
+  return Range(start, math.max(0, end - start));
+}
+
+/// Shifts [range] given an edit at [index] adding/removing [shift]
+/// characters, mirroring the numeric overload of `shiftRange`.
+Range shiftRangeByLength(Range range, int index, int shift, String source) {
+  int move(int pos) {
+    if (pos < index || (pos == index && source == EmitterSource.USER)) {
+      return pos;
+    }
+    if (shift >= 0) {
+      return pos + shift;
+    }
+    return math.max(index, pos + shift);
+  }
+
+  final start = move(range.index);
+  final end = move(range.index + range.length);
+  return Range(start, math.max(0, end - start));
 }
 
 /// Represents bounding rectangle information for an element or range.

@@ -1,7 +1,9 @@
+import 'dart:math' as math;
+
 import '../blots/abstract/blot.dart';
 import '../blots/scroll.dart';
-import '../blots/text.dart';
 import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
+import '../formats/abstract/attributor.dart';
 import '../modules/clipboard.dart';
 import '../modules/history.dart';
 import '../modules/input.dart';
@@ -86,6 +88,7 @@ class Quill {
   late final Input input;
 
   static final Map<String, RegistryEntry> _formatRegistry = {};
+  static final Map<String, Attributor> _attributorRegistry = {};
   static final Map<String, ModuleFactory> _moduleRegistry = {};
   static final Map<String, ThemeBuilder> _themeRegistry = {
     'default': (quill, options) => Theme(quill, options),
@@ -109,6 +112,14 @@ class Quill {
         return;
       }
       _formatRegistry[name] = definition;
+      return;
+    }
+    if (definition is Attributor) {
+      final name = definition.attrName;
+      if (!overwrite && _attributorRegistry.containsKey(name)) {
+        return;
+      }
+      _attributorRegistry[name] = definition;
       return;
     }
     throw ArgumentError(
@@ -160,6 +171,9 @@ class Quill {
     scroll = Scroll(Registry(), root, emitter: emitter);
     for (final entry in _formatRegistry.values) {
       scroll.registry.register(entry);
+    }
+    for (final attributor in _attributorRegistry.values) {
+      scroll.registry.registerAttributor(attributor);
     }
     editor = Editor(scroll);
     selection = Selection(scroll, emitter);
@@ -250,6 +264,16 @@ class Quill {
       editor.update(delta, source);
       change = change.concat(delta);
     }
+    // Applying a delta that ends in '\n' onto the mandatory empty document
+    // leaves an extra trailing line; remove it (quill.ts setContents).
+    final newLength = scroll.length();
+    if (newLength > 1) {
+      final trailingDelete = Delta()
+        ..retain(newLength - 1)
+        ..delete(1);
+      editor.update(trailingDelete, source);
+      change = change.concat(trailingDelete);
+    }
     if (change.operations.isEmpty) return;
     emitter.emit(EmitterEvents.TEXT_CHANGE, change, before, source);
     emitter.emit(
@@ -265,6 +289,7 @@ class Quill {
     if (delta.operations.isEmpty) return;
     final before = getContents();
     editor.update(delta, source);
+    _shiftSelectionByDelta(delta, source);
     emitter.emit(EmitterEvents.TEXT_CHANGE, delta, before, source);
     emitter.emit(
       EmitterEvents.EDITOR_CHANGE,
@@ -299,32 +324,20 @@ class Quill {
     return !root.hasAttribute('disabled');
   }
 
-  MapEntry<DomNode, int>? _domPosition(int index) {
-    final entries = scroll.path(index, inclusive: true);
-    LeafBlot? leaf;
-    int leafOffset = 0;
-    for (var i = entries.length - 1; i >= 0; i--) {
-      final blot = entries[i].key;
-      if (blot is LeafBlot) {
-        leaf = blot;
-        leafOffset = entries[i].value;
-        break;
-      }
-    }
+  /// Maps a document index to a native (DOM node, offset) pair, mirroring
+  /// `Selection.rangeToNative` in quill's selection.ts: the index is clamped
+  /// to the last document position and resolved through `scroll.leaf` +
+  /// `LeafBlot.position`. [inclusive] is false for range starts and true for
+  /// range ends.
+  MapEntry<DomNode, int>? _domPosition(int index, {bool inclusive = false}) {
+    final scrollLength = scroll.length();
+    final clamped = math.min(scrollLength - 1, index);
+    final leafEntry = scroll.leaf(clamped);
+    final leaf = leafEntry.key;
     if (leaf == null) {
-      final allLeaves = scroll.descendants<LeafBlot>();
-      if (allLeaves.isNotEmpty) {
-        leaf = allLeaves.last;
-        leafOffset = leaf.length();
-      } else {
-        return null;
-      }
+      return null;
     }
-    if (leaf is TextBlot) {
-      final maxOffset = leaf.length();
-      return MapEntry(leaf.textNode, leafOffset.clamp(0, maxOffset));
-    }
-    return MapEntry(leaf.domNode, 0);
+    return leaf.position(leafEntry.value, inclusive);
   }
 
   void focus({bool preventScroll = false}) {
@@ -334,7 +347,7 @@ class Quill {
     final range = selection.getRange() ?? selection.savedRange;
     if (range != null) {
       final start = _domPosition(range.index);
-      final end = _domPosition(range.index + range.length);
+      final end = _domPosition(range.index + range.length, inclusive: true);
       if (start != null && end != null) {
         domBindings.adapter.setSelectionByNodes(
             start.key, start.value, end.key, end.value);
@@ -358,11 +371,26 @@ class Quill {
   void setSelection(Range range, {String source = EmitterSource.API}) {
     selection.setSelection(range, source);
     final start = _domPosition(range.index);
-    final end = _domPosition(range.index + range.length);
+    final end = _domPosition(range.index + range.length, inclusive: true);
     if (start != null && end != null) {
       domBindings.adapter.setSelectionByNodes(
           start.key, start.value, end.key, end.value);
     }
+  }
+
+  void formatLine(int index, int length, String name, dynamic value,
+      {String source = EmitterSource.API}) {
+    final before = getContents();
+    final change = editor.formatLine(index, length, {name: value});
+    emitter.emit(EmitterEvents.TEXT_CHANGE, change, before, source);
+    emitter.emit(
+      EmitterEvents.EDITOR_CHANGE,
+      EmitterEvents.TEXT_CHANGE,
+      change,
+      before,
+      source,
+    );
+    _shiftSelectionByLength(index, 0, source);
   }
 
   void formatText(int index, int length, String name, dynamic value,
@@ -377,9 +405,7 @@ class Quill {
       before,
       source,
     );
-    if (source == EmitterSource.USER) {
-      setSelection(Range(index, length), source: source);
-    }
+    _shiftSelectionByDelta(change, source);
   }
 
   void insertEmbed(int index, String embed, dynamic value,
@@ -394,9 +420,24 @@ class Quill {
       before,
       source,
     );
-    if (source == EmitterSource.USER) {
-      setSelection(Range(index + 1, 0), source: source);
-    }
+    _shiftSelectionByDelta(change, source);
+  }
+
+  /// Mirrors the selection adjustment performed by `modify()` in quill.ts:
+  /// after a document change, an existing selection is shifted through the
+  /// change and re-applied silently.
+  void _shiftSelectionByDelta(Delta change, String source) {
+    final range = selection.getRange();
+    if (range == null) return;
+    setSelection(shiftRangeByDelta(range, change, source),
+        source: EmitterSource.SILENT);
+  }
+
+  void _shiftSelectionByLength(int index, int shift, String source) {
+    final range = selection.getRange();
+    if (range == null) return;
+    setSelection(shiftRangeByLength(range, index, shift, source),
+        source: EmitterSource.SILENT);
   }
 
   void insertText(int index, String text,
@@ -411,9 +452,7 @@ class Quill {
       before,
       source,
     );
-    if (source == EmitterSource.USER) {
-      setSelection(Range(index + text.length, 0), source: source);
-    }
+    _shiftSelectionByLength(index, text.length, source);
   }
 
   void deleteText(int index, int length, {String source = EmitterSource.API}) {
@@ -430,9 +469,7 @@ class Quill {
       before,
       source,
     );
-    if (source == EmitterSource.USER) {
-      setSelection(Range(index, 0), source: source);
-    }
+    _shiftSelectionByLength(index, -length, source);
   }
 
   Range? _syncNativeSelection({String source = EmitterSource.USER}) {

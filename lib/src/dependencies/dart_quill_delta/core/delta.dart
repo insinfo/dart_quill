@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:collection/collection.dart';
-import 'package:diff_match_patch/diff_match_patch.dart' as dmp;
-import 'package:quiver/core.dart';
+import '../../diff_match_patch/diff_match_patch.dart' as dmp;
+
 
 import 'operation.dart';
 import 'delta_iterator.dart';
@@ -375,7 +375,7 @@ class Delta {
   }
 
   @override
-  int get hashCode => hashObjects(operations);
+  int get hashCode => Object.hashAll(operations);
 
   /// Retain [count] of characters from current position.
   void retain(int count, [Map<String, dynamic>? attributes]) {

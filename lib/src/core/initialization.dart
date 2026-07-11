@@ -3,7 +3,14 @@ import '../blots/block.dart';
 import '../blots/break.dart';
 import '../blots/cursor.dart';
 import '../blots/text.dart';
+import '../formats/align.dart';
+import '../formats/background.dart';
 import '../formats/bold.dart';
+import '../formats/color.dart';
+import '../formats/direction.dart';
+import '../formats/font.dart';
+import '../formats/indent.dart';
+import '../formats/size.dart';
 import '../formats/code.dart';
 import '../formats/formula.dart';
 import '../formats/header.dart';
@@ -271,6 +278,15 @@ void _registerFormats() {
   for (final entry in defaults) {
     Quill.register(entry);
   }
+
+  // Default attributors, mirroring quill.ts core registration.
+  Quill.register(AlignClass.instance);
+  Quill.register(DirectionClass.instance);
+  Quill.register(IndentClass);
+  Quill.register(ColorStyle.instance);
+  Quill.register(BackgroundStyle());
+  Quill.register(FontClass.instance);
+  Quill.register(SizeClass());
 }
 
 KeyboardOptions _resolveKeyboardOptions(dynamic options) {

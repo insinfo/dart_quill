@@ -67,9 +67,22 @@ class Editor {
     _update();
   }
 
-  void formatLine(int index, int length, String name, dynamic value) {
-    scroll.formatAt(index, length, name, value);
+  /// Mirrors editor.ts `formatLine`: applies [formats] directly to every
+  /// line in the range and returns the equivalent change delta.
+  Delta formatLine(int index, int length, Map<String, dynamic> formats) {
+    formats.forEach((name, value) {
+      final lineLength = length > 1 ? length : 1;
+      for (final line in scroll.lines(index, lineLength)) {
+        line.format(name, value);
+      }
+    });
+    scroll.optimize([], {});
     _update();
+    final change = Delta()..retain(index);
+    if (length > 0) {
+      change.retain(length, Map<String, dynamic>.from(formats));
+    }
+    return change;
   }
 
   Delta formatText(int index, int length, String name, dynamic value) {

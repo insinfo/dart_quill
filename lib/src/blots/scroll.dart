@@ -6,6 +6,7 @@ import '../platform/platform.dart';
 import 'abstract/blot.dart';
 import 'block.dart';
 import 'break.dart';
+import 'text.dart';
 
 bool isLine(Blot blot) => blot is Block || blot is BlockEmbed;
 
@@ -26,6 +27,7 @@ class Scroll extends ScrollBlot {
     observer = domBindings.adapter.createMutationObserver(_handleMutations);
     observer?.observe(domNode,
         subtree: true, childList: true, characterData: true);
+    build();
     optimize([], {});
     enable();
     element.addEventListener('dragstart', handleDragStart);
@@ -348,6 +350,47 @@ class Scroll extends ScrollBlot {
     return block as ParentBlot;
   }
 
+  /// Builds the blot tree from pre-existing DOM children of the scroll root.
+  /// Mirrors parchment's `ParentBlot.build()` performed at construction time.
+  void build() {
+    for (final node in List<DomNode>.from(element.childNodes)) {
+      final blot = _blotFromDomNode(node);
+      if (blot != null) {
+        insertBefore(blot, null);
+      }
+    }
+  }
+
+  Blot? _blotFromDomNode(DomNode node) {
+    if (node is DomText) {
+      final trimmed = node.data.trim();
+      if (trimmed.isEmpty && node.data.isNotEmpty) {
+        // Whitespace between blocks; drop it to avoid phantom text blots.
+        node.remove();
+        return null;
+      }
+      return TextBlot(node);
+    }
+
+    if (node is DomElement) {
+      final entry = registry.queryByTagName(node.tagName, scope: Scope.ANY) ??
+          registry.queryByClassName(node.className ?? '', scope: Scope.ANY);
+      final blotName = entry?.blotName ?? Block.kBlotName;
+      final blot = create(blotName, node);
+      if (blot is ParentBlot) {
+        for (final child in List<DomNode>.from(node.childNodes)) {
+          final childBlot = _blotFromDomNode(child);
+          if (childBlot != null) {
+            blot.insertBefore(childBlot, null);
+          }
+        }
+      }
+      return blot;
+    }
+
+    return null;
+  }
+
   Block _appendBlock() {
     final block = _createBlock();
     appendChild(block);
@@ -379,58 +422,59 @@ class Scroll extends ScrollBlot {
     return blot?.blotName;
   }
 
+  /// Mirrors `Editor.getFormat` in editor.ts: for a cursor the path at
+  /// [index] supplies both line and leaf; for a range, formats common to all
+  /// lines and leaves in the range are combined.
   Map<String, dynamic> getFormat(int index, [int length = 0]) {
-    final formats = <String, dynamic>{};
-    final lines = <Blot>[];
-
+    var lineBlots = <Blot>[];
+    var leafBlots = <LeafBlot>[];
     if (length == 0) {
-      // Get format at cursor position
-      final lineEntry = line(index);
-      final lineBlot = lineEntry.key;
-      if (lineBlot != null) {
-        lines.add(lineBlot);
-      }
-    } else {
-      // Get format for range
-      final endIndex = index + length;
-      var currentIndex = index;
-
-      while (currentIndex < endIndex) {
-        final lineEntry = line(currentIndex);
-        final lineBlot = lineEntry.key;
-        if (lineBlot != null) {
-          lines.add(lineBlot);
-          currentIndex += lineBlot.length();
-        } else {
-          break;
+      for (final entry in path(index, inclusive: false)) {
+        final blot = entry.key;
+        if (blot is Block) {
+          lineBlots.add(blot);
+        } else if (blot is LeafBlot) {
+          leafBlots.add(blot);
         }
       }
+    } else {
+      lineBlots = lines(index, length);
+      leafBlots = descendantsAt<LeafBlot>(index, length);
     }
 
-    // Merge formats from all lines
-    for (final lineBlot in lines) {
-      if (lineBlot is Block) {
-        final lineFormats = lineBlot.formats();
-        formats.addAll(lineFormats);
+    Map<String, dynamic> mergeAll(List<Blot> blots) {
+      if (blots.isEmpty) return <String, dynamic>{};
+      var formats = bubbleFormats(blots.first);
+      for (var i = 1; i < blots.length && formats.isNotEmpty; i++) {
+        formats = _combineFormats(bubbleFormats(blots[i]), formats);
       }
+      return formats;
     }
 
-    // Get leaf-level formats
-    var leafEntry = leaf(index);
-    var leafBlot = leafEntry.key;
-    if (length == 0 &&
-        (leafBlot == null || leafBlot.length() == 0) &&
-        index > 0) {
-      leafEntry = leaf(index - 1);
-      leafBlot = leafEntry.key;
-    }
+    return {...mergeAll(lineBlots), ...mergeAll(List<Blot>.from(leafBlots))};
+  }
 
-    if (leafBlot != null) {
-      final leafFormats = bubbleFormats(leafBlot);
-      formats.addAll(leafFormats);
-    }
-
-    return formats;
+  /// Mirrors `combineFormats` in editor.ts: keeps only formats present in
+  /// both maps; differing values accumulate into a list.
+  Map<String, dynamic> _combineFormats(
+      Map<String, dynamic> formats, Map<String, dynamic> combined) {
+    final merged = <String, dynamic>{};
+    combined.forEach((name, combinedValue) {
+      final value = formats[name];
+      if (value == null) return;
+      if (combinedValue == value) {
+        merged[name] = combinedValue;
+      } else if (combinedValue is List) {
+        if (!combinedValue.contains(value)) {
+          merged[name] = [...combinedValue, value];
+        } else {
+          merged[name] = combinedValue;
+        }
+      } else {
+        merged[name] = [combinedValue, value];
+      }
+    });
+    return merged;
   }
 
   int? indexFromDomNode(DomNode? node, int nativeOffset) {

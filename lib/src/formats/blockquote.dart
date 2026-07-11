@@ -22,7 +22,7 @@ class Blockquote extends Block {
   int get scope => kScope;
 
   @override
-  Map<String, dynamic> formats() => {kBlotName: true};
+  Map<String, dynamic> formats() => {...super.formats(), kBlotName: true};
 
   @override
   Blockquote clone() => Blockquote(element.cloneNode(deep: true));

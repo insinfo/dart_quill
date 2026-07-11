@@ -1,0 +1,48 @@
+.breadcrumbRow {
+  align-items: center;
+  display: flex;
+  margin-bottom: 32px;
+  justify-content: space-between;
+
+  &:after {
+    content: none;
+  }
+
+  .breadcrumb {
+    font-size: 1.25rem;
+    display: flex;
+
+    span:not(:last-child) {
+      &::after {
+        content: '>';
+        font-weight: normal;
+        margin: 0 4px 0 6px;
+      }
+    }
+  }
+
+  .breadcrumb span:first-child {
+    font-weight: bold;
+    margin-right: 4px;
+  }
+
+  .editOnGitHub {
+    font-size: 1.08rem;
+    max-width: var(--width-readable);
+    text-transform: uppercase;
+  }
+}
+
+.content {
+  code {
+    background: #f1f1f1;
+  }
+
+  pre {
+    border-radius: 2px;
+
+    code {
+      background: transparent;
+    }
+  }
+}

@@ -377,10 +377,6 @@ class Keyboard extends Module<KeyboardOptions> {
   }
 
   bool handleEnter(Range range, Context context) {
-    if (range.length > 0) {
-      quill.deleteText(range.index, range.length, source: EmitterSource.USER);
-    }
-
     final lineFormats = <String, dynamic>{};
     context.format.forEach((name, value) {
       if (quill.scroll.registry.query(name, Scope.BLOCK) != null &&
@@ -389,8 +385,13 @@ class Keyboard extends Module<KeyboardOptions> {
       }
     });
 
-    quill.insertText(range.index, '\n',
-        formats: lineFormats, source: EmitterSource.USER);
+    final delta = Delta()
+      ..retain(range.index)
+      ..delete(range.length)
+      ..insert('\n', lineFormats.isEmpty ? null : lineFormats);
+    quill.updateContents(delta, source: EmitterSource.USER);
+    quill.setSelection(Range(range.index + 1, 0),
+        source: EmitterSource.SILENT);
     quill.focus();
     return false;
   }

@@ -1,5 +1,14 @@
 # Roteiro de Tradução – QuillJS (TypeScript) → Dart
 
+> **Atualização 2026-07-11:** ver plano completo em `doc/PLANO_PORT_COMPLETO.md`.
+> Entregas desta data:
+> - Compilação restaurada: `quiver` removido (→ `Object.hash*`), `diff_match_patch` vendorizado em `lib/src/dependencies/`.
+> - **Bug do Enter corrigido**: `Scroll.build()` (hidratação parchment-fiel do DOM inicial), `LeafBlot.position`/`TextBlot.position` portados, `_domPosition` reescrito fiel a `rangeToNative` (inclusive start/end + clamp), `Block.path` com `inclusive:true`, `handleEnter` paritário (updateContents + setSelection SILENT), deslocamento de seleção estilo `modify()`/`shiftRange` em insertText/deleteText/insertEmbed/updateContents, `setContents` remove linha final extra.
+> - **Atributos de bloco habilitados**: `AttributorStore` portado, `Registry.registerAttributor`/`queryAttributor`, `Block.format/formats/formatAt` com attributors, align/indent/direction/color/background/font/size registrados por padrão; `Quill.formatLine` adicionado.
+> - `Scroll.getFormat` reescrito fiel a `Editor.getFormat` (combineFormats + descendants em range).
+> - Componentes Angular movidos para `example/ngdart/` (lib compila só com `web`).
+> - Testes: 152 VM + 3 browser (Enter em Chrome) todos passando; `dart analyze` limpo.
+
 ## Visão Geral
 
 Portamos o QuillJS para Dart visando paridade funcional com a base TypeScript, preservando compatibilidade web e abrindo espaço para outros adaptadores via camada `Dom*`. O código-fonte de referência encontra-se em `quilljs/src`, enquanto a implementação Dart reside em `lib/src`.

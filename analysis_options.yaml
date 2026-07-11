@@ -7,6 +7,11 @@ analyzer:
   # language:
   #   strict-casts: true
   #   strict-raw-types: true
+  exclude:
+    # Requires ngdart, which consumers add themselves; not part of the lib build.
+    #- example/ngdart/**
+    # Reference sources are kept only for comparison and should not be analyzed.
+    - referencias/**
   errors:
     # Permanent inclusions: These are optional hints that are not default on.
     # unused_element: warning
