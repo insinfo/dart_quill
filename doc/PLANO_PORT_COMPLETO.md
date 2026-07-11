@@ -154,7 +154,7 @@ Ordem de port (dependências primeiro):
 - [ ] F5.3 `formats/header.ts` (78 l.) e `formats/list.ts` (159 l.) → header/list dentro de célula.
 - [ ] F5.4 `quill-table-better.ts` (446 l.) → módulo `TableBetter` (registro, keyboard bindings `makeTableArrowHandler`/`makeCellBlockHandler`/etc., insertTable/deleteTable/getTable, listenDeleteTable).
 - [ ] F5.5 `utils/clipboard-matchers.ts` (110 l.) + `modules/clipboard.ts` (61 l.) → **parcial:** matchers `td,th`/`tr`/`col`/`table`, `TableClipboard` opt-in, registro público e `getTableDelta`/`onPaste` contextual entregues; ainda falta integrar copy/cut de seleção multicélula e o fluxo completo de células selecionadas.
-- [ ] F5.6 `ui/cell-selection.ts` (811 l.) → seleção multi-célula, copy/cut/paste de células, navegação por setas, WHITE_LIST. Incluir patch SALI (null-guard em `onCapturePaste`).
+- [ ] F5.6 `ui/cell-selection.ts` (811 l.) → **parcial:** núcleo `CellSelection` com retângulo lógico normalizado, expansão de `rowspan`/`colspan` e classe `ql-cell-selected` entregue; ainda faltam hit-test/arraste visual, copy/cut/paste multicélula, navegação por setas e `WHITE_LIST`.
 - [ ] F5.7 `ui/operate-line.ts` (463 l.) → redimensionamento de colunas/linhas/tabela. Incluir patch SALI (`quill.update(USER)` no mouseup).
 - [ ] F5.8 `ui/table-menus.ts` (1059 l.) → **parcial:** mini-toolbar contextual entregue para inserir/apagar linha/coluna/tabela e merge/split horizontal da célula ativa com `colspan`; ainda faltam merge retangular/rowspan, header row, copiar tabela e menus de propriedades completos.
 - [ ] F5.9 `ui/table-properties-form.ts` (791 l.) → diálogo de propriedades. **Substituir `@jaames/iro`** por color-picker próprio simples (paleta 15 cores + input hex + roda opcional canvas) — sem dep JS.
@@ -165,7 +165,7 @@ Ordem de port (dependências primeiro):
 
 **Testes portados/adicionados em 2026-07-11:** a árvore `referencias/quilljs/test` foi incluída como fonte normativa para testes core/unit/e2e (table, toolbar, clipboard, history e fuzz). O repositório do table-better não distribui testes equivalentes junto de `src`; foram criados testes unitários Dart e E2E Puppeteer para o seletor 10×10, inserção dimensional, toolbar contextual, ícones Tabler e isolamento contra CSS Limitless. O E2E gera o bundle com Webdev e o serve em porta efêmera com Shelf. Estado verificado: 203 testes unitários + 2 E2E passando.
 
-**Incremento seguinte:** colagem contextual de tabela coberta; estado atual: 207 unitários + 3 E2E.
+**Incremento seguinte:** núcleo de seleção multicélula coberto; estado atual: 209 unitários + 3 E2E.
 
 ### F5A — Manipulação de imagens estilo Word (pendente, ~1-2 semanas)
 - [x] F5A.1 Base de atributos Delta/DOM entregue (2026-07-11): largura, altura, `data-image-wrap`, tipo de âncora e campos X/Y reconhecidos pelo blot. Modos avançados `square`, `tight`, `behind` e `in-front` ainda pendentes.
