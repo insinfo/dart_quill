@@ -1,6 +1,8 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- `TableClipboard.getTableDelta`/`onPaste` para colagem contextual dentro de
+  células, com proteção contra aninhamento de tabelas temporárias.
 - `quill-table-better` clipboard matchers for `table`, `tr`, `td`/`th` and
   `col`, preserving table attributes, header cells, column spans/widths and
   internal cell IDs.

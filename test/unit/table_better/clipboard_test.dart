@@ -50,4 +50,39 @@ void main() {
         }),
     );
   });
+
+  test('applies the active cell context to external pasted text', () {
+    final quill = createTestQuill();
+    final clipboard = TableClipboard(quill, const ClipboardOptions());
+    final delta = clipboard.getTableDelta(
+      text: 'external',
+      formats: const {
+        'table-cell': 1,
+        'table-cell-block': 'cell-1',
+      },
+    );
+
+    expectDelta(
+      delta,
+      Delta()
+        ..insert('external', {
+          'table-cell': 1,
+          'table-cell-block': 'cell-1',
+        }),
+    );
+  });
+
+  test('does not nest a copied table inside an active cell', () {
+    final quill = createTestQuill();
+    final clipboard = TableClipboard(quill, const ClipboardOptions());
+    final delta = clipboard.getTableDelta(
+      html: '<table><tr><td>nested</td></tr></table>',
+      formats: const {
+        'table-cell': 1,
+        'table-cell-block': 'cell-1',
+      },
+    );
+
+    expect(delta.isEmpty, isTrue);
+  });
 }
