@@ -349,8 +349,8 @@ class Quill {
       final start = _domPosition(range.index);
       final end = _domPosition(range.index + range.length, inclusive: true);
       if (start != null && end != null) {
-        domBindings.adapter.setSelectionByNodes(
-            start.key, start.value, end.key, end.value);
+        domBindings.adapter
+            .setSelectionByNodes(start.key, start.value, end.key, end.value);
       }
     }
     if (preventScroll && previousScrollTop != null) {
@@ -363,9 +363,46 @@ class Quill {
   }
 
   void format(String name, dynamic value, {String source = EmitterSource.API}) {
-    final range = getSelection();
+    // Toolbar actions restore the saved range before calling this method. Use
+    // that canonical range instead of re-reading the browser selection, which
+    // may already have collapsed onto the first line after the toolbar click.
+    final range = selection.getRange();
     if (range == null) return;
-    formatText(range.index, range.length, name, value, source: source);
+    if (scroll.registry.query(name, Scope.BLOCK) != null ||
+        scroll.registry.queryAttributor(name, Scope.BLOCK_ATTRIBUTE) != null) {
+      formatLine(range.index, range.length, name, value, source: source);
+    } else if (range.length == 0) {
+      selection.format(name, value);
+    } else {
+      formatText(range.index, range.length, name, value, source: source);
+    }
+  }
+
+  /// Removes inline and block formats from the selected range.
+  ///
+  /// This mirrors the observable behavior of Quill 2's `removeFormat`: block
+  /// attributes (including lists and alignment) are cleared as well as inline
+  /// styles.
+  void removeFormat(int index, int length,
+      {String source = EmitterSource.API}) {
+    if (length <= 0) return;
+    final names = <String>{};
+    for (final operation
+        in getContents().slice(index, index + length).operations) {
+      names.addAll(operation.attributes?.keys ?? const <String>[]);
+    }
+    for (final line in scroll.lines(index, length)) {
+      names.addAll(line.formats().keys);
+    }
+    for (final name in names) {
+      if (scroll.registry.query(name, Scope.BLOCK) != null ||
+          scroll.registry.queryAttributor(name, Scope.BLOCK_ATTRIBUTE) !=
+              null) {
+        formatLine(index, length, name, false, source: source);
+      } else {
+        formatText(index, length, name, false, source: source);
+      }
+    }
   }
 
   void setSelection(Range range, {String source = EmitterSource.API}) {
@@ -373,8 +410,8 @@ class Quill {
     final start = _domPosition(range.index);
     final end = _domPosition(range.index + range.length, inclusive: true);
     if (start != null && end != null) {
-      domBindings.adapter.setSelectionByNodes(
-          start.key, start.value, end.key, end.value);
+      domBindings.adapter
+          .setSelectionByNodes(start.key, start.value, end.key, end.value);
     }
   }
 
@@ -528,11 +565,14 @@ ThemeOptions _mergeThemeOptions(ThemeOptions? options) {
     'clipboard': <String, dynamic>{},
     'input': <String, dynamic>{},
     'uploader': <String, dynamic>{},
+    'imageResize': <String, dynamic>{},
+    'table': <String, dynamic>{},
   };
   if (options != null) {
     modules.addAll(options.modules);
     return ThemeOptions(
       theme: options.theme,
+      iconTheme: options.iconTheme,
       bounds: options.bounds,
       modules: modules,
     );

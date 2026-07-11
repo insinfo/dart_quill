@@ -38,6 +38,9 @@ void main() {
       {'align': []},
     ],
     ['link', 'image', 'video'],
+    [
+      {'table': '3x3'},
+    ],
     ['formula', 'code-block'],
     ['clean'],
   ];
@@ -72,8 +75,7 @@ void _addButton(web.Element parent, String label, void Function() onClick) {
 }
 
 void _openDocx(Quill quill) {
-  final input =
-      web.document.createElement('input') as web.HTMLInputElement;
+  final input = web.document.createElement('input') as web.HTMLInputElement;
   input.type = 'file';
   input.accept =
       '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -112,8 +114,7 @@ void _download(Uint8List bytes, String filename, String mimeType) {
     web.BlobPropertyBag(type: mimeType),
   );
   final url = web.URL.createObjectURL(blob);
-  final anchor =
-      web.document.createElement('a') as web.HTMLAnchorElement;
+  final anchor = web.document.createElement('a') as web.HTMLAnchorElement;
   anchor.href = url;
   anchor.download = filename;
   anchor.click();

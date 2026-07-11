@@ -2,8 +2,10 @@ import '../core/module.dart';
 import '../core/quill.dart';
 import '../core/selection.dart';
 import '../core/emitter.dart';
+import '../blots/abstract/blot.dart';
 import '../platform/platform.dart';
 import '../platform/dom.dart';
+import 'table.dart';
 
 // Placeholder for logger
 class Logger {
@@ -46,6 +48,8 @@ class Toolbar extends Module<ToolbarProps> {
   DomElement? container;
   final List<List<dynamic>> controls = []; // [format, input]
   final Map<String, Handler> handlers = {};
+  Range? _savedRange;
+  _TableGridPicker? _tableGridPicker;
 
   Toolbar(Quill quill, ToolbarProps options) : super(quill, options) {
     final document = domBindings.adapter.document;
@@ -67,6 +71,11 @@ class Toolbar extends Module<ToolbarProps> {
       return;
     }
     container!.classes.add('ql-toolbar');
+    container!.addEventListener('mousedown', (event) {
+      _captureRange();
+      // Toolbar controls must not replace the editor's native selection.
+      event.preventDefault();
+    });
 
     if (options.handlers != null) {
       options.handlers!.forEach((format, handler) {
@@ -116,6 +125,9 @@ class Toolbar extends Module<ToolbarProps> {
     if (input.tagName.toLowerCase() == 'button') {
       input.setAttribute('type', 'button');
     }
+    if (format == 'table' && input.tagName.toLowerCase() == 'button') {
+      _tableGridPicker ??= _TableGridPicker(quill, container!, input);
+    }
 
     // Placeholder for quill.scroll.query
     // if (handlers[format] == null && quill.scroll.query(format) == null) {
@@ -128,6 +140,7 @@ class Toolbar extends Module<ToolbarProps> {
     final eventName = isSelect ? 'change' : 'mousedown';
 
     input.addEventListener(eventName, (e) {
+      final actionRange = _captureRange();
       dynamic value;
       if (isSelect) {
         // For select elements, get the selected option's value via getAttribute
@@ -157,8 +170,7 @@ class Toolbar extends Module<ToolbarProps> {
         e.preventDefault();
       }
 
-      quill.focus();
-      final range = quill.getSelection(focus: true);
+      final range = _restoreRange(actionRange);
       if (range == null) return;
 
       if (handlers[format] != null) {
@@ -173,7 +185,7 @@ class Toolbar extends Module<ToolbarProps> {
         //     EmitterSource.USER,
         //   );
         // } else {
-        quill.format(format, value, source: EmitterSource.USER);
+        _formatRange(range, format, value);
         // }
       }
       update(range);
@@ -294,8 +306,7 @@ class Toolbar extends Module<ToolbarProps> {
       resolvedValue = false;
     }
 
-    quill.focus();
-    final range = quill.getSelection(focus: true);
+    final range = _restoreRange(_savedRange ?? quill.selection.savedRange);
     if (range == null) {
       return;
     }
@@ -304,16 +315,58 @@ class Toolbar extends Module<ToolbarProps> {
     if (handler != null) {
       handler(resolvedValue);
     } else {
-      quill.format(format, resolvedValue, source: EmitterSource.USER);
+      _formatRange(range, format, resolvedValue);
     }
 
     update(range);
   }
 
+  Range? _captureRange() {
+    final range = quill.getSelection() ?? quill.selection.savedRange;
+    if (range != null) {
+      _savedRange = range;
+    }
+    return range;
+  }
+
+  Range? _restoreRange(Range? range) {
+    final restored = range ?? _savedRange ?? quill.selection.savedRange;
+    if (restored == null) {
+      return null;
+    }
+    _savedRange = restored;
+    quill.focus(preventScroll: true);
+    quill.setSelection(restored, source: EmitterSource.SILENT);
+    return restored;
+  }
+
+  void _formatRange(Range range, String format, dynamic value) {
+    final isBlock = quill.scroll.registry.query(format, Scope.BLOCK) != null ||
+        quill.scroll.registry.queryAttributor(format, Scope.BLOCK_ATTRIBUTE) !=
+            null;
+    if (isBlock) {
+      quill.formatLine(
+        range.index,
+        range.length,
+        format,
+        value,
+        source: EmitterSource.USER,
+      );
+    } else {
+      quill.formatText(
+        range.index,
+        range.length,
+        format,
+        value,
+        source: EmitterSource.USER,
+      );
+    }
+  }
+
   void _registerBuiltInHandlers() {
     if (!handlers.containsKey('clean')) {
       addHandler('clean', (_) {
-        final range = quill.getSelection();
+        final range = quill.selection.getRange();
         if (range == null) return;
         if (range.length == 0) {
           final formats = quill.getFormat(range.index, range.length);
@@ -321,18 +374,15 @@ class Toolbar extends Module<ToolbarProps> {
             quill.format(entry.key, false, source: EmitterSource.USER);
           }
         } else {
-          final formats = quill.getFormat(range.index, range.length);
-          for (final entry in formats.entries) {
-            quill.formatText(range.index, range.length, entry.key, false,
-                source: EmitterSource.USER);
-          }
+          quill.removeFormat(range.index, range.length,
+              source: EmitterSource.USER);
         }
       });
     }
 
     if (!handlers.containsKey('direction')) {
       addHandler('direction', (value) {
-        final range = quill.getSelection();
+        final range = quill.selection.getRange();
         if (range == null) return;
         final formats = quill.getFormat(range.index, range.length);
         final align = formats['align'];
@@ -347,7 +397,7 @@ class Toolbar extends Module<ToolbarProps> {
 
     if (!handlers.containsKey('indent')) {
       addHandler('indent', (value) {
-        final range = quill.getSelection();
+        final range = quill.selection.getRange();
         if (range == null) return;
         final formats = quill.getFormat(range.index, range.length);
         final currentIndent = int.tryParse('${formats['indent'] ?? 0}') ?? 0;
@@ -371,7 +421,7 @@ class Toolbar extends Module<ToolbarProps> {
 
     if (!handlers.containsKey('link')) {
       addHandler('link', (value) {
-        final range = quill.getSelection();
+        final range = quill.selection.getRange();
         if (range == null) return;
         final formats = quill.getFormat(range.index, range.length);
         final hasLink = formats.containsKey('link');
@@ -398,7 +448,7 @@ class Toolbar extends Module<ToolbarProps> {
 
     if (!handlers.containsKey('list')) {
       addHandler('list', (value) {
-        final range = quill.getSelection();
+        final range = quill.selection.getRange();
         if (range == null) return;
         final formats = quill.getFormat(range.index, range.length);
         if (value == 'check') {
@@ -413,6 +463,126 @@ class Toolbar extends Module<ToolbarProps> {
         quill.format('list', value, source: EmitterSource.USER);
       });
     }
+
+    if (!handlers.containsKey('table')) {
+      addHandler('table', (_) {
+        _tableGridPicker?.toggle();
+      });
+    }
+
+    final tableActions = <String, void Function(Table)>{
+      'table-row-above': (table) => table.insertRowAbove(),
+      'table-row-below': (table) => table.insertRowBelow(),
+      'table-column-left': (table) => table.insertColumnLeft(),
+      'table-column-right': (table) => table.insertColumnRight(),
+      'table-delete-row': (table) => table.deleteRow(),
+      'table-delete-column': (table) => table.deleteColumn(),
+      'table-delete': (table) => table.deleteTable(),
+    };
+    for (final entry in tableActions.entries) {
+      if (!handlers.containsKey(entry.key)) {
+        addHandler(entry.key, (_) {
+          final module = quill.getModule('table');
+          if (module is Table) entry.value(module);
+        });
+      }
+    }
+  }
+}
+
+/// Port of quill-table-better `TableSelect`: a 10×10 insertion grid.
+class _TableGridPicker {
+  _TableGridPicker(this.quill, this.toolbar, DomElement button) {
+    root = quill.container.ownerDocument.createElement('div');
+    root.classes.add('ql-table-select-container');
+    root.classes.add('ql-hidden');
+    root.setAttribute('role', 'dialog');
+    root.setAttribute('aria-label', 'Escolher tamanho da tabela');
+    root.style.cssText =
+        'display:none;position:absolute;z-index:1200;width:224px;padding:10px;'
+        'background:#fff;border:1px solid #bbb;border-radius:4px;'
+        'box-shadow:0 3px 10px rgba(0,0,0,.2);';
+
+    final list = quill.container.ownerDocument.createElement('div');
+    list.classes.add('ql-table-select-list');
+    list.style.cssText =
+        'display:grid;grid-template-columns:repeat(10,16px);gap:4px;';
+    for (var row = 1; row <= 10; row++) {
+      for (var column = 1; column <= 10; column++) {
+        final cell = quill.container.ownerDocument.createElement('span');
+        cell
+          ..setAttribute('data-row', '$row')
+          ..setAttribute('data-column', '$column')
+          ..setAttribute('role', 'button')
+          ..setAttribute('aria-label', '$row por $column')
+          ..style.cssText =
+              'width:16px;height:16px;border:1px solid #aaa;box-sizing:border-box;';
+        cell.addEventListener('mouseenter', (_) => highlight(row, column));
+        cell.addEventListener('click', (event) {
+          final module = quill.getModule('table');
+          if (module is Table) module.insertTable(row, column);
+          hide();
+          event.preventDefault();
+          event.stopPropagation();
+        });
+        cells.add(cell);
+        list.append(cell);
+      }
+    }
+    label = quill.container.ownerDocument.createElement('div');
+    label.classes.add('ql-table-select-label');
+    label
+      ..text = '0 × 0'
+      ..style.cssText = 'padding-top:8px;text-align:center;font-size:12px;';
+    root
+      ..append(list)
+      ..append(label);
+    toolbar.append(root);
+    button.setAttribute('aria-haspopup', 'dialog');
+    button.setAttribute('aria-expanded', 'false');
+    _button = button;
+  }
+
+  final Quill quill;
+  final DomElement toolbar;
+  final List<DomElement> cells = [];
+  late final DomElement root;
+  late final DomElement label;
+  late final DomElement _button;
+
+  void highlight(int rows, int columns) {
+    for (final cell in cells) {
+      final row = int.parse(cell.getAttribute('data-row')!);
+      final column = int.parse(cell.getAttribute('data-column')!);
+      final selected = row <= rows && column <= columns;
+      cell.classes.toggle('ql-cell-selected', selected);
+      cell.style
+        ..setProperty('background-color', selected ? '#2b7cff' : '#fff')
+        ..setProperty('border-color', selected ? '#2b7cff' : '#aaa');
+    }
+    label.text = '$rows × $columns';
+  }
+
+  void toggle() => root.classes.contains('ql-hidden') ? show() : hide();
+
+  void show() {
+    highlight(0, 0);
+    final bounds =
+        domBindings.adapter.getElementBounds(_button, relativeTo: toolbar);
+    if (bounds != null) {
+      root.style
+        ..left = '${bounds['left']}px'
+        ..top = '${(bounds['bottom'] as num).toDouble() + 6}px';
+    }
+    root.classes.remove('ql-hidden');
+    root.style.display = 'block';
+    _button.setAttribute('aria-expanded', 'true');
+  }
+
+  void hide() {
+    root.classes.add('ql-hidden');
+    root.style.display = 'none';
+    _button.setAttribute('aria-expanded', 'false');
   }
 }
 
@@ -429,7 +599,42 @@ void addButton(DomElement container, String format, [dynamic value]) {
   } else {
     input.setAttribute('aria-label', format);
   }
+  input.setAttribute('title', _controlTitle(format, value));
   container.append(input);
+}
+
+String _controlTitle(String format, dynamic value) {
+  final key = value == null ? format : '$format:$value';
+  return const <String, String>{
+        'bold': 'Negrito',
+        'italic': 'Itálico',
+        'underline': 'Sublinhado',
+        'strike': 'Tachado',
+        'blockquote': 'Citação',
+        'code-block': 'Bloco de código',
+        'link': 'Inserir link',
+        'image': 'Inserir imagem',
+        'video': 'Inserir vídeo',
+        'formula': 'Inserir fórmula',
+        'clean': 'Limpar formatação',
+        'table:3x3': 'Inserir tabela',
+        'table-row-above': 'Inserir linha acima',
+        'table-row-below': 'Inserir linha abaixo',
+        'table-column-left': 'Inserir coluna à esquerda',
+        'table-column-right': 'Inserir coluna à direita',
+        'table-delete-row': 'Excluir linha',
+        'table-delete-column': 'Excluir coluna',
+        'table-delete': 'Excluir tabela',
+        'list:ordered': 'Lista numerada',
+        'list:bullet': 'Lista com marcadores',
+        'list:check': 'Lista de tarefas',
+        'indent:-1': 'Diminuir recuo',
+        'indent:+1': 'Aumentar recuo',
+        'script:sub': 'Subscrito',
+        'script:super': 'Sobrescrito',
+        'direction:rtl': 'Direção da direita para a esquerda',
+      }[key] ??
+      (value == null ? format : '$format: $value');
 }
 
 void addControls(DomElement container, ToolbarConfig groups) {
@@ -461,6 +666,8 @@ void addSelect(DomElement container, String format, List<dynamic> values) {
   final document = domBindings.adapter.document;
   final input = document.createElement('select');
   input.classes.add('ql-$format');
+  input.setAttribute('title', _controlTitle(format, null));
+  input.setAttribute('aria-label', _controlTitle(format, null));
   values.forEach((value) {
     final option = document.createElement('option');
     if (value != false) {

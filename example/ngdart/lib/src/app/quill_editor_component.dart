@@ -8,7 +8,7 @@ import 'package:web/web.dart' as web;
   template: '<div id="quillEditorHost" class="quill-editor-host"></div>',
   styles: [
     ':host { display: block; }',
-    '.quill-editor-host { min-height: 200px; }',
+    '.quill-editor-host { min-height: 320px; }',
   ],
   changeDetection: ChangeDetectionStrategy.onPush,
 )
@@ -29,6 +29,9 @@ class QuillEditorComponent implements AfterViewInit {
       {'align': []},
     ],
     ['link', 'image', 'video'],
+    [
+      {'table': '3x3'},
+    ],
     ['formula', 'code-block'],
     ['clean'],
   ];
@@ -54,6 +57,7 @@ class QuillEditorComponent implements AfterViewInit {
 
     final container = HtmlDomElement(host);
     final modules = <String, dynamic>{
+      'table': true,
       if (showToolbar)
         'toolbar': <String, dynamic>{
           'container': _defaultToolbar,
@@ -62,6 +66,7 @@ class QuillEditorComponent implements AfterViewInit {
 
     final options = ThemeOptions(
       theme: theme,
+      iconTheme: QuillIconTheme.tabler,
       modules: modules,
     );
 

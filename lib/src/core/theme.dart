@@ -1,14 +1,18 @@
 import '../platform/dom.dart';
 import 'quill.dart';
 
+enum QuillIconTheme { svg, tabler }
+
 /// Options for theme configuration
 class ThemeOptions {
   final String? theme;
+  final QuillIconTheme iconTheme;
   final DomElement? bounds;
   final Map<String, dynamic> modules;
 
   ThemeOptions({
     this.theme,
+    this.iconTheme = QuillIconTheme.svg,
     this.bounds,
     Map<String, dynamic>? modules,
   }) : modules = modules != null
@@ -17,11 +21,13 @@ class ThemeOptions {
 
   ThemeOptions copyWith({
     String? theme,
+    QuillIconTheme? iconTheme,
     DomElement? bounds,
     Map<String, dynamic>? modules,
   }) {
     return ThemeOptions(
       theme: theme ?? this.theme,
+      iconTheme: iconTheme ?? this.iconTheme,
       bounds: bounds ?? this.bounds,
       modules: modules ?? Map<String, dynamic>.from(this.modules),
     );
@@ -57,25 +63,16 @@ class Theme {
     });
 
     // Base list styles
-    addStyle('.ql-editor ol, .ql-editor ul', {
-      'padding-left': '1.5em'
-    });
+    addStyle('.ql-editor ol, .ql-editor ul', {'padding-left': '1.5em'});
 
     // Add additional base styles for different formats
-    addStyle('.ql-editor p', {
-      'margin': '0',
-      'padding': '0'
-    });
+    addStyle('.ql-editor p', {'margin': '0', 'padding': '0'});
 
     // Bold style
-    addStyle('.ql-editor strong', {
-      'font-weight': 'bold'
-    });
+    addStyle('.ql-editor strong', {'font-weight': 'bold'});
 
     // Italic style
-    addStyle('.ql-editor em', {
-      'font-style': 'italic'
-    });
+    addStyle('.ql-editor em', {'font-style': 'italic'});
 
     // Code style
     addStyle('.ql-editor pre', {
@@ -133,7 +130,9 @@ class Theme {
     final module = Quill.createModule(
       quill,
       name,
-      options.modules[name] == true ? <String, dynamic>{} : options.modules[name],
+      options.modules[name] == true
+          ? <String, dynamic>{}
+          : options.modules[name],
     );
     if (module != null) {
       modules[name] = module;

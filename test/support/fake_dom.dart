@@ -55,6 +55,21 @@ class FakeDomAdapter implements DomAdapter {
   }
 
   @override
+  Map<String, dynamic>? getElementBounds(DomElement element,
+      {DomElement? relativeTo}) {
+    final width = double.tryParse(element.getAttribute('width') ?? '') ?? 120;
+    final height = double.tryParse(element.getAttribute('height') ?? '') ?? 80;
+    return {
+      'left': 0.0,
+      'right': width,
+      'top': 0.0,
+      'bottom': height,
+      'width': width,
+      'height': height,
+    };
+  }
+
+  @override
   Future<String?> readFileAsDataUrl(dynamic file) async {
     if (file is FakeDomFile && file.type.startsWith('image/')) {
       return 'data:${file.type};base64,';

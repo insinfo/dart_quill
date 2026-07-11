@@ -375,6 +375,13 @@ const Map<String, dynamic> icons = {
   },
   'strike': _strikeIcon,
   'table': _tableIcon,
+  'table-row-above': _tableIcon,
+  'table-row-below': _tableIcon,
+  'table-column-left': _tableIcon,
+  'table-column-right': _tableIcon,
+  'table-delete-row': _cleanIcon,
+  'table-delete-column': _cleanIcon,
+  'table-delete': _cleanIcon,
   'underline': _underlineIcon,
   'video': _videoIcon,
 };

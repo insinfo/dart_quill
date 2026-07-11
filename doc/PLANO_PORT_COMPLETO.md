@@ -1,7 +1,12 @@
 # Plano Detalhado — Conclusão do Port Quill 2.0.3 + quill-table-better para Dart Puro
 
 **Data:** 2026-07-11
-**Objetivo:** Editor rich-text completo em Dart puro, dependendo **somente de `web: ^1.1.1`**, embarcável em qualquer app Dart Web (puro ou ngdart ^8.0.0-dev.4), capaz de **abrir DOCX**, **exportar DOCX** e **exportar PDF**.
+**Objetivo:** Editor rich-text completo em Dart puro, dependendo **somente de `web: ^1.1.1`**, embarcável em qualquer app Dart Web (puro ou ngdart ^8.0.0-dev.4), capaz de **abrir DOCX**, **exportar DOCX** e **exportar PDF**, **exportar e importar delta**, **exportar e importar HTML**.
+
+referencias https://github.com/quilljs/awesome-quill
+tem que usar os icones do C:\MyDartProjects\dart_quill\lib\assets\icons\tabler de invetar outros icones malucos
+ser compativel com C:\MyDartProjects\dart_quill\example\ngdart\web\assets\css\ltr\all.min.css para não ter conflitos
+C:\MyDartProjects\dart_quill\referencias
 
 ---
 
@@ -122,6 +127,7 @@ Regras:
 - [x] F1.5 Atributos de bloco habilitados: `AttributorStore` portado (store.ts), `Registry.registerAttributor`/`queryAttributor` (lookup por attrName E keyName), `Block.format/formats/formatAt/_replaceWithBlock` com attributors; align/indent/direction/color/background/font/size registrados por padrão; `Quill.formatLine` + `Editor.formatLine` fiéis; `Scroll.getFormat` fiel a `Editor.getFormat` (combineFormats + `descendantsAt`).
 - [x] F1.6 Suíte: 152 testes VM verdes (inclui novos `block_attributors_test.dart`); 3 testes browser de Enter em Chrome (`test/browser/enter_key_test.dart`) verdes.
 - [ ] F1.7 Teste manual no navegador com o demo (`dart run build_runner serve`) — pendente de sessão interativa.
+- [x] F1.8 Formatação multilinha/toolbar corrigida (2026-07-11): `Quill.format` distingue blots e attributors de bloco; seleção salva sobrevive ao clique; align/list cobrem todas as linhas; `removeFormat` remove formatos inline e de bloco; limpeza de listas gera parágrafos válidos. Regressões cobertas na suíte.
 
 ### F2 — Migração `dart:html` → `package:web` ✅ CONCLUÍDO 2026-07-11
 - [x] F2.1 `platform/html_dom.dart` reescrito com `package:web` 1.1.1 + `dart:js_interop`. Sem mudanças nas interfaces de `dom.dart`. Adições internas: `HtmlRawEventProxy`/`HtmlRawEventTargetProxy` (acesso dinâmico a rawEvent), `HtmlDomCssStyle` (wrapper de CSSStyleDeclaration), `_HtmlDomDatasetMap` (mapa vivo sobre data-*), sanitizador de HTML próprio (substitui NodeValidator do dart:html).
@@ -141,6 +147,8 @@ Regras:
 Fonte: `referencias/quill_table_better/1.2.3/src/src` (~6.436 linhas TS em 15 arquivos).
 Ordem de port (dependências primeiro):
 
+**Estado em 2026-07-11:** o módulo básico `modules/table.dart` está funcional e habilitado por padrão. A toolbar Snow e os demos usam um único botão com dropdown em grade 10×10, realce progressivo e rótulo linhas×colunas, portado de `ui/toolbar-table.ts`. Ao entrar numa célula surge uma mini-toolbar contextual com inserir linha acima/abaixo, inserir coluna à esquerda/direita e excluir linha/coluna/tabela, usando títulos e ícones Tabler locais. Do table-better já existem formatos estruturais, config, utils, idiomas en_US/pt_BR e 38 testes. Seleção multicélula, merge/split, propriedades e redimensionamento visual ainda não estão concluídos.
+
 - [ ] F5.1 `utils/index.ts` (447 l.) + `config/index.ts` (437 l.) → `table_better/utils/`, `table_better/config/`.
 - [ ] F5.2 `formats/table.ts` (902 l.) → 12 blots: TableCellBlock/TableThBlock/TableCell/TableTh/TableRow/TableThRow/TableBody/TableThead/TableCol/TableColgroup/TableTemporary/TableContainer (+ `cellId`/`tableId`). Atenção: `TableTemporary` roundtrip de atributos da `<table>` via `optimize()`.
 - [ ] F5.3 `formats/header.ts` (78 l.) e `formats/list.ts` (159 l.) → header/list dentro de célula.
@@ -148,12 +156,22 @@ Ordem de port (dependências primeiro):
 - [ ] F5.5 `utils/clipboard-matchers.ts` (110 l.) + `modules/clipboard.ts` (61 l.) → matchers `td,th`/`tr`/`col`/`table` e `TableClipboard.getTableDelta`.
 - [ ] F5.6 `ui/cell-selection.ts` (811 l.) → seleção multi-célula, copy/cut/paste de células, navegação por setas, WHITE_LIST. Incluir patch SALI (null-guard em `onCapturePaste`).
 - [ ] F5.7 `ui/operate-line.ts` (463 l.) → redimensionamento de colunas/linhas/tabela. Incluir patch SALI (`quill.update(USER)` no mouseup).
-- [ ] F5.8 `ui/table-menus.ts` (1059 l.) → barra de menus flutuante (inserir/apagar linha/coluna, merge/split, header row, copiar tabela).
+- [ ] F5.8 `ui/table-menus.ts` (1059 l.) → **parcial:** mini-toolbar contextual entregue para inserir/apagar linha/coluna/tabela; ainda faltam merge/split, header row, copiar tabela e menus de propriedades completos.
 - [ ] F5.9 `ui/table-properties-form.ts` (791 l.) → diálogo de propriedades. **Substituir `@jaames/iro`** por color-picker próprio simples (paleta 15 cores + input hex + roda opcional canvas) — sem dep JS.
-- [ ] F5.10 `ui/toolbar-table.ts` (133 l.) + `modules/toolbar.ts` (283 l.) → grid 10×10 no toolbar e roteamento de formatos p/ células selecionadas.
+- [ ] F5.10 `ui/toolbar-table.ts` (133 l.) + `modules/toolbar.ts` (283 l.) → **grid 10×10 e dropdown entregues**; ainda falta roteamento de formatos para seleção multicélula, dependente de F5.6.
 - [ ] F5.11 `language/` → i18n com pt_BR/en_US primeiro (16 locales no total, ~60 chaves).
 - [ ] F5.12 CSS (847 l.) + 21 SVGs → `src/assets/` (strings Dart).
 - [ ] F5.13 Testes: port dos cenários da suíte JS do plugin + testes de Delta roundtrip de tabela.
+
+**Testes portados/adicionados em 2026-07-11:** a árvore `referencias/quilljs/test` foi incluída como fonte normativa para testes core/unit/e2e (table, toolbar, clipboard, history e fuzz). O repositório do table-better não distribui testes equivalentes junto de `src`; foram criados testes unitários Dart e E2E Puppeteer para o seletor 10×10, inserção dimensional, toolbar contextual, ícones Tabler e isolamento contra CSS Limitless. O E2E gera o bundle com Webdev e o serve em porta efêmera com Shelf. Estado verificado: 203 testes unitários + 2 E2E passando.
+
+### F5A — Manipulação de imagens estilo Word (pendente, ~1-2 semanas)
+- [x] F5A.1 Base de atributos Delta/DOM entregue (2026-07-11): largura, altura, `data-image-wrap`, tipo de âncora e campos X/Y reconhecidos pelo blot. Modos avançados `square`, `tight`, `behind` e `in-front` ainda pendentes.
+- [x] F5A.2 Primeira versão de `ImageResize` entregue: overlay, oito alças, tamanho mínimo, proporção preservada nos cantos e controles inline/esquerda/centro/direita. Controles usam exclusivamente o webfont Tabler vendorizado em `lib/assets/icons/tabler`. Teclado e limites avançados ainda pendentes.
+- [ ] F5A.3 Implementar arraste/ancoragem e reposicionamento responsivo sem gravar coordenadas transitórias do viewport no Delta.
+- [ ] F5A.4 Integrar undo/redo e clipboard; a toolbar flutuante e títulos/ARIA básicos foram entregues, mas context menu e operação completa por teclado seguem pendentes.
+- [ ] F5A.5 Mapear imagens inline/flutuantes para DrawingML no DOCX e para o layout do PDF; hoje o import DOCX reduz imagem flutuante a inline.
+- [ ] F5A.6 Testes browser de resize/drag e roundtrip Delta↔DOCX. Há 3 testes VM do módulo; validação visual manual foi realizada no demo Angular, mas a suíte Chrome automatizada ficou sem resposta nesta sessão.
 
 ### F6 — Plugins SALI opcionais (~2-3 dias)
 - [ ] F6.1 `sali_word_paste.js` (434 l.) → normalizador extra em `modules/normalize_external_html/normalizers/ms_word_sali.dart` (listas numeradas, bullets, bold por classe).

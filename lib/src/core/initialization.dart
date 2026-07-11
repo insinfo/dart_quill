@@ -2,6 +2,7 @@ import '../blots/abstract/blot.dart';
 import '../blots/block.dart';
 import '../blots/break.dart';
 import '../blots/cursor.dart';
+import '../blots/inline.dart';
 import '../blots/text.dart';
 import '../formats/align.dart';
 import '../formats/background.dart';
@@ -27,6 +28,7 @@ import '../modules/clipboard.dart';
 import '../modules/history.dart';
 import '../modules/keyboard.dart';
 import '../modules/input.dart';
+import '../modules/image_resize.dart';
 import '../modules/syntax.dart';
 import '../modules/table.dart';
 import '../modules/ui_node.dart';
@@ -77,6 +79,13 @@ void _registerModules() {
         ? options
         : UploaderOptions.fromConfig(options);
     return Uploader(quill, resolved);
+  });
+
+  Quill.registerModule('imageResize', (quill, options) {
+    final resolved = options is ImageResizeOptions
+        ? options
+        : ImageResizeOptions.fromConfig(options);
+    return ImageResize(quill, resolved);
   });
 
   Quill.registerModule('table', (quill, options) {
@@ -134,6 +143,12 @@ void _registerFormats() {
       blotName: TextBlot.kBlotName,
       scope: TextBlot.kScope,
       create: ([dynamic value]) => TextBlot.create(value),
+    ),
+    RegistryEntry(
+      blotName: Inline.kBlotName,
+      scope: Inline.kScope,
+      tagNames: const [Inline.kTagName],
+      create: ([dynamic _]) => Inline.create(),
     ),
     RegistryEntry(
       blotName: Bold.kBlotName,

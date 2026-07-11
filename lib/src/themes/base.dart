@@ -10,6 +10,7 @@ import '../modules/uploader.dart';
 import '../platform/dom.dart';
 import '../platform/platform.dart';
 import '../ui/picker.dart';
+import '../ui/tabler_icons.dart';
 import '../ui/tooltip.dart';
 
 // Utility functions (simplified for now)
@@ -449,7 +450,12 @@ class BaseTheme extends Theme {
             fillSelect(select, SIZES);
           }
         }
-        picker = Picker(select);
+        picker = Picker(
+          select,
+          iconSvg: options.iconTheme == QuillIconTheme.tabler
+              ? tablerPickerIcon
+              : null,
+        );
       }
 
       picker.onSelected = (value) {

@@ -17,6 +17,27 @@ Quill _createQuill(String html) {
 void main() {
   group('Table Module', () {
     group('insert table', () {
+      test('creates a contextual toolbar with Tabler table actions', () {
+        final quill = _createQuill('<p><br></p>');
+        final table = quill.getModule('table') as Table;
+        quill.setSelection(const Range(0, 0));
+        table.insertTable(2, 2);
+        quill.setSelection(const Range(0, 0));
+        table.updateContextToolbar();
+
+        final contextToolbar = quill.container
+            .querySelectorAll('div')
+            .where((element) =>
+                element.classes.contains('ql-table-context-toolbar'))
+            .single;
+        final actions = contextToolbar.querySelectorAll('button');
+        expect(actions, hasLength(7));
+        expect(contextToolbar.getAttribute('role'), 'toolbar');
+        expect(actions.first.getAttribute('title'), 'Inserir linha acima');
+        expect(actions.last.getAttribute('title'), 'Excluir tabela');
+        expect(actions.first.innerHTML, contains('ti-row-insert-top'));
+      });
+
       test('empty', () {
         final quill = _createQuill('<p><br></p>');
         final table = quill.getModule('table') as Table;
@@ -215,7 +236,9 @@ void main() {
 
       test('insertText after', () {
         final quill = _setup();
-        quill.updateContents(Delta()..retain(18)..insert('\n'));
+        quill.updateContents(Delta()
+          ..retain(18)
+          ..insert('\n'));
         expect(
           quill.root,
           quill.root.toEqualHTML(

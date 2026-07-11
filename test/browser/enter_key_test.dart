@@ -97,6 +97,16 @@ void main() {
     expect(inSecond, isTrue,
         reason: 'caret should be inside the second paragraph, '
             'anchor=${native.anchorNode} offset=${native.anchorOffset}');
+
+    final syncedRange = quill.getSelection();
+    expect(syncedRange?.index, equals(6),
+        reason: 'the implicit newline between paragraphs must count toward '
+            'the document index');
+
+    quill.insertText(syncedRange!.index, 'World', source: 'user');
+    expect(quill.getText(), equals('Hello\nWorld\n'));
+    expect(paragraphs[0].textContent, equals('Hello'));
+    expect(paragraphs[1].textContent, equals('World'));
   });
 
   test('Successive Enters keep advancing lines', () {

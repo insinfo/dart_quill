@@ -39,6 +39,11 @@ class _StubDomAdapter implements DomAdapter {
       null;
 
   @override
+  Map<String, dynamic>? getElementBounds(DomElement element,
+          {DomElement? relativeTo}) =>
+      null;
+
+  @override
   Future<String?> readFileAsDataUrl(dynamic file) async => null;
 
   @override

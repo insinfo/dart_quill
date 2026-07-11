@@ -1,5 +1,58 @@
 import '../platform/dom.dart';
+import '../platform/platform.dart';
+import '../formats/abstract/attributor.dart';
 import 'abstract/blot.dart';
+
+class Inline extends InlineBlot {
+  Inline(DomElement domNode) : super(domNode);
+
+  static const String kBlotName = 'inline';
+  static const String kTagName = 'SPAN';
+  static const int kScope = Scope.INLINE_BLOT;
+
+  late final AttributorStore attributes = AttributorStore(element);
+
+  static Inline create() =>
+      Inline(domBindings.adapter.document.createElement(kTagName));
+
+  @override
+  String get blotName => kBlotName;
+
+  @override
+  int get scope => kScope;
+
+  @override
+  Inline clone() => Inline(element.cloneNode(deep: false));
+
+  Attributor? _lookupAttributor(String name) =>
+      isAttached ? scroll.queryAttributor(name, Scope.INLINE_ATTRIBUTE) : null;
+
+  void _ensureAttributesBuilt() {
+    if (isAttached) {
+      attributes.ensureBuilt(_lookupAttributor);
+    }
+  }
+
+  @override
+  void format(String name, dynamic value) {
+    final attribute = _lookupAttributor(name);
+    if (attribute == null) {
+      super.format(name, value);
+      return;
+    }
+    _ensureAttributesBuilt();
+    attributes.attribute(attribute, value);
+    if (attributes.values().isEmpty) {
+      unwrap();
+    }
+  }
+
+  @override
+  Map<String, dynamic> formats() {
+    _ensureAttributesBuilt();
+    return attributes.values();
+  }
+}
 
 abstract class InlineBlot extends ParentBlot {
   static const List<Type> allowedChildren = [];

@@ -7,16 +7,22 @@ import '../modules/keyboard.dart';
 import '../modules/toolbar.dart';
 import '../platform/dom.dart';
 import '../ui/icons.dart';
+import '../ui/tabler_icons.dart';
 import 'base.dart';
 
 const TOOLBAR_CONFIG = [
   [
-    {'header': ['1', '2', '3', false]}
+    {
+      'header': ['1', '2', '3', false]
+    }
   ],
   ['bold', 'italic', 'underline', 'link'],
   [
-    {'list': 'ordered'}, 
+    {'list': 'ordered'},
     {'list': 'bullet'}
+  ],
+  [
+    {'table': '3x3'},
   ],
   ['clean'],
 ];
@@ -71,7 +77,8 @@ class SnowTooltip extends BaseTooltip {
       if (isEditing) return;
       if (range == null) return;
       if (range.length == 0 && source == EmitterSource.USER) {
-        final entry = quill.scroll.descendant((blot) => blot is Link, range.index);
+        final entry =
+            quill.scroll.descendant((blot) => blot is Link, range.index);
         final linkBlot = entry.key as Link?;
         if (linkBlot != null) {
           final linkIndex = quill.scroll.offset(linkBlot);
@@ -122,14 +129,23 @@ class SnowTheme extends BaseTheme {
       };
     }
     quill.container.classes.add('ql-snow');
+    if (options.iconTheme == QuillIconTheme.tabler) {
+      quill.container.classes.add('ql-icons-tabler');
+    }
   }
 
   @override
   void extendToolbar(Toolbar toolbar) {
     if (toolbar.container != null) {
       toolbar.container!.classes.add('ql-snow');
-      buildButtons(toolbar.container!.querySelectorAll('button'), icons);
-  buildPickers(toolbar, toolbar.container!.querySelectorAll('select'), icons);
+      final themeIcons =
+          options.iconTheme == QuillIconTheme.tabler ? tablerIcons : icons;
+      if (options.iconTheme == QuillIconTheme.tabler) {
+        toolbar.container!.classes.add('ql-icons-tabler');
+      }
+      buildButtons(toolbar.container!.querySelectorAll('button'), themeIcons);
+      buildPickers(
+          toolbar, toolbar.container!.querySelectorAll('select'), themeIcons);
       tooltip = SnowTooltip(quill, options.bounds ?? quill.container);
       if (toolbar.container!.querySelector('.ql-link') != null) {
         quill.keyboard.addBinding(

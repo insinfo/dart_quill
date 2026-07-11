@@ -214,6 +214,8 @@ abstract class DomAdapter {
   void setSelectionByNodes(
       DomNode startNode, int startOffset, DomNode endNode, int endOffset);
   Map<String, dynamic>? getBounds(DomElement root, int index, int length);
+  Map<String, dynamic>? getElementBounds(DomElement element,
+      {DomElement? relativeTo});
   Future<String?> readFileAsDataUrl(dynamic file);
   void focus(DomElement element);
   String? get userAgent;

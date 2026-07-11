@@ -2,10 +2,6 @@
   "dart.analysisExcludedFolders": [
     "referencias"
   ],
-  "files.exclude": {
-    "**/referencias": true,
-    "**/referencias/**": true
-  },
   "search.exclude": {
     "**/referencias": true,
     "**/referencias/**": true

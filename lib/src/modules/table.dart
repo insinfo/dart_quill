@@ -8,6 +8,7 @@ import '../core/selection.dart';
 import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
 import '../formats/table.dart';
 import '../platform/dom.dart';
+import '../platform/platform.dart';
 
 class TableOptions {
   const TableOptions();
@@ -20,8 +21,8 @@ class TableOptions {
 class Table extends Module<TableOptions> {
   bool _isBalancing = false;
 
-  Table(Quill quill, TableOptions options)
-      : super(quill, options) {
+  Table(Quill quill, TableOptions options) : super(quill, options) {
+    _buildContextToolbar();
     _listenBalanceCells();
     quill.emitter.on(
       EmitterEvents.TEXT_CHANGE,
@@ -35,6 +36,118 @@ class Table extends Module<TableOptions> {
       },
     );
     balanceTables();
+  }
+
+  late final DomElement _contextToolbar;
+  TableCell? _activeCell;
+  DomElement? _activeCellElement;
+
+  void _buildContextToolbar() {
+    _contextToolbar = quill.addContainer('ql-table-context-toolbar');
+    _contextToolbar.setAttribute('role', 'toolbar');
+    _contextToolbar.setAttribute('aria-label', 'Ferramentas da tabela');
+    _contextToolbar.style.cssText =
+        'display:none;position:absolute;z-index:1100;padding:4px;gap:2px;'
+        'background:#fff;border:1px solid #bbb;border-radius:4px;'
+        'box-shadow:0 3px 10px rgba(0,0,0,.18);';
+    final actions = <(String, String, String, void Function())>[
+      (
+        'row-insert-top',
+        'Inserir linha acima',
+        'table-row-above',
+        insertRowAbove
+      ),
+      (
+        'row-insert-bottom',
+        'Inserir linha abaixo',
+        'table-row-below',
+        insertRowBelow
+      ),
+      (
+        'column-insert-left',
+        'Inserir coluna à esquerda',
+        'table-column-left',
+        insertColumnLeft
+      ),
+      (
+        'column-insert-right',
+        'Inserir coluna à direita',
+        'table-column-right',
+        insertColumnRight
+      ),
+      ('row-remove', 'Excluir linha', 'table-delete-row', deleteRow),
+      ('column-remove', 'Excluir coluna', 'table-delete-column', deleteColumn),
+      ('table-off', 'Excluir tabela', 'table-delete', deleteTable),
+    ];
+    for (final action in actions) {
+      final button = quill.container.ownerDocument.createElement('button');
+      button
+        ..setAttribute('type', 'button')
+        ..setAttribute('title', action.$2)
+        ..setAttribute('aria-label', action.$2)
+        ..setAttribute('data-table-action', action.$3)
+        ..style.cssText = _contextButtonStyle
+        ..innerHTML = '<i class="ti ti-${action.$1}" aria-hidden="true"></i>';
+      button.addEventListener('mousedown', (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      button.addEventListener('click', (event) {
+        action.$4();
+        updateContextToolbar();
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      _contextToolbar.append(button);
+    }
+    quill.root.addEventListener('click', (event) {
+      DomNode? node = event.target;
+      while (node != null && node != quill.root) {
+        if (node is DomElement && node.tagName.toLowerCase() == 'td') {
+          _activeCellElement = node;
+          updateContextToolbar();
+          return;
+        }
+        node = node.parentNode;
+      }
+      _activeCell = null;
+      _activeCellElement = null;
+      _contextToolbar.style.display = 'none';
+    });
+    quill.root.addEventListener('keyup', (_) => updateContextToolbar());
+    quill.root.addEventListener('scroll', (_) => updateContextToolbar());
+    quill.emitter.on(EmitterEvents.SELECTION_CHANGE,
+        (dynamic _range, dynamic _oldRange, dynamic _source) {
+      updateContextToolbar();
+    });
+  }
+
+  static const String _contextButtonStyle =
+      'appearance:none;-webkit-appearance:none;width:28px;height:28px;'
+      'min-width:28px;min-height:28px;margin:0;padding:3px;border:0;'
+      'border-radius:2px;background:transparent;box-shadow:none;outline:none;'
+      'display:inline-flex;align-items:center;justify-content:center;'
+      'color:#444;font-size:18px;line-height:1;cursor:pointer;';
+
+  void updateContextToolbar() {
+    final context = _getTable(quill.selection.getRange());
+    final cell = _activeCell ?? context.cell;
+    final cellElement = _activeCellElement ?? cell?.element;
+    if (cellElement == null) {
+      return;
+    }
+    final bounds = domBindings.adapter
+        .getElementBounds(cellElement, relativeTo: quill.container);
+    if (bounds == null) {
+      _contextToolbar.style.display = 'none';
+      return;
+    }
+    final top =
+        ((bounds['top'] as num).toDouble() - 38).clamp(0, double.infinity);
+    _contextToolbar.style
+      ..display = 'flex'
+      ..left = '${bounds['left']}px'
+      ..top = '${top}px';
   }
 
   void balanceTables() {
@@ -52,9 +165,22 @@ class Table extends Module<TableOptions> {
       for (final table in tables) {
         _normalizeTableBoundaries(table);
       }
+      _wireContextCells();
       _runUserOptimize();
     } finally {
       _isBalancing = false;
+    }
+  }
+
+  void _wireContextCells() {
+    for (final cell in quill.scroll.descendants<TableCell>()) {
+      if (cell.element.dataset['contextToolbarBound'] == 'true') continue;
+      cell.element.dataset['contextToolbarBound'] = 'true';
+      cell.element.addEventListener('click', (_) {
+        _activeCell = cell;
+        _activeCellElement = cell.element;
+        updateContextToolbar();
+      });
     }
   }
 
@@ -123,8 +249,7 @@ class Table extends Module<TableOptions> {
     if (range == null) {
       return;
     }
-    final delta = Delta()
-      ..retain(range.index);
+    final delta = Delta()..retain(range.index);
     for (var i = 0; i < rows; i++) {
       final buffer = StringBuffer();
       for (var j = 0; j < columns; j++) {
@@ -205,16 +330,17 @@ class Table extends Module<TableOptions> {
           return;
         }
         final shouldBalance = records.any((mutation) {
-          final target = mutation.target;
-          if (target is! DomElement) {
-            return false;
-          }
-          final tagName = target.tagName.toUpperCase();
-          return tagName == 'TD' ||
-              tagName == 'TR' ||
-              tagName == 'TBODY' ||
-              tagName == 'TABLE';
-        }) || _needsTableNormalization();
+              final target = mutation.target;
+              if (target is! DomElement) {
+                return false;
+              }
+              final tagName = target.tagName.toUpperCase();
+              return tagName == 'TD' ||
+                  tagName == 'TR' ||
+                  tagName == 'TBODY' ||
+                  tagName == 'TABLE';
+            }) ||
+            _needsTableNormalization();
         if (!shouldBalance) {
           return;
         }

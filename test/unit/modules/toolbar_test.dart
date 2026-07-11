@@ -95,6 +95,26 @@ _ToolbarFixture _createToolbarFixture() {
 
 void main() {
   group('Toolbar addControls', () {
+    test('generated controls expose localized titles', () {
+      final container = _createContainer();
+      addControls(
+          container,
+          ToolbarConfig([
+            [
+              {'list': 'bullet'},
+              {'table': '3x3'},
+              'clean',
+            ],
+          ]));
+
+      expect(_getButtonByClass(container, 'ql-list')?.getAttribute('title'),
+          'Lista com marcadores');
+      expect(_getButtonByClass(container, 'ql-table')?.getAttribute('title'),
+          'Inserir tabela');
+      expect(_getButtonByClass(container, 'ql-clean')?.getAttribute('title'),
+          'Limpar formatação');
+    });
+
     test('single group', () {
       final container = _createContainer();
       addControls(
@@ -176,7 +196,7 @@ void main() {
         container,
         '''
         <span class="ql-formats">
-          <select class="ql-size">
+          <select class="ql-size" aria-label="size">
             <option value="10px"></option>
             <option selected="selected"></option>
             <option value="18px"></option>
@@ -215,12 +235,12 @@ void main() {
         container,
         '''
         <span class="ql-formats">
-          <select class="ql-font">
+          <select class="ql-font" aria-label="font">
             <option selected="selected"></option>
             <option value="sans-serif"></option>
             <option value="monospace"></option>
           </select>
-          <select class="ql-size">
+          <select class="ql-size" aria-label="size">
             <option value="10px"></option>
             <option selected="selected"></option>
             <option value="18px"></option>
@@ -236,7 +256,7 @@ void main() {
         <span class="ql-formats">
           <button class="ql-list" type="button" value="ordered" aria-label="list: ordered" aria-pressed="false"></button>
           <button class="ql-list" type="button" value="bullet" aria-label="list: bullet" aria-pressed="false"></button>
-          <select class="ql-align">
+          <select class="ql-align" aria-label="align">
             <option selected="selected"></option>
             <option value="center"></option>
             <option value="right"></option>
@@ -253,6 +273,71 @@ void main() {
   });
 
   group('Toolbar active state updates', () {
+    test('table button builds a quill-table-better style 10x10 picker', () {
+      final quill = createTestQuill(
+        initialHtml: '<p><br></p>',
+        modules: {
+          'toolbar': [
+            [
+              {'table': '3x3'}
+            ],
+          ],
+        },
+        theme: 'snow',
+      );
+      final toolbar = quill.getModule('toolbar') as Toolbar;
+      final pickers = toolbar.container!
+          .querySelectorAll('div')
+          .where((element) =>
+              element.classes.contains('ql-table-select-container'))
+          .toList();
+      expect(pickers, hasLength(1), reason: toolbar.container!.innerHTML);
+      final picker = pickers.single;
+      final cells = picker
+          .querySelectorAll('span')
+          .where((element) => element.hasAttribute('data-row'))
+          .toList();
+
+      expect(cells, hasLength(100));
+      expect(cells.first.getAttribute('data-row'), '1');
+      expect(cells.first.getAttribute('data-column'), '1');
+      expect(cells.last.getAttribute('data-row'), '10');
+      expect(cells.last.getAttribute('data-column'), '10');
+      expect(picker.getAttribute('role'), 'dialog');
+    });
+
+    test('block formats apply to every selected line', () {
+      final quill = createTestQuill(initialHtml: '<p>one</p><p>two</p>');
+      quill.setSelection(const Range(0, 7), source: EmitterSource.USER);
+
+      quill.format('align', 'center', source: EmitterSource.USER);
+
+      final paragraphs = quill.root.querySelectorAll('p');
+      expect(paragraphs, hasLength(2));
+      expect(paragraphs.every((p) => p.classes.contains('ql-align-center')),
+          isTrue,
+          reason: quill.root.innerHTML);
+
+      quill.format('list', 'bullet', source: EmitterSource.USER);
+      expect(quill.root.querySelectorAll('li'), hasLength(2));
+      expect(quill.getFormat(0)['list'], equals('bullet'));
+      expect(quill.getFormat(4)['list'], equals('bullet'));
+    });
+
+    test('clean removes inline styles and list formatting', () {
+      final quill = createTestQuill(
+        initialHtml: '<ul><li><strong>one</strong></li><li>two</li></ul>',
+      );
+
+      quill.removeFormat(0, 7, source: EmitterSource.USER);
+
+      expect(quill.root.querySelectorAll('ul'), isEmpty,
+          reason: quill.root.innerHTML);
+      expect(quill.root.querySelectorAll('li'), isEmpty);
+      expect(quill.root.querySelectorAll('strong'), isEmpty);
+      expect(quill.root.querySelectorAll('p'), hasLength(2));
+    });
+
     test('toggle button reflects formats', () {
       final fixture = _createToolbarFixture();
       final boldButton = _requireElement(

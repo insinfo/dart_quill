@@ -78,6 +78,37 @@ class TextBlot extends LeafBlot {
       return;
     }
 
+    final inlineAttribute =
+        scroll.queryAttributor(name, Scope.INLINE_ATTRIBUTE);
+    if (inlineAttribute != null) {
+      final target = _isolate(index, length);
+      if (value == null || value == false) {
+        Blot? current = target.parent;
+        while (current is InlineBlot) {
+          if (current is Inline && current.formats().containsKey(name)) {
+            current.format(name, false);
+            return;
+          }
+          current = current.parent;
+        }
+        return;
+      }
+
+      final parent = target.parent;
+      if (parent is Inline && parent.length() == target.length()) {
+        parent.format(name, value);
+        return;
+      }
+      if (parent is! ParentBlot) {
+        return;
+      }
+      final wrapper = scroll.create(Inline.kBlotName) as Inline;
+      parent.insertBefore(wrapper, target);
+      wrapper.appendChild(target);
+      wrapper.format(name, value);
+      return;
+    }
+
     final inlineEntry = scroll.query(name, Scope.INLINE_BLOT);
     if (inlineEntry == null) {
       super.formatAt(index, length, name, value);

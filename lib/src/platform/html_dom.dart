@@ -231,17 +231,29 @@ class HtmlRawEventProxy {
       ? (nativeEvent as web.KeyboardEvent).keyCode
       : null;
 
-  bool get altKey => nativeEvent.isA<web.KeyboardEvent>() &&
+  bool get altKey =>
+      nativeEvent.isA<web.KeyboardEvent>() &&
       (nativeEvent as web.KeyboardEvent).altKey;
 
-  bool get ctrlKey => nativeEvent.isA<web.KeyboardEvent>() &&
+  bool get ctrlKey =>
+      nativeEvent.isA<web.KeyboardEvent>() &&
       (nativeEvent as web.KeyboardEvent).ctrlKey;
 
-  bool get metaKey => nativeEvent.isA<web.KeyboardEvent>() &&
+  bool get metaKey =>
+      nativeEvent.isA<web.KeyboardEvent>() &&
       (nativeEvent as web.KeyboardEvent).metaKey;
 
-  bool get shiftKey => nativeEvent.isA<web.KeyboardEvent>() &&
+  bool get shiftKey =>
+      nativeEvent.isA<web.KeyboardEvent>() &&
       (nativeEvent as web.KeyboardEvent).shiftKey;
+
+  double get clientX => nativeEvent.isA<web.MouseEvent>()
+      ? (nativeEvent as web.MouseEvent).clientX.toDouble()
+      : 0;
+
+  double get clientY => nativeEvent.isA<web.MouseEvent>()
+      ? (nativeEvent as web.MouseEvent).clientY.toDouble()
+      : 0;
 
   String? get inputType => nativeEvent.isA<web.InputEvent>()
       ? (nativeEvent as web.InputEvent).inputType
@@ -656,6 +668,32 @@ class HtmlDomAdapter implements DomAdapter {
   }
 
   @override
+  Map<String, dynamic>? getElementBounds(DomElement element,
+      {DomElement? relativeTo}) {
+    if (element is! _HtmlDomNode) return null;
+    final elementNode = (element as _HtmlDomNode).node;
+    if (!elementNode.isA<web.Element>()) return null;
+    final rect = (elementNode as web.Element).getBoundingClientRect();
+    web.DOMRect? relativeRect;
+    if (relativeTo is _HtmlDomNode) {
+      final relativeNode = (relativeTo as _HtmlDomNode).node;
+      if (relativeNode.isA<web.Element>()) {
+        relativeRect = (relativeNode as web.Element).getBoundingClientRect();
+      }
+    }
+    final left = rect.left - (relativeRect?.left ?? 0);
+    final top = rect.top - (relativeRect?.top ?? 0);
+    return {
+      'left': left,
+      'right': left + rect.width,
+      'top': top,
+      'bottom': top + rect.height,
+      'width': rect.width,
+      'height': rect.height,
+    };
+  }
+
+  @override
   Future<String?> readFileAsDataUrl(dynamic file) {
     web.File? nativeFile;
     if (file is HtmlDomFile) {
@@ -710,7 +748,7 @@ int _textOffset(web.Node root, web.Node target, int targetOffset) {
         final children = node.childNodes;
         final limit = targetOffset.clamp(0, children.length);
         for (var i = 0; i < limit; i++) {
-          offset += children.item(i)!.textContent?.length ?? 0;
+          offset += _quillNodeLength(children.item(i)!);
         }
       }
       found = true;
@@ -722,15 +760,46 @@ int _textOffset(web.Node root, web.Node target, int targetOffset) {
     }
     final children = node.childNodes;
     for (var i = 0; i < children.length; i++) {
-      visit(children.item(i)!);
+      final child = children.item(i)!;
+      visit(child);
       if (found) {
         return;
+      }
+      if (_isQuillLine(child)) {
+        offset += 1;
       }
     }
   }
 
   visit(root);
   return offset;
+}
+
+bool _isQuillLine(web.Node node) {
+  if (!node.isA<web.Element>()) {
+    return false;
+  }
+  final element = node as web.Element;
+  final tag = element.tagName.toUpperCase();
+  return tag == 'P' ||
+      tag == 'LI' ||
+      tag == 'BLOCKQUOTE' ||
+      tag == 'PRE' ||
+      RegExp(r'^H[1-6]$').hasMatch(tag) ||
+      element.classList.contains('ql-code-block');
+}
+
+int _quillNodeLength(web.Node node) {
+  if (node.isA<web.Text>()) {
+    return (node as web.Text).data.length;
+  }
+
+  var length = 0;
+  final children = node.childNodes;
+  for (var i = 0; i < children.length; i++) {
+    length += _quillNodeLength(children.item(i)!);
+  }
+  return length + (_isQuillLine(node) ? 1 : 0);
 }
 
 ({web.Node node, int offset}) _findTextPosition(web.Node root, int index) {
@@ -1048,8 +1117,7 @@ class HtmlDomElement extends _HtmlDomNode implements DomElement {
   @override
   set innerHTML(String? value) {
     final markup = value ?? '';
-    final doc =
-        web.DOMParser().parseFromString(markup.toJS, 'text/html');
+    final doc = web.DOMParser().parseFromString(markup.toJS, 'text/html');
     final source = doc.body ?? doc.documentElement;
     if (source != null) {
       _sanitizeTree(source);
@@ -1218,8 +1286,7 @@ class HtmlDomCssStyle {
     _style.cssText = value ?? '';
   }
 
-  String getPropertyValue(String property) =>
-      _style.getPropertyValue(property);
+  String getPropertyValue(String property) => _style.getPropertyValue(property);
 
   void setProperty(String property, String? value, [String? priority]) {
     _style.setProperty(property, value ?? '', priority ?? '');

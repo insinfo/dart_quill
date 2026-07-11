@@ -110,6 +110,30 @@ class ListItem extends Block {
       super.format(name, value);
       return;
     }
+    if (value == null || value == false) {
+      // Match Quill's ListItem.format: clearing the list delegates to Block,
+      // which replaces the <li> with a normal paragraph. Our list container
+      // is explicit, so place that paragraph beside (not inside) the list.
+      final list = parent;
+      final outer = list?.parent;
+      if (list is ListContainer && outer != null) {
+        final replacement = scroll.create(Block.kBlotName) as Block;
+        outer.insertBefore(replacement, list);
+        moveChildren(replacement, null);
+        for (final entry in super.formats().entries) {
+          if (entry.key != kBlotName) {
+            replacement.format(entry.key, entry.value);
+          }
+        }
+        remove();
+        if (list.children.isEmpty) {
+          list.remove();
+        }
+      } else {
+        super.format(name, value);
+      }
+      return;
+    }
     if (value is Map) {
       final checked = value['checked'];
       if (checked != null) {

@@ -6,7 +6,7 @@ import '../platform/platform.dart';
 String sanitizeUrl(String url, List<String> protocols) {
   final Uri? uri = Uri.tryParse(url);
   if (uri == null) return '//:0';
-  
+
   if (uri.scheme.isEmpty) return url; // Relative URL
   if (protocols.contains(uri.scheme.toLowerCase())) {
     return url;
@@ -20,7 +20,15 @@ class Image extends Embed {
   static const String kBlotName = 'image';
   static const String kTagName = 'IMG';
   static const int kScope = Scope.INLINE_BLOT;
-  static const List<String> kAttributes = ['alt', 'height', 'width'];
+  static const List<String> kAttributes = [
+    'alt',
+    'height',
+    'width',
+    'data-image-wrap',
+    'data-anchor',
+    'data-anchor-x',
+    'data-anchor-y',
+  ];
 
   static DomElement create(dynamic value) {
     if (value is! String) {
@@ -42,8 +50,9 @@ class Image extends Embed {
   }
 
   static bool match(String url) {
-    return RegExp(r'\.(jpe?g|gif|png|webp|avif)$', caseSensitive: false).hasMatch(url) ||
-           RegExp(r'^data:image\/.+;base64').hasMatch(url);
+    return RegExp(r'\.(jpe?g|gif|png|webp|avif)$', caseSensitive: false)
+            .hasMatch(url) ||
+        RegExp(r'^data:image\/.+;base64').hasMatch(url);
   }
 
   static String? getValue(DomElement node) {
@@ -82,7 +91,8 @@ class Image extends Embed {
   Image clone() => Image(element.cloneNode(deep: true));
 
   @override
-  void optimize([List<DomMutationRecord>? mutations, Map<String, dynamic>? context]) {
+  void optimize(
+      [List<DomMutationRecord>? mutations, Map<String, dynamic>? context]) {
     super.optimize(mutations, context);
     // Remove imagem se a URL for inválida
     final src = getValue(element);

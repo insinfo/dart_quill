@@ -167,7 +167,10 @@ class Picker {
         item.setAttribute('data-label', labelText);
       }
 
-      item.addEventListener('click', (_) => _selectItem(item));
+      item.addEventListener('mousedown', (event) {
+        event.preventDefault();
+        _selectItem(item);
+      });
       item.addEventListener('keydown', (event) {
         final key = (event.rawEvent as dynamic).key as String?;
         if (key == 'Enter') {

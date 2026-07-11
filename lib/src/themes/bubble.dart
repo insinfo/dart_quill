@@ -5,6 +5,7 @@ import '../core/theme.dart';
 import '../modules/toolbar.dart';
 import '../platform/dom.dart';
 import '../ui/icons.dart';
+import '../ui/tabler_icons.dart';
 import 'base.dart';
 
 // Utility functions (simplified for now)
@@ -22,11 +23,16 @@ Map<String, dynamic> merge(Map<String, dynamic> a, Map<String, dynamic> b) {
 
 const TOOLBAR_CONFIG = <List<dynamic>>[
   ['bold', 'italic', 'link'],
-  [{'header': 1}, {'header': 2}, 'blockquote'],
+  [
+    {'header': 1},
+    {'header': 2},
+    'blockquote'
+  ],
 ];
 
 class BubbleTooltip extends BaseTooltip {
-  static const String TEMPLATE = '<span class="ql-tooltip-arrow"></span><div class="ql-tooltip-editor"><input type="text" data-formula="e=mc^2" data-link="https://quilljs.com" data-video="Embed URL"><a class="ql-close"></a></div>';
+  static const String TEMPLATE =
+      '<span class="ql-tooltip-arrow"></span><div class="ql-tooltip-editor"><input type="text" data-formula="e=mc^2" data-link="https://quilljs.com" data-video="Embed URL"><a class="ql-close"></a></div>';
 
   BubbleTooltip(Quill quill, [DomElement? bounds])
       : super(quill, TEMPLATE, bounds) {
@@ -88,18 +94,17 @@ class BubbleTooltip extends BaseTooltip {
 
   @override
   double position(Map<String, dynamic> bounds) {
-  final baseShift = super.position(bounds);
-  final container = boundsContainer;
+    final baseShift = super.position(bounds);
+    final container = boundsContainer;
     final containerWidth = container.offsetWidth.toDouble();
-  final tooltipWidth = root.offsetWidth.toDouble();
-  final left = _extract(bounds['left']);
-  final rawWidth = _extract(bounds['width']);
-  final effectiveWidth = rawWidth == 0 ? tooltipWidth : rawWidth;
-  final center = left + effectiveWidth / 2;
+    final tooltipWidth = root.offsetWidth.toDouble();
+    final left = _extract(bounds['left']);
+    final rawWidth = _extract(bounds['width']);
+    final effectiveWidth = rawWidth == 0 ? tooltipWidth : rawWidth;
+    final center = left + effectiveWidth / 2;
     final idealLeft = center - tooltipWidth / 2;
-    final maxLeft = containerWidth > tooltipWidth
-        ? containerWidth - tooltipWidth
-        : 0;
+    final maxLeft =
+        containerWidth > tooltipWidth ? containerWidth - tooltipWidth : 0;
     final clampedLeft = idealLeft.clamp(0, maxLeft.toDouble());
     final style = root.style as dynamic;
     style.left = '${clampedLeft}px';
@@ -137,16 +142,26 @@ class BubbleTheme extends BaseTheme {
       };
     }
     quill.container.classes.add('ql-bubble');
+    if (options.iconTheme == QuillIconTheme.tabler) {
+      quill.container.classes.add('ql-icons-tabler');
+    }
   }
 
   @override
   void extendToolbar(Toolbar toolbar) {
-    final bubbleTooltip = BubbleTooltip(quill, options.bounds ?? quill.container);
+    final bubbleTooltip =
+        BubbleTooltip(quill, options.bounds ?? quill.container);
     tooltip = bubbleTooltip;
     if (toolbar.container != null) {
       bubbleTooltip.root.append(toolbar.container!);
-      buildButtons(toolbar.container!.querySelectorAll('button'), icons);
-      buildPickers(toolbar, toolbar.container!.querySelectorAll('select'), icons);
+      final themeIcons =
+          options.iconTheme == QuillIconTheme.tabler ? tablerIcons : icons;
+      if (options.iconTheme == QuillIconTheme.tabler) {
+        toolbar.container!.classes.add('ql-icons-tabler');
+      }
+      buildButtons(toolbar.container!.querySelectorAll('button'), themeIcons);
+      buildPickers(
+          toolbar, toolbar.container!.querySelectorAll('select'), themeIcons);
     }
     super.extendToolbar(toolbar);
   }

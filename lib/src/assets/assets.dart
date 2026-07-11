@@ -8,10 +8,26 @@ export 'snow_css.dart' show quillSnowCss;
 class QuillAssets {
   QuillAssets._();
 
+  static const String snowStylesheet =
+      'packages/dart_quill/assets/quill.snow.css';
+  static const String limitlessStylesheet =
+      'packages/dart_quill/assets/quill.limitless.css';
+  static const String tablerIconsStylesheet =
+      'packages/dart_quill/assets/icons/tabler/tabler-icons.css';
+
   static final Set<String> _injected = {};
 
   /// Injects the Snow theme stylesheet once per document.
   static void injectSnowTheme() => _injectCss('ql-snow-css', quillSnowCss);
+
+  /// Loads the file-based Snow, Limitless integration and Tabler icon styles.
+  static void injectFileTheme({bool tablerIcons = true}) {
+    _injectStylesheet('ql-snow-file', snowStylesheet);
+    if (tablerIcons) {
+      _injectStylesheet('ql-tabler-icons', tablerIconsStylesheet);
+    }
+    _injectStylesheet('ql-limitless-file', limitlessStylesheet);
+  }
 
   static void _injectCss(String id, String css) {
     if (_injected.contains(id)) return;
@@ -21,6 +37,18 @@ class QuillAssets {
     style.setAttribute('data-quill-style', id);
     style.text = css;
     head.append(style);
+    _injected.add(id);
+  }
+
+  static void _injectStylesheet(String id, String href) {
+    if (_injected.contains(id)) return;
+    final document = domBindings.adapter.document;
+    final head = document.querySelector('head') ?? document.body;
+    final link = document.createElement('link');
+    link.setAttribute('rel', 'stylesheet');
+    link.setAttribute('href', href);
+    link.setAttribute('data-quill-style', id);
+    head.append(link);
     _injected.add(id);
   }
 }

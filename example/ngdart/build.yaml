@@ -1,0 +1,7 @@
+targets:
+  $default:
+    builders:
+      ngdart:
+        generate_for:
+          exclude:
+            - web/assets/**

@@ -1,13 +1,25 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>dart_quill ngdart example</title>
+  <title>Dart Quill - AngularDart + Limitless</title>
   <base href="/">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="assets/fonts/inter/inter.css">
+  <link rel="stylesheet" href="assets/css/ltr/all.min.css">
+  <link rel="stylesheet" href="packages/dart_quill/assets/icons/tabler/tabler-icons.css">
+  <link rel="stylesheet" href="packages/dart_quill/assets/quill.limitless.css">
+  <script defer src="main.dart.js"></script>
 </head>
 <body>
-  <my-app>Loading...</my-app>
-  <script defer src="main.dart.js"></script>
+  <my-app>
+    <div class="d-flex align-items-center justify-content-center min-vh-100">
+      <div class="text-center">
+        <div class="spinner-border text-primary mb-3" role="status"></div>
+        <div>Carregando editor...</div>
+      </div>
+    </div>
+  </my-app>
 </body>
 </html>
