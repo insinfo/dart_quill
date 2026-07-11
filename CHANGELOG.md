@@ -1,6 +1,12 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- `quill-table-better` clipboard matchers for `table`, `tr`, `td`/`th` and
+  `col`, preserving table attributes, header cells, column spans/widths and
+  internal cell IDs.
+- Opt-in `TableClipboard`, `registerTableBetter()` wiring and the public
+  `dart_quill_table_better.dart` entrypoint without changing stock clipboard
+  behavior.
 - Horizontal cell merge/split actions with persisted `colspan` and logical-column-aware table balancing.
 - Puppeteer coverage for merge/split and for the plain-Dart demo's bundled Tabler icon theme.
 - Shelf/Webdev-backed Puppeteer E2E coverage for the table grid and contextual toolbar, including computed-style assertions against Limitless CSS interference.

@@ -13,7 +13,30 @@
 /// — the same collision exists in the TS registry, where they are created
 /// programmatically or matched by class.
 import '../blots/abstract/blot.dart';
+import '../core/quill.dart';
+import '../modules/clipboard.dart';
 import 'formats/table.dart';
+import 'modules/clipboard.dart';
+
+/// Registers the table-better structural formats and its clipboard port.
+///
+/// This is opt-in because the advanced formats intentionally replace Quill's
+/// basic table blots with the names used by quill-table-better 1.2.3.
+void registerTableBetter({bool replaceClipboard = true}) {
+  for (final entry in registerTableBetterFormats()) {
+    Quill.register(entry, true);
+  }
+  if (replaceClipboard) {
+    Quill.registerModule(
+      'clipboard',
+      (quill, options) => TableClipboard(
+        quill,
+        options is ClipboardOptions ? options : const ClipboardOptions(),
+      ),
+      overwrite: true,
+    );
+  }
+}
 
 List<RegistryEntry> registerTableBetterFormats() {
   return <RegistryEntry>[
