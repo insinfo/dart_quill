@@ -1,6 +1,8 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- Diálogo DOM `TablePropertiesForm` para propriedades de tabela e células, com
+  campos, aplicar/cancelar, títulos e ícones Tabler.
 - `TablePropertiesController` para leitura/aplicação validada de propriedades
   de tabela e células, incluindo cores, dimensões, bordas e alinhamento.
 - Controlador `OperateLine` do table-better para redimensionar colunas, linhas

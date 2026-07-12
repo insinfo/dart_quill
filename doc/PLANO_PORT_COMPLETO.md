@@ -157,7 +157,7 @@ Ordem de port (dependências primeiro):
 - [ ] F5.6 `ui/cell-selection.ts` (811 l.) → **parcial:** núcleo `CellSelection` com retângulo lógico normalizado, expansão de `rowspan`/`colspan`, classe `ql-cell-selected`, controlador opt-in de âncora/`Shift`-click e copy/cut HTML/TSV entregues; ainda faltam integração com eventos nativos de clipboard, hit-test/arraste visual, navegação por setas e `WHITE_LIST`.
 - [ ] F5.7 `ui/operate-line.ts` (463 l.) → **parcial:** controlador `OperateLine` para redimensionar colunas/linhas/tabela, limites mínimos, persistência em `col`/`tr`/`table` e callback entregues; ainda falta overlay visual, hit-test de alças e atualização `USER` no mouseup.
 - [ ] F5.8 `ui/table-menus.ts` (1059 l.) → **parcial:** mini-toolbar contextual entregue para inserir/apagar linha/coluna/tabela e merge/split horizontal da célula ativa com `colspan`; ainda faltam merge retangular/rowspan, header row, copiar tabela e menus de propriedades completos.
-- [ ] F5.9 `ui/table-properties-form.ts` (791 l.) → **parcial:** `TablePropertiesController` com leitura/aplicação validada de propriedades de tabela/célula, cores, dimensões, bordas e alinhamento entregue; ainda falta o diálogo visual, paleta de 15 cores/input hex e integração com a mini-toolbar.
+- [ ] F5.9 `ui/table-properties-form.ts` (791 l.) → **parcial:** `TablePropertiesController` e diálogo DOM `TablePropertiesForm` com leitura/aplicação validada de propriedades de tabela/célula, cores, dimensões, bordas, alinhamento e aplicar/cancelar entregues; ainda falta a paleta própria de 15 cores/input hex, acessibilidade completa e integração com a mini-toolbar.
 - [ ] F5.10 `ui/toolbar-table.ts` (133 l.) + `modules/toolbar.ts` (283 l.) → **grid 10×10 e dropdown entregues**; ainda falta roteamento de formatos para seleção multicélula, dependente de F5.6.
 - [ ] F5.11 `language/` → i18n com pt_BR/en_US primeiro (16 locales no total, ~60 chaves).
 - [ ] F5.12 CSS (847 l.) + 21 SVGs → `src/assets/` (strings Dart).
@@ -165,7 +165,7 @@ Ordem de port (dependências primeiro):
 
 **Testes portados/adicionados em 2026-07-11:** a árvore `referencias/quilljs/test` foi incluída como fonte normativa para testes core/unit/e2e (table, toolbar, clipboard, history e fuzz). O repositório do table-better não distribui testes equivalentes junto de `src`; foram criados testes unitários Dart e E2E Puppeteer para o seletor 10×10, inserção dimensional, toolbar contextual, ícones Tabler e isolamento contra CSS Limitless. O E2E gera o bundle com Webdev e o serve em porta efêmera com Shelf. Estado verificado: 203 testes unitários + 2 E2E passando.
 
-**Incremento seguinte:** seleção lógica, `Shift`-click, copy/cut multicélula, núcleo de resize e propriedades validadas cobertos; estado atual: 215 unitários + 3 E2E.
+**Incremento seguinte:** seleção lógica, `Shift`-click, copy/cut multicélula, núcleo de resize e diálogo de propriedades cobertos; estado atual: 216 unitários + 3 E2E.
 
 ### F5A — Manipulação de imagens estilo Word (pendente, ~1-2 semanas)
 - [x] F5A.1 Base de atributos Delta/DOM entregue (2026-07-11): largura, altura, `data-image-wrap`, tipo de âncora e campos X/Y reconhecidos pelo blot. Modos avançados `square`, `tight`, `behind` e `in-front` ainda pendentes.

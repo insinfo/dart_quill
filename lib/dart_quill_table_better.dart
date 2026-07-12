@@ -9,3 +9,4 @@ export 'src/table_better/ui/cell_selection.dart';
 export 'src/table_better/ui/cell_selection_controller.dart';
 export 'src/table_better/ui/operate_line.dart';
 export 'src/table_better/ui/properties_form.dart';
+export 'src/table_better/ui/table_properties_form.dart';
