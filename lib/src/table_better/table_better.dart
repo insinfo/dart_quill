@@ -10,6 +10,7 @@ import '../core/module.dart';
 import '../core/quill.dart';
 import '../core/selection.dart';
 import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
+import '../modules/keyboard.dart';
 import 'formats/table.dart';
 import 'language/language.dart';
 import 'ui/cell_selection.dart';
@@ -68,6 +69,7 @@ class TableBetter extends Module<TableBetterOptions> {
   TableBetter(Quill quill, TableBetterOptions options)
       : language = Language(options.language),
         super(quill, options) {
+    _registerKeyboardBindings();
     listenDeleteTable();
     quill.emitter.on(
       EmitterEvents.TEXT_CHANGE,
@@ -81,6 +83,47 @@ class TableBetter extends Module<TableBetterOptions> {
 
   final Language language;
   final Map<TableContainer, CellSelectionController> _cellSelections = {};
+
+  void _registerKeyboardBindings() {
+    for (final up in const [true, false]) {
+      quill.keyboard.addBinding(
+        BindingObject(key: up ? 'ArrowUp' : 'ArrowDown'),
+        context: {
+          'collapsed': true,
+          'format': [TableCell.kBlotName, TableTh.kBlotName],
+        },
+        handler: (Range _range, Context _context) => false,
+      );
+    }
+    for (final key in const ['Backspace', 'Delete']) {
+      quill.keyboard.addBinding(
+        BindingObject(key: key),
+        context: {
+          'collapsed': true,
+          'format': [TableCellBlock.kBlotName, TableThBlock.kBlotName],
+        },
+        handler: (Range range, Context context) =>
+            _handleCellBlockKey(key, range, context),
+      );
+    }
+  }
+
+  bool _handleCellBlockKey(String key, Range range, Context context) {
+    final line = context.line;
+    if (context.offset == 0 && line.prev == null) return false;
+    if (context.offset == 0 && line.prev is TableCellBlock) {
+      line.remove();
+      quill.setSelection(
+        Range((range.index - 1).clamp(0, range.index).toInt(), 0),
+        source: EmitterSource.SILENT,
+      );
+      return false;
+    }
+    if (context.offset != 0 && context.suffix.isEmpty && key == 'Delete') {
+      return false;
+    }
+    return true;
+  }
 
   /// Logical multi-cell selection of the table under the caret, if any.
   CellSelection? get activeCellSelection {

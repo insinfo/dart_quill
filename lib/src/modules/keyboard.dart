@@ -183,9 +183,12 @@ class Keyboard extends Module<KeyboardOptions> {
     final event = evt;
 
     if (binding.altKey != null && binding.altKey != event.altKey) return false;
-    if (binding.ctrlKey != null && binding.ctrlKey != event.ctrlKey) return false;
-    if (binding.metaKey != null && binding.metaKey != event.metaKey) return false;
-    if (binding.shiftKey != null && binding.shiftKey != event.shiftKey) return false;
+    if (binding.ctrlKey != null && binding.ctrlKey != event.ctrlKey)
+      return false;
+    if (binding.metaKey != null && binding.metaKey != event.metaKey)
+      return false;
+    if (binding.shiftKey != null && binding.shiftKey != event.shiftKey)
+      return false;
 
     return binding.key == event.key || binding.key == event.keyCode?.toString();
   }
@@ -276,9 +279,8 @@ class Keyboard extends Module<KeyboardOptions> {
       final prefixText = (leafStart is TextBlot)
           ? leafStart.value().substring(0, offsetStart)
           : '';
-      final suffixText = (leafEnd is TextBlot)
-          ? leafEnd.value().substring(offsetEnd)
-          : '';
+      final suffixText =
+          (leafEnd is TextBlot) ? leafEnd.value().substring(offsetEnd) : '';
 
       final curContext = Context(
         collapsed: range.length == 0,
@@ -301,7 +303,7 @@ class Keyboard extends Module<KeyboardOptions> {
 
         if (binding.format is List) {
           if (!(binding.format as List)
-              .every((name) => curContext.format[name] == null)) return false;
+              .any((name) => curContext.format[name] != null)) return false;
         } else if (binding.format is Map) {
           if (!(binding.format as Map).keys.every((name) {
             if (binding.format[name] == true)
@@ -390,8 +392,7 @@ class Keyboard extends Module<KeyboardOptions> {
       ..delete(range.length)
       ..insert('\n', lineFormats.isEmpty ? null : lineFormats);
     quill.updateContents(delta, source: EmitterSource.USER);
-    quill.setSelection(Range(range.index + 1, 0),
-        source: EmitterSource.SILENT);
+    quill.setSelection(Range(range.index + 1, 0), source: EmitterSource.SILENT);
     quill.focus();
     return false;
   }

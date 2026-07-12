@@ -73,4 +73,21 @@ void main() {
     expect(language.name, 'custom');
     expect(language.content['copy'], 'Copiar personalizado');
   });
+
+  test('registers the original table cell keyboard bindings', () {
+    final module = createModule();
+    final keyboard = module.quill.keyboard;
+    for (final key in const ['ArrowUp', 'ArrowDown', 'Backspace', 'Delete']) {
+      final bindings = keyboard.bindings[key] ?? const [];
+      expect(
+        bindings.any((binding) =>
+            binding.format is List &&
+                (binding.format as List).contains(TableCellBlock.kBlotName) ||
+            binding.format is List &&
+                (binding.format as List).contains(TableCell.kBlotName)),
+        isTrue,
+        reason: 'missing table-better binding for $key',
+      );
+    }
+  });
 }

@@ -1,6 +1,8 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- Bindings de teclado do `TableBetter` para ArrowUp/ArrowDown e
+  Backspace/Delete em células, portados de `quill-table-better.ts`.
 - Núcleo do módulo `TableBetter` (`insertTable`, `getTable`, `deleteTable`,
   limpeza de temporários, prevenção de tabelas aninhadas e monitor de tabelas
   vazias), com registro público em `modules/table-better`.
@@ -70,6 +72,8 @@
 - Removed obsolete merge scripts and the vendored `quilljs/` source tree from the active build path, keeping references under `referencias/`.
 
 ### Fixed
+- Corrigida a semântica de `Keyboard` para listas de formatos: um binding com
+  `format: [a, b]` agora casa quando qualquer formato listado está ativo.
 - Reset contextual image and table buttons to Quill's icon-only 28 × 28 presentation, preventing native/Limitless button borders, backgrounds, padding, and shadows from leaking into floating toolbars.
 - Contextual table toolbar visibility now follows the active table cell reliably after insertion and browser selection updates.
 - Multi-line block formatting now matches Quill 2.0.3: alignment and list actions apply to every selected line instead of only the first.
