@@ -1,6 +1,11 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- Núcleo do módulo `TableBetter` (`insertTable`, `getTable`, `deleteTable`,
+  limpeza de temporários, prevenção de tabelas aninhadas e monitor de tabelas
+  vazias), com registro público em `modules/table-better`.
+- Wiring automático de `CellSelectionController` por tabela e suporte a
+  configuração de idioma no formato mapa usado pelo plugin TypeScript.
 - Diálogo DOM `TablePropertiesForm` para propriedades de tabela e células, com
   campos, aplicar/cancelar, títulos e ícones Tabler.
 - `TablePropertiesController` para leitura/aplicação validada de propriedades
