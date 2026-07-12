@@ -1,6 +1,8 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- `TablePropertiesController` para leitura/aplicação validada de propriedades
+  de tabela e células, incluindo cores, dimensões, bordas e alinhamento.
 - Controlador `OperateLine` do table-better para redimensionar colunas, linhas
   e tabela com limites mínimos, persistência em `col`/`tr`/`table` e callback.
 - Copy/cut multicélula no núcleo `CellSelection`, com HTML tabular sanitizado,
