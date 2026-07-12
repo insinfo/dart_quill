@@ -4,6 +4,7 @@ import 'package:dart_quill/src/table_better/formats/header.dart';
 import 'package:dart_quill/src/table_better/formats/list.dart';
 import 'package:dart_quill/src/table_better/register.dart';
 import 'package:dart_quill/src/table_better/table_better.dart';
+import 'package:dart_quill/src/modules/toolbar.dart';
 import 'package:test/test.dart';
 
 import '../../support/quill_test_helpers.dart';
@@ -22,10 +23,20 @@ void main() {
     }
   });
 
-  TableBetter createModule() {
-    final quill = createTestQuill(modules: {
+  TableBetter createModule({bool withToolbar = false}) {
+    final modules = <String, dynamic>{
+      if (withToolbar)
+        'toolbar': ToolbarProps(
+          container: ToolbarConfig(const [
+            ['header', 'list']
+          ]),
+        ),
       'table-better': const <String, dynamic>{},
-    });
+    };
+    final quill = createTestQuill(
+      modules: modules,
+      theme: withToolbar ? 'snow' : null,
+    );
     return quill.getModule('table-better') as TableBetter;
   }
 
@@ -103,5 +114,35 @@ void main() {
           (binding.format as List).contains(TableList.kBlotName)),
       isTrue,
     );
+  });
+
+  test('routes toolbar header format to all selected cells', () {
+    final module = createModule(withToolbar: true);
+    module.quill.setSelection(const Range(0, 0));
+    module.insertTable(1, 2);
+    final table = module.quill.scroll.descendants<TableContainer>().single;
+    final selection = module.controllerFor(table).selection;
+    selection.select(
+      startRow: 0,
+      startColumn: 0,
+      endRow: 0,
+      endColumn: 1,
+    );
+
+    final toolbar = module.quill.getModule('toolbar') as Toolbar;
+    toolbar.handlers['header']!(2);
+    final headers = table.descendants<TableHeader>().toList();
+    expect(headers, hasLength(2));
+    expect(
+        headers.every((header) =>
+            (header.formats()[TableHeader.kBlotName] as Map)['value'] == 2),
+        isTrue);
+
+    toolbar.handlers['list']!('bullet');
+    final lists = table.descendants<TableList>().toList();
+    expect(lists, hasLength(2), reason: table.element.innerHTML);
+    expect(
+        lists.every((list) => list.formats()[TableList.kBlotName] == 'bullet'),
+        isTrue);
   });
 }

@@ -1,6 +1,9 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- `TableToolbarRouter` para aplicar header, lista, alinhamento, direção e recuo
+  em todas as células selecionadas, preservando os handlers normais fora da
+  tabela.
 - Formatos table-better `TableHeader`, `TableListContainer` e `TableList`, com
   hidratação por classes, preservação de `data-cell` e retorno a
   `TableCellBlock`.
@@ -76,6 +79,8 @@
 - Removed obsolete merge scripts and the vendored `quilljs/` source tree from the active build path, keeping references under `referencias/`.
 
 ### Fixed
+- `TableBetter.getTable()` agora reconhece caret em `TableHeader` e
+  `TableList`, mantendo o contexto após conversões feitas pela toolbar.
 - Corrigida a semântica de `Keyboard` para listas de formatos: um binding com
   `format: [a, b]` agora casa quando qualquer formato listado está ativo.
 - Reset contextual image and table buttons to Quill's icon-only 28 × 28 presentation, preventing native/Limitless button borders, backgrounds, padding, and shadows from leaking into floating toolbars.
