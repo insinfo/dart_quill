@@ -51,6 +51,16 @@ class CellSelection {
 
   bool get isActive => _selected.isNotEmpty;
 
+  /// Returns the logical top-left coordinate of [cell] in this table.
+  ({int row, int column})? coordinateOf(TableCell cell) {
+    for (final placement in _placements()) {
+      if (identical(placement.cell, cell)) {
+        return (row: placement.row, column: placement.column);
+      }
+    }
+    return null;
+  }
+
   void clear() {
     for (final cell in _selected) {
       cell.element.classes.remove('ql-cell-selected');

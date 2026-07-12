@@ -1,6 +1,8 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- `CellSelectionController` opt-in com âncora por clique e extensão por
+  `Shift`-click, usando as coordenadas lógicas do table-better.
 - Núcleo `CellSelection` do table-better com retângulo lógico normalizado,
   expansão de `rowspan`/`colspan` e marcação das células selecionadas.
 - `TableClipboard.getTableDelta`/`onPaste` para colagem contextual dentro de

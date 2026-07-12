@@ -45,6 +45,20 @@ void main() {
         isTrue);
   });
 
+  test('reports logical coordinates for cells with spans', () {
+    final scroll = createScroll(
+      _tableHtml,
+      registry: createRegistry(registerTableBetterFormats()),
+    );
+    final table = scroll.descendants<TableContainer>().first;
+    final cells = table.descendants<TableCell>().toList();
+    final selection = CellSelection(table);
+    expect(selection.coordinateOf(cells[0]), (row: 0, column: 0));
+    expect(selection.coordinateOf(cells[1]), (row: 0, column: 1));
+    expect(selection.coordinateOf(cells[2]), (row: 1, column: 0));
+    expect(selection.coordinateOf(cells[3]), (row: 1, column: 1));
+  });
+
   test('clear removes selection class', () {
     final scroll = createScroll(
       _tableHtml,
