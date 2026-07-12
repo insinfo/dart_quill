@@ -165,7 +165,7 @@ Ordem de port (dependências primeiro):
 
 **Testes portados/adicionados em 2026-07-11:** a árvore `referencias/quilljs/test` foi incluída como fonte normativa para testes core/unit/e2e (table, toolbar, clipboard, history e fuzz). O repositório do table-better não distribui testes equivalentes junto de `src`; foram criados testes unitários Dart e E2E Puppeteer para o seletor 10×10, inserção dimensional, toolbar contextual, ícones Tabler e isolamento contra CSS Limitless. O E2E gera o bundle com Webdev e o serve em porta efêmera com Shelf. Estado verificado: 203 testes unitários + 2 E2E passando.
 
-**Incremento seguinte:** seleção lógica, `Shift`-click, copy/cut multicélula, núcleo de resize e diálogo de propriedades cobertos; estado atual: 216 unitários + 3 E2E.
+**Incremento seguinte:** seleção lógica, `Shift`-click, copy/cut multicélula, núcleo de resize, diálogo de propriedades e alinhamento visual table-better cobertos; estado atual: 216 unitários + 3 E2E.
 
 ### F5A — Manipulação de imagens estilo Word (pendente, ~1-2 semanas)
 - [x] F5A.1 Base de atributos Delta/DOM entregue (2026-07-11): largura, altura, `data-image-wrap`, tipo de âncora e campos X/Y reconhecidos pelo blot. Modos avançados `square`, `tight`, `behind` e `in-front` ainda pendentes.

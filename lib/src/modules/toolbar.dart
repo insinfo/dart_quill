@@ -499,14 +499,15 @@ class _TableGridPicker {
     root.setAttribute('role', 'dialog');
     root.setAttribute('aria-label', 'Escolher tamanho da tabela');
     root.style.cssText =
-        'display:none;position:absolute;z-index:1200;width:224px;padding:10px;'
-        'background:#fff;border:1px solid #bbb;border-radius:4px;'
-        'box-shadow:0 3px 10px rgba(0,0,0,.2);';
+        'display:none;position:fixed;z-index:1200;width:224px;padding:8px;'
+        'box-sizing:border-box;background:#fff;border:1px solid #ccced1;'
+        'border-radius:2px;box-shadow:0 1px 2px 1px rgba(0,0,0,.15);';
 
     final list = quill.container.ownerDocument.createElement('div');
     list.classes.add('ql-table-select-list');
     list.style.cssText =
-        'display:grid;grid-template-columns:repeat(10,16px);gap:4px;';
+        'display:grid;grid-template-columns:repeat(10,18px);gap:3px;'
+        'justify-content:center;';
     for (var row = 1; row <= 10; row++) {
       for (var column = 1; column <= 10; column++) {
         final cell = quill.container.ownerDocument.createElement('span');
@@ -515,8 +516,8 @@ class _TableGridPicker {
           ..setAttribute('data-column', '$column')
           ..setAttribute('role', 'button')
           ..setAttribute('aria-label', '$row por $column')
-          ..style.cssText =
-              'width:16px;height:16px;border:1px solid #aaa;box-sizing:border-box;';
+          ..style.cssText = 'width:18px;height:18px;border:1px solid #ccced1;'
+              'box-sizing:border-box;background:#fff;';
         cell.addEventListener('mouseenter', (_) => highlight(row, column));
         cell.addEventListener('click', (event) {
           final module = quill.getModule('table');
@@ -567,12 +568,11 @@ class _TableGridPicker {
 
   void show() {
     highlight(0, 0);
-    final bounds =
-        domBindings.adapter.getElementBounds(_button, relativeTo: toolbar);
+    final bounds = domBindings.adapter.getElementBounds(_button);
     if (bounds != null) {
       root.style
         ..left = '${bounds['left']}px'
-        ..top = '${(bounds['bottom'] as num).toDouble() + 6}px';
+        ..top = '${(bounds['bottom'] as num).toDouble() + 4}px';
     }
     root.classes.remove('ql-hidden');
     root.style.display = 'block';

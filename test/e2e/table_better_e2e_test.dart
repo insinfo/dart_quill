@@ -72,6 +72,13 @@ void main() {
       '(element) => getComputedStyle(element).display !== "none"',
     );
     expect(visible, isTrue);
+    final pickerAlignment = await page.evaluate<Map<String, dynamic>>('''() => {
+      const button = document.querySelector('button.ql-table').getBoundingClientRect();
+      const picker = document.querySelector('.ql-table-select-container').getBoundingClientRect();
+      return {dx: Math.abs(picker.left - button.left), below: picker.top >= button.bottom};
+    }''');
+    expect((pickerAlignment['dx'] as num).toDouble(), lessThan(2));
+    expect(pickerAlignment['below'], isTrue);
 
     await page.click(
       '.ql-table-select-list span[data-row="2"][data-column="3"]',
@@ -103,6 +110,8 @@ void main() {
     await page.click('.ql-editor td');
     final result = await page.evaluate<Map<String, dynamic>>('''() => {
       const toolbar = document.querySelector('.ql-table-context-toolbar');
+      const table = document.querySelector('.ql-editor table').getBoundingClientRect();
+      const toolbarRect = toolbar.getBoundingClientRect();
       const buttons = [...toolbar.querySelectorAll('button')];
       const first = getComputedStyle(buttons[0]);
       return {
@@ -113,7 +122,10 @@ void main() {
         borderWidth: first.borderWidth,
         boxShadow: first.boxShadow
         ,cellBound: document.querySelector('.ql-editor td')?.dataset.contextToolbarBound,
-        inlineStyle: toolbar.getAttribute('style')
+        inlineStyle: toolbar.getAttribute('style'),
+        centered: Math.abs((toolbarRect.left + toolbarRect.width / 2) -
+          (table.left + table.width / 2)) < 3,
+        tablerNames: buttons.map(button => button.querySelector('i')?.className)
       };
     }''');
     expect(result['visible'], isTrue, reason: '$result');
@@ -122,6 +134,19 @@ void main() {
     expect(result['width'], '28px');
     expect(result['borderWidth'], '0px');
     expect(result['boxShadow'], 'none');
+    expect(result['centered'], isTrue, reason: '$result');
+    expect(
+        (result['tablerNames'] as List)
+            .any((name) => '$name'.contains('ti-row-insert-top')),
+        isTrue);
+    expect(
+        (result['tablerNames'] as List)
+            .any((name) => '$name'.contains('ti-column-insert-left')),
+        isTrue);
+    expect(
+        (result['tablerNames'] as List)
+            .any((name) => '$name'.contains('ti-arrow-merge')),
+        isTrue);
   });
 
   test('context toolbar merges and splits the active cell', () async {

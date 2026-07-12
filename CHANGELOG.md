@@ -42,6 +42,11 @@
 - `example/ngdart` editor component wired to the public `dart_quill` package and the `package:web` DOM layer.
 
 ### Changed
+- Alinhamento visual do dropdown 10×10 e da mini-toolbar contextual conforme o
+  `quill-table-better`: posicionamento ancorado, dimensões, bordas, espaçamento
+  e centralização sobre a tabela.
+- Corrigidos os nomes dos ícones contextuais para os glyphs Tabler existentes
+  (`row-insert-*`, `column-insert-*`, `row-remove`, `column-remove`, merge/split).
 - Updated the root `web/` demo to load bundled Snow, Limitless integration, and Tabler icon assets through `packages/dart_quill/assets/`.
 - Enabled `QuillIconTheme.tabler` in the plain-Dart demo so it matches the AngularDart example.
 - Excluded generated `build/**` output from static analysis.

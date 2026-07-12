@@ -1,4 +1,6 @@
 import '../blots/abstract/blot.dart';
+import 'dart:math' as math;
+
 import '../blots/block.dart';
 import '../blots/break.dart';
 import '../core/emitter.dart';
@@ -17,6 +19,20 @@ class TableOptions {
     return const TableOptions();
   }
 }
+
+String _tablerIcon(String action) =>
+    const {
+      'row-insert-top': 'row-insert-top',
+      'row-insert-bottom': 'row-insert-bottom',
+      'column-insert-left': 'column-insert-left',
+      'column-insert-right': 'column-insert-right',
+      'row-remove': 'row-remove',
+      'column-remove': 'column-remove',
+      'arrow-merge': 'arrow-merge',
+      'arrows-split': 'arrows-split',
+      'table-off': 'table-off',
+    }[action] ??
+    'table';
 
 class Table extends Module<TableOptions> {
   bool _isBalancing = false;
@@ -47,9 +63,10 @@ class Table extends Module<TableOptions> {
     _contextToolbar.setAttribute('role', 'toolbar');
     _contextToolbar.setAttribute('aria-label', 'Ferramentas da tabela');
     _contextToolbar.style.cssText =
-        'display:none;position:absolute;z-index:1100;padding:4px;gap:2px;'
-        'background:#fff;border:1px solid #bbb;border-radius:4px;'
-        'box-shadow:0 3px 10px rgba(0,0,0,.18);';
+        'display:none;position:absolute;z-index:1100;height:40px;'
+        'align-items:center;padding:4px;gap:2px;box-sizing:border-box;'
+        'background:#fff;border:1px solid #ccced1;border-radius:2px;'
+        'box-shadow:0 1px 2px 1px rgba(0,0,0,.15);';
     final actions = <(String, String, String, void Function())>[
       (
         'row-insert-top',
@@ -94,7 +111,8 @@ class Table extends Module<TableOptions> {
         ..setAttribute('aria-label', action.$2)
         ..setAttribute('data-table-action', action.$3)
         ..style.cssText = _contextButtonStyle
-        ..innerHTML = '<i class="ti ti-${action.$1}" aria-hidden="true"></i>';
+        ..innerHTML =
+            '<i class="ti ti-${_tablerIcon(action.$1)}" aria-hidden="true"></i>';
       button.addEventListener('mousedown', (event) {
         event.preventDefault();
         event.stopPropagation();
@@ -143,17 +161,25 @@ class Table extends Module<TableOptions> {
     if (cellElement == null) {
       return;
     }
+    final anchor = context.table?.element ?? cellElement;
     final bounds = domBindings.adapter
-        .getElementBounds(cellElement, relativeTo: quill.container);
+        .getElementBounds(anchor, relativeTo: quill.container);
     if (bounds == null) {
       _contextToolbar.style.display = 'none';
       return;
     }
+    final tableWidth = (bounds['width'] as num?)?.toDouble() ?? 0;
+    const toolbarWidth = 286.0;
+    final containerWidth = quill.container.clientWidth.toDouble();
+    final centered =
+        (bounds['left'] as num).toDouble() + (tableWidth - toolbarWidth) / 2;
+    final left = centered.clamp(0, math.max(0, containerWidth - toolbarWidth));
     final top =
-        ((bounds['top'] as num).toDouble() - 38).clamp(0, double.infinity);
+        ((bounds['top'] as num).toDouble() - 42).clamp(0, double.infinity);
     _contextToolbar.style
       ..display = 'flex'
-      ..left = '${bounds['left']}px'
+      ..width = '${toolbarWidth}px'
+      ..left = '${left}px'
       ..top = '${top}px';
   }
 
