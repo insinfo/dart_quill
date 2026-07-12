@@ -1,6 +1,8 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- Controlador `OperateLine` do table-better para redimensionar colunas, linhas
+  e tabela com limites mínimos, persistência em `col`/`tr`/`table` e callback.
 - Copy/cut multicélula no núcleo `CellSelection`, com HTML tabular sanitizado,
   texto TSV e limpeza do conteúdo sem destruir a estrutura da tabela.
 - `CellSelectionController` opt-in com âncora por clique e extensão por
