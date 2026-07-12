@@ -8,6 +8,7 @@
 import 'dart:math' as math;
 
 import '../blots/block.dart';
+import '../blots/abstract/blot.dart';
 import '../core/emitter.dart';
 import '../core/module.dart';
 import '../core/quill.dart';
@@ -18,6 +19,7 @@ import 'formats/table.dart';
 import 'formats/header.dart';
 import 'formats/list.dart';
 import 'language/language.dart';
+import 'modules/toolbar.dart';
 import 'ui/cell_selection.dart';
 import 'ui/cell_selection_controller.dart';
 
@@ -75,6 +77,8 @@ class TableBetter extends Module<TableBetterOptions> {
       : language = Language(options.language),
         super(quill, options) {
     _registerKeyboardBindings();
+    toolbarRouter = TableToolbarRouter(quill, () => activeCellSelection)
+      ..install();
     listenDeleteTable();
     quill.emitter.on(
       EmitterEvents.TEXT_CHANGE,
@@ -87,6 +91,7 @@ class TableBetter extends Module<TableBetterOptions> {
   }
 
   final Language language;
+  late final TableToolbarRouter toolbarRouter;
   final Map<TableContainer, CellSelectionController> _cellSelections = {};
 
   void _registerKeyboardBindings() {
@@ -225,10 +230,19 @@ class TableBetter extends Module<TableBetterOptions> {
     final entry = quill.getLine(targetRange.index);
     final block = entry.key;
     final offset = entry.value;
-    if (block == null || block.blotName != TableCellBlock.kBlotName) {
+    if (block == null ||
+        !const {
+          TableCellBlock.kBlotName,
+          TableThBlock.kBlotName,
+          TableHeader.kBlotName,
+          TableList.kBlotName,
+        }.contains(block.blotName)) {
       return TableBetterContext(offset: offset);
     }
-    final cell = block.parent;
+    Blot? cell = block.parent;
+    while (cell != null && cell is! TableCell) {
+      cell = cell.parent;
+    }
     final row = cell?.parent;
     final table = row?.parent?.parent;
     if (cell is TableCell && row is TableRow && table is TableContainer) {
