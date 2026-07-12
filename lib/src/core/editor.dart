@@ -13,6 +13,11 @@ class Editor {
   void update(Delta delta, String source) {
     var index = 0;
 
+    // editor.ts:31/120 — applyDelta batches the scroll so optimize (and its
+    // structural normalization, e.g. requiredContainer wrapping) only runs
+    // after every op of the delta has been applied.
+    scroll.batchStart();
+
     for (final op in delta.operations) {
       if (op.isInsert) {
         if (op.data is String) {
@@ -59,6 +64,8 @@ class Editor {
       }
     }
 
+    scroll.batchEnd();
+    scroll.optimize([], {});
     _update();
   }
 
