@@ -1,5 +1,7 @@
 import 'package:dart_quill/src/core/selection.dart';
 import 'package:dart_quill/src/table_better/formats/table.dart';
+import 'package:dart_quill/src/table_better/formats/header.dart';
+import 'package:dart_quill/src/table_better/formats/list.dart';
 import 'package:dart_quill/src/table_better/register.dart';
 import 'package:dart_quill/src/table_better/table_better.dart';
 import 'package:test/test.dart';
@@ -89,5 +91,17 @@ void main() {
         reason: 'missing table-better binding for $key',
       );
     }
+    expect(
+      keyboard.bindings['Enter']!.any((binding) =>
+          binding.format is List &&
+          (binding.format as List).contains(TableHeader.kBlotName)),
+      isTrue,
+    );
+    expect(
+      keyboard.bindings['Enter']!.any((binding) =>
+          binding.format is List &&
+          (binding.format as List).contains(TableList.kBlotName)),
+      isTrue,
+    );
   });
 }

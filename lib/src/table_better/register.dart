@@ -16,6 +16,8 @@ import '../blots/abstract/blot.dart';
 import '../core/quill.dart';
 import '../modules/clipboard.dart';
 import 'formats/table.dart';
+import 'formats/header.dart';
+import 'formats/list.dart';
 import 'modules/clipboard.dart';
 import 'table_better.dart';
 
@@ -49,6 +51,27 @@ void registerTableBetter({bool replaceClipboard = true}) {
 
 List<RegistryEntry> registerTableBetterFormats() {
   return <RegistryEntry>[
+    RegistryEntry(
+      blotName: TableHeader.kBlotName,
+      scope: TableHeader.kScope,
+      tagNames: TableHeader.kTagNames,
+      classNames: const [TableHeader.kClassName],
+      create: TableHeader.create,
+    ),
+    RegistryEntry(
+      blotName: TableListContainer.kBlotName,
+      scope: TableListContainer.kScope,
+      tagNames: const [TableListContainer.kTagName],
+      classNames: const [TableListContainer.kClassName],
+      create: TableListContainer.create,
+    ),
+    RegistryEntry(
+      blotName: TableList.kBlotName,
+      scope: TableList.kScope,
+      tagNames: const [TableList.kTagName],
+      classNames: const [TableList.kClassName],
+      create: TableList.create,
+    ),
     RegistryEntry(
       blotName: TableCellBlock.kBlotName,
       scope: TableCellBlock.kScope,
