@@ -1,6 +1,8 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- Copy/cut multicélula no núcleo `CellSelection`, com HTML tabular sanitizado,
+  texto TSV e limpeza do conteúdo sem destruir a estrutura da tabela.
 - `CellSelectionController` opt-in com âncora por clique e extensão por
   `Shift`-click, usando as coordenadas lógicas do table-better.
 - Núcleo `CellSelection` do table-better com retângulo lógico normalizado,

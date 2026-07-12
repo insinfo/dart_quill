@@ -1,4 +1,12 @@
 import '../formats/table.dart';
+import '../utils/utils.dart' as utils;
+
+class CellSelectionClipboardData {
+  const CellSelectionClipboardData({required this.html, required this.text});
+
+  final String html;
+  final String text;
+}
 
 /// Inclusive rectangular range in the logical table grid.
 class CellSelectionRange {
@@ -50,6 +58,54 @@ class CellSelection {
   List<TableCell> get selectedCells => List.unmodifiable(_selected);
 
   bool get isActive => _selected.isNotEmpty;
+
+  /// Serializes the selected cells in table order for clipboard copy.
+  CellSelectionClipboardData copyData() {
+    final rows = <int, List<TableCell>>{};
+    for (final placement in _placements()) {
+      if (_selected.contains(placement.cell)) {
+        rows.putIfAbsent(placement.row, () => []).add(placement.cell);
+      }
+    }
+    final htmlRows = StringBuffer();
+    final textRows = <String>[];
+    for (final row in rows.keys.toList()..sort()) {
+      final cells = rows[row]!;
+      htmlRows.write('<tr>');
+      final textCells = <String>[];
+      for (final cell in cells) {
+        htmlRows.write(utils.getCopyTd(outerHtml(cell.element)));
+        textCells.add(cell.element.textContent ?? '');
+      }
+      htmlRows.write('</tr>');
+      textRows.add(textCells.join('\t'));
+    }
+    return CellSelectionClipboardData(
+      html: '<table><tbody>$htmlRows</tbody></table>',
+      text: textRows.join('\n'),
+    );
+  }
+
+  /// Clears text from selected cells while retaining their table structure.
+  void clearContents() {
+    for (final cell in _selected) {
+      for (final child in cell.children.toList()) {
+        child.remove();
+      }
+      final block = table.scroll.create(
+        TableCellBlock.kBlotName,
+        cell.element.getAttribute('data-cell') ?? cellId(),
+      ) as TableCellBlock;
+      cell.appendChild(block);
+    }
+  }
+
+  /// Returns clipboard data and clears the selected cells.
+  CellSelectionClipboardData cutData() {
+    final data = copyData();
+    clearContents();
+    return data;
+  }
 
   /// Returns the logical top-left coordinate of [cell] in this table.
   ({int row, int column})? coordinateOf(TableCell cell) {

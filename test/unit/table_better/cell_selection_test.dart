@@ -78,4 +78,30 @@ void main() {
             .contains('ql-cell-selected'),
         isFalse);
   });
+
+  test('copies and cuts selected cells as table html and TSV text', () {
+    final scroll = createScroll(
+      _tableHtml,
+      registry: createRegistry(registerTableBetterFormats()),
+    );
+    final table = scroll.descendants<TableContainer>().first;
+    final selection = CellSelection(table);
+    selection.select(startRow: 0, startColumn: 0, endRow: 1, endColumn: 1);
+
+    final copied = selection.copyData();
+    expect(copied.html, contains('<table><tbody><tr>'));
+    expect(copied.html, isNot(contains('data-cell=')));
+    expect(copied.text, contains('a\tb'));
+
+    final cut = selection.cutData();
+    expect(cut.text, copied.text);
+    expect(
+      selection.selectedCells.every(
+        (cell) => cell.children.whereType<TableCellBlock>().every(
+              (block) => (block.element.textContent ?? '').trim().isEmpty,
+            ),
+      ),
+      isTrue,
+    );
+  });
 }
