@@ -5,6 +5,9 @@
 /// plus per-table [CellSelectionController] wiring. The DOM tool layers the
 /// TS constructor also builds (`TableMenus`, `OperateLine`, `ToolbarTable`)
 /// and the keyboard bindings are later increments (F5.7/F5.8/F5.10).
+import 'dart:math' as math;
+
+import '../blots/block.dart';
 import '../core/emitter.dart';
 import '../core/module.dart';
 import '../core/quill.dart';
@@ -12,6 +15,8 @@ import '../core/selection.dart';
 import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
 import '../modules/keyboard.dart';
 import 'formats/table.dart';
+import 'formats/header.dart';
+import 'formats/list.dart';
 import 'language/language.dart';
 import 'ui/cell_selection.dart';
 import 'ui/cell_selection_controller.dart';
@@ -105,7 +110,79 @@ class TableBetter extends Module<TableBetterOptions> {
         handler: (Range range, Context context) =>
             _handleCellBlockKey(key, range, context),
       );
+      quill.keyboard.addBinding(
+        BindingObject(key: key),
+        context: {
+          'collapsed': true,
+          'empty': true,
+          'format': [TableHeader.kBlotName],
+        },
+        handler: (Range range, Context context) =>
+            _handleEmptyHeader(range, context),
+      );
+      quill.keyboard.addBinding(
+        BindingObject(key: key),
+        context: {
+          'collapsed': true,
+          'empty': true,
+          'format': [TableList.kBlotName],
+        },
+        handler: (Range _range, Context context) =>
+            _replaceWithCellBlock(context.line),
+      );
     }
+    quill.keyboard.addBinding(
+      BindingObject(key: 'Enter'),
+      context: {
+        'collapsed': true,
+        'suffix': RegExp(r'^$'),
+        'format': [TableHeader.kBlotName],
+      },
+      handler: (Range range, Context context) =>
+          _handleHeaderEnter(range, context),
+    );
+    quill.keyboard.addBinding(
+      BindingObject(key: 'Enter'),
+      context: {
+        'collapsed': true,
+        'empty': true,
+        'format': [TableList.kBlotName],
+      },
+      handler: (Range _range, Context context) =>
+          _replaceWithCellBlock(context.line),
+    );
+  }
+
+  bool _handleEmptyHeader(Range range, Context context) {
+    if (context.line.prev != null) {
+      context.line.remove();
+      quill.setSelection(
+        Range((range.index - 1).clamp(0, range.index).toInt(), 0),
+        source: EmitterSource.SILENT,
+      );
+      return false;
+    }
+    return _replaceWithCellBlock(context.line);
+  }
+
+  bool _replaceWithCellBlock(Block line) {
+    final id = line.element.getAttribute('data-cell') ?? cellId();
+    replaceBlotWith(line, TableCellBlock.kBlotName, id);
+    return false;
+  }
+
+  bool _handleHeaderEnter(Range range, Context context) {
+    final delta = Delta()
+      ..retain(range.index)
+      ..insert('\n', context.format)
+      ..retain(math.max(0, context.line.length() - context.offset - 1))
+      ..retain(1, {TableHeader.kBlotName: null});
+    quill.updateContents(delta, source: EmitterSource.USER);
+    quill.setSelection(
+      Range(range.index + 1, 0),
+      source: EmitterSource.SILENT,
+    );
+    return false;
   }
 
   bool _handleCellBlockKey(String key, Range range, Context context) {

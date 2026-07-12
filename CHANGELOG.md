@@ -1,6 +1,10 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- Formatos table-better `TableHeader`, `TableListContainer` e `TableList`, com
+  hidratação por classes, preservação de `data-cell` e retorno a
+  `TableCellBlock`.
+- Bindings de Enter/Backspace/Delete para headers e listas dentro de células.
 - Bindings de teclado do `TableBetter` para ArrowUp/ArrowDown e
   Backspace/Delete em células, portados de `quill-table-better.ts`.
 - Núcleo do módulo `TableBetter` (`insertTable`, `getTable`, `deleteTable`,
