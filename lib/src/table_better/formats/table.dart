@@ -114,12 +114,57 @@ void _setClassAttribute(DomElement node, String className) {
   node.setAttribute('class', className);
 }
 
+/// Parchment's `requiredContainer` enforcement (shadow.ts `optimize` +
+/// the assignments in table.ts:851-872): when [blot]'s parent does not
+/// [satisfied] the constraint, the blot is wrapped in a new [wrapperName].
+///
+/// Deviation: parchment converges through its mutation-driven optimize loop;
+/// the Dart [Scroll.optimize] is a single pass, so convergence is local —
+/// a blot whose *previous sibling* already is a suitable container joins it
+/// instead of spawning a duplicate, and the adopting side re-optimizes so
+/// sibling merges (`checkMerge`) still collapse split rows/bodies.
+///
+/// Returns true when the tree was restructured (callers should stop their
+/// own optimize pass; the re-entrant optimize already finished the job).
+bool _enforceRequiredContainer(
+  Blot blot,
+  String wrapperName,
+  bool Function(Blot) satisfied,
+  List<DomMutationRecord>? mutations,
+  Map<String, dynamic>? context,
+) {
+  final parentBlot = blot.parent;
+  if (parentBlot == null || satisfied(parentBlot)) return false;
+  final prevBlot = blot.prev;
+  if (prevBlot is ParentBlot && satisfied(prevBlot)) {
+    prevBlot.appendChild(blot);
+    final sibling = blot.prev;
+    if (sibling != null) {
+      sibling.optimize(mutations, context);
+    } else {
+      blot.optimize(mutations, context);
+    }
+    return true;
+  }
+  final wrapper = wrapBlot(blot, wrapperName);
+  wrapper.optimize(mutations, context);
+  return true;
+}
+
 /// Base for the table-better container blots. Reproduces the parts of
 /// parchment's `ContainerBlot.optimize` that the Dart layer lacks: removal of
-/// empty containers and merging into an identically named next sibling when
-/// [checkMerge] allows it.
+/// empty containers, `requiredContainer` wrapping and merging into an
+/// identically named next sibling when [checkMerge] allows it.
 abstract class TableBetterContainer extends Container {
   TableBetterContainer(DomElement domNode) : super(domNode);
+
+  /// TS `requiredContainer` blot name (table.ts:851-867); null when the
+  /// container has no placement constraint.
+  String? get requiredContainerBlotName => null;
+
+  /// Whether [blot] satisfies [requiredContainerBlotName] as a parent (TS
+  /// uses `instanceof`, so subclasses of the required container qualify).
+  bool isRequiredContainer(Blot blot) => true;
 
   /// Parchment's default `checkMerge`.
   bool checkMerge() {
@@ -137,13 +182,27 @@ abstract class TableBetterContainer extends Container {
       remove();
       return;
     }
-    final nextBlot = next;
-    if (nextBlot is ContainerBlot &&
+    if (requiredContainerBlotName != null &&
+        _enforceRequiredContainer(
+          this,
+          requiredContainerBlotName!,
+          isRequiredContainer,
+          mutations,
+          context,
+        )) {
+      return;
+    }
+    var nextBlot = next;
+    while (nextBlot is ContainerBlot &&
         nextBlot.prev == this &&
         nextBlot.element.tagName == element.tagName &&
         checkMerge()) {
       nextBlot.moveChildren(this, null);
       nextBlot.remove();
+      // Adopted children may now merge with their new siblings (parchment
+      // reaches the same fixpoint through its mutation loop).
+      super.optimize(mutations, context);
+      nextBlot = next;
     }
   }
 
@@ -245,6 +304,30 @@ class TableCellBlock extends Block {
     if (cellBlot == null) return;
     final (formats, _) = utils.getCellFormats(cellBlot);
     wrapBlot(this, cellBlot.blotName, formats);
+  }
+
+  /// TS `TableCellBlock.requiredContainer = TableCell` (table.ts:870).
+  ///
+  /// Deviation guard: enforcement is limited to blocks that actually carry
+  /// the `ql-table-block` class. A registry that lists this blot first for
+  /// the `P` tag (as the barebones test registries do) hydrates plain
+  /// paragraphs as [TableCellBlock]; without the guard those would be
+  /// swallowed into a table on the first optimize pass.
+  @override
+  void optimize([
+    List<DomMutationRecord>? mutations,
+    Map<String, dynamic>? context,
+  ]) {
+    super.optimize(mutations, context);
+    if (parent == null) return;
+    if (!element.classes.contains(TableCellBlock.kClassName)) return;
+    _enforceRequiredContainer(
+      this,
+      TableCell.kBlotName,
+      (blot) => blot is TableCell,
+      mutations,
+      context,
+    );
   }
 }
 
@@ -357,6 +440,13 @@ class TableCell extends TableBetterContainer {
   @override
   TableCell clone() => TableCell(element.cloneNode(deep: false));
 
+  /// TS `TableCell.requiredContainer = TableRow` (table.ts:865).
+  @override
+  String? get requiredContainerBlotName => TableRow.kBlotName;
+
+  @override
+  bool isRequiredContainer(Blot blot) => blot is TableRow;
+
   String? _childCellId(Blot child) =>
       utils.getCellId(child.formats()[child.blotName]);
 
@@ -465,6 +555,13 @@ class TableTh extends TableCell {
 
   @override
   TableTh clone() => TableTh(element.cloneNode(deep: false));
+
+  /// TS `TableTh.requiredContainer = TableThRow` (table.ts:867).
+  @override
+  String? get requiredContainerBlotName => TableThRow.kBlotName;
+
+  @override
+  bool isRequiredContainer(Blot blot) => blot is TableThRow;
 }
 
 /// TS `TableRow` — the `<tr>` container.
@@ -488,6 +585,13 @@ class TableRow extends TableBetterContainer {
 
   @override
   TableRow clone() => TableRow(element.cloneNode(deep: false));
+
+  /// TS `TableRow.requiredContainer = TableBody` (table.ts:857).
+  @override
+  String? get requiredContainerBlotName => TableBody.kBlotName;
+
+  @override
+  bool isRequiredContainer(Blot blot) => blot is TableBody;
 
   String? _dataRow(Blot child) {
     final formats = child.formats()[child.blotName];
@@ -540,6 +644,13 @@ class TableThRow extends TableRow {
 
   @override
   TableThRow clone() => TableThRow(element.cloneNode(deep: false));
+
+  /// TS `TableThRow.requiredContainer = TableThead` (table.ts:859).
+  @override
+  String? get requiredContainerBlotName => TableThead.kBlotName;
+
+  @override
+  bool isRequiredContainer(Blot blot) => blot is TableThead;
 }
 
 /// TS `TableBody` — the `<tbody>` container.
@@ -563,6 +674,14 @@ class TableBody extends TableBetterContainer {
 
   @override
   TableBody clone() => TableBody(element.cloneNode(deep: false));
+
+  /// TS `TableBody.requiredContainer = TableContainer` (table.ts:851; the
+  /// thead subclass shares it via table.ts:852).
+  @override
+  String? get requiredContainerBlotName => TableContainer.kBlotName;
+
+  @override
+  bool isRequiredContainer(Blot blot) => blot is TableContainer;
 }
 
 /// TS `TableThead` — the `<thead>` container.
@@ -662,6 +781,15 @@ class TableTemporary extends Block {
       }
     }
     super.optimize(mutations, context);
+    if (parent == null) return;
+    // TS `TableTemporary.requiredContainer = TableContainer` (table.ts:853).
+    _enforceRequiredContainer(
+      this,
+      TableContainer.kBlotName,
+      (blot) => blot is TableContainer,
+      mutations,
+      context,
+    );
   }
 }
 
@@ -723,6 +851,15 @@ class TableCol extends Block {
     for (final child in List<Blot>.from(children)) {
       child.remove();
     }
+    if (parent == null) return;
+    // TS `TableCol.requiredContainer = TableColgroup` (table.ts:862).
+    _enforceRequiredContainer(
+      this,
+      TableColgroup.kBlotName,
+      (blot) => blot is TableColgroup,
+      mutations,
+      context,
+    );
   }
 }
 
@@ -747,6 +884,13 @@ class TableColgroup extends TableBetterContainer {
 
   @override
   TableColgroup clone() => TableColgroup(element.cloneNode(deep: false));
+
+  /// TS `TableColgroup.requiredContainer = TableContainer` (table.ts:854).
+  @override
+  String? get requiredContainerBlotName => TableContainer.kBlotName;
+
+  @override
+  bool isRequiredContainer(Blot blot) => blot is TableContainer;
 }
 
 /// Entry of the `columnCells` work lists built by `insertColumn`/`deleteRow`.

@@ -386,16 +386,31 @@ void main() {
 
   group('table-better TableCellBlock.format', () {
     test('wrapping with table-cell builds row > cell around the block', () {
-      final scroll = _createTableScroll(
-        '<p class="ql-table-block" data-cell="cell-x">hi</p>',
-      );
-      final block = scroll.children.first as TableCellBlock;
+      final scroll = _createTableScroll('<p><br></p>');
+      // Created after the constructor optimize so `format` (the delta path)
+      // does the wrapping, not the requiredContainer enforcement.
+      final block =
+          scroll.create(TableCellBlock.kBlotName, 'cell-x') as TableCellBlock;
+      scroll.appendChild(block);
       block.format(TableCell.kBlotName, {'data-row': 'row-x'});
 
       expect(block.parent, isA<TableCell>());
       final cell = block.parent as TableCell;
       expect(cell.element.getAttribute('data-row'), 'row-x');
       expect(cell.parent, isA<TableRow>());
+    });
+
+    test('requiredContainer wraps a stray cell block into a full table', () {
+      // TS parity (table.ts:851-872): optimize rebuilds the container chain
+      // p.ql-table-block > td > tr > tbody > table on hydration.
+      final scroll = _createTableScroll(
+        '<p class="ql-table-block" data-cell="cell-x">hi</p>',
+      );
+      final table = scroll.descendants<TableContainer>().single;
+      final cell = table.descendants<TableCell>().single;
+      expect(cell.children.first, isA<TableCellBlock>());
+      expect(table.descendants<TableRow>().length, 1);
+      expect(scroll.descendants<TableBody>().length, 1);
     });
   });
 
