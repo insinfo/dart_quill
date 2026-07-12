@@ -17,6 +17,7 @@ import '../core/quill.dart';
 import '../modules/clipboard.dart';
 import 'formats/table.dart';
 import 'modules/clipboard.dart';
+import 'table_better.dart';
 
 /// Registers the table-better structural formats and its clipboard port.
 ///
@@ -36,6 +37,14 @@ void registerTableBetter({bool replaceClipboard = true}) {
       overwrite: true,
     );
   }
+  Quill.registerModule(
+    'table-better',
+    (quill, options) => TableBetter(
+      quill,
+      TableBetterOptions.fromConfig(options),
+    ),
+    overwrite: true,
+  );
 }
 
 List<RegistryEntry> registerTableBetterFormats() {
