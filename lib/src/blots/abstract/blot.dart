@@ -909,9 +909,16 @@ abstract class LeafBlot extends Blot {
   @override
   int length() => 1;
 
+  /// Parity parchment leaf.ts — a leaf cannot hold content, so the new blot
+  /// is created and handed to the parent at the split point. Throwing here
+  /// (as this port used to) broke any delta that inserted two embeds in a
+  /// row, since the second insert lands on the first embed.
   @override
   void insertAt(int index, String value, [dynamic def]) {
-    throw UnsupportedError('Cannot insert into ${runtimeType}');
+    final blot =
+        def == null ? scroll.create('text', value) : scroll.create(value, def);
+    final ref = split(index);
+    parent?.insertBefore(blot, ref);
   }
 
   @override

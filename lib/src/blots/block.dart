@@ -17,7 +17,14 @@ Delta blockDelta(Block block, {bool filter = true}) {
       continue;
     }
     final leafFormats = bubbleFormats(leaf, filter: filter);
-    delta.insert(leaf.value(), leafFormats.isEmpty ? null : leafFormats);
+    // Parity parchment LeafBlot.value(): an embed's delta value is
+    // `{blotName: value}`, while a text leaf inserts its string. The Dart
+    // embeds return the raw value from value(), so the wrapping happens
+    // here (BlockEmbed is handled the same way in Editor._buildDelta).
+    final value = leaf is EmbedBlot && leaf.value() is! Map
+        ? {leaf.blotName: leaf.value()}
+        : leaf.value();
+    delta.insert(value, leafFormats.isEmpty ? null : leafFormats);
   }
   final lineFormats = bubbleFormats(block, filter: filter);
   delta.insert('\n', lineFormats.isEmpty ? null : lineFormats);
