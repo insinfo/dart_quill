@@ -36,17 +36,13 @@ class Emitter {
   }
 
   void once(String event, Function handler) {
-    void wrapper([dynamic arg1, dynamic arg2, dynamic arg3]) {
+    void wrapper(
+        [dynamic arg1 = _absent,
+        dynamic arg2 = _absent,
+        dynamic arg3 = _absent,
+        dynamic arg4 = _absent]) {
       off(event, wrapper);
-      if (arg3 != null) {
-        handler(arg1, arg2, arg3);
-      } else if (arg2 != null) {
-        handler(arg1, arg2);
-      } else if (arg1 != null) {
-        handler(arg1);
-      } else {
-        handler();
-      }
+      _dispatch(handler, _collectArgs(arg1, arg2, arg3, arg4));
     }
 
     on(event, wrapper);
@@ -63,22 +59,44 @@ class Emitter {
     }
   }
 
+  /// Sentinel distinguishing "argument not passed" from an explicit `null`,
+  /// so events like SELECTION_CHANGE(range, oldRange: null, source) reach
+  /// handlers with their full argument list (parity with eventemitter3).
+  static const Object _absent = Object();
+
   void emit(String event,
-      [dynamic data1, dynamic data2, dynamic data3, dynamic data4]) {
+      [dynamic data1 = _absent,
+      dynamic data2 = _absent,
+      dynamic data3 = _absent,
+      dynamic data4 = _absent]) {
     final handlers = _handlers[event];
     if (handlers == null) return;
 
-    for (var handler in handlers) {
-      if (data4 != null) {
-        handler(data1, data2, data3, data4);
-      } else if (data3 != null) {
-        handler(data1, data2, data3);
-      } else if (data2 != null) {
-        handler(data1, data2);
-      } else if (data1 != null) {
-        handler(data1);
-      } else {
-        handler();
+    final args = _collectArgs(data1, data2, data3, data4);
+    for (final handler in List<Function>.from(handlers)) {
+      _dispatch(handler, args);
+    }
+  }
+
+  static List<dynamic> _collectArgs(
+      dynamic d1, dynamic d2, dynamic d3, dynamic d4) {
+    final args = <dynamic>[];
+    for (final d in [d1, d2, d3, d4]) {
+      if (identical(d, _absent)) break;
+      args.add(d);
+    }
+    return args;
+  }
+
+  /// Invokes [handler] with as many of [args] as its signature accepts,
+  /// trying the full list first and trimming from the end on arity mismatch.
+  static void _dispatch(Function handler, List<dynamic> args) {
+    for (var count = args.length; count >= 0; count--) {
+      try {
+        Function.apply(handler, args.sublist(0, count));
+        return;
+      } on NoSuchMethodError {
+        if (count == 0) rethrow;
       }
     }
   }

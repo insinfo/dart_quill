@@ -169,6 +169,9 @@ class Quill {
     root.addEventListener('keyup', (_) => _syncNativeSelection());
 
     scroll = Scroll(Registry(), root, emitter: emitter);
+    // Editable by default (parity quill.ts, which relies on the
+    // contenteditable attribute for isEnabled()).
+    scroll.enable();
     for (final entry in _formatRegistry.values) {
       scroll.registry.register(entry);
     }
@@ -224,6 +227,103 @@ class Quill {
 
   void on(String event, Function handler) {
     emitter.on(event, handler);
+  }
+
+  void off(String event, [Function? handler]) => emitter.off(event, handler);
+
+  void once(String event, Function handler) => emitter.once(event, handler);
+
+  /// When true, USER-sourced edits are accepted even while the editor is
+  /// disabled (parity quill.ts `allowReadOnlyEdits`, toggled by
+  /// [editReadOnly]).
+  bool allowReadOnlyEdits = false;
+
+  /// Parity quill.ts:881-917 — the single funnel for every document
+  /// mutation: honours readOnly, captures the old delta, shifts and
+  /// re-applies the selection silently, and emits change events only when
+  /// something actually changed (TEXT_CHANGE is suppressed for SILENT).
+  ///
+  /// [index] `null` leaves the selection untouched; [indexFromRange] mirrors
+  /// the TS `index === true`. [shift] `null` shifts the range through the
+  /// change delta, `0` re-applies it unchanged, other values shift by length.
+  Delta modify(
+    Delta Function() modifier, {
+    String source = EmitterSource.API,
+    int? index,
+    bool indexFromRange = false,
+    int? shift,
+  }) {
+    if (!isEnabled() &&
+        source == EmitterSource.USER &&
+        !allowReadOnlyEdits) {
+      return Delta();
+    }
+    final tracksSelection = index != null || indexFromRange;
+    var range = tracksSelection ? selection.getRange() : null;
+    final oldDelta = editor.getContents();
+    final change = modifier();
+    if (range != null) {
+      final effectiveIndex = indexFromRange ? range.index : index!;
+      if (shift == null) {
+        range = shiftRangeByDelta(range, change, source);
+      } else if (shift != 0) {
+        range = shiftRangeByLength(range, effectiveIndex, shift, source);
+      }
+      setSelection(range, source: EmitterSource.SILENT);
+    }
+    if (change.operations.isNotEmpty) {
+      if (source != EmitterSource.SILENT) {
+        emitter.emit(EmitterEvents.TEXT_CHANGE, change, oldDelta, source);
+      }
+      emitter.emit(
+        EmitterEvents.EDITOR_CHANGE,
+        EmitterEvents.TEXT_CHANGE,
+        change,
+        oldDelta,
+        source,
+      );
+    }
+    return change;
+  }
+
+  /// Parity quill.ts — runs [modifier] with read-only edits temporarily
+  /// permitted.
+  T editReadOnly<T>(T Function() modifier) {
+    allowReadOnlyEdits = true;
+    try {
+      return modifier();
+    } finally {
+      allowReadOnlyEdits = false;
+    }
+  }
+
+  void enable([bool enabled = true]) {
+    scroll.enable(enabled);
+    if (enabled) {
+      container.classes.remove('ql-disabled');
+      root.removeAttribute('disabled');
+    } else {
+      container.classes.add('ql-disabled');
+      root.setAttribute('disabled', 'true');
+    }
+  }
+
+  void disable() => enable(false);
+
+  void blur() {
+    selection.clear();
+    domBindings.adapter.blur(root);
+  }
+
+  int getLength() => scroll.length();
+
+  /// Lines intersecting the range (parity quill.ts `getLines`).
+  List<Blot> getLines([int index = 0, int length = 0x7fffffff]) =>
+      scroll.lines(index, length);
+
+  /// Drains pending DOM mutations into the model (parity quill.ts `update`).
+  void update([String source = EmitterSource.USER]) {
+    scroll.update(null, {'source': source});
   }
 
   Delta getContents() {
@@ -285,19 +385,12 @@ class Quill {
     );
   }
 
-  void updateContents(Delta delta, {String source = EmitterSource.API}) {
-    if (delta.operations.isEmpty) return;
-    final before = getContents();
-    editor.update(delta, source);
-    _shiftSelectionByDelta(delta, source);
-    emitter.emit(EmitterEvents.TEXT_CHANGE, delta, before, source);
-    emitter.emit(
-      EmitterEvents.EDITOR_CHANGE,
-      EmitterEvents.TEXT_CHANGE,
-      delta,
-      before,
-      source,
-    );
+  Delta updateContents(Delta delta, {String source = EmitterSource.API}) {
+    if (delta.operations.isEmpty) return Delta();
+    return modify(() {
+      editor.update(delta, source);
+      return delta;
+    }, source: source, indexFromRange: true);
   }
 
   MapEntry<Blot?, int> getLine(int index) {
@@ -320,9 +413,8 @@ class Quill {
     return nativeRange ?? selection.getRange();
   }
 
-  bool isEnabled() {
-    return !root.hasAttribute('disabled');
-  }
+  /// Parity quill.ts — driven by the root's contenteditable state.
+  bool isEnabled() => scroll.isEnabled();
 
   /// Maps a document index to a native (DOM node, offset) pair, mirroring
   /// `Selection.rangeToNative` in quill's selection.ts: the index is clamped
@@ -380,9 +472,15 @@ class Quill {
 
   /// Removes inline and block formats from the selected range.
   ///
-  /// This mirrors the observable behavior of Quill 2's `removeFormat`: block
-  /// attributes (including lists and alignment) are cleared as well as inline
-  /// styles.
+  /// Observable parity with Quill 2's `removeFormat` (block attributes,
+  /// including lists and alignment, are cleared along with inline styles),
+  /// but implemented by clearing each format by name instead of by the TS
+  /// diff-against-plain-text route.
+  ///
+  /// NOTE: [Editor.removeFormat] IS the faithful diff-based port; switching
+  /// this over requires the faithful `applyDelta` (G1.10 pendency) — the
+  /// current bespoke `Editor.update` does not apply the `{list: null}`
+  /// retain that the diff produces, so lists survive the clean.
   void removeFormat(int index, int length,
       {String source = EmitterSource.API}) {
     if (length <= 0) return;
@@ -415,98 +513,38 @@ class Quill {
     }
   }
 
-  void formatLine(int index, int length, String name, dynamic value,
+  Delta formatLine(int index, int length, String name, dynamic value,
       {String source = EmitterSource.API}) {
-    final before = getContents();
-    final change = editor.formatLine(index, length, {name: value});
-    emitter.emit(EmitterEvents.TEXT_CHANGE, change, before, source);
-    emitter.emit(
-      EmitterEvents.EDITOR_CHANGE,
-      EmitterEvents.TEXT_CHANGE,
-      change,
-      before,
-      source,
-    );
-    _shiftSelectionByLength(index, 0, source);
+    return modify(() => editor.formatLine(index, length, {name: value}),
+        source: source, index: index, shift: 0);
   }
 
-  void formatText(int index, int length, String name, dynamic value,
+  Delta formatText(int index, int length, String name, dynamic value,
       {String source = EmitterSource.API}) {
-    final before = getContents();
-    final change = editor.formatText(index, length, name, value);
-    emitter.emit(EmitterEvents.TEXT_CHANGE, change, before, source);
-    emitter.emit(
-      EmitterEvents.EDITOR_CHANGE,
-      EmitterEvents.TEXT_CHANGE,
-      change,
-      before,
-      source,
-    );
-    _shiftSelectionByDelta(change, source);
+    return modify(() => editor.formatText(index, length, name, value),
+        source: source, index: index, shift: 0);
   }
 
-  void insertEmbed(int index, String embed, dynamic value,
+  Delta insertEmbed(int index, String embed, dynamic value,
       {String source = EmitterSource.API}) {
-    final before = getContents();
-    final change = editor.insertEmbed(index, embed, value);
-    emitter.emit(EmitterEvents.TEXT_CHANGE, change, before, source);
-    emitter.emit(
-      EmitterEvents.EDITOR_CHANGE,
-      EmitterEvents.TEXT_CHANGE,
-      change,
-      before,
-      source,
-    );
-    _shiftSelectionByDelta(change, source);
+    return modify(() => editor.insertEmbed(index, embed, value),
+        source: source, index: index);
   }
 
-  /// Mirrors the selection adjustment performed by `modify()` in quill.ts:
-  /// after a document change, an existing selection is shifted through the
-  /// change and re-applied silently.
-  void _shiftSelectionByDelta(Delta change, String source) {
-    final range = selection.getRange();
-    if (range == null) return;
-    setSelection(shiftRangeByDelta(range, change, source),
-        source: EmitterSource.SILENT);
-  }
-
-  void _shiftSelectionByLength(int index, int shift, String source) {
-    final range = selection.getRange();
-    if (range == null) return;
-    setSelection(shiftRangeByLength(range, index, shift, source),
-        source: EmitterSource.SILENT);
-  }
-
-  void insertText(int index, String text,
+  Delta insertText(int index, String text,
       {Map<String, dynamic>? formats, String source = EmitterSource.API}) {
-    final before = getContents();
-    final change = editor.insertText(index, text, formats ?? {});
-    emitter.emit(EmitterEvents.TEXT_CHANGE, change, before, source);
-    emitter.emit(
-      EmitterEvents.EDITOR_CHANGE,
-      EmitterEvents.TEXT_CHANGE,
-      change,
-      before,
-      source,
-    );
-    _shiftSelectionByLength(index, text.length, source);
+    return modify(() => editor.insertText(index, text, formats ?? {}),
+        source: source, index: index, shift: text.length);
   }
 
-  void deleteText(int index, int length, {String source = EmitterSource.API}) {
-    final before = getContents();
-    final change = Delta()
-      ..retain(index)
-      ..delete(length);
-    editor.deleteText(index, length);
-    emitter.emit(EmitterEvents.TEXT_CHANGE, change, before, source);
-    emitter.emit(
-      EmitterEvents.EDITOR_CHANGE,
-      EmitterEvents.TEXT_CHANGE,
-      change,
-      before,
-      source,
-    );
-    _shiftSelectionByLength(index, -length, source);
+  Delta deleteText(int index, int length,
+      {String source = EmitterSource.API}) {
+    return modify(() {
+      editor.deleteText(index, length);
+      return Delta()
+        ..retain(index)
+        ..delete(length);
+    }, source: source, index: index, shift: -length);
   }
 
   Range? _syncNativeSelection({String source = EmitterSource.USER}) {

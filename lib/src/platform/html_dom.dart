@@ -560,6 +560,15 @@ class HtmlDomAdapter implements DomAdapter {
   }
 
   @override
+  void blur(DomElement element) {
+    final native = (element as _HtmlDomNode).node;
+    if (!identical(web.document.activeElement, native)) return;
+    if (native.isA<web.HTMLElement>()) {
+      (native as web.HTMLElement).blur();
+    }
+  }
+
+  @override
   DomSelectionRange? getSelectionRange(DomElement root) {
     final rootNode = (root as _HtmlDomNode).node;
     if (!rootNode.isA<web.Element>()) {

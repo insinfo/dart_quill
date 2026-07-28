@@ -12,6 +12,7 @@ import '../formats/direction.dart';
 import '../formats/font.dart';
 import '../formats/indent.dart';
 import '../formats/size.dart';
+import '../formats/blockquote.dart';
 import '../formats/code.dart';
 import '../formats/formula.dart';
 import '../formats/header.dart';
@@ -31,8 +32,10 @@ import '../modules/input.dart';
 import '../modules/image_resize.dart';
 import '../modules/syntax.dart';
 import '../modules/table.dart';
+import '../modules/table_embed.dart';
 import '../modules/ui_node.dart';
 import '../modules/uploader.dart';
+import '../platform/dom.dart';
 import '../platform/platform.dart';
 import '../themes/bubble.dart';
 import '../themes/snow.dart';
@@ -103,6 +106,13 @@ void _registerModules() {
   Quill.registerModule('uiNode', (quill, options) {
     return UINode(quill, const {});
   });
+
+  // Opt-in module (parity: upstream ships modules/tableEmbed outside the
+  // default bundle). Enabling it installs the 'table-embed' Delta handler.
+  Quill.registerModule('tableEmbed', (quill, options) {
+    TableEmbed.register();
+    return TableEmbed(quill, options);
+  });
 }
 
 void _registerThemes() {
@@ -117,7 +127,8 @@ void _registerFormats() {
       blotName: Block.kBlotName,
       scope: Block.kScope,
       tagNames: const [Block.tagName],
-      create: ([dynamic _]) {
+      create: ([dynamic value]) {
+        if (value is DomElement) return Block(value);
         final node = domBindings.adapter.document.createElement(Block.tagName);
         final block = Block(node);
         if (block.children.isEmpty) {
@@ -130,14 +141,16 @@ void _registerFormats() {
       blotName: Break.kBlotName,
       scope: Break.kScope,
       tagNames: const [Break.tagName],
-      create: ([dynamic _]) => Break.create(),
+      create: ([dynamic value]) =>
+          value is DomElement ? Break(value) : Break.create(),
     ),
     RegistryEntry(
       blotName: Cursor.kBlotName,
       scope: Cursor.kScope,
       tagNames: const [Cursor.kTagName],
       classNames: const [Cursor.kClassName],
-      create: ([dynamic _]) => Cursor.create(),
+      create: ([dynamic value]) =>
+          value is DomElement ? Cursor(value) : Cursor.create(),
     ),
     RegistryEntry(
       blotName: TextBlot.kBlotName,
@@ -148,7 +161,8 @@ void _registerFormats() {
       blotName: Inline.kBlotName,
       scope: Inline.kScope,
       tagNames: const [Inline.kTagName],
-      create: ([dynamic _]) => Inline.create(),
+      create: ([dynamic value]) =>
+          value is DomElement ? Inline(value) : Inline.create(),
     ),
     RegistryEntry(
       blotName: Bold.kBlotName,
@@ -160,51 +174,75 @@ void _registerFormats() {
       blotName: Italic.kBlotName,
       scope: Italic.kScope,
       tagNames: Italic.kTagNames,
-      create: ([dynamic _]) => Italic.create(),
+      create: ([dynamic value]) =>
+          value is DomElement ? Italic(value) : Italic.create(),
     ),
     RegistryEntry(
       blotName: Underline.kBlotName,
       scope: Underline.kScope,
       tagNames: const [Underline.kTagName],
-      create: ([dynamic _]) => Underline.create(),
+      create: ([dynamic value]) =>
+          value is DomElement ? Underline(value) : Underline.create(),
     ),
     RegistryEntry(
       blotName: Strike.kBlotName,
       scope: Strike.kScope,
       tagNames: Strike.kTagNames,
-      create: ([dynamic _]) => Strike.create(),
+      create: ([dynamic value]) =>
+          value is DomElement ? Strike(value) : Strike.create(),
     ),
     RegistryEntry(
       blotName: Link.kBlotName,
       scope: Link.kScope,
       tagNames: const [Link.kTagName],
-      create: ([dynamic value]) => Link.create(value?.toString() ?? ''),
+      create: ([dynamic value]) => value is DomElement
+          ? Link(value)
+          : Link.create(value?.toString() ?? ''),
     ),
     RegistryEntry(
       blotName: Code.kBlotName,
       scope: Code.kScope,
       tagNames: const [Code.kTagName],
-      create: ([dynamic _]) => Code.create(),
+      create: ([dynamic value]) =>
+          value is DomElement ? Code(value) : Code.create(),
     ),
     RegistryEntry(
       blotName: CodeBlockContainer.kBlotName,
       scope: CodeBlockContainer.kScope,
       tagNames: const [CodeBlockContainer.kTagName],
       classNames: const [CodeBlockContainer.kClassName],
-      create: ([dynamic _]) => CodeBlockContainer.create(),
+      create: ([dynamic value]) => value is DomElement
+          ? CodeBlockContainer(value)
+          : CodeBlockContainer.create(),
     ),
     RegistryEntry(
       blotName: CodeBlock.kBlotName,
       scope: CodeBlock.kScope,
       tagNames: const [CodeBlock.kTagName],
       classNames: const [CodeBlock.kClassName],
-      create: ([dynamic _]) => CodeBlock.create(),
+      requiredContainerBlotName: CodeBlockContainer.kBlotName,
+      create: ([dynamic value]) =>
+          value is DomElement ? CodeBlock(value) : CodeBlock.create(),
+    ),
+    RegistryEntry(
+      blotName: Blockquote.kBlotName,
+      scope: Blockquote.kScope,
+      tagNames: const [Blockquote.kTagName],
+      create: ([dynamic value]) {
+        if (value is DomElement) return Blockquote(value);
+        final blockquote = Blockquote.create();
+        if (blockquote.children.isEmpty) {
+          blockquote.appendChild(Break.create());
+        }
+        return blockquote;
+      },
     ),
     RegistryEntry(
       blotName: Header.kBlotName,
       scope: Header.kScope,
       tagNames: Header.kTagNames,
       create: ([dynamic value]) {
+        if (value is DomElement) return Header(value);
         final node = Header.create(value);
         final header = Header(node);
         if (header.children.isEmpty) {
@@ -218,6 +256,7 @@ void _registerFormats() {
       scope: ListContainer.kScope,
       tagNames: const ['OL', 'UL'],
       create: ([dynamic value]) {
+        if (value is DomElement) return ListContainer(value);
         final resolved = value is String ? value : 'bullet';
         return ListContainer.create(resolved);
       },
@@ -226,7 +265,9 @@ void _registerFormats() {
       blotName: ListItem.kBlotName,
       scope: ListItem.kScope,
       tagNames: const [ListItem.kTagName],
+      requiredContainerBlotName: ListContainer.kBlotName,
       create: ([dynamic value]) {
+        if (value is DomElement) return ListItem(value);
         final resolved = value is String ? value : 'bullet';
         return ListItem.create(resolved);
       },
@@ -235,13 +276,15 @@ void _registerFormats() {
       blotName: Script.kBlotName,
       scope: Script.kScope,
       tagNames: Script.kTagNames,
-      create: ([dynamic value]) => Script.create(value),
+      create: ([dynamic value]) =>
+          value is DomElement ? Script(value) : Script.create(value),
     ),
     RegistryEntry(
       blotName: Image.kBlotName,
       scope: Image.kScope,
       tagNames: const [Image.kTagName],
       create: ([dynamic value]) {
+        if (value is DomElement) return Image(value);
         final node = Image.create(value);
         return Image(node);
       },
@@ -251,8 +294,9 @@ void _registerFormats() {
       scope: Formula.kScope,
       tagNames: const [Formula.kTagName],
       classNames: const [Formula.kClassName],
-      create: ([dynamic value]) =>
-          Formula(Formula.create(value?.toString() ?? '')),
+      create: ([dynamic value]) => value is DomElement
+          ? Formula(value)
+          : Formula(Formula.create(value?.toString() ?? '')),
     ),
     RegistryEntry(
       blotName: TableContainer.kBlotName,
@@ -264,18 +308,21 @@ void _registerFormats() {
       blotName: TableBody.kBlotName,
       scope: TableBody.kScope,
       tagNames: const [TableBody.kTagName],
+      requiredContainerBlotName: TableContainer.kBlotName,
       create: ([dynamic value]) => TableBody.create(value),
     ),
     RegistryEntry(
       blotName: TableRow.kBlotName,
       scope: TableRow.kScope,
       tagNames: const [TableRow.kTagName],
+      requiredContainerBlotName: TableBody.kBlotName,
       create: ([dynamic value]) => TableRow.create(value),
     ),
     RegistryEntry(
       blotName: TableCell.kBlotName,
       scope: TableCell.kScope,
       tagNames: const [TableCell.kTagName],
+      requiredContainerBlotName: TableRow.kBlotName,
       create: ([dynamic value]) => TableCell.create(value),
     ),
     RegistryEntry(
@@ -284,6 +331,7 @@ void _registerFormats() {
       tagNames: const [Video.kTagName],
       classNames: const [Video.kClassName],
       create: ([dynamic value]) {
+        if (value is DomElement) return Video(value);
         final source = value?.toString() ?? '';
         return Video.create(source);
       },

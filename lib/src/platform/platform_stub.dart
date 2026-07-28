@@ -25,6 +25,12 @@ class _StubDomAdapter implements DomAdapter {
   }
 
   @override
+  void blur(DomElement element) {
+    throw UnsupportedError(
+        'DOM operations are not supported on this platform.');
+  }
+
+  @override
   DomSelectionRange? getSelectionRange(DomElement root) => null;
 
   @override

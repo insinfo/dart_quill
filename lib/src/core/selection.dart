@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import '../blots/abstract/blot.dart';
+import '../blots/cursor.dart';
+import '../blots/scroll.dart';
 import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
 import 'emitter.dart';
 
@@ -133,12 +135,44 @@ class Selection {
     // reflecting focus state in the UI if necessary.
   }
 
+  /// The pending-format marker blot (parity selection.ts `this.cursor`),
+  /// created lazily and reused across calls.
+  Cursor? _cursor;
+
+  /// Parity selection.ts:157-186.
+  ///
+  /// With a collapsed selection the format cannot be applied to any existing
+  /// text, so a zero-length [Cursor] blot is parked at the caret and formatted
+  /// instead — that is the "enable bold, then type" behavior. With a real
+  /// range the format is applied directly.
   void format(String name, dynamic value) {
     final range = _range;
-    if (range == null || range.length == 0) {
+    if (range == null) return;
+    if (range.length > 0) {
+      scroll.formatAt(range.index, range.length, name, value);
       return;
     }
-    scroll.formatAt(range.index, range.length, name, value);
+    // Block formats are handled by Quill.formatLine, never by the cursor.
+    if (scroll.query(name, Scope.BLOCK) != null) return;
+
+    final scrollBlot = scroll;
+    if (scrollBlot is! Scroll) return;
+    final leafEntry = scrollBlot.leaf(range.index);
+    final leaf = leafEntry.key;
+    if (leaf == null) return;
+
+    var cursor = _cursor;
+    if (cursor == null) {
+      cursor = scrollBlot.create(Cursor.kBlotName) as Cursor;
+      _cursor = cursor;
+    } else if (cursor.parent != null) {
+      cursor.remove();
+    }
+
+    final after = leaf.split(leafEntry.value);
+    leaf.parent?.insertBefore(cursor, after);
+    cursor.format(name, value);
+    scroll.optimize([], {});
   }
 
   Map<String, int>? getNativeRange() {

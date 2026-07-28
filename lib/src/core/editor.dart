@@ -1,6 +1,8 @@
 import '../blots/block.dart';
 import '../blots/abstract/blot.dart';
+import '../blots/break.dart';
 import '../blots/scroll.dart';
+import 'emitter.dart';
 
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
 
@@ -104,6 +106,31 @@ class Editor {
     return Delta()..retain(index)..insert({type: data});
   }
 
+  /// Parity editor.ts `insertContents`: inserts a full delta (multiline,
+  /// embeds, block formats) at [index] through the canonical
+  /// [Scroll.insertContents] path and returns the change delta.
+  Delta insertContents(int index, Delta contents) {
+    final normalized = _normalizeDelta(contents);
+    scroll.insertContents(index, normalized);
+    _update();
+    return (Delta()..retain(index)).concat(normalized);
+  }
+
+  /// Parity editor.ts `normalizeDelta` — CRLF→LF on every string insert.
+  Delta _normalizeDelta(Delta delta) {
+    final normalized = Delta();
+    for (final op in delta.operations) {
+      final data = op.data;
+      if (op.isInsert && data is String) {
+        normalized.insert(data.replaceAll('\r\n', '\n').replaceAll('\r', '\n'),
+            op.attributes);
+      } else {
+        normalized.operations.add(op);
+      }
+    }
+    return normalized;
+  }
+
   Delta insertText(int index, String text, [Map<String, dynamic>? formats]) {
     scroll.insertAt(index, text);
     if (formats != null) {
@@ -149,13 +176,73 @@ class Editor {
     return delta;
   }
 
+  /// Parity editor.ts:158-160.
+  Delta getContentsRange(int index, int length) =>
+      delta.slice(index, index + length);
+
+  /// Parity editor.ts:211-216.
+  String getText(int index, int length) {
+    final buffer = StringBuffer();
+    for (final op in getContentsRange(index, length).operations) {
+      final data = op.data;
+      if (op.isInsert && data is String) {
+        buffer.write(data);
+      }
+    }
+    return buffer.toString();
+  }
+
+  /// Parity editor.ts:168-196 — line formats combined with leaf formats;
+  /// values that differ across the range accumulate into a list.
+  Map<String, dynamic> getFormat(int index, [int length = 0]) =>
+      scroll.getFormat(index, length);
+
+  /// Parity editor.ts:245-253.
+  bool isBlank() {
+    if (scroll.children.isEmpty) return true;
+    if (scroll.children.length > 1) return false;
+    final blot = scroll.children.first;
+    if (blot is! Block) return false;
+    if (blot.children.length > 1) return false;
+    return blot.children.isNotEmpty && blot.children.first is Break;
+  }
+
+  /// Parity editor.ts:255-271 — diff the range against its plain text (plus
+  /// the untouched suffix of the closing line) and apply the difference, so
+  /// both inline and block formats are dropped in one delta.
+  Delta removeFormat(int index, int length) {
+    final text = getText(index, length);
+    final lineEntry = scroll.line(index + length);
+    final line = lineEntry.key;
+    final offset = lineEntry.value;
+    var suffixLength = 0;
+    var suffix = Delta();
+    if (line is Block) {
+      suffixLength = line.length() - offset;
+      suffix = line
+          .delta()
+          .slice(offset, offset + suffixLength - 1)
+          .concat(Delta()..insert('\n'));
+    }
+    final contents = getContentsRange(index, length + suffixLength);
+    final diff = contents.diff(Delta()..insert(text)..concat(suffix));
+    final change = (Delta()..retain(index)).concat(diff);
+    update(change, EmitterSource.USER);
+    return change;
+  }
+
   Delta _buildDelta(Blot blot) {
     if (blot is Block) {
       return blot.delta();
     }
 
     if (blot is BlockEmbed) {
-      final attributes = bubbleFormats(blot, filter: true);
+      // Block attributors (align/indent on a full-line embed) live in the
+      // embed's AttributorStore (block.ts:140-145), not in formats().
+      final attributes = {
+        ...bubbleFormats(blot, filter: true),
+        ...blot.attributeValues(),
+      };
       final value = {blot.blotName: blot.value()};
       return Delta()
         ..insert(value, attributes.isEmpty ? null : attributes)

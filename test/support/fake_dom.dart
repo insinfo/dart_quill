@@ -29,6 +29,13 @@ class FakeDomAdapter implements DomAdapter {
   }
 
   @override
+  void blur(DomElement element) {
+    if (element is FakeDomElement) {
+      element.removeAttribute('data-focused');
+    }
+  }
+
+  @override
   DomSelectionRange? getSelectionRange(DomElement root) => selectionRange;
 
   @override

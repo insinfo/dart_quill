@@ -218,6 +218,9 @@ abstract class DomAdapter {
       {DomElement? relativeTo});
   Future<String?> readFileAsDataUrl(dynamic file);
   void focus(DomElement element);
+
+  /// Removes focus from [element] when it currently holds it.
+  void blur(DomElement element);
   String? get userAgent;
 }
 
