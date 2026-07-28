@@ -2,7 +2,7 @@
 
 **Data:** 2026-07-28
 **Método:** comparação arquivo-a-arquivo e método-a-método entre `referencias/quilljs/src`, `referencias/quill_table_better/1.2.3/src/src` (+ parchment em `referencias/quill_table_better/1.2.3/src/node_modules/parchment/src`) e `lib/`.
-**Baseline de testes:** 444 unitários VM + 14 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo. *(atualizado em 2026-07-28)*
+**Baseline de testes:** 451 unitários VM + 14 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo. *(atualizado em 2026-07-28)*
 **Complementa:** `doc/PLANO_PORT_COMPLETO.md` (fases F0–F10; F0–F2 concluídas, F7/F8 núcleo entregue). Este documento substitui o detalhamento de lacunas daquele plano.
 
 ---
@@ -164,6 +164,7 @@ Bugs pontuais de alto impacto e baixo risco, sem mudança arquitetural:
 - [x] G1.8 `Embed` inline com guards ﻿: contentNode contenteditable=false, leftGuard/rightGuard, `restore()`/`index()`/`update()`, `EmbedContextRange`. (B4)
 - [x] G1.9 `BlockEmbed` com `attributes` (AttributorStore de BLOCK_ATTRIBUTE), `delta()`, `format()`/`formatAt()` fiéis; `Editor._buildDelta` mescla `attributeValues()` na linha do embed (align/indent em vídeo funcionam). (B8)
 - [x] G1.10 (núcleo) `Scroll.insertContents` fiel (scroll.ts:139-210, usando deltaToRenderBlocks/createBlock/insertInlineContents que estavam órfãos) + `Editor.insertContents(index, delta)` com normalização CRLF; `Scroll.lines` respeitando range dentro de containers (B20); testes novos em `test/unit/core/insert_contents_test.dart`. *Restam: trocar o Editor.update bespoke pelo applyDelta fiel, drenagem de update nas APIs (B18), emitMount/emitUnmount (B16), split de TableRow por data-row.*
+- [x] G1.13 **`deleteAt` fiel nas três camadas** (2026-07-28) — ver o bloco de bugs no fim do G3. `ParentBlot.forEachAt` + `ParentBlot.deleteAt` (parent.ts:92-99), `Scroll._scrollDeleteAt` (parchment scroll.ts:80-89, com o `update()` do B18) e `Scroll.deleteAt` (quill scroll.ts:79-96), sem os ramos inventados.
 - Testes: portar cenários de `parchment` upstream + suíte atual verde.
 
 ### G2 — Core fiel (1 semana) — EM ANDAMENTO (2026-07-27)
@@ -183,9 +184,13 @@ Bugs pontuais de alto impacto e baixo risco, sem mudança arquitetural:
 - Testes: `test/unit/modules/keyboard_bindings_test.dart` (23 casos: defaults por tecla + contagem, Ctrl/Cmd+B, Tab/Shift+Tab, autofill, empty enter, code exit, merge de formatos no backspace, semântica do addBinding); `test/unit/modules/table_test.dart` cobre contexto/offset e inserções públicas; `test/unit/public_api_test.dart` cobre export de `TableContext` e registro repetido sem sobrescrever definições.
 - TODOs deixados: `CodeBlock.TAB` (G5.2) e `Quill.update` no makeCodeBlockHandler (G2.1 — expresso como delta, mesmo efeito). `quill.scrollSelectionIntoView` foi concluído em G2.5.
 
-**⚠️ Dois bugs de core encontrados pelo trabalho de G3 (ainda abertos, candidatos a G1.10):**
-1. **`Scroll.deleteAt` apaga demais em blocos vazios**: em `'code\n\n\n\n'`, `updateContents(retain(6)+delete(1))` produz `'code\n'` — três newlines somem. Reproduz também com parágrafos simples. Afeta backspace/delete em linhas vazias.
-2. **`Quill.deleteText` não apaga através de fronteira de bloco**: `Editor.deleteText` chama `Scroll.deleteAt` uma única vez (só `Editor.update` tem o laço `while (remaining > 0)`), então `deleteText(3, 5)` sobre `'Title\nbody\n'` remove só 3 caracteres **e ainda emite um delta que não corresponde ao documento**.
+**✓ Os dois bugs de core encontrados pelo G3 — CORRIGIDOS em 2026-07-28 (G1.13):**
+1. ~~`Scroll.deleteAt` apaga demais em blocos vazios~~ — a causa eram **dois ramos inventados**, sem contraparte no TS: um re-resolvia `first`/`offset` a partir de `line(index - 1)` quando o offset era 0 (fazendo o merge de linhas disparar em casos que o upstream não dispara), e o outro removia a linha final inteira quando ela tinha só um Break. `Scroll.deleteAt` foi reescrito fiel a scroll.ts:79-96.
+2. ~~`Quill.deleteText` não apaga através de fronteira de bloco~~ — a causa era o `ParentBlot.deleteAt`, que removia filhos esvaziados na hora e depois **recursava no mesmo índice** para o resto, contando comprimentos duas vezes. Agora é o parent.ts:92-99: `forEachAt` (portado de linked-list.ts:70-92) e a remoção dos vazios deixada para o `optimize`, como no parchment. Com isso o laço `while (remaining > 0)` do `Editor.update` — que só existia para compensar o corte prematuro — foi removido, e `deleteText` volta a ser a chamada única do editor.ts.
+
+Faltava ainda o nível intermediário: **`ScrollBlot.deleteAt` do parchment** (scroll.ts:80-89), que drena `update()` antes e trata "apagar tudo" removendo os filhos. Sem ele, apagar o documento inteiro caía no `remove()` do próprio scroll — um no-op deliberado — e o `setContents` mantinha silenciosamente o conteúdo antigo. Portado como `Scroll._scrollDeleteAt`; resolve também a parte de drenagem do **B18**.
+
+Testes: `test/unit/core/delete_at_test.dart` (7 casos, incluindo um que verifica que `oldDelta.compose(change)` bate com o documento resultante — o delta emitido tinha de descrever o que de fato aconteceu).
 
 ### G4 — Clipboard/Uploader/Input/UINode (3-5 dias) — CONCLUÍDO (2026-07-28)
 - [x] G4.1 ATTRIBUTE/STYLE_ATTRIBUTORS + `matchAttributor` real; `matchBlot` genérico via registry; short-circuit code-block; `matchCodeBlock` com linguagem; `matchList` via `data-checked` (C7). Testes: `clipboard_attributors_test.dart` + expectativas de conversão atualizadas para o registry padrão.
