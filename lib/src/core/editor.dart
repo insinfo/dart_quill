@@ -2,7 +2,7 @@ import '../blots/block.dart';
 import '../blots/abstract/blot.dart';
 import '../blots/break.dart';
 import '../blots/scroll.dart';
-import 'emitter.dart';
+import '../blots/text.dart';
 
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
 
@@ -12,57 +12,167 @@ class Editor {
 
   Editor(this.scroll);
 
+  /// Applies [delta] to the document (parity editor.ts:28-122).
+  ///
+  /// Kept as the single write path so `Quill.setContents`/`updateContents`
+  /// behave like upstream. The name stays `update` for the existing call
+  /// sites; [applyDelta] is the faithful implementation.
   void update(Delta delta, String source) {
-    var index = 0;
+    applyDelta(delta);
+  }
 
-    // editor.ts:31/120 — applyDelta batches the scroll so optimize (and its
-    // structural normalization, e.g. requiredContainer wrapping) only runs
-    // after every op of the delta has been applied.
+  /// Parity `Editor.applyDelta` (editor.ts:28-122).
+  ///
+  /// Three things the previous bespoke loop did not do, each of which changed
+  /// the resulting document:
+  ///
+  /// * **implicit newlines** — inserting text that does not end in `\n` at the
+  ///   end of the document (or right before a block embed) makes the scroll
+  ///   append one; inserting a block embed after non-newline content makes it
+  ///   prepend one. Upstream records those in a companion delta and deletes
+  ///   them afterwards, so the document matches the delta exactly;
+  /// * **`splitOpLines`** — a multi-line insert is applied line by line, so
+  ///   each line's attributes land on the right newline;
+  /// * **retain of an object** — `{retain: {key: change}}` reaches
+  ///   `Scroll.updateEmbedAt`, which is how embeds are updated in place.
+  ///
+  /// Attributes are diffed against what the document already has
+  /// (`AttributeMap.diff`), instead of being applied blindly.
+  Delta applyDelta(Delta delta) {
+    scroll.update();
+    var scrollLength = scroll.length();
     scroll.batchStart();
 
-    for (final op in delta.operations) {
+    final normalized = _normalizeDelta(delta);
+    final deleteDelta = Delta();
+    var index = 0;
+
+    for (final op in _splitOpLines(normalized.operations)) {
+      final length = _opLength(op);
+      var attributes = Map<String, dynamic>.from(op.attributes ?? const {});
+      var prependImplicitNewline = false;
+      var appendImplicitNewline = false;
+
       if (op.isInsert) {
-        if (op.data is String) {
-          final text = op.data as String;
-          scroll.insertAt(index, text);
-          final length = text.length;
-          final formats = _collectFormatsAt(index);
-          final diff = _diffFormats(formats, op.attributes);
-          diff.forEach((name, value) {
-            scroll.formatAt(index, length, name, value);
-          });
-          index += length;
-        } else if (op.data is Map) {
-          final embed = op.data as Map;
-          embed.forEach((key, value) {
-            scroll.insertAt(index, key, value);
-            final formats = _collectFormatsAt(index);
-            final diff = _diffFormats(formats, op.attributes);
-            diff.forEach((name, attrValue) {
-              scroll.formatAt(index, 1, name, attrValue);
-            });
-            index += 1;
-          });
+        deleteDelta.retain(length);
+        final data = op.data;
+        if (data is String) {
+          appendImplicitNewline = !data.endsWith('\n') &&
+              (scrollLength <= index || _blockEmbedAt(index) != null);
+          scroll.insertAt(index, data);
+          final entry = scroll.line(index);
+          final line = entry.key;
+          final offset = entry.value;
+          var formats = <String, dynamic>{...bubbleFormats(line)};
+          if (line is Block) {
+            final leaf =
+                line.descendant((blot) => blot is LeafBlot, offset).key;
+            if (leaf != null) {
+              formats = {...formats, ...bubbleFormats(leaf)};
+            }
+          }
+          attributes = Delta.diffAttributes(formats, attributes) ?? {};
+        } else if (data is Map && data.isNotEmpty) {
+          final key = data.keys.first as String;
+          final isInlineEmbed = scroll.query(key, Scope.INLINE) != null;
+          if (isInlineEmbed) {
+            if (scrollLength <= index || _blockEmbedAt(index) != null) {
+              appendImplicitNewline = true;
+            }
+          } else if (index > 0) {
+            final entry = scroll.descendant((b) => b is LeafBlot, index - 1);
+            final leaf = entry.key;
+            final leafOffset = entry.value;
+            if (leaf is TextBlot) {
+              final text = leaf.value() as String? ?? '';
+              if (leafOffset >= text.length || text[leafOffset] != '\n') {
+                prependImplicitNewline = true;
+              }
+            } else if (leaf is EmbedBlot && leaf.scope == Scope.INLINE_BLOT) {
+              prependImplicitNewline = true;
+            }
+          }
+          scroll.insertAt(index, key, data[key]);
+
+          if (isInlineEmbed) {
+            final leaf = scroll.descendant((b) => b is LeafBlot, index).key;
+            if (leaf != null) {
+              final formats = <String, dynamic>{...bubbleFormats(leaf)};
+              attributes = Delta.diffAttributes(formats, attributes) ?? {};
+            }
+          }
         }
-      } else if (op.isRetain) {
-        final length = op.length ?? 0;
-        if (op.attributes != null && op.attributes!.isNotEmpty) {
-          op.attributes!.forEach((name, value) {
-            scroll.formatAt(index, length, name, value);
-          });
+        scrollLength += length;
+      } else {
+        deleteDelta.push(op);
+        // `{retain: {embedKey: change}}` updates an embed in place.
+        if (op.isRetain && op.data is Map && (op.data as Map).isNotEmpty) {
+          final change = op.data as Map;
+          final key = change.keys.first as String;
+          scroll.updateEmbedAt(index, key, change[key]);
         }
-        index += length;
-      } else if (op.isDelete) {
-        // One call, as editor.ts does. The retry loop that used to live here
-        // existed only because `Scroll.deleteAt` stopped at a block boundary.
-        scroll.deleteAt(index, op.length ?? 0);
       }
+
+      attributes.forEach((name, value) {
+        scroll.formatAt(index, length, name, value);
+      });
+
+      final prepended = prependImplicitNewline ? 1 : 0;
+      final appended = appendImplicitNewline ? 1 : 0;
+      scrollLength += prepended + appended;
+      deleteDelta.retain(prepended);
+      deleteDelta.delete(appended);
+      index += length + prepended + appended;
+    }
+
+    // Second pass: remove the newlines the scroll added implicitly.
+    var deleteIndex = 0;
+    for (final op in deleteDelta.operations) {
+      if (op.isDelete) {
+        scroll.deleteAt(deleteIndex, op.length ?? 0);
+        continue;
+      }
+      deleteIndex += _opLength(op);
     }
 
     scroll.batchEnd();
     scroll.optimize([], {});
     _update();
+    return normalized;
   }
+
+  /// Parity `Op.length(op)`.
+  int _opLength(Operation op) {
+    if (op.isDelete || op.isRetain) return op.length ?? 0;
+    final data = op.data;
+    return data is String ? data.length : 1;
+  }
+
+  /// Parity `splitOpLines(ops)` (editor.ts:465-480) — a text insert becomes one
+  /// op per line, with an explicit `\n` op carrying the line's attributes.
+  List<Operation> _splitOpLines(List<Operation> ops) {
+    final split = <Operation>[];
+    for (final op in ops) {
+      final data = op.data;
+      if (op.isInsert && data is String) {
+        final lines = data.split('\n');
+        for (var i = 0; i < lines.length; i++) {
+          if (i > 0) split.add(Operation.insert('\n', op.attributes));
+          if (lines[i].isNotEmpty) {
+            split.add(Operation.insert(lines[i], op.attributes));
+          }
+        }
+      } else {
+        split.add(op);
+      }
+    }
+    return split;
+  }
+
+  /// The block embed covering [index], if any (TS
+  /// `this.scroll.descendant(BlockEmbed, index)[0]`).
+  Blot? _blockEmbedAt(int index) =>
+      scroll.descendant((blot) => blot is BlockEmbed, index).key;
 
   void deleteText(int index, int length) {
     scroll.deleteAt(index, length);
@@ -239,11 +349,14 @@ class Editor {
           .concat(Delta()..insert('\n'));
     }
     final contents = getContentsRange(index, length + suffixLength);
-    final diff = contents.diff(Delta()
-      ..insert(text)
-      ..concat(suffix));
+    // `Delta()..insert(text)..concat(suffix)` would discard the concat: a
+    // cascade returns the receiver, not the new Delta. The suffix never made
+    // it into the diff, so the diff deleted the line's newline instead of
+    // clearing its formats, and block formats survived the clean.
+    final plain = Delta()..insert(text);
+    final diff = contents.diff(plain.concat(suffix));
     final change = (Delta()..retain(index)).concat(diff);
-    update(change, EmitterSource.USER);
+    applyDelta(change);
     return change;
   }
 
@@ -300,52 +413,5 @@ class Editor {
     }
     final attrs = op.attributes;
     return attrs == null || attrs.isEmpty;
-  }
-
-  Map<String, dynamic> _collectFormatsAt(int index) {
-    final formats = <String, dynamic>{};
-    final lineEntry = scroll.line(index);
-    final line = lineEntry.key;
-    final offset = lineEntry.value;
-
-    if (line != null) {
-      formats.addAll(bubbleFormats(line, filter: true));
-      if (line is ParentBlot) {
-        final leafResult = line.descendant((blot) => blot is LeafBlot, offset);
-        final leaf = leafResult.key;
-        if (leaf != null) {
-          formats.addAll(bubbleFormats(leaf, filter: true));
-        }
-      }
-    }
-
-    return formats;
-  }
-
-  Map<String, dynamic> _diffFormats(
-      Map<String, dynamic> current, Map<String, dynamic>? desired) {
-    final target = desired == null
-        ? const <String, dynamic>{}
-        : Map<String, dynamic>.from(desired);
-    final diff = <String, dynamic>{};
-    final keys = {...current.keys, ...target.keys};
-
-    for (final key in keys) {
-      final currentValue = current[key];
-      final hasTarget = target.containsKey(key);
-      final targetValue = hasTarget ? target[key] : null;
-
-      if (!hasTarget || targetValue == null || targetValue == false) {
-        if (current.containsKey(key) && currentValue != null) {
-          diff[key] = null;
-        }
-        continue;
-      }
-
-      if (currentValue != targetValue) {
-        diff[key] = targetValue;
-      }
-    }
-    return diff;
   }
 }

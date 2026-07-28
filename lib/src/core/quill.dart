@@ -502,37 +502,22 @@ class Quill {
     }
   }
 
-  /// Removes inline and block formats from the selected range.
+  /// Removes inline and block formats from the range (parity quill.ts).
   ///
-  /// Observable parity with Quill 2's `removeFormat` (block attributes,
-  /// including lists and alignment, are cleared along with inline styles),
-  /// but implemented by clearing each format by name instead of by the TS
-  /// diff-against-plain-text route.
-  ///
-  /// NOTE: [Editor.removeFormat] IS the faithful diff-based port; switching
-  /// this over requires the faithful `applyDelta` (G1.10 pendency) — the
-  /// current bespoke `Editor.update` does not apply the `{list: null}`
-  /// retain that the diff produces, so lists survive the clean.
-  void removeFormat(int index, int length,
+  /// Delegates to the faithful [Editor.removeFormat], which diffs the range
+  /// against its plain text plus the untouched suffix of the closing line.
+  /// The clear-each-format-by-name version that used to live here existed
+  /// because that diff could not be applied — it produced a
+  /// `retain {list: null}` the bespoke `Editor.update` ignored. With the
+  /// faithful `applyDelta` in place, the upstream route works.
+  Delta removeFormat(int index, int length,
       {String source = EmitterSource.API}) {
-    if (length <= 0) return;
-    final names = <String>{};
-    for (final operation
-        in getContents().slice(index, index + length).operations) {
-      names.addAll(operation.attributes?.keys ?? const <String>[]);
-    }
-    for (final line in scroll.lines(index, length)) {
-      names.addAll(line.formats().keys);
-    }
-    for (final name in names) {
-      if (scroll.registry.query(name, Scope.BLOCK) != null ||
-          scroll.registry.queryAttributor(name, Scope.BLOCK_ATTRIBUTE) !=
-              null) {
-        formatLine(index, length, name, false, source: source);
-      } else {
-        formatText(index, length, name, false, source: source);
-      }
-    }
+    return modify(
+      () => editor.removeFormat(index, length),
+      source: source,
+      index: index,
+      shift: length,
+    );
   }
 
   void setSelection(Range range, {String source = EmitterSource.API}) {
