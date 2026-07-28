@@ -27,6 +27,17 @@ const TOOLBAR_CONFIG = [
   ['clean'],
 ];
 
+final RegExp _emailPattern = RegExp(r'^\S+@\S+\.\S+$');
+
+/// Parity snow.ts:132-138 — the text of the selection becomes the link
+/// preview, prefixed with `mailto:` when it looks like an e-mail address.
+String snowLinkPreview(String text) {
+  if (_emailPattern.hasMatch(text) && !text.startsWith('mailto:')) {
+    return 'mailto:$text';
+  }
+  return text;
+}
+
 class SnowTooltip extends BaseTooltip {
   static final TEMPLATE = [
     '<a class="ql-preview" rel="noopener noreferrer" target="_blank" href="about:blank"></a>',
@@ -36,14 +47,18 @@ class SnowTooltip extends BaseTooltip {
   ].join('');
 
   late final DomElement? preview;
-  Range? linkRange;
 
   SnowTooltip(Quill quill, DomElement? bounds)
       : super(quill, TEMPLATE, bounds) {
     preview = root.querySelector('a.ql-preview');
-    listen();
+    // listen() already ran via the BaseTooltip constructor (virtual
+    // dispatch); calling it again here duplicated every listener.
   }
 
+  // linkRange lives on BaseTooltip — shadowing it here broke save(), which
+  // read the base field and always saw null (formatting the wrong range).
+
+  @override
   void listen() {
     super.listen();
     root.querySelector('a.ql-action')?.addEventListener('click', (event) {
@@ -147,22 +162,41 @@ class SnowTheme extends BaseTheme {
       buildPickers(
           toolbar, toolbar.container!.querySelectorAll('select'), themeIcons);
       tooltip = SnowTooltip(quill, options.bounds ?? quill.container);
+      registerThemeHandlers(toolbar);
       if (toolbar.container!.querySelector('.ql-link') != null) {
         quill.keyboard.addBinding(
           {'key': 'k', 'shortKey': true},
-          handler: (Range range, Context _) {
-            final formats = quill.getFormat(range.index, range.length);
-            final hasLink = formats.containsKey(Link.kBlotName);
-            if (hasLink) {
-              quill.format(Link.kBlotName, false, source: EmitterSource.USER);
-            } else {
-              toolbar.handlers['link']?.call(null);
-            }
+          // Parity snow.ts:114-119 — delegate to the link handler with the
+          // negated current state instead of duplicating its logic.
+          handler: (Range range, Context context) {
+            final hasLink = context.format.containsKey(Link.kBlotName);
+            toolbar.handlers['link']?.call(!hasLink);
             return true;
           },
         );
       }
       super.extendToolbar(toolbar);
     }
+  }
+
+  /// Parity `SnowTheme.DEFAULTS.modules.toolbar.handlers.link`
+  /// (snow.ts:124-149). Registered imperatively because this port has no
+  /// theme-level DEFAULTS merging for toolbar handlers; user supplied
+  /// handlers still win (see [BaseTheme.overridesHandler]).
+  void registerThemeHandlers(Toolbar toolbar) {
+    if (overridesHandler(toolbar, 'link')) return;
+    toolbar.addHandler('link', (value) {
+      if (isFalsyHandlerValue(value)) {
+        quill.format(Link.kBlotName, false, source: EmitterSource.USER);
+        return;
+      }
+      final range = quill.getSelection();
+      if (range == null || range.length == 0) return;
+      final preview = snowLinkPreview(quill.getText(range.index, range.length));
+      final currentTooltip = tooltip;
+      if (currentTooltip is BaseTooltip) {
+        currentTooltip.edit('link', preview);
+      }
+    });
   }
 }

@@ -13,19 +13,6 @@ import '../ui/picker.dart';
 import '../ui/tabler_icons.dart';
 import '../ui/tooltip.dart';
 
-// Utility functions (simplified for now)
-Map<String, dynamic> merge(Map<String, dynamic> a, Map<String, dynamic> b) {
-  final result = Map<String, dynamic>.from(a);
-  b.forEach((key, value) {
-    if (value is Map<String, dynamic> && result[key] is Map<String, dynamic>) {
-      result[key] = merge(result[key], value);
-    } else {
-      result[key] = value;
-    }
-  });
-  return result;
-}
-
 const List<dynamic> ALIGNS = [false, 'center', 'right', 'justify'];
 
 const List<String> COLORS = [
@@ -135,6 +122,26 @@ class BaseTheme extends Theme {
   }
 
   void extendToolbar(Toolbar toolbar) {}
+
+  /// Whether the embedder supplied its own handler for [format] through the
+  /// toolbar options.
+  ///
+  /// Upstream merges `Theme.DEFAULTS.modules.toolbar.handlers` with the user
+  /// configuration (user wins). This port has no DEFAULTS merging for
+  /// handlers, so themes register theirs imperatively and use this guard to
+  /// avoid clobbering an explicit user handler.
+  bool overridesHandler(Toolbar toolbar, String format) {
+    final userHandlers = toolbar.options.handlers;
+    return userHandlers != null && userHandlers.containsKey(format);
+  }
+
+  /// JS truthiness for the value a toolbar control passes to its handler:
+  /// `null`, `false` and the empty string mean "toggle the format off".
+  bool isFalsyHandlerValue(dynamic value) {
+    if (value == null || value == false) return true;
+    if (value is String && value.isEmpty) return true;
+    return false;
+  }
 
   void _registerToolbarHandlers(Toolbar toolbar) {
     if (!toolbar.handlers.containsKey('formula')) {
@@ -437,7 +444,10 @@ class BaseTheme extends Theme {
         final pickerFormat =
             select.classes.contains('ql-background') ? 'background' : 'color';
         if (select.querySelector('option') == null) {
-          fillSelect(select, COLORS, pickerFormat == 'background');
+          // Parity base.ts:160-166 — the default swatch is white for
+          // background and black for color (not a boolean).
+          fillSelect(select, COLORS,
+              pickerFormat == 'background' ? '#ffffff' : '#000000');
         }
         picker = ColorPicker(select, icons[pickerFormat] as String?);
       } else {

@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math' as math;
+
 import '../core/emitter.dart';
 import '../core/quill.dart';
 import '../core/theme.dart';
@@ -7,19 +9,6 @@ import '../platform/dom.dart';
 import '../ui/icons.dart';
 import '../ui/tabler_icons.dart';
 import 'base.dart';
-
-// Utility functions (simplified for now)
-Map<String, dynamic> merge(Map<String, dynamic> a, Map<String, dynamic> b) {
-  final result = Map<String, dynamic>.from(a);
-  b.forEach((key, value) {
-    if (value is Map<String, dynamic> && result[key] is Map<String, dynamic>) {
-      result[key] = merge(result[key], value);
-    } else {
-      result[key] = value;
-    }
-  });
-  return result;
-}
 
 const TOOLBAR_CONFIG = <List<dynamic>>[
   ['bold', 'italic', 'link'],
@@ -40,26 +29,37 @@ class BubbleTooltip extends BaseTooltip {
       if (type != EmitterEvents.SELECTION_CHANGE) return;
       if (range != null && range.length > 0 && source == EmitterSource.USER) {
         show();
-        root.style.left = '0px';
-        root.style.width = '';
-        root.style.width = '${root.offsetWidth}px';
-        // Placeholder for quill.getLines and quill.getBounds
-        // final lines = quill.getLines(range.index, range.length);
-        // if (lines.length == 1) {
-        //   final bounds = quill.getBounds(range);
-        //   if (bounds != null) {
-        //     position(bounds);
-        //   }
-        // } else {
-        //   final lastLine = lines.last;
-        //   final index = quill.getIndex(lastLine);
-        //   final length = math.min(lastLine.length() - 1, range.index + range.length - index);
-        //   final indexBounds = quill.getBounds(Range(index, length));
-        //   if (indexBounds != null) {
-        //     position(indexBounds);
-        //   }
-        // }
+        // Lock our width so we will expand beyond our offsetParent boundaries
+        root.style?.left = '0px';
+        root.style?.width = '';
+        root.style?.width = '${root.offsetWidth}px';
+        // Parity bubble.ts:42-59 — `quill.getLines` does not exist in this
+        // port; `scroll.lines(index, length)` is its implementation.
+        final int rangeIndex = range.index as int;
+        final int rangeLength = range.length as int;
+        final lines = quill.scroll.lines(rangeIndex, rangeLength);
+        if (lines.length <= 1) {
+          final bounds = quill.getBounds(rangeIndex, rangeLength);
+          if (bounds != null) {
+            position(bounds);
+          }
+        } else {
+          final lastLine = lines.last;
+          // `quill.getIndex(blot)` is `scroll.offset(blot)` here.
+          final index = quill.scroll.offset(lastLine);
+          final length = math.min(
+            lastLine.length() - 1,
+            rangeIndex + rangeLength - index,
+          );
+          final indexBounds = quill.getBounds(index, length);
+          if (indexBounds != null) {
+            position(indexBounds);
+          }
+        }
       } else if (quill.hasFocus()) {
+        // TS checks `document.activeElement !== this.textbox`; the platform
+        // DOM abstraction exposes no activeElement, so the tooltip's own
+        // editing flag stands in for "focus is inside the textbox".
         if (!isEditing) {
           hide();
         }
@@ -74,6 +74,7 @@ class BubbleTooltip extends BaseTooltip {
       root.classes.remove('ql-editing');
     });
     quill.on(EmitterEvents.SCROLL_OPTIMIZE, (mutations, context) {
+      // Let selection be restored by toolbar handlers before repositioning
       Timer(Duration(milliseconds: 1), () {
         if (root.classes.contains('ql-hidden')) return;
         final range = quill.getSelection();
@@ -92,42 +93,20 @@ class BubbleTooltip extends BaseTooltip {
     show();
   }
 
+  /// Parity `bubble.ts:95-105` — the arrow compensates the horizontal shift
+  /// applied by [Tooltip.position] so it keeps pointing at the selection.
   @override
   double position(Map<String, dynamic> bounds) {
-    final baseShift = super.position(bounds);
-    final container = boundsContainer;
-    final containerWidth = container.offsetWidth.toDouble();
-    final tooltipWidth = root.offsetWidth.toDouble();
-    final left = _extract(bounds['left']);
-    final rawWidth = _extract(bounds['width']);
-    final effectiveWidth = rawWidth == 0 ? tooltipWidth : rawWidth;
-    final center = left + effectiveWidth / 2;
-    final idealLeft = center - tooltipWidth / 2;
-    final maxLeft =
-        containerWidth > tooltipWidth ? containerWidth - tooltipWidth : 0;
-    final clampedLeft = idealLeft.clamp(0, maxLeft.toDouble());
-    final style = root.style as dynamic;
-    style.left = '${clampedLeft}px';
-
-    final arrowShift = idealLeft - clampedLeft;
+    final shift = super.position(bounds);
     final arrow = root.querySelector('.ql-tooltip-arrow');
     if (arrow != null) {
-      final style = arrow.style as dynamic;
-      style.marginLeft = '';
-      if (baseShift != 0 || arrowShift != 0) {
-        final totalShift = baseShift + arrowShift;
-        style.marginLeft = '${-totalShift - arrow.offsetWidth / 2}px';
+      arrow.style?.marginLeft = '';
+      if (shift != 0) {
+        arrow.style?.marginLeft =
+            '${-1 * shift - arrow.offsetWidth / 2}px';
       }
     }
-
-    return baseShift;
-  }
-
-  double _extract(dynamic value) {
-    if (value is num) {
-      return value.toDouble();
-    }
-    return 0;
+    return shift;
   }
 }
 
@@ -163,10 +142,25 @@ class BubbleTheme extends BaseTheme {
       buildPickers(
           toolbar, toolbar.container!.querySelectorAll('select'), themeIcons);
     }
+    registerThemeHandlers(toolbar);
     super.extendToolbar(toolbar);
   }
 
-  static Map<String, dynamic> defaults() => {
-        'toolbar': Toolbar.DEFAULTS,
-      };
+  /// Parity `BubbleTheme.DEFAULTS.modules.toolbar.handlers.link`
+  /// (bubble.ts:132-147). Registered imperatively because this port has no
+  /// theme-level DEFAULTS merging for toolbar handlers; user supplied
+  /// handlers still win (see [BaseTheme.overridesHandler]).
+  void registerThemeHandlers(Toolbar toolbar) {
+    if (overridesHandler(toolbar, 'link')) return;
+    toolbar.addHandler('link', (value) {
+      if (isFalsyHandlerValue(value)) {
+        quill.format('link', false, source: EmitterSource.USER);
+      } else {
+        final currentTooltip = tooltip;
+        if (currentTooltip is BaseTooltip) {
+          currentTooltip.edit();
+        }
+      }
+    });
+  }
 }

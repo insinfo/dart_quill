@@ -1,4 +1,5 @@
 import '../platform/dom.dart';
+import 'dom_interop.dart';
 
 const String _dropdownIcon = '''
 <svg viewBox="0 0 18 18">
@@ -112,7 +113,7 @@ class Picker {
       }
     }
 
-    _selectItem(item, trigger: false);
+    selectItem(item, trigger: false);
 
     final initialOption = select.querySelector('option[selected]');
     final isActive =
@@ -169,12 +170,12 @@ class Picker {
 
       item.addEventListener('mousedown', (event) {
         event.preventDefault();
-        _selectItem(item);
+        selectItem(item);
       });
       item.addEventListener('keydown', (event) {
         final key = (event.rawEvent as dynamic).key as String?;
         if (key == 'Enter') {
-          _selectItem(item);
+          selectItem(item);
           event.preventDefault();
         } else if (key == 'Escape') {
           escape();
@@ -192,7 +193,10 @@ class Picker {
     return options;
   }
 
-  void _selectItem(DomElement? item, {bool trigger = true}) {
+  /// Parity `picker.ts:147-175`. Selects [item] and, when [trigger] is set
+  /// (user interaction, as opposed to a programmatic [update]), dispatches a
+  /// `change` event on the underlying `<select>` and closes the dropdown.
+  void selectItem(DomElement? item, {bool trigger = true}) {
     final selected = container.querySelector('.ql-selected');
     if (selected == item) {
       if (trigger) close();
@@ -216,8 +220,18 @@ class Picker {
     onSelectionChanged(value);
 
     if (trigger) {
+      // Parity picker.ts:171-174 — notify listeners of the hidden <select>
+      // (this is how upstream reaches the toolbar, and how embedder code
+      // observing the element learns about the change).
+      final dispatched = dispatchDomEvent(select, 'change');
       close();
-      onSelected?.call(value);
+      // The toolbar already listens for `change` on the select, so calling
+      // `onSelected` as well would apply the format twice. It is only used
+      // as a fallback on adapters that cannot dispatch DOM events (VM /
+      // fake DOM), where the native listener never runs.
+      if (!dispatched) {
+        onSelected?.call(value);
+      }
     }
   }
 
@@ -347,7 +361,7 @@ class IconPicker extends Picker {
     }
     _defaultItem = container.querySelector('.ql-selected') ??
         (items.isNotEmpty ? items.first : null);
-    _selectItem(_defaultItem, trigger: false);
+    selectItem(_defaultItem, trigger: false);
   }
 
   final Map<String, String> icons;
