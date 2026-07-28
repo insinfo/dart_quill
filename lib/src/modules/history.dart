@@ -50,29 +50,26 @@ class History extends Module<HistoryOptions> {
       },
     );
 
+    // Parity history.ts:27-37. KeyboardEvent.key is 'z' for Ctrl+Z and 'Z'
+    // for Ctrl+Shift+Z, so the shift variant is registered for both cases.
     quill.keyboard.addBinding(
-      BindingObject(key: 'Z', shortKey: true),
+      BindingObject(key: 'z', shortKey: true),
       handler: (_, __) => undo(),
     );
     quill.keyboard.addBinding(
-      BindingObject(key: 'Y', shortKey: true),
+      BindingObject(key: 'z', shortKey: true, shiftKey: true),
       handler: (_, __) => redo(),
     );
     quill.keyboard.addBinding(
       BindingObject(key: 'Z', shortKey: true, shiftKey: true),
       handler: (_, __) => redo(),
     );
-    // if (isMac()) {
-    //   quill.keyboard.addBinding(
-    //     {'key': 'z', 'shortKey': true, 'shiftKey': true},
-    //     (range, context) => redo(),
-    //   );
-    // } else {
-    //   quill.keyboard.addBinding(
-    //     {'key': 'y', 'shortKey': true},
-    //     (range, context) => redo(),
-    //   );
-    // }
+    if (!isMacPlatform) {
+      quill.keyboard.addBinding(
+        BindingObject(key: 'y', shortKey: true),
+        handler: (_, __) => redo(),
+      );
+    }
 
     quill.root.addEventListener('beforeinput', (event) {
       if (event is! DomInputEvent) return;
