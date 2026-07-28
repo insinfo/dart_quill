@@ -35,6 +35,16 @@ String _tablerIcon(String action) =>
     'table';
 
 class Table extends Module<TableOptions> {
+  /// Registers the four blots used by the basic table module.
+  ///
+  /// This mirrors Quill's `Table.register()` extension entry point. Calling it
+  /// repeatedly is safe because [Quill.register] preserves existing entries.
+  static void register() {
+    for (final entry in tableRegistryEntries()) {
+      Quill.register(entry);
+    }
+  }
+
   bool _isBalancing = false;
 
   Table(Quill quill, TableOptions options) : super(quill, options) {
@@ -155,7 +165,7 @@ class Table extends Module<TableOptions> {
       'color:#444;font-size:18px;line-height:1;cursor:pointer;';
 
   void updateContextToolbar() {
-    final context = _getTable(quill.selection.getRange());
+    final context = getTable(quill.selection.getRange());
     final cell = _activeCell ?? context.cell;
     final cellElement = _activeCellElement ?? cell?.element;
     if (cellElement == null) {
@@ -218,7 +228,7 @@ class Table extends Module<TableOptions> {
   }
 
   void deleteColumn() {
-    final context = _getTable();
+    final context = getTable();
     final table = context.table;
     final cell = context.cell;
     if (table == null || cell == null) {
@@ -231,7 +241,7 @@ class Table extends Module<TableOptions> {
   }
 
   void deleteRow() {
-    final context = _getTable();
+    final context = getTable();
     final row = context.row;
     if (row == null) {
       return;
@@ -243,7 +253,7 @@ class Table extends Module<TableOptions> {
   }
 
   void deleteTable() {
-    final context = _getTable();
+    final context = getTable();
     final table = context.table;
     if (table == null) {
       return;
@@ -267,7 +277,7 @@ class Table extends Module<TableOptions> {
   /// multi-cell merge operation. The resulting logical width is persisted as
   /// HTML `colspan`.
   void mergeCellRight() {
-    final cell = _activeCell ?? _getTable(quill.selection.getRange()).cell;
+    final cell = _activeCell ?? getTable(quill.selection.getRange()).cell;
     final row = cell?.row();
     if (cell == null || row == null) return;
     final offset = cell.cellOffset();
@@ -289,7 +299,7 @@ class Table extends Module<TableOptions> {
 
   /// Splits a horizontally merged cell back into individual cells.
   void splitCell() {
-    final cell = _activeCell ?? _getTable(quill.selection.getRange()).cell;
+    final cell = _activeCell ?? getTable(quill.selection.getRange()).cell;
     final row = cell?.row();
     if (cell == null || row == null || cell.colspan <= 1) return;
     final span = cell.colspan;
@@ -306,19 +316,19 @@ class Table extends Module<TableOptions> {
   }
 
   void insertColumnLeft() {
-    _insertColumn(0);
+    insertColumn(0);
   }
 
   void insertColumnRight() {
-    _insertColumn(1);
+    insertColumn(1);
   }
 
   void insertRowAbove() {
-    _insertRow(0);
+    insertRow(0);
   }
 
   void insertRowBelow() {
-    _insertRow(1);
+    insertRow(1);
   }
 
   void insertTable(int rows, int columns) {
@@ -345,12 +355,16 @@ class Table extends Module<TableOptions> {
     );
   }
 
-  void _insertColumn(int offset) {
+  /// Inserts a column at the current cell plus [offset].
+  ///
+  /// Pass `0` to insert on the left and `1` to insert on the right, matching
+  /// Quill's public table-module API.
+  void insertColumn(int offset) {
     final range = quill.getSelection();
     if (range == null) {
       return;
     }
-    final context = _getTable(range);
+    final context = getTable(range);
     final table = context.table;
     final row = context.row;
     final cell = context.cell;
@@ -372,12 +386,16 @@ class Table extends Module<TableOptions> {
     );
   }
 
-  void _insertRow(int offset) {
+  /// Inserts a row at the current row plus [offset].
+  ///
+  /// Pass `0` to insert above and `1` to insert below, matching Quill's public
+  /// table-module API.
+  void insertRow(int offset) {
     final range = quill.getSelection();
     if (range == null) {
       return;
     }
-    final context = _getTable(range);
+    final context = getTable(range);
     final table = context.table;
     final row = context.row;
     if (table == null || row == null) {
@@ -583,11 +601,15 @@ class Table extends Module<TableOptions> {
     _runUserOptimize();
   }
 
-  _TableContext _getTable([Range? range]) {
+  /// Returns the table hierarchy and cell-relative offset for [range].
+  ///
+  /// When [range] is omitted the current selection is used. Outside a table,
+  /// the hierarchy fields are null and [TableContext.offset] is `-1`.
+  TableContext getTable([Range? range]) {
     _ensureTableStructure();
     final targetRange = range ?? quill.getSelection();
     if (targetRange == null) {
-      return const _TableContext();
+      return const TableContext();
     }
     final entry = quill.scroll.descendant(
       (blot) => blot is TableCell,
@@ -596,25 +618,26 @@ class Table extends Module<TableOptions> {
     final blot = entry.key;
     final offset = entry.value;
     if (blot is! TableCell) {
-      return _TableContext(offset: offset);
+      return const TableContext();
     }
     final row = blot.parent;
     final body = row?.parent;
     final table = body?.parent;
     if (row is TableRow && body is TableBody && table is TableContainer) {
-      return _TableContext(
+      return TableContext(
         table: table,
         row: row,
         cell: blot,
         offset: offset,
       );
     }
-    return _TableContext(offset: offset);
+    return const TableContext();
   }
 }
 
-class _TableContext {
-  const _TableContext({
+/// Public result returned by [Table.getTable].
+class TableContext {
+  const TableContext({
     this.table,
     this.row,
     this.cell,

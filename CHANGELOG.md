@@ -1,6 +1,10 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- Public basic-table parity APIs: typed `TableContext`, `Table.getTable`,
+  direct `insertRow`/`insertColumn`, and idempotent `Table.register`.
+- Public API and table-module tests for cell-relative context, direct
+  row/column offsets, exported `TableContext`, and repeated table registration.
 - Public `Quill.scrollRectIntoView`, `scrollSelectionIntoView` and deprecated
   `scrollIntoView` APIs, backed by ancestor-aware CSSOM nearest scrolling.
 - Platform support for visual viewport bounds, ShadowRoot parent traversal,
@@ -81,6 +85,8 @@
 - `example/ngdart` editor component wired to the public `dart_quill` package and the `package:web` DOM layer.
 
 ### Changed
+- Basic table registry definitions are now shared by global initialization and
+  `Table.register`, preventing the two registration paths from diverging.
 - Non-silent `setSelection` now scrolls the selection into view; clipboard
   paste and checklist/header Enter handlers explicitly scroll after their
   silent caret update.
@@ -147,7 +153,7 @@
 - AngularDart example compilation issues caused by missing package wiring and invalid host element typing.
 
 ### Tests
-- 315 VM unit tests, 14 browser/Chrome tests and 3 Puppeteer E2E scenarios
+- 318 VM unit tests, 14 browser/Chrome tests and 3 Puppeteer E2E scenarios
   passing; `dart analyze` clean (2026-07-28).
 - 204 unit tests and 3 Puppeteer E2E scenarios passing after the merge/split port.
 - Port/audit source expanded to `referencias/quilljs/test` for upstream unit, E2E, and fuzz scenarios.

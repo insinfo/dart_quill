@@ -2,7 +2,7 @@
 
 **Data:** 2026-07-28
 **Método:** comparação arquivo-a-arquivo e método-a-método entre `referencias/quilljs/src`, `referencias/quill_table_better/1.2.3/src/src` (+ parchment em `referencias/quill_table_better/1.2.3/src/node_modules/parchment/src`) e `lib/`.
-**Baseline de testes:** 315 unitários VM + 14 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo.
+**Baseline de testes:** 318 unitários VM + 14 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo.
 **Complementa:** `doc/PLANO_PORT_COMPLETO.md` (fases F0–F10; F0–F2 concluídas, F7/F8 núcleo entregue). Este documento substitui o detalhamento de lacunas daquele plano.
 
 ---
@@ -72,7 +72,7 @@ A cobertura em **nível de arquivo** é ~1:1 (todo arquivo TS tem contraparte Da
 | C15 | `scrollRectIntoView` sem walk de ancestrais/scroll-padding/visualViewport/smooth; nunca invocado. | `scroll_rect_into_view.dart` |
 | C16 | `createRegistryWithFormats` sem o laço `requiredContainer` + detecção de ciclo. | `create_registry_with_formats.dart:27-36` |
 | C17 | `deleteRange`/`handleBackspace`/`handleDelete` sem `AttributeMap.diff` (merge de formatos ao juntar linhas); `deleteRange` muta blots fora do pipeline (sem TEXT_CHANGE). | `keyboard.dart:454-488` |
-| C18 | `Table` básico: `getTable`/`insertRow`/`insertColumn` privados, sem `register()` → bindings `table enter/tab` não integram. | `table.dart:586` |
+| C18 | ~~`Table` básico: `getTable`/`insertRow`/`insertColumn` privados, sem `register()`.~~ **Resolvido em G3.4:** API pública e registro idempotente dos quatro blots, compartilhando as mesmas definições da inicialização global. | `table.dart`, `formats/table.dart` |
 | C19 | `TableEmbed` portado mas **nunca registrado**. | `initialization.dart` |
 | C20 | `clipboard_temp.dart` morto (só `export`); remover. | — |
 
@@ -176,8 +176,8 @@ Bugs pontuais de alto impacto e baixo risco, sem mudança arquitetural:
 - [x] G3.1 As 5 factories reais (`makeFormatHandler`, `makeCodeBlockHandler`, `makeEmbedArrowHandler`, `makeTableArrowHandler`, `tableSide`), portadas de keyboard.ts:639-784/817-831. Handlers default usam `DefaultBindingHandler(Keyboard, Range, Context)` como substituto do `this` do TS; `_invokeHandler` reconhece a aridade e mantém compatibilidade com `(range, context)`/`(range)`.
 - [x] G3.2 **Os 26 bindings default** registrados (C1), com `{...DEFAULTS.bindings, ...options.bindings}` (usuário sobrescreve por nome; `null`/`false` desabilita). `addBinding` com semântica de spread real + `context` como função ou BindingObject. Correções colaterais necessárias: **`Keyboard.match` era infiel** (modificador ausente era tratado como "tanto faz", então Tab capturava Shift+Tab) — agora ausente = "não pode estar pressionado", só `null` é opcional; `normalize` clona o binding (senão os objetos estáticos de DEFAULTS eram mutados e vazavam entre instâncias); `listen()` extraiu `handleKeydown(DomEvent)` público para permitir teste em VM.
 - [x] G3.3 `handleBackspace`/`handleDelete`/`deleteRange` com `Delta.diffAttributes` no pipeline de delta (C17) — nada mais muta blots direto, tudo emite TEXT_CHANGE.
-- [ ] G3.4 `Table` básico: `getTable`/`insertRow`/`insertColumn` públicos + `register()` (C18). *O binding `table enter` foi implementado derivando table/row/cell de `context.line`, então funciona sem essa API.*
-- Testes: `test/unit/modules/keyboard_bindings_test.dart` (23 casos: defaults por tecla + contagem, Ctrl/Cmd+B, Tab/Shift+Tab, autofill, empty enter, code exit, merge de formatos no backspace, semântica do addBinding).
+- [x] G3.4 **API pública do `Table` básico** (2026-07-28): `getTable([Range?])` retorna o novo `TableContext` tipado (`table`/`row`/`cell`/`offset`); `insertRow(offset)` e `insertColumn(offset)` são públicos e alimentam os wrappers acima/abaixo/esquerda/direita; `Table.register()` instala idempotentemente `TableContainer`/`TableBody`/`TableRow`/`TableCell`. As entradas do registry foram centralizadas em `formats/table.dart` e são compartilhadas pela inicialização, eliminando a implementação duplicada/incompleta. `TableContext` está exportado no entrypoint público. (C18)
+- Testes: `test/unit/modules/keyboard_bindings_test.dart` (23 casos: defaults por tecla + contagem, Ctrl/Cmd+B, Tab/Shift+Tab, autofill, empty enter, code exit, merge de formatos no backspace, semântica do addBinding); `test/unit/modules/table_test.dart` cobre contexto/offset e inserções públicas; `test/unit/public_api_test.dart` cobre export de `TableContext` e registro repetido sem sobrescrever definições.
 - TODOs deixados: `CodeBlock.TAB` (G5.2) e `Quill.update` no makeCodeBlockHandler (G2.1 — expresso como delta, mesmo efeito). `quill.scrollSelectionIntoView` foi concluído em G2.5.
 
 **⚠️ Dois bugs de core encontrados pelo trabalho de G3 (ainda abertos, candidatos a G1.10):**

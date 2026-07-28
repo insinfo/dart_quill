@@ -12,6 +12,40 @@ String tableId() {
   return 'row-${value.toRadixString(36)}';
 }
 
+/// Registry definitions required by the basic table module.
+///
+/// Kept alongside the blots so both the default Quill initialization and
+/// [Table.register] can install the exact same definitions.
+List<RegistryEntry> tableRegistryEntries() => [
+      RegistryEntry(
+        blotName: TableContainer.kBlotName,
+        scope: TableContainer.kScope,
+        tagNames: const [TableContainer.kTagName],
+        create: ([dynamic value]) => TableContainer.create(value),
+      ),
+      RegistryEntry(
+        blotName: TableBody.kBlotName,
+        scope: TableBody.kScope,
+        tagNames: const [TableBody.kTagName],
+        requiredContainerBlotName: TableContainer.kBlotName,
+        create: ([dynamic value]) => TableBody.create(value),
+      ),
+      RegistryEntry(
+        blotName: TableRow.kBlotName,
+        scope: TableRow.kScope,
+        tagNames: const [TableRow.kTagName],
+        requiredContainerBlotName: TableBody.kBlotName,
+        create: ([dynamic value]) => TableRow.create(value),
+      ),
+      RegistryEntry(
+        blotName: TableCell.kBlotName,
+        scope: TableCell.kScope,
+        tagNames: const [TableCell.kTagName],
+        requiredContainerBlotName: TableRow.kBlotName,
+        create: ([dynamic value]) => TableCell.create(value),
+      ),
+    ];
+
 class TableContainer extends Container {
   TableContainer(DomElement domNode) : super(domNode);
 

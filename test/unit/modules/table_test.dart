@@ -203,6 +203,51 @@ void main() {
         );
       });
 
+      test('getTable exposes the active hierarchy and cell offset', () {
+        final quill = _setup();
+        final table = quill.getModule('table') as Table;
+
+        final context = table.getTable(const Range(1, 0));
+
+        expect(context.table, isNotNull);
+        expect(context.row, isNotNull);
+        expect(context.cell, isNotNull);
+        expect(context.cell!.element.text, 'a1');
+        expect(context.offset, 1);
+
+        final outsideQuill = _createQuill(
+          '<p>outside</p><table><tbody><tr><td>inside</td></tr></tbody></table>',
+        );
+        final outsideTable = outsideQuill.getModule('table') as Table;
+        final outsideContext = outsideTable.getTable(const Range(0, 0));
+        expect(outsideContext.table, isNull);
+        expect(outsideContext.row, isNull);
+        expect(outsideContext.cell, isNull);
+        expect(outsideContext.offset, -1);
+      });
+
+      test('insertRow and insertColumn accept upstream offsets directly', () {
+        final rowQuill = _setup();
+        final rowTable = rowQuill.getModule('table') as Table;
+        rowQuill.setSelection(const Range(0, 0));
+        rowTable.insertRow(1);
+        expect(rowQuill.root.querySelectorAll('tr'), hasLength(3));
+        expect(
+          rowQuill.root.querySelectorAll('tr')[1].querySelectorAll('td'),
+          hasLength(3),
+        );
+
+        final columnQuill = _setup();
+        final columnTable = columnQuill.getModule('table') as Table;
+        columnQuill.setSelection(const Range(0, 0));
+        columnTable.insertColumn(1);
+        final rows = columnQuill.root.querySelectorAll('tr');
+        expect(rows, hasLength(2));
+        expect(rows.every((row) => row.querySelectorAll('td').length == 4),
+            isTrue);
+        expect(rows.first.querySelectorAll('td')[1].innerHTML, '<br>');
+      });
+
       test('deleteRow', () {
         final quill = _setup();
         final table = quill.getModule('table') as Table;

@@ -83,7 +83,7 @@ export 'src/modules/keyboard.dart'
 export 'src/modules/syntax.dart';
 export 'src/modules/ui_node.dart';
 export 'src/modules/toolbar.dart';
-export 'src/modules/table.dart' show Table, TableOptions;
+export 'src/modules/table.dart' show Table, TableContext, TableOptions;
 export 'src/modules/table_embed.dart' show TableEmbed;
 export 'src/modules/image_resize.dart'
     show ImageResize, ImageResizeOptions, ImageWrap;

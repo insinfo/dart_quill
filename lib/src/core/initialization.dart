@@ -299,33 +299,7 @@ void _registerFormats() {
           ? Formula(value)
           : Formula(Formula.create(value?.toString() ?? '')),
     ),
-    RegistryEntry(
-      blotName: TableContainer.kBlotName,
-      scope: TableContainer.kScope,
-      tagNames: const [TableContainer.kTagName],
-      create: ([dynamic value]) => TableContainer.create(value),
-    ),
-    RegistryEntry(
-      blotName: TableBody.kBlotName,
-      scope: TableBody.kScope,
-      tagNames: const [TableBody.kTagName],
-      requiredContainerBlotName: TableContainer.kBlotName,
-      create: ([dynamic value]) => TableBody.create(value),
-    ),
-    RegistryEntry(
-      blotName: TableRow.kBlotName,
-      scope: TableRow.kScope,
-      tagNames: const [TableRow.kTagName],
-      requiredContainerBlotName: TableBody.kBlotName,
-      create: ([dynamic value]) => TableRow.create(value),
-    ),
-    RegistryEntry(
-      blotName: TableCell.kBlotName,
-      scope: TableCell.kScope,
-      tagNames: const [TableCell.kTagName],
-      requiredContainerBlotName: TableRow.kBlotName,
-      create: ([dynamic value]) => TableCell.create(value),
-    ),
+    ...tableRegistryEntries(),
     RegistryEntry(
       blotName: Video.kBlotName,
       scope: Scope.BLOCK_BLOT,

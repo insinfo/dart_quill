@@ -51,6 +51,30 @@ void main() {
         dq.Quill.importDefinition('formats/size'), same(dq.SizeClass.instance));
   });
 
+  test('Table.register installs the basic table hierarchy idempotently', () {
+    dq.Table.register();
+    final firstRegistrations = <String, dynamic>{
+      for (final name in const [
+        'table-container',
+        'table-body',
+        'table-row',
+        'table',
+      ])
+        name: dq.Quill.importDefinition('formats/$name'),
+    };
+
+    dq.Table.register();
+
+    for (final entry in firstRegistrations.entries) {
+      expect(entry.value, isA<dq.RegistryEntry>(), reason: entry.key);
+      expect(
+        dq.Quill.importDefinition('formats/${entry.key}'),
+        same(entry.value),
+        reason: entry.key,
+      );
+    }
+  });
+
   test('public entrypoint exposes extension-facing core API', () {
     final publicTypes = <Type>[
       dq.Attributor,
@@ -66,10 +90,11 @@ void main() {
       dq.Range,
       dq.Registry,
       dq.Theme,
+      dq.TableContext,
       dq.Toolbar,
       dq.Tooltip,
     ];
 
-    expect(publicTypes, hasLength(15));
+    expect(publicTypes, hasLength(16));
   });
 }
