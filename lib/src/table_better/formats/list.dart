@@ -2,6 +2,8 @@ import '../../blots/abstract/blot.dart';
 import '../../formats/list.dart';
 import '../../platform/dom.dart';
 import '../config/config.dart';
+import '../utils/utils.dart' as utils;
+import 'header.dart';
 import 'table.dart';
 
 const _defaultSpanAttributes = ['colspan', 'rowspan'];
@@ -95,14 +97,48 @@ class TableList extends ListItem {
   }
 
   @override
-  void format(String name, dynamic value) {
+  void format(String name, dynamic value, [bool isReplace = false]) {
     if (name == ListItem.kBlotName) {
+      // TS list.ts:66-73 — the same value (or none) turns the item back into a
+      // plain cell block; a different value swaps the list type.
       final current = formats()[kBlotName];
       if (value == null || value == false || value == current) {
-        replaceBlotWith(this, TableCellBlock.kBlotName, _cellId());
+        // TS reads the cell id *before* restructuring: setReplace re-parents
+        // this blot, after which the list container is no longer reachable.
+        final id = _cellId();
+        setReplace(isReplace);
+        replaceBlotWith(this, TableCellBlock.kBlotName, id);
       } else {
         element.dataset['list'] = '$value';
       }
+      return;
+    }
+    if (name == 'header') {
+      // TS list.ts:82-86 — a list item becomes a header line.
+      final id = _cellId();
+      setReplace(isReplace);
+      replaceBlotWith(
+        this,
+        TableHeader.kBlotName,
+        {'cellId': id, 'value': value},
+      );
+      return;
+    }
+    if ((name == TableCell.kBlotName || name == TableTh.kBlotName) &&
+        value != null &&
+        value != false) {
+      // TS list.ts:87-96 — the cell wrapper is rebuilt around the item and its
+      // list container restored on top.
+      final container = parent;
+      if (container is! TableListContainer) return;
+      final containerFormats = Map<String, dynamic>.from(
+          container.formats()[container.blotName] as Map<String, dynamic>? ??
+              const {});
+      wrapBlot(this, name, value);
+      wrapBlot(this, TableListContainer.kBlotName, {
+        ...containerFormats,
+        if (value is Map) ...value,
+      });
       return;
     }
     if (name == kBlotName && (value == null || value == false)) {
@@ -110,6 +146,22 @@ class TableList extends ListItem {
       return;
     }
     super.format(name, value);
+  }
+
+  /// TS `setReplace(isReplace, formats)` — when the whole cell is being
+  /// reformatted the cell itself is rebuilt; otherwise the line is wrapped in
+  /// a fresh cell so the rest of the original one survives.
+  void setReplace(bool isReplace) {
+    final container = parent;
+    if (container is! TableListContainer) return;
+    final cellBlot = utils.getCorrectCellBlot(container);
+    if (cellBlot == null) return;
+    final (formats, _) = utils.getCellFormats(cellBlot);
+    if (isReplace) {
+      replaceBlotWith(container, cellBlot.blotName, formats);
+    } else {
+      wrapBlot(this, cellBlot.blotName, formats);
+    }
   }
 
   String _cellId() {

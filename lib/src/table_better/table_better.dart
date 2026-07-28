@@ -115,8 +115,11 @@ class TableBetter extends Module<TableBetterOptions> {
       : language = Language(options.language),
         super(quill, options) {
     _registerKeyboardBindings();
-    toolbarRouter = TableToolbarRouter(quill, () => activeCellSelection)
-      ..install();
+    toolbarRouter = TableToolbarRouter(
+      quill,
+      () => activeCellSelection,
+      onFormatted: () => tableMenus.updateMenus(),
+    );
     tableMenus = TableMenus(
       quill: quill,
       language: language,
@@ -124,6 +127,7 @@ class TableBetter extends Module<TableBetterOptions> {
       resolveSelection: _selectionForElement,
       hideTools: hideTools,
     );
+    toolbarRouter.install();
     operateLine = OperateLine(
       quill: quill,
       resolveTable: _tableForElement,

@@ -278,14 +278,20 @@ class TableCellBlock extends Block {
       wrapBlot(this, name, value);
     } else if (name == TableContainer.kBlotName) {
       wrapBlot(this, name, value);
-    } else if (name == 'header' ||
-        name == 'table-header' ||
-        name == 'list' ||
-        name == 'table-list') {
-      // TODO(table-better): TS replaces this block with `table-header` /
-      // `table-list` blots (formats/header.ts, formats/list.ts) which are not
-      // part of the foundation port; fall through to the default handling.
-      super.format(name, value);
+    } else if (name == 'header') {
+      // TS table.ts:54-55 — a cell block turns into a `table-header` line.
+      final id = formats()[blotName];
+      replaceBlotWith(this, 'table-header', {'cellId': id, 'value': value});
+    } else if (name == 'table-header' && truthy) {
+      // TS table.ts:56-58 — the block first regains its cell wrapper.
+      wrapTableCell(parent);
+      replaceBlotWith(this, name, value);
+    } else if (name == 'list' || (name == 'table-list' && truthy)) {
+      // TS table.ts:59-62 — wrapped in a list container, then replaced.
+      final id = formats()[blotName];
+      final cellFormats = getCellFormats(parent);
+      wrapBlot(this, 'table-list-container', {...cellFormats, 'cellId': id});
+      replaceBlotWith(this, 'table-list', value);
     } else {
       super.format(name, value);
     }
