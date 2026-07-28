@@ -1,10 +1,18 @@
 /// Port of `quill-table-better.ts` (v1.2.3) — the `table-better` module core.
 ///
-/// Scope of this increment: document-level operations (`insertTable`,
-/// `getTable`, `deleteTable`, `deleteTableTemporary`, `listenDeleteTable`)
-/// plus per-table [CellSelectionController] wiring. The DOM tool layers the
-/// TS constructor also builds (`TableMenus`, `OperateLine`, `ToolbarTable`)
-/// and the keyboard bindings are later increments (F5.7/F5.8/F5.10).
+/// Covers the document-level operations (`insertTable`, `getTable`,
+/// `deleteTable`, `deleteTableTemporary`, `listenDeleteTable`), the root-level
+/// handlers (`handleKeyup`, `handleMousedown`, `handleMouseMove`,
+/// `handleScroll`, `clearHistorySelected`) and the tool layers the TS
+/// constructor builds: [TableMenus], [OperateLine], [TableSelect] and the
+/// keyboard bindings.
+///
+/// **Deviation:** upstream keeps a single `CellSelection` for the editor; this
+/// port keeps one [CellSelectionController] per table, resolved lazily and
+/// disposed when its table goes away. So the delegation calls in TS's
+/// `handleKeyup`/`handleMousedown` are absent here — each controller listens on
+/// the same root and ignores events outside its own table — while the
+/// surrounding lifecycle below stays faithful.
 import 'dart:math' as math;
 
 import '../blots/block.dart';
@@ -135,6 +143,14 @@ class TableBetter extends Module<TableBetterOptions> {
     );
     registerToolbarTable(options.toolbarTable);
     listenDeleteTable();
+    // TS quill-table-better.ts:96-98 — the module owns the root-level
+    // lifecycle; each table's CellSelectionController keeps its own click /
+    // mousedown / keyup listeners for the grid itself.
+    quill.root.addEventListener('keyup', (event) {
+      if (event is DomKeyboardEvent) handleKeyup(event);
+    });
+    quill.root.addEventListener('mousedown', handleMousedown);
+    quill.root.addEventListener('scroll', (_) => handleScroll());
     quill.emitter.on(
       EmitterEvents.TEXT_CHANGE,
       (dynamic _delta, dynamic _old, dynamic source) {
@@ -501,6 +517,117 @@ class TableBetter extends Module<TableBetterOptions> {
 
   /// TS `updateMenus()` (quill-table-better.ts:316).
   void updateMenus() => tableMenus.updateMenus();
+
+  // --- root-level handlers (quill-table-better.ts:147-212) -----------------
+
+  /// TS `clearHistorySelected()` (quill-table-better.ts:103).
+  ///
+  /// Undo/redo replays DOM that may still carry the selection classes, and the
+  /// blots behind them are gone — so the classes are stripped straight off the
+  /// `<td>`s instead of through the selection model.
+  void clearHistorySelected() {
+    final table = getTable().table;
+    if (table == null) return;
+    for (final td in table.element.querySelectorAll('td')) {
+      td.classes.remove('ql-cell-focused');
+      td.classes.remove('ql-cell-selected');
+    }
+  }
+
+  /// TS `handleKeyup(e)` (quill-table-better.ts:147).
+  ///
+  /// The arrow-key half lives in [CellSelectionController], which listens on
+  /// the same root; this is the surrounding lifecycle.
+  void handleKeyup(DomKeyboardEvent event) {
+    if (!quill.isEnabled()) return;
+    if (event.ctrlKey && (event.key == 'z' || event.key == 'y')) {
+      hideTools();
+      clearHistorySelected();
+    }
+    _updateMenusOnKeyup(event);
+  }
+
+  /// TS private `updateMenus(e)` (quill-table-better.ts:310) — Enter and
+  /// Ctrl+V resize the table, so the menus have to follow.
+  void _updateMenusOnKeyup(DomKeyboardEvent event) {
+    if (activeCellSelection?.selectedTds.isEmpty ?? true) return;
+    if (event.key == 'Enter' || (event.ctrlKey && event.key == 'v')) {
+      tableMenus.updateMenus();
+    }
+  }
+
+  /// TS `handleMousedown(e)` (quill-table-better.ts:157).
+  void handleMousedown(DomEvent event) {
+    if (!quill.isEnabled()) return;
+    tableSelect?.hide();
+    final table = _closestTable(event.target);
+    if (table != null && !_isInside(table, quill.root)) {
+      // A table belonging to an editor nested inside this one.
+      hideTools();
+      return;
+    }
+    if (table == null) {
+      hideTools();
+      handleMouseMove();
+      return;
+    }
+    final blot = _tableForElement(table);
+    if (blot != null) controllerFor(blot).setDisabled(true);
+  }
+
+  /// TS `handleMouseMove()` (quill-table-better.ts:177).
+  ///
+  /// A native drag that starts outside a table and passes through one would
+  /// otherwise leave a partial selection cutting cells in half; on mouseup the
+  /// range is widened to cover the whole table.
+  void handleMouseMove() {
+    DomElement? touched;
+    late final DomEventListener onMove;
+    late final DomEventListener onUp;
+    onMove = (moveEvent) {
+      touched ??= _closestTable(moveEvent.target);
+    };
+    onUp = (_) {
+      final element = touched;
+      if (element != null) {
+        final blot = _tableForElement(element);
+        final range = quill.getSelection();
+        if (blot != null && range != null) {
+          final index = quill.scroll.offset(blot);
+          final length = blot.length();
+          final start = math.min(range.index, index);
+          final end = math.max(range.index + range.length, index + length);
+          quill.setSelection(
+            Range(start, end - start),
+            source: EmitterSource.USER,
+          );
+        }
+      }
+      quill.root.removeEventListener('mousemove', onMove);
+      quill.root.removeEventListener('mouseup', onUp);
+    };
+    quill.root.addEventListener('mousemove', onMove);
+    quill.root.addEventListener('mouseup', onUp);
+  }
+
+  /// TS `handleScroll()` (quill-table-better.ts:208).
+  void handleScroll() {
+    if (!quill.isEnabled()) return;
+    hideTools();
+    tableMenus.updateScroll(true);
+  }
+
+  /// Nearest `<table>` ancestor of [target], itself included.
+  DomElement? _closestTable(DomNode? target) {
+    DomNode? node = target;
+    while (node != null) {
+      if (node is DomElement && node.tagName.toUpperCase() == 'TABLE') {
+        return node;
+      }
+      node = node.parentNode;
+    }
+    return null;
+  }
 
   /// Routes a paste to the active cell selection (TS `onCapturePaste`).
   ///
