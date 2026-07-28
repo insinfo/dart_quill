@@ -2,7 +2,7 @@
 
 **Data:** 2026-07-28
 **Método:** comparação arquivo-a-arquivo e método-a-método entre `referencias/quilljs/src`, `referencias/quill_table_better/1.2.3/src/src` (+ parchment em `referencias/quill_table_better/1.2.3/src/node_modules/parchment/src`) e `lib/`.
-**Baseline de testes:** 461 unitários VM + 14 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo. *(atualizado em 2026-07-28)*
+**Baseline de testes:** 474 unitários VM + 14 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo. *(atualizado em 2026-07-28)*
 **Complementa:** `doc/PLANO_PORT_COMPLETO.md` (fases F0–F10; F0–F2 concluídas, F7/F8 núcleo entregue). Este documento substitui o detalhamento de lacunas daquele plano.
 
 ---
@@ -131,7 +131,7 @@ A cobertura em **nível de arquivo** é ~1:1 (todo arquivo TS tem contraparte Da
 - `modules/clipboard.dart`: precedência invertida em `getTableDelta`; `onPaste` com seleção divergente.
 - `utils.getAlign`/`getCellChildBlot` só consideram `TableCellBlock` (TS: +TableList/TableHeader) → `cellId` de fallback errado em merge/split.
 - `getCorrectContainerWidth` sem padding; `getElementStyle` sem computed style.
-- Assets: ~~22 SVGs~~ **✓ 20 SVGs em `table_better/assets/icons.dart`** (2026-07-28); falta o `quill-table-better.scss` → **arquivo** `lib/assets/quill-table-better.css` (nenhuma classe CSS da UI tem produtor).
+- Assets: ~~22 SVGs~~ **✓ 20 SVGs em `table_better/assets/icons.dart`** (2026-07-28); **✓ `lib/assets/quill-table-better.css` entregue em G6.10 (2026-07-28)** — antes disso nenhuma classe CSS da UI tinha produtor.
 
 ---
 
@@ -223,7 +223,12 @@ Ordem interna (dependências primeiro):
 - [x] G6.7 **`TableToolbar` (module)** (2026-07-28): `setTableFormat` com a semântica `isReplace` do upstream (comprimento de `containers` vs `lines` para uma célula, sempre verdadeiro para seleção múltipla), `getHeaderReplace` (um header isolado virando lista sempre reconstrói a célula), o handler tri-estado de `list` via `getListCorrectValue` e a coleta de linhas do `tablehandler` (a linha do caret quando a seleção é colapsada e de uma célula só; as linhas de todas as células caso contrário). Ao fim, os menus são reposicionados. *Deviation: o TS faz subclasse de `Quill.import('modules/toolbar')`; em Dart o mesmo fork é instalado embrulhando os handlers da Toolbar viva — o comportamento observável é o do upstream.* (T6)
 - [~] G6.8 Módulo `Table`: `showTools`/`updateMenus`/`hideTools` (agora escondendo os menus), `insertTable` terminando em `showTools`, e as opções `menus`/`toolbarButtons`/`toolbarTable` da interface TS entregues em G6.2/G6.3. Pendentes: `handleKeyup`/`handleMousedown`/`handleMouseMove`/`handleScroll`/`clearHistorySelected` (T8, T9).
 - [~] G6.9 **Ramos cruzados header↔list↔cell** (2026-07-28): `TableCellBlock.format` passou a realmente produzir `table-header` e `table-list` (embrulhado num `table-list-container` com o cellId) em vez de cair no `super.format` sob um TODO desatualizado; `TableHeader.format` ganhou o ramo `list` (honrando `isReplace`) e o ramo table-cell/table-th, mais `getCellFormats`; `TableList.format` ganhou o ramo `header`, o ramo table-cell/table-th restaurando o list container por cima, e `setReplace` — o cellId é lido **antes** da reestruturação, pois `setReplace` reparenta o blot. Os três aceitam o `isReplace` posicional opcional que o TS passa como terceiro argumento. *Pendentes: `setCellRowspan` e os fixes de clipboard do §4.2.*
-- [~] G6.10 ~~22 SVGs~~ **✓ 20 SVGs de `src/assets/icon` embutidos em `table_better/assets/icons.dart` (2026-07-28)** — fiel ao upstream, que passa os SVGs de ícone pelo `html-loader` e os embute no JS. Falta converter `quill-table-better.scss` para **`lib/assets/quill-table-better.css`** (arquivo, não `const String` — ver §6). ~~14 idiomas restantes~~ **✓ Idiomas completos (2026-07-27): os 16 locales do TS portados e registrados em `language/language.dart` (60 chaves cada, verificadas por diff).** (T10)
+- [x] G6.10 ~~22 SVGs~~ **✓ 20 SVGs de `src/assets/icon` embutidos em `table_better/assets/icons.dart` (2026-07-28)** — fiel ao upstream, que passa os SVGs de ícone pelo `html-loader` e os embute no JS. ~~14 idiomas restantes~~ **✓ Idiomas completos (2026-07-27): os 16 locales do TS portados e registrados em `language/language.dart` (60 chaves cada, verificadas por diff).** (T10)
+  - **✓ `lib/assets/quill-table-better.css` (2026-07-28)** — `quill-table-better.scss` compilado com `sass 1.102.0` (`--style=expanded`), como **arquivo**, não `const String` (§6). O `assets.dart` já apontava para esse caminho desde o G7.1b, mas o arquivo não existia: **o `injectTableBetterTheme` produzia um `<link>` 404** e a UI de tabela — menus, formulário, overlay de resize, grade 10×10 — não tinha nenhum produtor de estilo.
+    - **Verificação de fidelidade:** minificar o resultado (`--style=compressed`) reproduz `src/dist/quill-table-better.css` do plugin, com duas diferenças, ambas benignas: o sass 1.102 emite dois blocos onde o do build original fundiu declarações do mesmo seletor adjacente, e inverte a ordem de `.label-field-view-error>input` e `>input:focus` (propriedades disjuntas). Comparados como multiconjunto de regras, os 108 blocos batem.
+    - **`url("../icon/check.png")` → data URI**, que é o que o bundle do upstream publica (via `url-loader`) e mantém a folha auto-contida: copiar um único `.css` basta.
+    - ⚠️ **Não incluído:** `referencias/quill_table_better/1.2.3/quill_table_better.css` (847 l.) *não* é o dist do plugin — é uma cópia adaptada com 14 regras `[data-color-theme=dark]` acrescentadas à mão (comentários em pt-BR). Ficou de fora do asset da biblioteca; quem quiser o tema escuro sobrepõe a própria folha, que é justamente o que a regra "CSS em arquivo" do §6 permite.
+    - **Teste novo** `test/unit/table_better/stylesheet_test.dart` (13 casos): constrói menus, formulário de tabela e de célula, grade 10×10, overlay de resize e as classes de seleção no fake DOM, coleta **toda** classe que chega ao DOM e exige uma regra na folha. Pega a falha silenciosa (widget renderizado sem estilo) que nenhum teste de comportamento pega. Sobreviveram quatro exclusões, todas confirmadas como sem regra **no upstream também** (`icon`, vinda do próprio `<svg>` do iconfont; `ql-table-dropdown-icon`; `ql-table-block`; `ql-table-header`) e o prefixo `Iro*` da roda de cores — para o qual há um teste dedicado provando que cada camada leva `style` inline, como o iro.js faz, e portanto não precisa de CSS.
 - Testes: cenários E2E Puppeteer para menus/resize/properties; unit para toda a lógica de grade.
 
 ### G7 — Assets e API pública (2-3 dias)
@@ -340,7 +345,7 @@ diretórios, e atualizar o Quill vira: copiar os SVGs, rodar o gerador, rodar os
 - `dart analyze` limpo; suíte 100% verde (VM + chrome + E2E).
 - Única dependência runtime: `web: ^1.1.1`.
 - `lib/src/ui/icons.dart` e `lib/src/table_better/assets/icons.dart` são reproduzíveis: rodar `dart run tool/gen_icons.dart` não deixa diff no git.
-- Nenhum CSS embutido como `const String`: `grep -rn "const String.*{" lib --include=*.dart` não deve devolver folhas de estilo, e `lib/assets/*.css` cobre core/snow/bubble/table-better.
+- Nenhum CSS embutido como `const String`: `grep -rn "const String.*{" lib --include=*.dart` não deve devolver folhas de estilo, e `lib/assets/*.css` cobre core/snow/bubble/table-better. *(table-better ✓ em G6.10; core/bubble pendem do G7.1.)*
 - Paridade comportamental com Quill 2.0.3: 26 bindings, paste com attributors, formato pendente no cursor, embeds com guards, checklist clicável, syntax com realce aplicado.
 - table-better completo: menus flutuantes, seleção por arrasto, resize visual, propriedades com paleta, seletor 10×10 inserindo tabela table-better, 16 idiomas.
 - DOCX abre/exporta fiel; PDF visualmente equivalente.
