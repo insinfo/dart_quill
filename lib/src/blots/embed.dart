@@ -46,6 +46,7 @@ abstract class Embed extends EmbedBlot {
   late final DomText rightGuard;
 
   /// Parity embed.ts:33-37.
+  @override
   int index(DomNode node, int offset) {
     if (identical(node, leftGuard)) return 0;
     if (identical(node, rightGuard)) return 1;

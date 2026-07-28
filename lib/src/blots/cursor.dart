@@ -82,6 +82,7 @@ class Cursor extends EmbedBlot {
   }
 
   /// Parity cursor.ts:56-59.
+  @override
   int index(DomNode node, int offset) {
     if (identical(node, _textNode)) return 0;
     return offset > 0 ? 1 : 0;

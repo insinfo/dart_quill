@@ -1,8 +1,8 @@
 # Inventário de Paridade e Plano de Finalização do Port — Quill 2.0.3 + quill-table-better 1.2.3 → Dart
 
-**Data:** 2026-07-27
+**Data:** 2026-07-28
 **Método:** comparação arquivo-a-arquivo e método-a-método entre `referencias/quilljs/src`, `referencias/quill_table_better/1.2.3/src/src` (+ parchment em `referencias/quill_table_better/1.2.3/src/node_modules/parchment/src`) e `lib/`.
-**Baseline de testes:** 234 unitários VM + 3 E2E (Puppeteer) verdes; `dart analyze` limpo.
+**Baseline de testes:** 304 unitários VM + 13 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo.
 **Complementa:** `doc/PLANO_PORT_COMPLETO.md` (fases F0–F10; F0–F2 concluídas, F7/F8 núcleo entregue). Este documento substitui o detalhamento de lacunas daquele plano.
 
 ---
@@ -166,7 +166,7 @@ Bugs pontuais de alto impacto e baixo risco, sem mudança arquitetural:
 
 ### G2 — Core fiel (1 semana) — EM ANDAMENTO (2026-07-27)
 - [x] G2.1 **`Quill.modify()` fiel** (quill.ts:881-917): guard de readOnly (`!isEnabled() && source==USER && !allowReadOnlyEdits` → Delta vazio), captura do oldDelta, shift+reaplicação silenciosa da seleção, e emissão condicional — **TEXT_CHANGE suprimido em SILENT** (antes era sempre emitido) e nada emitido quando o change é vazio. Todos os mutadores (`insertText`/`deleteText`/`formatText`/`formatLine`/`insertEmbed`/`updateContents`) passaram a delegar a ele e agora **retornam o Delta** como no TS. Novas APIs: `enable`/`disable`/`editReadOnly`/`allowReadOnlyEdits`, `blur`, `getLength`, `getLines`, `update(source)`, `off`, `once`; `isEnabled()` agora reflete `contenteditable` (scroll.isEnabled) e o construtor habilita o scroll. `DomAdapter.blur` adicionado (html/stub/fake). Testes: `test/unit/core/modify_test.dart`. (C4)
-- [~] G2.2 `Selection`: **`format()` com o contrato correto** — com seleção colapsada agora estaciona um `Cursor` no caret e o formata (formato pendente), em vez de não fazer nada; com range aplica direto (C2 parcial). *Pendente: camada nativa (normalizeNative/normalizedToRange/rangeToNative/setNativeRange/update(source)) — o port resolve índice↔DOM em `Quill._domPosition`.*
+- [~] G2.2 `Selection`: **`format()` com o contrato correto** — com seleção colapsada agora estaciona um `Cursor` no caret e o formata (formato pendente), em vez de não fazer nada; com range aplica direto. Em 2026-07-28 foram portados `normalizeNative` e `normalizedToRange`, usados pelo `Input` para converter `StaticRange` do navegador em `Range` do Quill. *Pendente: `rangeToNative`/`setNativeRange`/`update(source)` e integração completa do Cursor com a seleção nativa.* (C2 parcial)
 - [x] G2.3 `Editor`: `getFormat` (delegando ao `Scroll.getFormat`, que já implementa combineFormats fiel), `removeFormat` fiel (diff contra texto puro + sufixo da linha), `isBlank`, `getContentsRange(i,l)`, `getText(i,l)`, `insertContents` + normalização CRLF (C3). *Pendente: `getHTML`/`convertHTML` baseado em blots (hoje `deltaToSemanticHTML` bespoke).*
   - ⚠️ **Achado bloqueante para G1.10:** `Quill.removeFormat` NÃO pôde ser trocado para o `Editor.removeFormat` fiel — o diff produz um `retain {list: null}` que o `Editor.update` bespoke não aplica (o clean deixa a lista intacta). Isso é evidência concreta de que **o `applyDelta` fiel é pré-requisito** de vários itens de paridade; a versão bespoke de `Quill.removeFormat` foi mantida com a nota no código.
 - [ ] G2.4 Emitter: bridge global DOM (selectionchange/mousedown/mouseup/click) (C5 parte 2); `instances` via Expando (C13).
@@ -184,17 +184,16 @@ Bugs pontuais de alto impacto e baixo risco, sem mudança arquitetural:
 1. **`Scroll.deleteAt` apaga demais em blocos vazios**: em `'code\n\n\n\n'`, `updateContents(retain(6)+delete(1))` produz `'code\n'` — três newlines somem. Reproduz também com parágrafos simples. Afeta backspace/delete em linhas vazias.
 2. **`Quill.deleteText` não apaga através de fronteira de bloco**: `Editor.deleteText` chama `Scroll.deleteAt` uma única vez (só `Editor.update` tem o laço `while (remaining > 0)`), então `deleteText(3, 5)` sobre `'Title\nbody\n'` remove só 3 caracteres **e ainda emite um delta que não corresponde ao documento**.
 
-### G4 — Clipboard/Uploader/Input/UINode (3-5 dias)
-- [ ] G4.1 ATTRIBUTE/STYLE_ATTRIBUTORS + `matchAttributor` real; `matchBlot` genérico via `scroll.query`; short-circuit code-block; `matchCodeBlock` com linguagem; `matchList` via `data-checked` (C7).
-- [ ] G4.2 Uploader: listener de drop + DEFAULTS.handler + instanciação por padrão + integração no paste (C10).
-- [ ] G4.3 Input: guard de range colapsado + getTargetRanges (C14). UINode: aceitar `Context` + correção real do caret (C11).
+### G4 — Clipboard/Uploader/Input/UINode (3-5 dias) — G4.1–G4.3 CONCLUÍDOS (2026-07-28)
+- [x] G4.1 ATTRIBUTE/STYLE_ATTRIBUTORS + `matchAttributor` real; `matchBlot` genérico via registry; short-circuit code-block; `matchCodeBlock` com linguagem; `matchList` via `data-checked` (C7). Testes: `clipboard_attributors_test.dart` + expectativas de conversão atualizadas para o registry padrão.
+- [x] G4.2 Uploader: listener de drop + `DEFAULTS.handler`, filtro de mimetype correto, uma única operação Delta para múltiplos arquivos e integração no paste (C10). *Pendente de plataforma: obter o índice pelo ponto do drop (`caretRangeFromPoint`) e expor `dataTransfer` em eventos de drop genéricos.*
+- [x] G4.3 **Input fiel ao `beforeinput`**: `DomInputEvent.getTargetRanges()`/`DomNativeRange`, rejeição de range colapsado, normalização DOM→Quill e substituição do range nativo (não da seleção lógica desatualizada), incluindo texto vindo de `dataTransfer` e replacement vazio. **UINode funcional**: handler recebe `Context`, direção via computed style, escuta one-shot de `document.selectionchange` com TTL e move o range nativo para depois de `.ql-ui`. `ParentBlot.attachUI` foi portado; hidratação/reconciliação ignoram o nó UI de comprimento zero (evita transformá-lo em Cursor e vazar FEFF); checklist checked/unchecked agora alterna por mouse/touch. Testes: 5 novos de Input + 2 de UINode/checklist, além da regressão table-better existente. (C14, C11, F6 parcial)
 - [ ] G4.4 Namespaces `attributors/*` e chaves de registro não-colidentes (F5); export público de formats/ui/themes/modules em `dart_quill.dart`.
 
 ### G5 — Formats/Themes/UI (3-5 dias) — G5.1/G5.3 CONCLUÍDOS (2026-07-27)
 - [x] G5.1 **BubbleTooltip posicionado** (F1) — o corpo comentado foi portado de bubble.ts:42-59 incluindo o caso multi-linha; **`Tooltip.position` com rects reais e `ql-flip`** (F9) + `isScrollable` guardando o listener de scroll; **handlers de link por tema** (F7) — snow ignora seleção colapsada e prefixa `mailto:`, bubble abre sem preview, handler do usuário vence (`BaseTheme.overridesHandler`); o Ctrl+K do snow delega ao handler. Novo helper `ui/dom_interop{,_stub,_web}.dart` para computed overflow / dispatch de evento (a camada de plataforma não expõe `getComputedStyle`). Testes: `test/unit/themes/tooltip_position_test.dart` (14) + `test/browser/tooltip_position_test.dart` (6).
 - [x] G5.3 `Picker.selectItem` público e despachando `change` no `<select>` nativo (F12); stubs mortos `color-picker.dart`/`icon-picker.dart`, `merge()` duplicada, getter `template` e `BubbleTheme.defaults()` removidos.
-- [ ] G5.2 Checklist com attachUI (F6); `CodeBlock.TAB`; `TableRow.checkMerge/optimize` (F10); unificar `ColorAttributor`; `FontStyle`/`SizeStyle` registrados; `Link.sanitize` fiel; modelo de `list` alinhado ao upstream (avaliar impacto no Delta).
-- [ ] G5.3 Picker: dispatch `change` (F12), `selectItem` público; limpar stubs mortos.
+- [~] G5.2 Checklist com `attachUI` e toggle checked/unchecked concluído em G4.3 (F6); `TableRow.checkMerge` já entregue em G1.4. Pendentes: `CodeBlock.TAB`; refinamento de `TableRow.optimize`; unificar `ColorAttributor`; `FontStyle`/`SizeStyle` registrados; `Link.sanitize` fiel; alinhar integralmente o modelo de `list` ao upstream (avaliar impacto no Delta).
 - [ ] G5.4 Syntax: aplicar realce via diff (C6) + initListener com select de linguagem; vendorizar highlight (F4 do plano antigo).
 
 ### G6 — table-better UI completa (2-3 semanas, maior bloco)

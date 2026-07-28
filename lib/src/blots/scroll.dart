@@ -228,8 +228,8 @@ class Scroll extends ScrollBlot {
   ]) {
     if (_batch != null) return;
     final scope = context ?? <String, dynamic>{};
-    final records = List<DomMutationRecord>.from(
-        mutations ?? const <DomMutationRecord>[]);
+    final records =
+        List<DomMutationRecord>.from(mutations ?? const <DomMutationRecord>[]);
 
     // Parity parchment scroll.ts:106-181 — converge: each optimize pass may
     // mutate the DOM (merges, unwraps, requiredContainer wrapping); drain
@@ -431,8 +431,8 @@ class Scroll extends ScrollBlot {
     return const MapEntry(null, 0);
   }
 
-  static int _characterLength(Delta delta) => delta.operations
-      .fold<int>(0, (total, op) => total + (op.length ?? 0));
+  static int _characterLength(Delta delta) =>
+      delta.operations.fold<int>(0, (total, op) => total + (op.length ?? 0));
 
   List<Map<String, dynamic>> deltaToRenderBlocks(Delta delta) {
     final renderBlocks = <Map<String, dynamic>>[];
@@ -541,6 +541,10 @@ class Scroll extends ScrollBlot {
       final blot = create(blotName, node);
       if (blot is ParentBlot) {
         for (final child in List<DomNode>.from(node.childNodes)) {
+          // `attachUI()` may prepend a zero-length marker while the parent
+          // blot is being constructed. It is deliberately not part of the
+          // blot tree.
+          if (child == blot.uiNode) continue;
           final childBlot = _blotFromDomNode(child);
           if (childBlot != null) {
             blot.insertBefore(childBlot, null);

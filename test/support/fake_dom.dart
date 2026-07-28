@@ -9,6 +9,7 @@ class FakeDomAdapter implements DomAdapter {
   final FakeDomDocument document;
 
   DomSelectionRange? selectionRange;
+  DomNativeRange? nativeSelectionRange;
 
   @override
   DomMutationObserver createMutationObserver(
@@ -39,6 +40,9 @@ class FakeDomAdapter implements DomAdapter {
   DomSelectionRange? getSelectionRange(DomElement root) => selectionRange;
 
   @override
+  DomNativeRange? getNativeSelectionRange() => nativeSelectionRange;
+
+  @override
   void setSelectionRange(DomElement root, int index, int length) {
     selectionRange = DomSelectionRange(index, length);
   }
@@ -46,7 +50,12 @@ class FakeDomAdapter implements DomAdapter {
   @override
   void setSelectionByNodes(
       DomNode startNode, int startOffset, DomNode endNode, int endOffset) {
-    // No-op for fake implementation.
+    nativeSelectionRange = DomNativeRange(
+      startContainer: startNode,
+      startOffset: startOffset,
+      endContainer: endNode,
+      endOffset: endOffset,
+    );
   }
 
   @override
@@ -77,6 +86,14 @@ class FakeDomAdapter implements DomAdapter {
   }
 
   @override
+  String getComputedStyleProperty(DomElement element, String property) {
+    if (property == 'direction') {
+      return element.getAttribute('dir') ?? 'ltr';
+    }
+    return '';
+  }
+
+  @override
   Future<String?> readFileAsDataUrl(dynamic file) async {
     if (file is FakeDomFile && file.type.startsWith('image/')) {
       return 'data:${file.type};base64,';
@@ -86,6 +103,9 @@ class FakeDomAdapter implements DomAdapter {
 
   @override
   String? get userAgent => 'fake-user-agent';
+
+  @override
+  String? get platform => 'fake-platform';
 }
 
 class FakeDomDocument implements DomDocument {
@@ -99,6 +119,25 @@ class FakeDomDocument implements DomDocument {
     final document = FakeDomDocument();
     document._loadFromHtml(html);
     return document;
+  }
+
+  final Map<String, List<DomEventListener>> _listeners = {};
+
+  @override
+  void addEventListener(String type, DomEventListener listener) {
+    (_listeners[type] ??= []).add(listener);
+  }
+
+  @override
+  void removeEventListener(String type, DomEventListener listener) {
+    _listeners[type]?.remove(listener);
+  }
+
+  void dispatchEvent(String type, DomEvent event) {
+    for (final listener
+        in List<DomEventListener>.from(_listeners[type] ?? const [])) {
+      listener(event);
+    }
   }
 
   late final FakeDomElement _documentElement;
@@ -416,6 +455,7 @@ class FakeDomElement extends FakeDomNode implements DomElement {
   final Map<String, String> _attributes = {};
   final Map<String, String> _dataset = {};
   final FakeDomClassList _classes;
+  final Map<String, List<DomEventListener>> _listeners = {};
 
   @override
   String get tagName => _tagName;
@@ -442,12 +482,19 @@ class FakeDomElement extends FakeDomNode implements DomElement {
 
   @override
   void addEventListener(String type, DomEventListener listener) {
-    // No-op for fake implementation.
+    (_listeners[type] ??= []).add(listener);
   }
 
   @override
   void removeEventListener(String type, DomEventListener listener) {
-    // No-op for fake implementation.
+    _listeners[type]?.remove(listener);
+  }
+
+  void dispatchEvent(String type, DomEvent event) {
+    for (final listener
+        in List<DomEventListener>.from(_listeners[type] ?? const [])) {
+      listener(event);
+    }
   }
 
   @override
@@ -925,7 +972,9 @@ class FakeDomInputEvent extends FakeDomEvent implements DomInputEvent {
     this.inputType,
     this.data,
     DomDataTransfer? dataTransfer,
+    List<DomNativeRange> targetRanges = const [],
   })  : _dataTransfer = dataTransfer,
+        _targetRanges = targetRanges,
         super(type, target);
 
   @override
@@ -938,6 +987,12 @@ class FakeDomInputEvent extends FakeDomEvent implements DomInputEvent {
 
   @override
   DomDataTransfer? get dataTransfer => _dataTransfer;
+
+  final List<DomNativeRange> _targetRanges;
+
+  @override
+  List<DomNativeRange> getTargetRanges() =>
+      List<DomNativeRange>.unmodifiable(_targetRanges);
 }
 
 class FakeDomClipboardEvent extends FakeDomEvent implements DomClipboardEvent {
@@ -987,6 +1042,9 @@ class FakeDomDataTransfer implements DomDataTransfer {
 
   @override
   List<DomFile> get files => List.unmodifiable(_files);
+
+  @override
+  List<String> get types => List.unmodifiable(_data.keys);
 
   @override
   String? getData(String format) => _data[format];

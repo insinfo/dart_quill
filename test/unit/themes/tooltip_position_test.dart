@@ -62,6 +62,9 @@ class _LayoutAdapter implements DomAdapter {
       inner.getSelectionRange(root);
 
   @override
+  DomNativeRange? getNativeSelectionRange() => inner.getNativeSelectionRange();
+
+  @override
   void setSelectionRange(DomElement root, int index, int length) =>
       inner.setSelectionRange(root, index, length);
 
@@ -81,7 +84,14 @@ class _LayoutAdapter implements DomAdapter {
   void blur(DomElement element) => inner.blur(element);
 
   @override
+  String getComputedStyleProperty(DomElement element, String property) =>
+      inner.getComputedStyleProperty(element, property);
+
+  @override
   String? get userAgent => inner.userAgent;
+
+  @override
+  String? get platform => inner.platform;
 }
 
 _LayoutAdapter _installLayoutAdapter() {
@@ -142,7 +152,13 @@ void main() {
       adapter.setRect(tooltip.root, left: 40, top: 20, right: 140, bottom: 60);
 
       final shift = tooltip.position(
-        {'left': 40.0, 'top': 0.0, 'right': 140.0, 'bottom': 20.0, 'width': 100.0},
+        {
+          'left': 40.0,
+          'top': 0.0,
+          'right': 140.0,
+          'bottom': 20.0,
+          'width': 100.0
+        },
       );
 
       expect(shift, 0);
@@ -156,7 +172,13 @@ void main() {
       adapter.setRect(tooltip.root, left: 150, top: 20, right: 250, bottom: 60);
 
       final shift = tooltip.position(
-        {'left': 150.0, 'top': 0.0, 'right': 250.0, 'bottom': 20.0, 'width': 100.0},
+        {
+          'left': 150.0,
+          'top': 0.0,
+          'right': 250.0,
+          'bottom': 20.0,
+          'width': 100.0
+        },
       );
 
       // containerBounds.right - rootBounds.right
@@ -171,7 +193,13 @@ void main() {
       adapter.setRect(tooltip.root, left: 60, top: 20, right: 160, bottom: 60);
 
       final shift = tooltip.position(
-        {'left': 60.0, 'top': 0.0, 'right': 160.0, 'bottom': 20.0, 'width': 100.0},
+        {
+          'left': 60.0,
+          'top': 0.0,
+          'right': 160.0,
+          'bottom': 20.0,
+          'width': 100.0
+        },
       );
 
       expect(shift, 40);
@@ -184,7 +212,13 @@ void main() {
       adapter.setRect(tooltip.root, left: 40, top: 80, right: 140, bottom: 120);
 
       tooltip.position(
-        {'left': 40.0, 'top': 60.0, 'right': 140.0, 'bottom': 80.0, 'width': 100.0},
+        {
+          'left': 40.0,
+          'top': 60.0,
+          'right': 140.0,
+          'bottom': 80.0,
+          'width': 100.0
+        },
       );
 
       expect(tooltip.root.classes.contains('ql-flip'), isTrue);
@@ -198,7 +232,13 @@ void main() {
       tooltip.root.classes.add('ql-flip');
 
       tooltip.position(
-        {'left': 40.0, 'top': 0.0, 'right': 140.0, 'bottom': 20.0, 'width': 100.0},
+        {
+          'left': 40.0,
+          'top': 0.0,
+          'right': 140.0,
+          'bottom': 20.0,
+          'width': 100.0
+        },
       );
 
       expect(tooltip.root.classes.contains('ql-flip'), isFalse);

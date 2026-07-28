@@ -368,6 +368,27 @@ class HtmlDomInputEvent extends HtmlDomEvent implements DomInputEvent {
     final transfer = (nativeEvent as web.InputEvent).dataTransfer;
     return transfer == null ? null : HtmlDomDataTransfer(transfer);
   }
+
+  @override
+  List<DomNativeRange> getTargetRanges() {
+    if (!nativeEvent.isA<web.InputEvent>()) {
+      return const [];
+    }
+    final inputEvent = nativeEvent as web.InputEvent;
+    if (!(inputEvent as JSObject).hasProperty('getTargetRanges'.toJS).toDart) {
+      return const [];
+    }
+    final ranges = inputEvent.getTargetRanges().toDart;
+    return [
+      for (final range in ranges)
+        DomNativeRange(
+          startContainer: _wrapNode(range.startContainer),
+          startOffset: range.startOffset,
+          endContainer: _wrapNode(range.endContainer),
+          endOffset: range.endOffset,
+        ),
+    ];
+  }
 }
 
 class HtmlDomMutationObserver implements DomMutationObserver {
@@ -495,6 +516,10 @@ class HtmlDomDataTransfer implements DomDataTransfer {
   }
 
   @override
+  List<String> get types =>
+      [for (final type in _native.types.toDart) type.toDart];
+
+  @override
   String? getData(String format) {
     return _native.getData(format);
   }
@@ -550,6 +575,9 @@ class HtmlDomAdapter implements DomAdapter {
   String? get userAgent => web.window.navigator.userAgent;
 
   @override
+  String? get platform => web.window.navigator.platform;
+
+  @override
   void focus(DomElement element) {
     final native = (element as _HtmlDomNode).node;
     if (native.isA<web.HTMLElement>()) {
@@ -594,6 +622,21 @@ class HtmlDomAdapter implements DomAdapter {
     final normalizedStart = start < end ? start : end;
     final normalizedEnd = start < end ? end : start;
     return DomSelectionRange(normalizedStart, normalizedEnd - normalizedStart);
+  }
+
+  @override
+  DomNativeRange? getNativeSelectionRange() {
+    final selection = web.window.getSelection();
+    if (selection == null || selection.rangeCount <= 0) {
+      return null;
+    }
+    final range = selection.getRangeAt(0);
+    return DomNativeRange(
+      startContainer: _wrapNode(range.startContainer),
+      startOffset: range.startOffset,
+      endContainer: _wrapNode(range.endContainer),
+      endOffset: range.endOffset,
+    );
   }
 
   @override
@@ -700,6 +743,15 @@ class HtmlDomAdapter implements DomAdapter {
       'width': rect.width,
       'height': rect.height,
     };
+  }
+
+  @override
+  String getComputedStyleProperty(DomElement element, String property) {
+    final native = (element as _HtmlDomNode).node;
+    if (!native.isA<web.Element>()) return '';
+    return web.window
+        .getComputedStyle(native as web.Element)
+        .getPropertyValue(property);
   }
 
   @override
@@ -849,6 +901,25 @@ int _quillNodeLength(web.Node node) {
 }
 
 class HtmlDomDocument implements DomDocument {
+  final Map<DomEventListener, JSFunction> _documentListeners = {};
+
+  @override
+  void addEventListener(String type, DomEventListener listener) {
+    final wrapped = (web.Event event) {
+      listener(HtmlDomEvent(event));
+    }.toJS;
+    _documentListeners[listener] = wrapped;
+    web.document.addEventListener(type, wrapped);
+  }
+
+  @override
+  void removeEventListener(String type, DomEventListener listener) {
+    final wrapped = _documentListeners.remove(listener);
+    if (wrapped != null) {
+      web.document.removeEventListener(type, wrapped);
+    }
+  }
+
   @override
   DomElement createElement(String tag) {
     return HtmlDomElement(web.document.createElement(tag));

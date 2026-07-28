@@ -4,6 +4,7 @@ import '../core/module.dart';
 import '../core/selection.dart';
 import '../modules/keyboard.dart';
 import '../platform/dom.dart';
+import '../platform/platform.dart';
 
 /// How long (in milliseconds) a navigation-key-triggered selection change
 /// remains valid. Matches upstream `TTL_FOR_VALID_SELECTION_CHANGE = 100`.
@@ -22,7 +23,9 @@ bool _canMoveCaretBeforeUiNode(DomEvent event) {
     return true;
   }
   // macOS Ctrl+A (move to line start)
-  if (key == 'a' && raw.ctrlKey == true) {
+  final isMac =
+      (domBindings.adapter.platform ?? '').toLowerCase().contains('mac');
+  if (isMac && key == 'a' && raw.ctrlKey == true) {
     return true;
   }
   return false;
@@ -53,29 +56,30 @@ class UINode extends Module<Map<String, Never>> {
         offset: 0,
         shiftKey: null,
       ),
-      handler: (dynamic range, [dynamic ctx]) {
-        // ctx is a Context-like map with 'line' and 'event' entries when the
-        // keyboard module is fully implemented.
-        if (ctx is! Map) return true;
-        final line = ctx['line'];
-        final event = ctx['event'] as DomEvent?;
-        if (line is! ParentBlot || line.uiNode == null || event == null) {
+      handler: (Range range, Context context) {
+        final line = context.line;
+        final event = context.event;
+        if (line.uiNode == null) {
           return true;
         }
 
+        final isRtl = domBindings.adapter
+                .getComputedStyleProperty(line.element, 'direction') ==
+            'rtl';
         final raw = event.rawEvent as dynamic;
-        final isRtl =
-            (line.element.getAttribute('dir') ?? '') == 'rtl';
-        final key = raw.key as String?;
-        if ((isRtl && key != 'ArrowRight') ||
-            (!isRtl && key != 'ArrowLeft')) {
+        final key = event is DomKeyboardEvent ? event.key : raw.key as String?;
+        if ((isRtl && key != 'ArrowRight') || (!isRtl && key != 'ArrowLeft')) {
           return true;
         }
 
-        final r = range as Range;
-        final shiftKey = raw.shiftKey as bool? ?? false;
+        final shiftKey = event is DomKeyboardEvent
+            ? event.shiftKey
+            : raw.shiftKey as bool? ?? false;
         quill.setSelection(
-          Range(r.index - 1, r.length + (shiftKey ? 1 : 0)),
+          Range(
+            range.index - 1,
+            range.length + (shiftKey ? 1 : 0),
+          ),
           source: EmitterSource.USER,
         );
         return false;
@@ -105,39 +109,36 @@ class UINode extends Module<Map<String, Never>> {
     if (_isListening) return;
     _isListening = true;
 
-    void listener([dynamic range, dynamic oldRange, dynamic source]) {
+    final document = domBindings.adapter.document;
+    late DomEventListener listener;
+    listener = (DomEvent event) {
+      document.removeEventListener('selectionchange', listener);
       _isListening = false;
-      if (DateTime.now().millisecondsSinceEpoch <=
-          _selectionChangeDeadline) {
+      if (DateTime.now().millisecondsSinceEpoch <= _selectionChangeDeadline) {
         _handleSelectionChange();
       }
-    }
+    };
 
-    quill.emitter.once(EmitterEvents.SELECTION_CHANGE, listener);
+    document.addEventListener('selectionchange', listener);
   }
 
   // ---- selection correction ------------------------------------------------
 
   void _handleSelectionChange() {
-    final range = quill.getSelection();
-    if (range == null) return;
-    // Only act on collapsed cursor at offset 0 within its line.
-    if (range.length != 0) return;
+    final range = domBindings.adapter.getNativeSelectionRange();
+    if (range == null || !range.collapsed || range.startOffset != 0) return;
 
-    final lineEntry = quill.scroll.line(range.index);
-    final line = lineEntry.key;
+    final line = quill.scroll.find(range.startContainer, bubble: true).key;
     if (line is! ParentBlot || line.uiNode == null) return;
 
-    final offsetInLine = lineEntry.value;
-    // If the caret is at the very start of the line (before any content).
-    if (offsetInLine != 0) return;
-
-    // Advance cursor past the uiNode – in Quill delta terms that means
-    // keeping the same absolute index (uiNode has no length in the delta)
-    // but we nudge it so the visual cursor appears after the uiNode.
-    quill.setSelection(
-      Range(range.index, 0),
-      source: EmitterSource.SILENT,
+    final uiNode = line.uiNode!;
+    final offset = line.element.childNodes.indexOf(uiNode);
+    if (offset < 0) return;
+    domBindings.adapter.setSelectionByNodes(
+      line.element,
+      offset + 1,
+      line.element,
+      offset + 1,
     );
   }
 }

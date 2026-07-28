@@ -4,6 +4,7 @@ import '../blots/abstract/blot.dart';
 import '../blots/cursor.dart';
 import '../blots/scroll.dart';
 import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
+import '../platform/dom.dart';
 import 'emitter.dart';
 
 class Range {
@@ -11,6 +12,25 @@ class Range {
   final int length;
 
   const Range(this.index, this.length);
+}
+
+class NativePosition {
+  const NativePosition(this.node, this.offset);
+
+  final DomNode node;
+  final int offset;
+}
+
+class NormalizedNativeRange {
+  const NormalizedNativeRange({
+    required this.start,
+    required this.end,
+    required this.native,
+  });
+
+  final NativePosition start;
+  final NativePosition end;
+  final DomNativeRange native;
 }
 
 /// Shifts [range] by a document [change], mirroring `shiftRange` in
@@ -179,6 +199,70 @@ class Selection {
     final range = _range;
     if (range == null) return null;
     return {'index': range.index, 'length': range.length};
+  }
+
+  /// Normalize a browser range so each endpoint resolves to a leaf-like DOM
+  /// position inside the editor, matching Quill's `normalizeNative`.
+  NormalizedNativeRange? normalizeNative(DomNativeRange nativeRange) {
+    final root = scroll.element;
+    if (!root.contains(nativeRange.startContainer) ||
+        (!nativeRange.collapsed && !root.contains(nativeRange.endContainer))) {
+      return null;
+    }
+
+    NativePosition normalize(DomNode initialNode, int initialOffset) {
+      var node = initialNode;
+      var offset = initialOffset;
+      while (node is! DomText && node.childNodes.isNotEmpty) {
+        if (node.childNodes.length > offset) {
+          node = node.childNodes[offset];
+          offset = 0;
+        } else if (node.childNodes.length == offset) {
+          node = node.lastChild!;
+          if (node is DomText) {
+            offset = node.data.length;
+          } else if (node.childNodes.isNotEmpty) {
+            offset = node.childNodes.length;
+          } else {
+            offset = node.childNodes.length + 1;
+          }
+        } else {
+          break;
+        }
+      }
+      return NativePosition(node, offset);
+    }
+
+    return NormalizedNativeRange(
+      start: normalize(nativeRange.startContainer, nativeRange.startOffset),
+      end: normalize(nativeRange.endContainer, nativeRange.endOffset),
+      native: nativeRange,
+    );
+  }
+
+  /// Convert a normalized native range to Quill document coordinates.
+  Range? normalizedToRange(NormalizedNativeRange range) {
+    final positions = <NativePosition>[range.start];
+    if (!range.native.collapsed) {
+      positions.add(range.end);
+    }
+    final indexes = <int>[];
+    for (final position in positions) {
+      final blot = scroll.find(position.node, bubble: true).key;
+      if (blot == null) return null;
+      final base = scroll.offset(blot);
+      if (position.offset == 0) {
+        indexes.add(base);
+      } else if (blot is LeafBlot) {
+        indexes.add(base + blot.index(position.node, position.offset));
+      } else {
+        indexes.add(base + blot.length());
+      }
+    }
+    final documentEnd = math.max(0, scroll.length() - 1);
+    final end = indexes.reduce(math.max).clamp(0, documentEnd);
+    final start = indexes.reduce(math.min).clamp(0, end);
+    return Range(start, end - start);
   }
 
   bool _rangesEqual(Range? a, Range? b) {

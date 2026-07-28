@@ -32,9 +32,11 @@ class Input extends Module<InputOptions> {
   Input(Quill quill, InputOptions options) : super(quill, options) {
     quill.root.addEventListener('beforeinput', _handleBeforeInput);
 
-    final shouldListen = options.listenCompositionBeforeStart ?? !_isAndroidUserAgent;
+    final shouldListen =
+        options.listenCompositionBeforeStart ?? !_isAndroidUserAgent;
     if (shouldListen) {
-      quill.on(EmitterEvents.COMPOSITION_BEFORE_START, _handleCompositionBeforeStart);
+      quill.on(EmitterEvents.COMPOSITION_BEFORE_START,
+          _handleCompositionBeforeStart);
     }
   }
 
@@ -61,14 +63,18 @@ class Input extends Module<InputOptions> {
       return;
     }
 
+    final targetRanges = event.getTargetRanges();
+    if (targetRanges.isEmpty || targetRanges.first.collapsed) {
+      return;
+    }
     final text = _extractText(event);
     if (text == null) {
       return;
     }
-    final range = quill.getSelection();
-    if (range == null) {
-      return;
-    }
+    final normalized = quill.selection.normalizeNative(targetRanges.first);
+    final range = normalized == null
+        ? null
+        : quill.selection.normalizedToRange(normalized);
     if (_replaceText(range, text)) {
       event.preventDefault();
     }
@@ -88,34 +94,26 @@ class Input extends Module<InputOptions> {
       return data;
     }
     final transfer = event.dataTransfer;
-    if (transfer != null) {
-      final plain = transfer.getData('text/plain');
-      if (plain != null && plain.isNotEmpty) {
-        return plain;
-      }
+    if (transfer != null && transfer.types.contains('text/plain')) {
+      return transfer.getData('text/plain') ?? '';
     }
     return null;
   }
 
-  bool _replaceText(Range range, String text) {
-    if (range.length == 0 && text.isEmpty) {
-      return false;
-    }
+  bool _replaceText(Range? range, String text) {
+    if (range == null || range.length == 0) return false;
 
-    Map<String, dynamic> formats = const <String, dynamic>{};
     if (text.isNotEmpty) {
-      formats = quill.getFormat(range.index, 1);
-    }
-
-    if (range.length > 0) {
+      // Native replacement text inherits the first replaced character's
+      // formats, matching contenteditable browser behaviour.
+      final formats = quill.getFormat(range.index, 1);
       deleteRange(quill: quill, range: range);
-    }
-
-    if (text.isNotEmpty) {
       final delta = Delta()
         ..retain(range.index)
         ..insert(text, formats.isEmpty ? null : formats);
       quill.updateContents(delta, source: EmitterSource.USER);
+    } else {
+      deleteRange(quill: quill, range: range);
     }
 
     final cursor = Range(range.index + text.length, 0);

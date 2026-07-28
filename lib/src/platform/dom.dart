@@ -115,6 +115,8 @@ abstract class DomText extends DomNode {
 abstract class DomDocument {
   DomElement createElement(String tag);
   DomText createTextNode(String value);
+  void addEventListener(String type, DomEventListener listener);
+  void removeEventListener(String type, DomEventListener listener);
   DomElement? querySelector(String selectors);
   List<DomElement> querySelectorAll(String selectors);
   DomElement get body;
@@ -163,6 +165,7 @@ abstract class DomInputEvent extends DomEvent {
   String? get inputType;
   String? get data;
   DomDataTransfer? get dataTransfer;
+  List<DomNativeRange> getTargetRanges();
 }
 
 /// DOM clipboard event abstraction.
@@ -183,6 +186,7 @@ abstract class DomKeyboardEvent extends DomEvent {
 /// DOM data transfer abstraction.
 abstract class DomDataTransfer {
   List<DomFile> get files;
+  List<String> get types;
   String? getData(String format);
   void setData(String format, String data);
 }
@@ -193,6 +197,27 @@ class DomSelectionRange {
 
   final int index;
   final int length;
+}
+
+/// A browser range expressed with DOM nodes and offsets.
+///
+/// This is used for `InputEvent.getTargetRanges()` and native selection
+/// handling without leaking `package:web` types into the editor core.
+class DomNativeRange {
+  const DomNativeRange({
+    required this.startContainer,
+    required this.startOffset,
+    required this.endContainer,
+    required this.endOffset,
+  });
+
+  final DomNode startContainer;
+  final int startOffset;
+  final DomNode endContainer;
+  final int endOffset;
+
+  bool get collapsed =>
+      startContainer == endContainer && startOffset == endOffset;
 }
 
 /// DOM file abstraction.
@@ -210,18 +235,21 @@ abstract class DomAdapter {
               List<DomMutationRecord> mutations, DomMutationObserver observer)
           callback);
   DomSelectionRange? getSelectionRange(DomElement root);
+  DomNativeRange? getNativeSelectionRange();
   void setSelectionRange(DomElement root, int index, int length);
   void setSelectionByNodes(
       DomNode startNode, int startOffset, DomNode endNode, int endOffset);
   Map<String, dynamic>? getBounds(DomElement root, int index, int length);
   Map<String, dynamic>? getElementBounds(DomElement element,
       {DomElement? relativeTo});
+  String getComputedStyleProperty(DomElement element, String property);
   Future<String?> readFileAsDataUrl(dynamic file);
   void focus(DomElement element);
 
   /// Removes focus from [element] when it currently holds it.
   void blur(DomElement element);
   String? get userAgent;
+  String? get platform;
 }
 
 /// Represents a parser for DOM.

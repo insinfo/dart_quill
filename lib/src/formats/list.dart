@@ -1,5 +1,6 @@
 import '../blots/abstract/blot.dart';
 import '../blots/block.dart';
+import '../blots/scroll.dart';
 import '../platform/dom.dart';
 import '../platform/platform.dart';
 
@@ -64,7 +65,25 @@ class ListContainer extends ContainerBlot {
 // Mirrors quill's list.ts where ListItem extends Block, so line-level
 // machinery (isLine, getFormat, newline accounting) treats it as a line.
 class ListItem extends Block {
-  ListItem(DomElement domNode) : super(domNode);
+  ListItem(DomElement domNode) : super(domNode) {
+    final ui = domNode.ownerDocument.createElement('span');
+    void toggleChecklist(DomEvent event) {
+      final root = scroll;
+      if (root is Scroll && !root.isEnabled()) return;
+      final format = element.dataset['list'];
+      if (format == 'checked') {
+        this.format('list', 'unchecked');
+        event.preventDefault();
+      } else if (format == 'unchecked') {
+        this.format('list', 'checked');
+        event.preventDefault();
+      }
+    }
+
+    ui.addEventListener('mousedown', toggleChecklist);
+    ui.addEventListener('touchstart', toggleChecklist);
+    attachUI(ui);
+  }
 
   static const String kBlotName = 'list';
   static const String kTagName = 'LI';
@@ -142,6 +161,11 @@ class ListItem extends Block {
       if (parent != null && value['type'] != null) {
         parent!.format('list', value['type']);
       }
+    } else if (value == 'checked' || value == 'unchecked') {
+      // Quill's public Delta representation uses these scalar values.
+      // Keep the checklist state on the LI; the surrounding container still
+      // owns the ordered/bullet list type in this port.
+      element.dataset['list'] = value;
     } else {
       element.dataset.remove('list');
       parent?.format('list', value);

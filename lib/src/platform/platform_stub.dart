@@ -34,6 +34,9 @@ class _StubDomAdapter implements DomAdapter {
   DomSelectionRange? getSelectionRange(DomElement root) => null;
 
   @override
+  DomNativeRange? getNativeSelectionRange() => null;
+
+  @override
   void setSelectionRange(DomElement root, int index, int length) {}
 
   @override
@@ -50,10 +53,16 @@ class _StubDomAdapter implements DomAdapter {
       null;
 
   @override
+  String getComputedStyleProperty(DomElement element, String property) => '';
+
+  @override
   Future<String?> readFileAsDataUrl(dynamic file) async => null;
 
   @override
   String? get userAgent => null;
+
+  @override
+  String? get platform => null;
 }
 
 /// Creates the platform-specific DOM adapter

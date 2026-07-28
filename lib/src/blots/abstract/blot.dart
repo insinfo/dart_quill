@@ -333,6 +333,17 @@ abstract class ParentBlot extends Blot {
 
   void appendChild(Blot blot) => insertBefore(blot, null);
 
+  /// Attach a non-editable UI marker before this blot's document content.
+  ///
+  /// Mirrors parchment's `ParentBlot.attachUI` and is used by list markers.
+  void attachUI(DomElement node) {
+    uiNode?.remove();
+    uiNode = node;
+    node.classes.add('ql-ui');
+    node.setAttribute('contenteditable', 'false');
+    element.insertBefore(node, element.firstChild);
+  }
+
   Blot? createDefaultChild([dynamic value]) => null;
 
   @override
@@ -519,6 +530,10 @@ abstract class ParentBlot extends Blot {
     };
     final desired = <Blot>[];
     for (final node in List<DomNode>.from(element.childNodes)) {
+      // UI markers live outside the blot model and have zero document
+      // length. Hydrating `<span class="ql-ui">` by tag would otherwise
+      // create a Cursor blot and leak its FEFF guard into the document.
+      if (node == uiNode) continue;
       final existing = byNode.remove(node);
       if (existing != null) {
         desired.add(existing);
@@ -654,8 +669,7 @@ abstract class ParentBlot extends Blot {
       final end = offset + childLength;
       if (end > index && offset < index + length) {
         final childIndex = math.max(0, index - offset);
-        final visited =
-            math.min(end, index + length) - math.max(offset, index);
+        final visited = math.min(end, index + length) - math.max(offset, index);
         if (child is T && (predicate == null || predicate(child))) {
           result.add(child);
         }
@@ -908,6 +922,9 @@ abstract class LeafBlot extends Blot {
 
   @override
   int length() => 1;
+
+  /// Convert a native offset in this leaf to a document offset.
+  int index(DomNode node, int offset) => offset;
 
   /// Parity parchment leaf.ts — a leaf cannot hold content, so the new blot
   /// is created and handed to the parent at the split point. Throwing here

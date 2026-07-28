@@ -1,6 +1,14 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- Native DOM range abstractions for `InputEvent.getTargetRanges()` and browser
+  selections, plus Quill-compatible `Selection.normalizeNative` and
+  `normalizedToRange`.
+- `ParentBlot.attachUI` and interactive list/checklist UI markers with
+  mouse/touch toggling.
+- Unit coverage for collapsed, external, replacement-text and formatted
+  `beforeinput` target ranges, native UI-node caret correction, and checklist
+  toggling.
 - `TableToolbarRouter` para aplicar header, lista, alinhamento, direção e recuo
   em todas as células selecionadas, preservando os handlers normais fora da
   tabela.
@@ -56,6 +64,11 @@
 - `example/ngdart` editor component wired to the public `dart_quill` package and the `package:web` DOM layer.
 
 ### Changed
+- `Input` now replaces the non-collapsed native `beforeinput` target range
+  instead of trusting a potentially stale logical selection.
+- `UINode` now uses the typed keyboard `Context`, computed text direction and
+  a one-shot native `selectionchange` listener to move the caret after
+  `.ql-ui`.
 - Alinhamento visual do dropdown 10×10 e da mini-toolbar contextual conforme o
   `quill-table-better`: posicionamento ancorado, dimensões, bordas, espaçamento
   e centralização sobre a tabela.
@@ -79,6 +92,10 @@
 - Removed obsolete merge scripts and the vendored `quilljs/` source tree from the active build path, keeping references under `referencias/`.
 
 ### Fixed
+- Prevented zero-length `.ql-ui` markers from being hydrated as Cursor blots,
+  which leaked the cursor FEFF guard into list and table-list text.
+- Checklist scalar Delta values (`checked`/`unchecked`) are retained on list
+  items and can be toggled by their UI marker.
 - `TableBetter.getTable()` agora reconhece caret em `TableHeader` e
   `TableList`, mantendo o contexto após conversões feitas pela toolbar.
 - Corrigida a semântica de `Keyboard` para listas de formatos: um binding com
@@ -98,6 +115,8 @@
 - AngularDart example compilation issues caused by missing package wiring and invalid host element typing.
 
 ### Tests
+- 304 VM unit tests, 13 browser/Chrome tests and 3 Puppeteer E2E scenarios
+  passing; `dart analyze` clean (2026-07-28).
 - 204 unit tests and 3 Puppeteer E2E scenarios passing after the merge/split port.
 - Port/audit source expanded to `referencias/quilljs/test` for upstream unit, E2E, and fuzz scenarios.
 - 203 unit tests and 2 Puppeteer E2E tests passing; AngularDart analysis/build also clean.
