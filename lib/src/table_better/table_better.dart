@@ -24,6 +24,8 @@ import 'modules/toolbar.dart';
 import 'ui/cell_selection.dart';
 import 'ui/cell_selection_controller.dart';
 import 'ui/table_menus.dart';
+import 'ui/toolbar_table.dart';
+import '../ui/icons.dart';
 
 /// Mirrors the TS `Options` interface.
 class TableBetterOptions {
@@ -121,6 +123,7 @@ class TableBetter extends Module<TableBetterOptions> {
       resolveSelection: _selectionForElement,
       hideTools: hideTools,
     );
+    registerToolbarTable(options.toolbarTable);
     listenDeleteTable();
     quill.emitter.on(
       EmitterEvents.TEXT_CHANGE,
@@ -137,6 +140,9 @@ class TableBetter extends Module<TableBetterOptions> {
 
   /// TS `this.tableMenus` — the floating menu bar (`ui/table-menus.ts`).
   late final TableMenus tableMenus;
+
+  /// TS `this.tableSelect` — only built when `toolbarTable` is enabled.
+  TableSelect? tableSelect;
 
   final Map<TableContainer, CellSelectionController> _cellSelections = {};
 
@@ -388,6 +394,52 @@ class TableBetter extends Module<TableBetterOptions> {
     }
     hideTools();
     quill.scroll.optimize([], {});
+  }
+
+  /// TS `registerToolbarTable(toolbarTable)` (quill-table-better.ts:281).
+  ///
+  /// Opt-in: registers the `formats/table-better` blot, hangs the 10x10
+  /// [TableSelect] under the toolbar's `ql-table-better` button and closes it
+  /// on any click outside.
+  void registerToolbarTable(bool enabled) {
+    if (!enabled) return;
+    Quill.registerPath('formats/table-better', ToolbarTable.registryEntry,
+        overwrite: true);
+    quill.scroll.registry.register(ToolbarTable.registryEntry);
+    icons[ToolbarTable.kBlotName] ??= toolbarTableIcon;
+
+    final toolbar = quill.getModule('toolbar');
+    if (toolbar == null) return;
+    final container = (toolbar as dynamic).container as DomElement?;
+    if (container == null) return;
+    DomElement? button;
+    for (final candidate in container.querySelectorAll('button')) {
+      if (candidate.classes.contains('ql-table-better')) {
+        button = candidate;
+        break;
+      }
+    }
+    if (button == null) return;
+    tableSelect = TableSelect(document: quill.root.ownerDocument);
+    button.append(tableSelect!.root);
+    button.addEventListener('click', (event) {
+      tableSelect!.handleClick(event.target, insertTable);
+    });
+    quill.root.ownerDocument.addEventListener('click', (event) {
+      final select = tableSelect;
+      if (select == null || select.isHidden) return;
+      if (_isInside(event.target, button!)) return;
+      select.hide();
+    });
+  }
+
+  bool _isInside(DomNode? target, DomNode ancestor) {
+    DomNode? node = target;
+    while (node != null) {
+      if (identical(node, ancestor)) return true;
+      node = node.parentNode;
+    }
+    return false;
   }
 
   /// TS `showTools(force)` (quill-table-better.ts:290) — parks the selection on

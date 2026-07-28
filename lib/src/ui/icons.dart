@@ -330,7 +330,14 @@ const String _videoIcon = r'''
 </svg>
 ''';
 
-const Map<String, dynamic> icons = {
+/// Icon registry, keyed by format name (`Quill.import('ui/icons')` upstream).
+///
+/// Mutable on purpose: modules register their own icons at runtime — the
+/// table-better toolbar button does `icons['table-better'] = tableIcon`
+/// (toolbar-table.ts:8-10).
+final Map<String, dynamic> icons = Map<String, dynamic>.from(defaultIcons);
+
+const Map<String, dynamic> defaultIcons = {
   'align': {
     '': _alignLeftIcon,
     'center': _alignCenterIcon,
