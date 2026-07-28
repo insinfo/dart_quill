@@ -172,12 +172,17 @@ Bugs pontuais de alto impacto e baixo risco, sem mudança arquitetural:
 - [ ] G2.4 Emitter: bridge global DOM (selectionchange/mousedown/mouseup/click) (C5 parte 2); `instances` via Expando (C13).
 - [ ] G2.5 `scrollRectIntoView` fiel + `Quill.scrollSelectionIntoView` (C15).
 
-### G3 — Keyboard completo (3-5 dias)
-- [ ] G3.1 As 5 factories (`makeFormatHandler`, `makeCodeBlockHandler`, `makeEmbedArrowHandler`, `makeTableArrowHandler`, `tableSide`) reais.
-- [ ] G3.2 Os 26 bindings default (C1) + `addBinding` com semântica de spread (sem sobrescrever com null) + context como função.
-- [ ] G3.3 `handleBackspace`/`handleDelete`/`deleteRange` com `AttributeMap.diff` via pipeline de delta (C17).
-- [ ] G3.4 `Table` básico: `getTable`/`insertRow`/`insertColumn` públicos + `register()` (C18).
-- Testes: port de `keyboard.spec`/`e2e` relevantes.
+### G3 — Keyboard completo — CONCLUÍDO (2026-07-27)
+- [x] G3.1 As 5 factories reais (`makeFormatHandler`, `makeCodeBlockHandler`, `makeEmbedArrowHandler`, `makeTableArrowHandler`, `tableSide`), portadas de keyboard.ts:639-784/817-831. Handlers default usam `DefaultBindingHandler(Keyboard, Range, Context)` como substituto do `this` do TS; `_invokeHandler` reconhece a aridade e mantém compatibilidade com `(range, context)`/`(range)`.
+- [x] G3.2 **Os 26 bindings default** registrados (C1), com `{...DEFAULTS.bindings, ...options.bindings}` (usuário sobrescreve por nome; `null`/`false` desabilita). `addBinding` com semântica de spread real + `context` como função ou BindingObject. Correções colaterais necessárias: **`Keyboard.match` era infiel** (modificador ausente era tratado como "tanto faz", então Tab capturava Shift+Tab) — agora ausente = "não pode estar pressionado", só `null` é opcional; `normalize` clona o binding (senão os objetos estáticos de DEFAULTS eram mutados e vazavam entre instâncias); `listen()` extraiu `handleKeydown(DomEvent)` público para permitir teste em VM.
+- [x] G3.3 `handleBackspace`/`handleDelete`/`deleteRange` com `Delta.diffAttributes` no pipeline de delta (C17) — nada mais muta blots direto, tudo emite TEXT_CHANGE.
+- [ ] G3.4 `Table` básico: `getTable`/`insertRow`/`insertColumn` públicos + `register()` (C18). *O binding `table enter` foi implementado derivando table/row/cell de `context.line`, então funciona sem essa API.*
+- Testes: `test/unit/modules/keyboard_bindings_test.dart` (23 casos: defaults por tecla + contagem, Ctrl/Cmd+B, Tab/Shift+Tab, autofill, empty enter, code exit, merge de formatos no backspace, semântica do addBinding).
+- TODOs deixados: `CodeBlock.TAB` (G5.2), `quill.scrollSelectionIntoView` (G2.5), `Quill.update` no makeCodeBlockHandler (G2.1 — expresso como delta, mesmo efeito).
+
+**⚠️ Dois bugs de core encontrados pelo trabalho de G3 (ainda abertos, candidatos a G1.10):**
+1. **`Scroll.deleteAt` apaga demais em blocos vazios**: em `'code\n\n\n\n'`, `updateContents(retain(6)+delete(1))` produz `'code\n'` — três newlines somem. Reproduz também com parágrafos simples. Afeta backspace/delete em linhas vazias.
+2. **`Quill.deleteText` não apaga através de fronteira de bloco**: `Editor.deleteText` chama `Scroll.deleteAt` uma única vez (só `Editor.update` tem o laço `while (remaining > 0)`), então `deleteText(3, 5)` sobre `'Title\nbody\n'` remove só 3 caracteres **e ainda emite um delta que não corresponde ao documento**.
 
 ### G4 — Clipboard/Uploader/Input/UINode (3-5 dias)
 - [ ] G4.1 ATTRIBUTE/STYLE_ATTRIBUTORS + `matchAttributor` real; `matchBlot` genérico via `scroll.query`; short-circuit code-block; `matchCodeBlock` com linguagem; `matchList` via `data-checked` (C7).
@@ -185,8 +190,9 @@ Bugs pontuais de alto impacto e baixo risco, sem mudança arquitetural:
 - [ ] G4.3 Input: guard de range colapsado + getTargetRanges (C14). UINode: aceitar `Context` + correção real do caret (C11).
 - [ ] G4.4 Namespaces `attributors/*` e chaves de registro não-colidentes (F5); export público de formats/ui/themes/modules em `dart_quill.dart`.
 
-### G5 — Formats/Themes/UI (3-5 dias)
-- [ ] G5.1 BubbleTooltip posicionado (F1); Tooltip.position com ql-flip (F9); handlers de link por tema (F7).
+### G5 — Formats/Themes/UI (3-5 dias) — G5.1/G5.3 CONCLUÍDOS (2026-07-27)
+- [x] G5.1 **BubbleTooltip posicionado** (F1) — o corpo comentado foi portado de bubble.ts:42-59 incluindo o caso multi-linha; **`Tooltip.position` com rects reais e `ql-flip`** (F9) + `isScrollable` guardando o listener de scroll; **handlers de link por tema** (F7) — snow ignora seleção colapsada e prefixa `mailto:`, bubble abre sem preview, handler do usuário vence (`BaseTheme.overridesHandler`); o Ctrl+K do snow delega ao handler. Novo helper `ui/dom_interop{,_stub,_web}.dart` para computed overflow / dispatch de evento (a camada de plataforma não expõe `getComputedStyle`). Testes: `test/unit/themes/tooltip_position_test.dart` (14) + `test/browser/tooltip_position_test.dart` (6).
+- [x] G5.3 `Picker.selectItem` público e despachando `change` no `<select>` nativo (F12); stubs mortos `color-picker.dart`/`icon-picker.dart`, `merge()` duplicada, getter `template` e `BubbleTheme.defaults()` removidos.
 - [ ] G5.2 Checklist com attachUI (F6); `CodeBlock.TAB`; `TableRow.checkMerge/optimize` (F10); unificar `ColorAttributor`; `FontStyle`/`SizeStyle` registrados; `Link.sanitize` fiel; modelo de `list` alinhado ao upstream (avaliar impacto no Delta).
 - [ ] G5.3 Picker: dispatch `change` (F12), `selectItem` público; limpar stubs mortos.
 - [ ] G5.4 Syntax: aplicar realce via diff (C6) + initListener com select de linguagem; vendorizar highlight (F4 do plano antigo).
