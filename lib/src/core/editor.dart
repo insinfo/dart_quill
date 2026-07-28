@@ -176,6 +176,19 @@ class Editor {
     return delta;
   }
 
+  /// Parity editor.ts `update(null, mutations)` — recompute the document delta
+  /// straight from the blot tree and return the change against the previous
+  /// snapshot.
+  ///
+  /// Needed whenever the tree is mutated outside the delta pipeline (native
+  /// typing absorbed by `Scroll.update`, the Syntax module's `formatAt` pass);
+  /// without it `getContents()` keeps serving a stale snapshot.
+  Delta syncFromDocument() {
+    final oldDelta = delta;
+    _update();
+    return oldDelta.diff(delta);
+  }
+
   /// Parity editor.ts:158-160.
   Delta getContentsRange(int index, int length) =>
       delta.slice(index, index + length);

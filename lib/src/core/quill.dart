@@ -347,9 +347,15 @@ class Quill {
   List<Blot> getLines([int index = 0, int length = 0x7fffffff]) =>
       scroll.lines(index, length);
 
-  /// Drains pending DOM mutations into the model (parity quill.ts `update`).
-  void update([String source = EmitterSource.USER]) {
+  /// Drains pending DOM mutations into the model and reconciles the cached
+  /// document delta with the resulting tree (parity quill.ts `update` plus the
+  /// SCROLL_UPDATE → `editor.update(null, mutations)` listener).
+  ///
+  /// Returns the change delta, which is empty whenever the model already
+  /// matched the snapshot.
+  Delta update([String source = EmitterSource.USER]) {
     scroll.update(null, {'source': source});
+    return modify(() => editor.syncFromDocument(), source: source);
   }
 
   Delta getContents() {

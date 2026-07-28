@@ -183,6 +183,12 @@ class TableBody extends Container {
   static const List<Type> allowedChildren = [TableRow];
   static const Type requiredContainer = TableContainer;
 
+  // The list/table hierarchies build their own containers (the container's
+  // tag and value matter), so they opt out of the generic
+  // `requiredContainer` wrapping in `Blot.optimize`.
+  @override
+  bool get managesOwnRequiredContainer => true;
+
   static TableBody create([dynamic value]) {
     if (value is DomElement) {
       return TableBody(value);
@@ -209,6 +215,12 @@ class TableRow extends Container {
   static const int kScope = Scope.BLOCK_BLOT;
   static const List<Type> allowedChildren = [TableCell];
   static const Type requiredContainer = TableBody;
+
+  // The list/table hierarchies build their own containers (the container's
+  // tag and value matter), so they opt out of the generic
+  // `requiredContainer` wrapping in `Blot.optimize`.
+  @override
+  bool get managesOwnRequiredContainer => true;
 
   static TableRow create([dynamic value]) {
     if (value is DomElement) {
@@ -278,6 +290,12 @@ class TableCell extends Block {
   static const String kTagName = 'TD';
   static const int kScope = Scope.BLOCK_BLOT;
   static const Type requiredContainer = TableRow;
+
+  // The list/table hierarchies build their own containers (the container's
+  // tag and value matter), so they opt out of the generic
+  // `requiredContainer` wrapping in `Blot.optimize`.
+  @override
+  bool get managesOwnRequiredContainer => true;
 
   static TableCell create([dynamic value]) {
     if (value is DomElement) {

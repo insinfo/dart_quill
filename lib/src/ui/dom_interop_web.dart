@@ -34,3 +34,22 @@ bool dispatchDomEvent(DomElement element, String type) {
   native.dispatchEvent(web.Event(type, web.EventInit(bubbles: true)));
   return true;
 }
+
+/// Current value of a `<select>` element (the DOM *property*, which the
+/// attribute-only abstraction cannot express).
+///
+/// Returns `null` when the element is not a real `<select>`.
+String? selectValue(DomElement element) {
+  final native = _native(element);
+  if (native == null || !native.isA<web.HTMLSelectElement>()) return null;
+  return (native as web.HTMLSelectElement).value;
+}
+
+/// Sets the value of a `<select>` element. Returns `false` when unavailable,
+/// so callers can fall back to `selected` attributes.
+bool setSelectValue(DomElement element, String value) {
+  final native = _native(element);
+  if (native == null || !native.isA<web.HTMLSelectElement>()) return false;
+  (native as web.HTMLSelectElement).value = value;
+  return true;
+}

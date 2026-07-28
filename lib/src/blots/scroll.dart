@@ -236,14 +236,18 @@ class Scroll extends ScrollBlot {
     // the observer and re-run until quiescent, with a hard iteration cap.
     var remaining = _kMaxOptimizeIterations;
     while (true) {
+      final versionBefore = treeVersion;
       super.optimize(mutations, scope);
       if (children.isEmpty) {
         final block = _createBlock();
         appendChild(block);
       }
       final produced = observer?.takeRecords() ?? const <DomMutationRecord>[];
-      if (produced.isEmpty) break;
       records.addAll(produced);
+      // Off-browser there is no observer to drain, so the structural changes a
+      // pass makes (requiredContainer wrapping, sibling merges) are detected
+      // through the tree version instead.
+      if (produced.isEmpty && treeVersion == versionBefore) break;
       remaining -= 1;
       if (remaining <= 0) {
         throw StateError('[Parchment] Maximum optimize iterations exceeded');
@@ -253,6 +257,22 @@ class Scroll extends ScrollBlot {
     if (records.isNotEmpty) {
       emitter.emit(EmitterEvents.SCROLL_OPTIMIZE, records, scope);
     }
+  }
+
+  /// Parity scroll.ts:67-69 — blots signal their own mount so modules
+  /// (Syntax's language `<select>`) can attach UI to them.
+  void emitMount(Blot blot) {
+    emitter.emit(EmitterEvents.SCROLL_BLOT_MOUNT, blot);
+  }
+
+  /// Parity scroll.ts:71-73.
+  void emitUnmount(Blot blot) {
+    emitter.emit(EmitterEvents.SCROLL_BLOT_UNMOUNT, blot);
+  }
+
+  /// Parity scroll.ts:75-77.
+  void emitEmbedUpdate(Blot blot, dynamic change) {
+    emitter.emit(EmitterEvents.SCROLL_EMBED_UPDATE, blot, change);
   }
 
   @override

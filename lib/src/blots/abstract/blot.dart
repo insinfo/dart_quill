@@ -154,6 +154,16 @@ abstract class Blot {
   int get scope;
 
   ScrollBlot get scroll {
+    final found = scrollOrNull;
+    if (found == null) {
+      throw StateError('Blot is not attached to a scroll');
+    }
+    return found;
+  }
+
+  /// Non-throwing variant of [scroll], for lifecycle hooks that may run while
+  /// a subtree is still detached (parchment builds subtrees bottom-up).
+  ScrollBlot? get scrollOrNull {
     Blot? current = this;
     while (current != null) {
       if (current is ScrollBlot) {
@@ -161,8 +171,17 @@ abstract class Blot {
       }
       current = current.parent;
     }
-    throw StateError('Blot is not attached to a scroll');
+    return null;
   }
+
+  /// Parity `ShadowBlot.attach` (shadow.ts:68-70) — invoked whenever this blot
+  /// gains a parent. Subclasses hook lifecycle work here (see
+  /// `SyntaxCodeBlockContainer`, which emits `SCROLL_BLOT_MOUNT`).
+  void attach() {}
+
+  /// Parity `ShadowBlot.detach` (shadow.ts:77-82) — invoked when the blot is
+  /// unlinked from its parent.
+  void detach() {}
 
   bool get isAttached => parent != null;
 
@@ -257,9 +276,32 @@ abstract class Blot {
     List<DomMutationRecord>? mutations,
     Map<String, dynamic>? context,
   ]) {
-    // Default implementation does nothing
-    // Subclasses can override to implement specific optimization logic
+    // Parity `ShadowBlot.optimize` (shadow.ts:135-143): a blot declaring a
+    // requiredContainer wraps itself in one whenever its parent is not it.
+    if (managesOwnRequiredContainer) return;
+    final required = registryRequiredContainer;
+    if (required != null && parent != null && parent!.blotName != required) {
+      wrap(required);
+    }
   }
+
+  /// blotName of this blot's required container, resolved through the scroll
+  /// registry (parchment reads `this.statics.requiredContainer`).
+  ///
+  /// Distinct from the table-better hierarchy's own `requiredContainerBlotName`
+  /// getter, which drives a bespoke convergence pass in that module.
+  String? get registryRequiredContainer {
+    final root = scrollOrNull;
+    if (root == null) return null;
+    return root.registry.query(blotName, Scope.ANY)?.requiredContainerBlotName;
+  }
+
+  /// Opt-out from the generic `requiredContainer` enforcement above.
+  ///
+  /// The list and core-table hierarchies build their containers themselves —
+  /// they need the container's *value* (an `<ol>` vs `<ul>`, a row's
+  /// `data-row`), which a bare `wrap(blotName)` cannot supply.
+  bool get managesOwnRequiredContainer => false;
 
   List<MapEntry<Blot, int>> path(int index, {bool inclusive = false}) {
     return [MapEntry(this, index)];
@@ -332,6 +374,25 @@ abstract class ParentBlot extends Blot {
   }
 
   void appendChild(Blot blot) => insertBefore(blot, null);
+
+  /// Parity `ParentBlot.attach` (parent.ts:50-55) — cascade to children so a
+  /// subtree built while detached still fires its mount hooks once grafted.
+  @override
+  void attach() {
+    super.attach();
+    for (final child in List<Blot>.from(children)) {
+      child.attach();
+    }
+  }
+
+  /// Parity `ParentBlot.detach` (parent.ts:161-166).
+  @override
+  void detach() {
+    for (final child in List<Blot>.from(children)) {
+      child.detach();
+    }
+    super.detach();
+  }
 
   /// Attach a non-editable UI marker before this blot's document content.
   ///
@@ -470,6 +531,9 @@ abstract class ParentBlot extends Blot {
     }
 
     children.insert(targetIndex, blot);
+
+    scrollOrNull?.treeVersion++;
+    blot.attach();
   }
 
   void removeChild(Blot child) {
@@ -482,6 +546,9 @@ abstract class ParentBlot extends Blot {
     next?.prev = previous;
 
     children.removeAt(index);
+
+    scrollOrNull?.treeVersion++;
+    child.detach();
 
     child.parent = null;
     child.prev = null;
@@ -1009,6 +1076,13 @@ abstract class ScrollBlot extends ParentBlot {
 
   final Registry registry;
   DomMutationObserver? observer;
+
+  /// Bumped by every structural change to the blot tree.
+  ///
+  /// Parchment converges `optimize` by draining the MutationObserver; off the
+  /// browser (fake DOM, VM tests) there is no observer, so the same
+  /// convergence is driven from this counter instead.
+  int treeVersion = 0;
 
   RegistryEntry? query(String name, int scope) => registry.query(name, scope);
 

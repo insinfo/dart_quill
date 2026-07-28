@@ -90,6 +90,12 @@ class ListItem extends Block {
   static const int kScope = Scope.BLOCK_BLOT;
   static const Type requiredContainer = ListContainer;
 
+  // The list/table hierarchies build their own containers (the container's
+  // tag and value matter), so they opt out of the generic
+  // `requiredContainer` wrapping in `Blot.optimize`.
+  @override
+  bool get managesOwnRequiredContainer => true;
+
   static ListItem create(String value) {
     final node = domBindings.adapter.document.createElement(kTagName);
     // The type is kept on the item until optimize() wraps it into the

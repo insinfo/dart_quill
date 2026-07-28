@@ -838,6 +838,13 @@ class TableCol extends Block {
   @override
   TableCol clone() => TableCol(element.cloneNode(deep: false));
 
+  // A real `<col>` is a void element: browsers drop any children. Returning
+  // null stops the Block base from appending a Break on every optimize pass
+  // (which the pass below would immediately remove, so the tree never
+  // converged once optimize started iterating to a fixpoint).
+  @override
+  Blot? createDefaultChild([dynamic value]) => null;
+
   @override
   Map<String, dynamic> formats() {
     return {blotName: TableCol.formatsFromNode(element)};
