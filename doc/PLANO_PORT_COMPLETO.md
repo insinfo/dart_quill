@@ -24,7 +24,7 @@ Fonte TS de referência: `C:\MyDartProjects\new_sali\frontend\web\assets\js\quil
 | blots/block.dart | ~80% | **`Block.format` retorna cedo para `Scope.BLOCK_ATTRIBUTE`** (block.dart:117-122) → align/list/indent/direction/header **não aplicam** |
 | formats/ | ~95% | fórmulas (KaTeX) apenas stub; formatos de bloco inertes pela lacuna acima |
 | modules/ | ~90% | `syntax` sem seletor de língua/highlight incremental; `keyboard.handleEnter` reescrito e **bugado** |
-| themes/ + ui/ | ~85% | `icons.dart`, `color-picker.dart`, `icon-picker.dart` com placeholders; SVGs não migrados |
+| themes/ + ui/ | ~85% | `color-picker.dart`/`icon-picker.dart` com placeholders; `icons.dart` cobre 33 dos 72 SVGs e o gerador `tool/gen_icons.dart` aponta para árvore externa |
 | assets | parcial | `.styl` do Quill não convertidos de forma reprodutível; `lib/assets/quill.snow.css` é cópia manual. **Dívida:** `lib/src/assets/snow_css.dart` (37 KB) duplica esse mesmo CSS como `const String` — deve ser removido (ver §3, regra de assets) |
 | platform/ | funcional | **usa `dart:html` (deprecated)** — precisa migrar para `package:web` + `dart:js_interop` |
 
@@ -103,7 +103,12 @@ dart_quill/
     quill.snow.css
     quill.bubble.css
     quill-table-better.css
-    icons/tabler/                # webfont vendorizado
+    icons/
+      tabler/                    # webfont vendorizado
+      svg_quill/                 # 72 SVGs oficiais — fonte do gerador
+      svg_table_better/          # 21 SVGs do plugin — idem
+  tool/
+    gen_icons.dart               # svg_quill/ + svg_table_better/ → os icons.dart
   example/
     plain/                       # dart web puro (atual web/)
     ngdart/                      # componente Angular (atual lib/src/app)
@@ -121,7 +126,11 @@ Regras:
   para `packages/dart_quill/assets/…`.
 - SVGs de **ícone** continuam como `const String` em Dart: são injetados como `innerHTML`
   dentro dos botões (o Quill faz o mesmo), não são folha de estilo, e cada um tem algumas
-  centenas de bytes.
+  centenas de bytes. **Mas o embutimento é gerado, não escrito à mão**: os `.svg` ficam em
+  `lib/assets/icons/svg_quill/` e `tool/gen_icons.dart` produz o Dart, exatamente como o
+  upstream resolve `import boldIcon from '../assets/icons/bold.svg'` no build
+  (`scripts/babel-svg-inline-import.cjs`). Assim a fonte segue diffável contra o Quill e
+  atualizar de versão é copiar os SVGs e rodar o gerador.
 
 ---
 
@@ -152,7 +161,18 @@ Regras:
 - [ ] F3.1 Converter `assets/*.styl` do Quill (core, snow, bubble) para CSS definitivo e
   publicá-lo como **arquivos** em `lib/assets/quill.core.css`, `quill.snow.css` e
   `quill.bubble.css`. Nada de `const String` de CSS em Dart (ver §3).
-- [ ] F3.2 Migrar todos os SVGs de `quilljs/src/assets/icons` para `src/assets/icons.dart`; completar `ui/icons.dart`, `color-picker`, `icon-picker` (remover placeholders).
+- [ ] F3.2 Migrar todos os SVGs de `quilljs/src/assets/icons` para `lib/assets/icons/svg_quill/`
+  (**arquivos**, fonte de verdade versionada) e **gerar** os literais Dart de
+  `lib/src/ui/icons.dart` com `tool/gen_icons.dart` — contraparte do
+  `scripts/babel-svg-inline-import.cjs` do upstream. Nenhum SVG colado à mão. Completar
+  `ui/icons.dart`, `color-picker`, `icon-picker` (remover placeholders).
+- [ ] F3.2a Reescrever `tool/gen_icons.dart`: hoje aponta para uma árvore externa
+  (`new_sali/...`), cobre 33 dos 72 ícones, não reproduz o `svgo` + `html-loader
+  ({minimize:true})` do upstream (os literais atuais guardam o SVG cru, indentado) e
+  sobrescreve o arquivo com a forma antiga, perdendo o `defaultIcons`/`icons` mutável.
+  Deve também gerar `src/table_better/assets/icons.dart` a partir de
+  `referencias/quill_table_better/1.2.3/src/src/assets/icon/`, hoje produzido por um script
+  descartável. Fechar com um teste que re-gera em memória e falha se houver diff.
 - [ ] F3.3 `QuillAssets` referencia as folhas por `<link rel="stylesheet">`
   (`packages/dart_quill/assets/…`), com um id por folha para não duplicar. O consumidor
   pode ignorar a API e declarar os próprios `<link>` no HTML.
@@ -182,7 +202,7 @@ Ordem de port (dependências primeiro):
 - [ ] F5.9 `ui/table-properties-form.ts` (791 l.) → **parcial:** `TablePropertiesController` e diálogo DOM `TablePropertiesForm` com leitura/aplicação validada de propriedades de tabela/célula, cores, dimensões, bordas, alinhamento e aplicar/cancelar entregues; ainda falta a paleta própria de 15 cores/input hex, acessibilidade completa e integração com a mini-toolbar.
 - [ ] F5.10 `ui/toolbar-table.ts` (133 l.) + `modules/toolbar.ts` (283 l.) → **parcial:** grid 10×10/dropdown e `TableToolbarRouter` para header/list/alinhamento/direção/recuo em seleção multicélula entregues; ainda falta rotear formatos inline e reproduzir todos os estados ativos/pickers do módulo original.
 - [ ] F5.11 `language/` → i18n com pt_BR/en_US primeiro (16 locales no total, ~60 chaves).
-- [ ] F5.12 `quill-table-better.scss` (847 l.) → **arquivo** `lib/assets/quill-table-better.css`; os 21 SVGs → `src/assets/icons.dart` (strings Dart, por serem `innerHTML` de botão).
+- [ ] F5.12 `quill-table-better.scss` (847 l.) → **arquivo** `lib/assets/quill-table-better.css`; os 21 SVGs → `lib/assets/icons/svg_table_better/` e daí para `src/table_better/assets/icons.dart` **pelo gerador** (F3.2a), por serem `innerHTML` de botão.
 - [ ] F5.13 Testes: port dos cenários da suíte JS do plugin + testes de Delta roundtrip de tabela.
 
 **Testes portados/adicionados em 2026-07-11:** a árvore `referencias/quilljs/test` foi incluída como fonte normativa para testes core/unit/e2e (table, toolbar, clipboard, history e fuzz). O repositório do table-better não distribui testes equivalentes junto de `src`; foram criados testes unitários Dart e E2E Puppeteer para o seletor 10×10, inserção dimensional, toolbar contextual, ícones Tabler e isolamento contra CSS Limitless. O E2E gera o bundle com Webdev e o serve em porta efêmera com Shelf. Estado verificado: 203 testes unitários + 2 E2E passando.

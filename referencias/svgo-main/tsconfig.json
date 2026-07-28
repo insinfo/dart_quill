@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "node16",
+    "target": "es2021",
+    "lib": ["es2021"],
+    "allowJs": true,
+    "checkJs": true,
+    "strict": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true
+  },
+  "exclude": [
+    ".yarn/",
+    "coverage/",
+    "dist/",
+    "node_modules/",
+    "rollup.config.js",
+    "test-d/",
+    "test/browser.js",
+    "test/svgo.cjs"
+  ]
+}
