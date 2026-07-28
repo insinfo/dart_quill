@@ -23,6 +23,7 @@ import 'language/language.dart';
 import 'modules/toolbar.dart';
 import 'ui/cell_selection.dart';
 import 'ui/cell_selection_controller.dart';
+import 'ui/operate_line.dart';
 import 'ui/table_menus.dart';
 import 'ui/toolbar_table.dart';
 import '../ui/icons.dart';
@@ -123,6 +124,11 @@ class TableBetter extends Module<TableBetterOptions> {
       resolveSelection: _selectionForElement,
       hideTools: hideTools,
     );
+    operateLine = OperateLine(
+      quill: quill,
+      resolveTable: _tableForElement,
+      onResized: (tableNode) => tableMenus.updateMenus(tableNode),
+    );
     registerToolbarTable(options.toolbarTable);
     listenDeleteTable();
     quill.emitter.on(
@@ -144,14 +150,21 @@ class TableBetter extends Module<TableBetterOptions> {
   /// TS `this.tableSelect` — only built when `toolbarTable` is enabled.
   TableSelect? tableSelect;
 
+  /// TS `this.operateLine` — the resize overlay (`ui/operate-line.ts`).
+  late final OperateLine operateLine;
+
   final Map<TableContainer, CellSelectionController> _cellSelections = {};
 
   /// Resolves the [CellSelection] owning a `<table>` element, for [tableMenus].
   CellSelection? _selectionForElement(DomElement element) {
+    final table = _tableForElement(element);
+    return table == null ? null : controllerFor(table).selection;
+  }
+
+  /// Resolves the [TableContainer] blot behind a `<table>` element.
+  TableContainer? _tableForElement(DomElement element) {
     for (final table in quill.scroll.descendants<TableContainer>()) {
-      if (identical(table.element, element)) {
-        return controllerFor(table).selection;
-      }
+      if (identical(table.element, element)) return table;
     }
     return null;
   }
@@ -492,6 +505,9 @@ class TableBetter extends Module<TableBetterOptions> {
       controller.clear();
       controller.setDisabled(false);
     }
+    operateLine.hideDragBlock();
+    operateLine.hideDragTable();
+    operateLine.hideLine();
     tableMenus.hideMenus();
     tableMenus.destroyTablePropertiesForm();
   }
