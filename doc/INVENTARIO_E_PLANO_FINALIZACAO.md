@@ -131,7 +131,7 @@ A cobertura em **nível de arquivo** é ~1:1 (todo arquivo TS tem contraparte Da
 - `modules/clipboard.dart`: precedência invertida em `getTableDelta`; `onPaste` com seleção divergente.
 - `utils.getAlign`/`getCellChildBlot` só consideram `TableCellBlock` (TS: +TableList/TableHeader) → `cellId` de fallback errado em merge/split.
 - `getCorrectContainerWidth` sem padding; `getElementStyle` sem computed style.
-- Assets: 22 SVGs + `quill-table-better.scss` não portados (nenhuma classe CSS da UI tem produtor).
+- Assets: ~~22 SVGs~~ **✓ 20 SVGs em `table_better/assets/icons.dart`** (2026-07-28); falta o `quill-table-better.scss` → **arquivo** `lib/assets/quill-table-better.css` (nenhuma classe CSS da UI tem produtor).
 
 ---
 
@@ -212,12 +212,13 @@ Ordem interna (dependências primeiro):
 - [x] G6.7 **`TableToolbar` (module)** (2026-07-28): `setTableFormat` com a semântica `isReplace` do upstream (comprimento de `containers` vs `lines` para uma célula, sempre verdadeiro para seleção múltipla), `getHeaderReplace` (um header isolado virando lista sempre reconstrói a célula), o handler tri-estado de `list` via `getListCorrectValue` e a coleta de linhas do `tablehandler` (a linha do caret quando a seleção é colapsada e de uma célula só; as linhas de todas as células caso contrário). Ao fim, os menus são reposicionados. *Deviation: o TS faz subclasse de `Quill.import('modules/toolbar')`; em Dart o mesmo fork é instalado embrulhando os handlers da Toolbar viva — o comportamento observável é o do upstream.* (T6)
 - [~] G6.8 Módulo `Table`: `showTools`/`updateMenus`/`hideTools` (agora escondendo os menus), `insertTable` terminando em `showTools`, e as opções `menus`/`toolbarButtons`/`toolbarTable` da interface TS entregues em G6.2/G6.3. Pendentes: `handleKeyup`/`handleMousedown`/`handleMouseMove`/`handleScroll`/`clearHistorySelected` (T8, T9).
 - [~] G6.9 **Ramos cruzados header↔list↔cell** (2026-07-28): `TableCellBlock.format` passou a realmente produzir `table-header` e `table-list` (embrulhado num `table-list-container` com o cellId) em vez de cair no `super.format` sob um TODO desatualizado; `TableHeader.format` ganhou o ramo `list` (honrando `isReplace`) e o ramo table-cell/table-th, mais `getCellFormats`; `TableList.format` ganhou o ramo `header`, o ramo table-cell/table-th restaurando o list container por cima, e `setReplace` — o cellId é lido **antes** da reestruturação, pois `setReplace` reparenta o blot. Os três aceitam o `isReplace` posicional opcional que o TS passa como terceiro argumento. *Pendentes: `setCellRowspan` e os fixes de clipboard do §4.2.*
-- [~] G6.10 ~~22 SVGs~~ **✓ 20 SVGs de `src/assets/icon` embutidos em `table_better/assets/icons.dart` (2026-07-28).** Falta o CSS `quill-table-better.scss` → Dart const. ~~14 idiomas restantes~~ **✓ Idiomas completos (2026-07-27): os 16 locales do TS portados e registrados em `language/language.dart` (60 chaves cada, verificadas por diff).** (T10)
+- [~] G6.10 ~~22 SVGs~~ **✓ 20 SVGs de `src/assets/icon` embutidos em `table_better/assets/icons.dart` (2026-07-28)** — fiel ao upstream, que passa os SVGs de ícone pelo `html-loader` e os embute no JS. Falta converter `quill-table-better.scss` para **`lib/assets/quill-table-better.css`** (arquivo, não `const String` — ver §6). ~~14 idiomas restantes~~ **✓ Idiomas completos (2026-07-27): os 16 locales do TS portados e registrados em `language/language.dart` (60 chaves cada, verificadas por diff).** (T10)
 - Testes: cenários E2E Puppeteer para menus/resize/properties; unit para toda a lógica de grade.
 
 ### G7 — Assets e API pública (2-3 dias)
-- [ ] G7.1 `.styl` do Quill → CSS definitivo embutido (core/snow/bubble); `QuillAssets.inject()` (F3 do plano antigo).
-- [ ] G7.2 Ícones SVG oficiais completos (72) como alternativa ao tema Tabler.
+- [ ] G7.1 `.styl` do Quill → CSS definitivo em **`lib/assets/quill.core.css`, `quill.snow.css` e `quill.bubble.css`** (arquivos, não `const String` — ver §6); `QuillAssets` emite `<link rel="stylesheet">` para `packages/dart_quill/assets/…`.
+- [ ] G7.1b **Remover `lib/src/assets/snow_css.dart`** (37 KB) e o export `quillSnowCss` de `dart_quill.dart`: duplicam `lib/assets/quill.snow.css` e entram no bundle JS de todo consumidor, inclusive de quem usa o próprio tema. `injectSnowTheme()` passa a carregar o arquivo, como `injectFileTheme()` já faz.
+- [ ] G7.2 Ícones SVG oficiais completos (72) como alternativa ao tema Tabler — como `const String` em Dart, que é o que o upstream faz.
 - [~] G7.3 Superfície pública: exports de extensão e `Quill.import`-like entregues em G4.4 (`importDefinition`, pois `import` é palavra reservada em Dart); pendem revisão final de compatibilidade e dartdoc.
 
 ### G8 — DOCX/PDF restantes (1-2 semanas)
@@ -232,9 +233,53 @@ Ordem interna (dependências primeiro):
 ### Estimativa total
 G0: 1-2 dias · G1: 1-2 sem · G2: 1 sem · G3: 3-5 d · G4: 3-5 d · G5: 3-5 d · G6: 2-3 sem · G7: 2-3 d · G8: 1-2 sem · G9: 3-5 d → **~8-10 semanas** de trabalho focado.
 
+---
+
+## 6. Regra de assets: CSS em arquivo, SVG de ícone embutido
+
+Os dois casos são tratados de forma diferente **no próprio Quill**, e o port segue a mesma
+divisão. Evidência em `referencias/quilljs/webpack.common.cjs`:
+
+```js
+const svgRules = {                       // SVG de ícone → string dentro do JS
+  test: /\.svg$/,
+  include: [resolve(__dirname, 'src/assets/icons')],
+  use: [{ loader: 'html-loader', options: { minimize: true } }],
+};
+
+module.exports = {
+  entry: {
+    quill: './src/quill.ts',
+    'quill.core.css':   './src/assets/core.styl',    // CSS → entrada separada,
+    'quill.bubble.css': './src/assets/bubble.styl',  // extraída pelo
+    'quill.snow.css':   './src/assets/snow.styl',    // MiniCssExtractPlugin
+  },
+  plugins: [new MiniCssExtractPlugin({ filename: '[name]' })],
+};
+```
+
+**CSS → arquivo.** O `quill.js` publicado não contém uma linha de CSS: os `.styl` são
+entradas próprias do bundle e saem como `dist/quill.snow.css`, que o consumidor importa
+(`import 'quill/dist/quill.snow.css'`). No port, o equivalente é `lib/assets/*.css`,
+servido em `packages/dart_quill/assets/…`. Razões, além da paridade:
+
+- quem usa a biblioteca edita o tema, sobrescreve regras ou troca por outra folha sem
+  recompilar nem fazer fork;
+- uma `const String` de CSS alcançável a partir de um export público **não é removida pelo
+  tree-shaking** do `dart2js`: os ~38 KB entram no JavaScript de toda aplicação, mesmo a de
+  quem fornece o próprio estilo.
+
+**SVG de ícone → `const String` em Dart.** O `html-loader` do upstream embute cada SVG de
+`src/assets/icons` no `quill.js`, porque o ícone vai para o `innerHTML` do botão — não é
+folha de estilo, e são algumas centenas de bytes cada. `ui/icons.dart` e
+`table_better/assets/icons.dart` fazem exatamente isso.
+
+**Fontes** (webfont Tabler) seguem a regra do CSS: arquivos em `lib/assets/icons/tabler/`.
+
 ### Critérios de aceite (inalterados do plano F, reforçados)
 - `dart analyze` limpo; suíte 100% verde (VM + chrome + E2E).
 - Única dependência runtime: `web: ^1.1.1`.
+- Nenhum CSS embutido como `const String`: `grep -rn "const String.*{" lib --include=*.dart` não deve devolver folhas de estilo, e `lib/assets/*.css` cobre core/snow/bubble/table-better.
 - Paridade comportamental com Quill 2.0.3: 26 bindings, paste com attributors, formato pendente no cursor, embeds com guards, checklist clicável, syntax com realce aplicado.
 - table-better completo: menus flutuantes, seleção por arrasto, resize visual, propriedades com paleta, seletor 10×10 inserindo tabela table-better, 16 idiomas.
 - DOCX abre/exporta fiel; PDF visualmente equivalente.

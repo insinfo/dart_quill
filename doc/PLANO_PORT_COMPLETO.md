@@ -25,7 +25,7 @@ Fonte TS de referência: `C:\MyDartProjects\new_sali\frontend\web\assets\js\quil
 | formats/ | ~95% | fórmulas (KaTeX) apenas stub; formatos de bloco inertes pela lacuna acima |
 | modules/ | ~90% | `syntax` sem seletor de língua/highlight incremental; `keyboard.handleEnter` reescrito e **bugado** |
 | themes/ + ui/ | ~85% | `icons.dart`, `color-picker.dart`, `icon-picker.dart` com placeholders; SVGs não migrados |
-| assets | 0% | `.styl` não convertidos; `web/quill.snow.css` é cópia manual |
+| assets | parcial | `.styl` do Quill não convertidos de forma reprodutível; `lib/assets/quill.snow.css` é cópia manual. **Dívida:** `lib/src/assets/snow_css.dart` (37 KB) duplica esse mesmo CSS como `const String` — deve ser removido (ver §3, regra de assets) |
 | platform/ | funcional | **usa `dart:html` (deprecated)** — precisa migrar para `package:web` + `dart:js_interop` |
 
 ### 1.2 Bug ativo do Enter (commit e1c24d1)
@@ -96,8 +96,14 @@ dart_quill/
         ce_zip/ ce_xml/ ce_opc/ ce_fonts/ ce_pdf/ ce_docx/   # do canvas-editor-port
         highlight/               # syntax
       assets/
-        css.dart                 # quill.snow.css, quill.bubble.css, table-better.css como const String
-        icons.dart               # SVGs como const String
+        icons.dart               # SVGs de ícone como const String (injetados como innerHTML
+                                 # em botões, não são folha de estilo)
+  assets/                        # CSS como ARQUIVOS, servidos em
+    quill.core.css               # packages/dart_quill/assets/<arquivo>.css
+    quill.snow.css
+    quill.bubble.css
+    quill-table-better.css
+    icons/tabler/                # webfont vendorizado
   example/
     plain/                       # dart web puro (atual web/)
     ngdart/                      # componente Angular (atual lib/src/app)
@@ -107,7 +113,15 @@ dart_quill/
 Regras:
 - **Nenhum `dart:html`** — só `package:web`/`dart:js_interop`, e apenas dentro de `src/platform/` e dos renderers.
 - **Nenhuma dependência runtime além de `web`** — tudo vendorizado em `src/dependencies/`.
-- CSS/SVG embutidos como strings Dart com injeção opcional (`QuillAssets.injectSnowTheme()`), para o consumidor não precisar de arquivos estáticos.
+- **CSS fica em `lib/assets/*.css`, nunca embutido em `.dart`.** Motivos: (a) quem usa a
+  biblioteca consegue editar o tema, sobrescrever regras ou trocar por outra folha sem
+  recompilar nem fazer fork; (b) uma `const String` de CSS entra no bundle JavaScript
+  compilado e não é removível por tree-shaking, inchando a aplicação mesmo para quem
+  fornece o próprio estilo. `QuillAssets` só emite `<link rel="stylesheet">` apontando
+  para `packages/dart_quill/assets/…`.
+- SVGs de **ícone** continuam como `const String` em Dart: são injetados como `innerHTML`
+  dentro dos botões (o Quill faz o mesmo), não são folha de estilo, e cada um tem algumas
+  centenas de bytes.
 
 ---
 
@@ -135,9 +149,17 @@ Regras:
 - [x] F2.3 Suíte VM + browser verdes pós-migração; smoke test em Chrome com toolbar/ícones/pickers OK.
 
 ### F3 — Assets e UI (~2 dias)
-- [ ] F3.1 Converter `assets/*.styl` do Quill (snow, bubble, core) para CSS definitivo; embutir em `src/assets/css.dart`; manter arquivos `.css` gerados em `example/` p/ referência.
+- [ ] F3.1 Converter `assets/*.styl` do Quill (core, snow, bubble) para CSS definitivo e
+  publicá-lo como **arquivos** em `lib/assets/quill.core.css`, `quill.snow.css` e
+  `quill.bubble.css`. Nada de `const String` de CSS em Dart (ver §3).
 - [ ] F3.2 Migrar todos os SVGs de `quilljs/src/assets/icons` para `src/assets/icons.dart`; completar `ui/icons.dart`, `color-picker`, `icon-picker` (remover placeholders).
-- [ ] F3.3 API `QuillAssets.inject()` (cria `<style>` via platform layer).
+- [ ] F3.3 `QuillAssets` referencia as folhas por `<link rel="stylesheet">`
+  (`packages/dart_quill/assets/…`), com um id por folha para não duplicar. O consumidor
+  pode ignorar a API e declarar os próprios `<link>` no HTML.
+- [ ] F3.4 **Remover `lib/src/assets/snow_css.dart`** e o export `quillSnowCss` de
+  `dart_quill.dart`: são 37 KB de CSS duplicado de `lib/assets/quill.snow.css` que vão
+  parar no bundle JS de todo mundo. `QuillAssets.injectSnowTheme()` passa a usar o
+  arquivo, como `injectFileTheme()` já faz.
 
 ### F4 — Syntax completo (~1-2 dias, opcional/paralelizável)
 - [ ] F4.1 Vendorizar `highlight` (de new_sali/core/dependencies) em `src/dependencies/highlight/`.
@@ -160,7 +182,7 @@ Ordem de port (dependências primeiro):
 - [ ] F5.9 `ui/table-properties-form.ts` (791 l.) → **parcial:** `TablePropertiesController` e diálogo DOM `TablePropertiesForm` com leitura/aplicação validada de propriedades de tabela/célula, cores, dimensões, bordas, alinhamento e aplicar/cancelar entregues; ainda falta a paleta própria de 15 cores/input hex, acessibilidade completa e integração com a mini-toolbar.
 - [ ] F5.10 `ui/toolbar-table.ts` (133 l.) + `modules/toolbar.ts` (283 l.) → **parcial:** grid 10×10/dropdown e `TableToolbarRouter` para header/list/alinhamento/direção/recuo em seleção multicélula entregues; ainda falta rotear formatos inline e reproduzir todos os estados ativos/pickers do módulo original.
 - [ ] F5.11 `language/` → i18n com pt_BR/en_US primeiro (16 locales no total, ~60 chaves).
-- [ ] F5.12 CSS (847 l.) + 21 SVGs → `src/assets/` (strings Dart).
+- [ ] F5.12 `quill-table-better.scss` (847 l.) → **arquivo** `lib/assets/quill-table-better.css`; os 21 SVGs → `src/assets/icons.dart` (strings Dart, por serem `innerHTML` de botão).
 - [ ] F5.13 Testes: port dos cenários da suíte JS do plugin + testes de Delta roundtrip de tabela.
 
 **Testes portados/adicionados em 2026-07-11:** a árvore `referencias/quilljs/test` foi incluída como fonte normativa para testes core/unit/e2e (table, toolbar, clipboard, history e fuzz). O repositório do table-better não distribui testes equivalentes junto de `src`; foram criados testes unitários Dart e E2E Puppeteer para o seletor 10×10, inserção dimensional, toolbar contextual, ícones Tabler e isolamento contra CSS Limitless. O E2E gera o bundle com Webdev e o serve em porta efêmera com Shelf. Estado verificado: 203 testes unitários + 2 E2E passando.
@@ -238,7 +260,13 @@ Ordem de port (dependências primeiro):
 2. **`document.execCommand`/beforeinput cross-browser** — testar Chrome/Firefox; a camada Input já trata `beforeinput`.
 3. **Fidelidade DOCX** — Word real usa recursos além do modelo Delta (seções, campos, notas). Estratégia: mapear o que o Delta representa; preservar o resto via passthrough do ce_docx quando em modo "editar documento existente"; documentar limitações.
 4. **Fontes no PDF** — métricas TTF necessárias para quebra de linha correta; `ce_fonts` já parseia TTF; embutir Inter/Arial-metric-compatible ou carregar fontes do app.
-5. **Tamanho do bundle** — CSS/SVG/fontes embutidos aumentam o JS; usar `const String` (tree-shakeable por import separado: `dart_quill_pdf.dart` só puxa ce_pdf se importado).
+5. **Tamanho do bundle** — o que é embutido como `const String` entra no JS compilado e o
+   tree-shaking não remove uma constante alcançável a partir de um export público. Por isso
+   **CSS e fontes ficam em `lib/assets/` como arquivos**, carregados por `<link>`: não
+   custam nada a quem usa o próprio tema. Só os SVGs de ícone continuam embutidos, por
+   serem pequenos e precisarem ir para o `innerHTML` do botão. Os subsistemas pesados
+   permanecem separados por entrypoint (`dart_quill_pdf.dart` só puxa `ce_pdf` se
+   importado).
 6. **ngdart dev** — manter Angular só em `example/` evita acoplar a lib a uma versão dev.
 
 ## 7. Critérios de Aceite
