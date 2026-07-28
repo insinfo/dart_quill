@@ -1,6 +1,6 @@
 library dart_quill;
 
-export 'src/assets/assets.dart' show QuillAssets, quillSnowCss;
+export 'src/assets/assets.dart' show QuillAssets;
 export 'src/core/initialization.dart' show initializeQuill;
 export 'src/core/quill.dart';
 export 'src/core/logger.dart' show DebugLevel, logger, setLoggerLevel;
@@ -12,6 +12,9 @@ export 'src/core/utils/scroll_rect_into_view.dart'
     show Rect, ScrollRectIntoViewOptions, scrollRectIntoView;
 export 'src/core/theme.dart';
 export 'src/platform/dom.dart';
+// Extensions that create elements need the adapter's document, the way
+// upstream blots reach for the global `document`.
+export 'src/platform/platform.dart' show DomBindings, domBindings;
 
 export 'src/blots/abstract/blot.dart'
     show
