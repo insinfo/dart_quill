@@ -1,3 +1,4 @@
+import '../../platform/dom.dart';
 import '../formats/table.dart';
 import '../utils/utils.dart' as utils;
 
@@ -58,6 +59,169 @@ class CellSelection {
   List<TableCell> get selectedCells => List.unmodifiable(_selected);
 
   bool get isActive => _selected.isNotEmpty;
+
+  // --- TS-shaped DOM surface (cell-selection.ts) -------------------------
+  //
+  // `table-menus.ts` and `toolbar-table.ts` are written against elements
+  // (`selectedTds`, `startTd`, `endTd`); the logical grid above stays the
+  // source of truth and these are projections of it.
+
+  /// TS `selectedTds`.
+  List<DomElement> get selectedTds =>
+      _selected.map((cell) => cell.element).toList(growable: false);
+
+  /// TS `startTd` — the selection's top-left cell element.
+  DomElement? get startTd => _corner(first: true)?.cell.element;
+
+  /// TS `endTd` — the selection's bottom-right cell element.
+  DomElement? get endTd => _corner(first: false)?.cell.element;
+
+  /// TS `setSelected(target)` — collapses the selection onto one cell.
+  ///
+  /// The TS variant also moves the text caret into the cell; that belongs to
+  /// the caller, which owns the Quill instance.
+  TableCell? setSelected(DomElement target) {
+    final cell = _cellForElement(target);
+    _reselect(cell);
+    if (cell != null) cell.element.classes.add('ql-cell-focused');
+    return cell;
+  }
+
+  /// TS `setSelectedTds(selectedTds)` — selects an explicit element list.
+  void setSelectedTds(List<DomElement> tds) {
+    clear();
+    final cells = <TableCell>[];
+    for (final td in tds) {
+      final cell = _cellForElement(td);
+      if (cell != null) cells.add(cell);
+    }
+    _selected = List.unmodifiable(cells);
+    for (final cell in _selected) {
+      cell.element.classes.add('ql-cell-selected');
+    }
+    range = _rangeOf(_selected);
+  }
+
+  /// TS `hasTdTh(selectedTds)` (cell-selection.ts:385-389).
+  ({bool hasTd, bool hasTh}) hasTdTh([List<DomElement>? tds]) {
+    final targets = tds ?? selectedTds;
+    return (
+      hasTd: targets.any((td) => td.tagName.toUpperCase() == 'TD'),
+      hasTh: targets.any((td) => td.tagName.toUpperCase() == 'TH'),
+    );
+  }
+
+  /// TS `selectColumn()` payload (table-menus.ts:891) — every cell whose
+  /// logical columns intersect the current selection.
+  List<TableCell> selectColumn() {
+    final current = range;
+    if (current == null) return const [];
+    final rows = table.descendants<TableRow>().length;
+    return select(
+      startRow: 0,
+      startColumn: current.startColumn,
+      endRow: rows == 0 ? 0 : rows - 1,
+      endColumn: current.endColumn,
+    );
+  }
+
+  /// TS `selectRow()` payload (table-menus.ts:899).
+  List<TableCell> selectRow() {
+    final current = range;
+    if (current == null) return const [];
+    var columns = 0;
+    for (final placement in _placements()) {
+      final end = placement.column + _span(placement.cell, 'colspan');
+      if (end > columns) columns = end;
+    }
+    return select(
+      startRow: current.startRow,
+      startColumn: 0,
+      endRow: current.endRow,
+      endColumn: columns == 0 ? 0 : columns - 1,
+    );
+  }
+
+  /// TS `updateSelected(type)` (cell-selection.ts:773) — after a row/column
+  /// deletion, park the selection on the neighbour that survived.
+  ///
+  /// Returns false when nothing is left to select, which the caller answers
+  /// with `hideTools()`, exactly as the TS does.
+  bool updateSelected(String type) {
+    final current = range;
+    if (current == null) return false;
+    final placements = _placements();
+    if (placements.isEmpty) return false;
+    var maxRow = 0, maxColumn = 0;
+    for (final placement in placements) {
+      final rowEnd = placement.row + _span(placement.cell, 'rowspan') - 1;
+      final colEnd = placement.column + _span(placement.cell, 'colspan') - 1;
+      if (rowEnd > maxRow) maxRow = rowEnd;
+      if (colEnd > maxColumn) maxColumn = colEnd;
+    }
+    int row;
+    int column;
+    if (type == 'column') {
+      row = current.startRow.clamp(0, maxRow).toInt();
+      column = current.endColumn + 1;
+      if (column > maxColumn) column = current.startColumn - 1;
+      if (column < 0) return false;
+    } else {
+      column = current.startColumn.clamp(0, maxColumn).toInt();
+      row = current.endRow + 1;
+      if (row > maxRow) row = current.startRow - 1;
+      if (row < 0) return false;
+    }
+    final selected = select(
+        startRow: row, startColumn: column, endRow: row, endColumn: column);
+    return selected.isNotEmpty;
+  }
+
+  TableCell? _cellForElement(DomElement target) {
+    for (final cell in table.descendants<TableCell>()) {
+      if (identical(cell.element, target)) return cell;
+    }
+    return null;
+  }
+
+  _CellPlacement? _corner({required bool first}) {
+    _CellPlacement? best;
+    for (final placement in _placements()) {
+      if (!_selected.contains(placement.cell)) continue;
+      if (best == null) {
+        best = placement;
+        continue;
+      }
+      final isEarlier = placement.row < best.row ||
+          (placement.row == best.row && placement.column < best.column);
+      if (first ? isEarlier : !isEarlier) best = placement;
+    }
+    return best;
+  }
+
+  CellSelectionRange? _rangeOf(List<TableCell> cells) {
+    if (cells.isEmpty) return null;
+    int? minRow, minColumn, maxRow, maxColumn;
+    for (final placement in _placements()) {
+      if (!cells.contains(placement.cell)) continue;
+      final rowEnd = placement.row + _span(placement.cell, 'rowspan') - 1;
+      final colEnd = placement.column + _span(placement.cell, 'colspan') - 1;
+      minRow =
+          minRow == null || placement.row < minRow ? placement.row : minRow;
+      minColumn = minColumn == null || placement.column < minColumn
+          ? placement.column
+          : minColumn;
+      maxRow = maxRow == null || rowEnd > maxRow ? rowEnd : maxRow;
+      maxColumn = maxColumn == null || colEnd > maxColumn ? colEnd : maxColumn;
+    }
+    if (minRow == null) return null;
+    return CellSelectionRange(
+      startRow: minRow,
+      startColumn: minColumn!,
+      endRow: maxRow!,
+      endColumn: maxColumn!,
+    );
+  }
 
   /// Serializes the selected cells in table order for clipboard copy.
   CellSelectionClipboardData copyData() {
@@ -179,8 +343,7 @@ class CellSelection {
       if (rowEnd > maxRow) maxRow = rowEnd;
       if (colEnd > maxColumn) maxColumn = colEnd;
       if (placement.row < topLeft.row ||
-          (placement.row == topLeft.row &&
-              placement.column < topLeft.column)) {
+          (placement.row == topLeft.row && placement.column < topLeft.column)) {
         topLeft = placement;
       }
     }

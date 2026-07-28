@@ -15,6 +15,7 @@ import '../core/quill.dart';
 import '../core/selection.dart';
 import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
 import '../modules/keyboard.dart';
+import '../platform/dom.dart';
 import 'formats/table.dart';
 import 'formats/header.dart';
 import 'formats/list.dart';
@@ -22,19 +23,37 @@ import 'language/language.dart';
 import 'modules/toolbar.dart';
 import 'ui/cell_selection.dart';
 import 'ui/cell_selection_controller.dart';
+import 'ui/table_menus.dart';
 
-/// Mirrors the TS `Options` interface (language only for now; `menus`,
-/// `toolbarButtons` and `toolbarTable` belong to the pending UI layers).
+/// Mirrors the TS `Options` interface.
 class TableBetterOptions {
-  const TableBetterOptions({this.language});
+  const TableBetterOptions({
+    this.language,
+    this.menus,
+    this.toolbarButtons,
+    this.toolbarTable = false,
+  });
 
   /// Locale name ([String]) or a [LanguageConfig] to register and select.
   final dynamic language;
+
+  /// TS `menus` — names of the floating menus to show, in order. `null` (or
+  /// empty) yields the upstream default set.
+  final List<String>? menus;
+
+  /// TS `toolbarButtons` — `{ whiteList, singleWhiteList }` of toolbar formats
+  /// allowed while cells are selected.
+  final Map<String, List<String>>? toolbarButtons;
+
+  /// TS `toolbarTable` — replace the built-in table button with the
+  /// table-better 10x10 selector.
+  final bool toolbarTable;
 
   factory TableBetterOptions.fromConfig(dynamic config) {
     if (config is TableBetterOptions) return config;
     if (config is Map) {
       final rawLanguage = config['language'];
+      dynamic language = rawLanguage;
       if (rawLanguage is Map) {
         final name = '${rawLanguage['name'] ?? ''}';
         final rawContent = rawLanguage['content'];
@@ -44,11 +63,27 @@ class TableBetterOptions {
             content['${entry.key}'] = '${entry.value}';
           }
         }
-        return TableBetterOptions(
-          language: LanguageConfig(name: name, content: content),
-        );
+        language = LanguageConfig(name: name, content: content);
       }
-      return TableBetterOptions(language: rawLanguage);
+      final rawMenus = config['menus'];
+      final rawButtons = config['toolbarButtons'];
+      return TableBetterOptions(
+        language: language,
+        menus: rawMenus is List
+            ? rawMenus.map((entry) => '$entry').toList(growable: false)
+            : null,
+        toolbarButtons: rawButtons is Map
+            ? {
+                for (final entry in rawButtons.entries)
+                  '${entry.key}': entry.value is List
+                      ? (entry.value as List)
+                          .map((value) => '$value')
+                          .toList(growable: false)
+                      : const <String>[],
+              }
+            : null,
+        toolbarTable: config['toolbarTable'] == true,
+      );
     }
     return const TableBetterOptions();
   }
@@ -79,6 +114,13 @@ class TableBetter extends Module<TableBetterOptions> {
     _registerKeyboardBindings();
     toolbarRouter = TableToolbarRouter(quill, () => activeCellSelection)
       ..install();
+    tableMenus = TableMenus(
+      quill: quill,
+      language: language,
+      menus: options.menus,
+      resolveSelection: _selectionForElement,
+      hideTools: hideTools,
+    );
     listenDeleteTable();
     quill.emitter.on(
       EmitterEvents.TEXT_CHANGE,
@@ -92,7 +134,21 @@ class TableBetter extends Module<TableBetterOptions> {
 
   final Language language;
   late final TableToolbarRouter toolbarRouter;
+
+  /// TS `this.tableMenus` — the floating menu bar (`ui/table-menus.ts`).
+  late final TableMenus tableMenus;
+
   final Map<TableContainer, CellSelectionController> _cellSelections = {};
+
+  /// Resolves the [CellSelection] owning a `<table>` element, for [tableMenus].
+  CellSelection? _selectionForElement(DomElement element) {
+    for (final table in quill.scroll.descendants<TableContainer>()) {
+      if (identical(table.element, element)) {
+        return controllerFor(table).selection;
+      }
+    }
+    return null;
+  }
 
   void _registerKeyboardBindings() {
     for (final up in const [true, false]) {
@@ -304,6 +360,8 @@ class TableBetter extends Module<TableBetterOptions> {
       Range(range.index + selectionOffset, 0),
       source: EmitterSource.SILENT,
     );
+    // TS `insertTable` finishes with `this.showTools()` (quill-table-better.ts:252).
+    showTools();
   }
 
   /// TS `deleteTable()` (quill-table-better.ts:114).
@@ -332,13 +390,33 @@ class TableBetter extends Module<TableBetterOptions> {
     quill.scroll.optimize([], {});
   }
 
-  /// TS `hideTools()` (quill-table-better.ts:214) — menus/operate-line are
-  /// not part of this increment; clearing the cell selections is the portion
-  /// that already exists.
+  /// TS `showTools(force)` (quill-table-better.ts:290) — parks the selection on
+  /// the caret's cell and reveals the menus over its table.
+  void showTools([bool force = false]) {
+    final context = getTable();
+    final table = context.table;
+    final cell = context.cell;
+    if (table == null || cell == null) return;
+    final selection = controllerFor(table).selection;
+    if (force || !selection.isActive) {
+      selection.setSelected(cell.element);
+    }
+    tableMenus.updateTable(table.element);
+    tableMenus.showMenus();
+    tableMenus.updateMenus(table.element);
+  }
+
+  /// TS `updateMenus()` (quill-table-better.ts:316).
+  void updateMenus() => tableMenus.updateMenus();
+
+  /// TS `hideTools()` (quill-table-better.ts:214) — clears the cell selections
+  /// and hides the floating menus. The operate-line overlay joins in G6.5.
   void hideTools() {
     for (final controller in _cellSelections.values) {
       controller.clear();
     }
+    tableMenus.hideMenus();
+    tableMenus.destroyTablePropertiesForm();
   }
 
   /// TS `listenDeleteTable()` (quill-table-better.ts:260): user edits that
