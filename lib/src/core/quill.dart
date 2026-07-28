@@ -17,6 +17,7 @@ import 'instances.dart';
 import 'logger.dart' as quill_logger;
 import 'selection.dart';
 import 'theme.dart';
+import 'utils/scroll_rect_into_view.dart' as scrolling;
 
 typedef ThemeBuilder = Theme Function(Quill quill, ThemeOptions options);
 typedef ModuleFactory = dynamic Function(Quill quill, dynamic options);
@@ -536,7 +537,34 @@ class Quill {
       domBindings.adapter
           .setSelectionByNodes(start.key, start.value, end.key, end.value);
     }
+    if (source != EmitterSource.SILENT) {
+      scrollSelectionIntoView();
+    }
   }
+
+  void scrollRectIntoView(
+    scrolling.Rect rect, [
+    scrolling.ScrollRectIntoViewOptions options =
+        const scrolling.ScrollRectIntoViewOptions(),
+  ]) {
+    scrolling.scrollRectIntoView(root, rect, options);
+  }
+
+  /// Scroll the current or last saved selection into the visible viewport.
+  void scrollSelectionIntoView([
+    scrolling.ScrollRectIntoViewOptions options =
+        const scrolling.ScrollRectIntoViewOptions(),
+  ]) {
+    final range = selection.getRange() ?? selection.savedRange;
+    if (range == null) return;
+    final bounds = getBounds(range.index, range.length);
+    if (bounds != null) {
+      scrollRectIntoView(scrolling.Rect.fromMap(bounds), options);
+    }
+  }
+
+  @Deprecated('Use scrollSelectionIntoView instead.')
+  void scrollIntoView() => scrollSelectionIntoView();
 
   Delta formatLine(int index, int length, String name, dynamic value,
       {String source = EmitterSource.API}) {
@@ -586,6 +614,19 @@ class Quill {
   }
 
   Map<String, dynamic>? getBounds(int index, [int length = 0]) {
+    final start = _domPosition(index);
+    final end = _domPosition(index + length, inclusive: true);
+    if (start != null && end != null) {
+      final nativeBounds = domBindings.adapter.getRangeBounds(
+        start.key,
+        start.value,
+        end.key,
+        end.value,
+      );
+      if (nativeBounds != null) return nativeBounds;
+    }
+
+    // Offset-based fallback for non-browser adapters.
     final platformBounds = domBindings.adapter.getBounds(root, index, length);
     if (platformBounds != null) {
       return platformBounds;

@@ -2,7 +2,7 @@
 
 **Data:** 2026-07-28
 **Método:** comparação arquivo-a-arquivo e método-a-método entre `referencias/quilljs/src`, `referencias/quill_table_better/1.2.3/src/src` (+ parchment em `referencias/quill_table_better/1.2.3/src/node_modules/parchment/src`) e `lib/`.
-**Baseline de testes:** 309 unitários VM + 13 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo.
+**Baseline de testes:** 315 unitários VM + 14 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo.
 **Complementa:** `doc/PLANO_PORT_COMPLETO.md` (fases F0–F10; F0–F2 concluídas, F7/F8 núcleo entregue). Este documento substitui o detalhamento de lacunas daquele plano.
 
 ---
@@ -170,7 +170,7 @@ Bugs pontuais de alto impacto e baixo risco, sem mudança arquitetural:
 - [x] G2.3 `Editor`: `getFormat` (delegando ao `Scroll.getFormat`, que já implementa combineFormats fiel), `removeFormat` fiel (diff contra texto puro + sufixo da linha), `isBlank`, `getContentsRange(i,l)`, `getText(i,l)`, `insertContents` + normalização CRLF (C3). *Pendente: `getHTML`/`convertHTML` baseado em blots (hoje `deltaToSemanticHTML` bespoke).*
   - ⚠️ **Achado bloqueante para G1.10:** `Quill.removeFormat` NÃO pôde ser trocado para o `Editor.removeFormat` fiel — o diff produz um `retain {list: null}` que o `Editor.update` bespoke não aplica (o clean deixa a lista intacta). Isso é evidência concreta de que **o `applyDelta` fiel é pré-requisito** de vários itens de paridade; a versão bespoke de `Quill.removeFormat` foi mantida com a nota no código.
 - [x] G2.4 **Emitter global e instâncias fracas** (2026-07-28): bridge instalado uma vez por `DomDocument` para `selectionchange`/`mousedown`/`mouseup`/`click`, roteando somente aos `.ql-container` anexados e respeitando o alvo de cada `listenDOM`; `QuillInstances` usa `Expando<Object>` em vez de `Map<DomNode, dynamic>`, eliminando a retenção forte e a enumeração de editores. Fake DOM ganhou selector `.class` no documento para testar o mesmo caminho do browser. Testes: `emitter_test.dart` (bridge, detach e isolamento entre editores) + `instances_test.dart`. (C5 parte 2, C13)
-- [ ] G2.5 `scrollRectIntoView` fiel + `Quill.scrollSelectionIntoView` (C15).
+- [x] G2.5 **Scroll de seleção fiel** (2026-07-28): `scrollRectIntoView` portado pelo algoritmo CSSOM `nearest`, percorrendo root/ancestrais/ShadowRoot host, compensando escala e scroll efetivamente aplicado, respeitando `scroll-padding-*`, `position:fixed`, viewport visual e replay smooth. APIs públicas `Quill.scrollRectIntoView`, `scrollSelectionIntoView` e alias deprecated `scrollIntoView`; `setSelection` não-silent agora faz auto-scroll, e os call-sites de Clipboard/checklist/header foram reativados. **Correção estrutural descoberta pelo teste browser:** `HtmlDomAdapter.getBounds` contava offsets no texto DOM bruto e ignorava os newlines lógicos entre blocos, resolvendo a linha errada; `Quill.getBounds` agora usa `_domPosition`/`LeafBlot.position` + range DOM nativo, inclusive caret colapsado, evitando overscroll. Testes: `scroll_rect_into_view_test.dart` (6 cenários: ancestrais, padding, alvo maior, smooth, fixed, API) + `scroll_selection_into_view_test.dart` em Chrome real. (C15, C2 parcial)
 
 ### G3 — Keyboard completo — CONCLUÍDO (2026-07-27)
 - [x] G3.1 As 5 factories reais (`makeFormatHandler`, `makeCodeBlockHandler`, `makeEmbedArrowHandler`, `makeTableArrowHandler`, `tableSide`), portadas de keyboard.ts:639-784/817-831. Handlers default usam `DefaultBindingHandler(Keyboard, Range, Context)` como substituto do `this` do TS; `_invokeHandler` reconhece a aridade e mantém compatibilidade com `(range, context)`/`(range)`.
@@ -178,7 +178,7 @@ Bugs pontuais de alto impacto e baixo risco, sem mudança arquitetural:
 - [x] G3.3 `handleBackspace`/`handleDelete`/`deleteRange` com `Delta.diffAttributes` no pipeline de delta (C17) — nada mais muta blots direto, tudo emite TEXT_CHANGE.
 - [ ] G3.4 `Table` básico: `getTable`/`insertRow`/`insertColumn` públicos + `register()` (C18). *O binding `table enter` foi implementado derivando table/row/cell de `context.line`, então funciona sem essa API.*
 - Testes: `test/unit/modules/keyboard_bindings_test.dart` (23 casos: defaults por tecla + contagem, Ctrl/Cmd+B, Tab/Shift+Tab, autofill, empty enter, code exit, merge de formatos no backspace, semântica do addBinding).
-- TODOs deixados: `CodeBlock.TAB` (G5.2), `quill.scrollSelectionIntoView` (G2.5), `Quill.update` no makeCodeBlockHandler (G2.1 — expresso como delta, mesmo efeito).
+- TODOs deixados: `CodeBlock.TAB` (G5.2) e `Quill.update` no makeCodeBlockHandler (G2.1 — expresso como delta, mesmo efeito). `quill.scrollSelectionIntoView` foi concluído em G2.5.
 
 **⚠️ Dois bugs de core encontrados pelo trabalho de G3 (ainda abertos, candidatos a G1.10):**
 1. **`Scroll.deleteAt` apaga demais em blocos vazios**: em `'code\n\n\n\n'`, `updateContents(retain(6)+delete(1))` produz `'code\n'` — três newlines somem. Reproduz também com parágrafos simples. Afeta backspace/delete em linhas vazias.

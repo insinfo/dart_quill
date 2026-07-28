@@ -44,10 +44,23 @@ class _LayoutAdapter implements DomAdapter {
       rects[element] ?? inner.getElementBounds(element, relativeTo: relativeTo);
 
   @override
+  DomElement? getParentElement(DomElement element) =>
+      inner.getParentElement(element);
+
+  @override
+  Map<String, double> getViewportBounds(DomDocument document) =>
+      inner.getViewportBounds(document);
+
+  @override
   Map<String, dynamic>? getBounds(DomElement root, int index, int length) {
     boundsCalls.add([index, length]);
     return inner.getBounds(root, index, length);
   }
+
+  @override
+  Map<String, dynamic>? getRangeBounds(
+          DomNode startNode, int startOffset, DomNode endNode, int endOffset) =>
+      inner.getRangeBounds(startNode, startOffset, endNode, endOffset);
 
   @override
   DomDocument get document => inner.document;
@@ -259,7 +272,10 @@ void main() {
       expect(adapter.boundsCalls, isNotEmpty);
       // Parity bubble.ts:48-58: the last line starts at index 5 and the
       // selection covers its 4 characters (the trailing newline is excluded).
-      expect(adapter.boundsCalls.last, [5, 4]);
+      expect(adapter.boundsCalls, contains(equals([5, 4])));
+      // setSelection(USER) subsequently asks for the complete selection
+      // bounds so it can scroll that range into view.
+      expect(adapter.boundsCalls.last, [0, 9]);
     });
 
     test('positions against the selection itself on a single line', () {

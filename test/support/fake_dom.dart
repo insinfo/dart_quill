@@ -71,6 +71,11 @@ class FakeDomAdapter implements DomAdapter {
   }
 
   @override
+  Map<String, dynamic>? getRangeBounds(
+          DomNode startNode, int startOffset, DomNode endNode, int endOffset) =>
+      null;
+
+  @override
   Map<String, dynamic>? getElementBounds(DomElement element,
       {DomElement? relativeTo}) {
     final width = double.tryParse(element.getAttribute('width') ?? '') ?? 120;
@@ -86,9 +91,25 @@ class FakeDomAdapter implements DomAdapter {
   }
 
   @override
+  DomElement? getParentElement(DomElement element) =>
+      element.parentNode is DomElement
+          ? element.parentNode as DomElement
+          : null;
+
+  @override
+  Map<String, double> getViewportBounds(DomDocument document) => {
+        'width': document.documentElement.clientWidth.toDouble(),
+        'height': document.documentElement.clientHeight.toDouble(),
+      };
+
+  @override
   String getComputedStyleProperty(DomElement element, String property) {
     if (property == 'direction') {
       return element.getAttribute('dir') ?? 'ltr';
+    }
+    final style = element.style;
+    if (style is _FakeStyle) {
+      return style.getPropertyValue(property);
     }
     return '';
   }
@@ -463,6 +484,10 @@ class FakeDomElement extends FakeDomNode implements DomElement {
   final Map<String, String> _dataset = {};
   final FakeDomClassList _classes;
   final Map<String, List<DomEventListener>> _listeners = {};
+  late final _FakeStyle _style = _FakeStyle(this);
+  int _scrollTop = 0;
+  int _scrollLeft = 0;
+  final List<({double left, double top, bool smooth})> scrollCalls = [];
 
   @override
   String get tagName => _tagName;
@@ -639,22 +664,22 @@ class FakeDomElement extends FakeDomNode implements DomElement {
   String? get id => getAttribute('id');
 
   @override
-  dynamic get style => _FakeStyle(this);
+  dynamic get style => _style;
 
   @override
-  int get scrollTop => 0;
+  int get scrollTop => _scrollTop;
 
   @override
   set scrollTop(int value) {
-    // No-op for fake
+    _scrollTop = value;
   }
 
   @override
-  int get scrollLeft => 0;
+  int get scrollLeft => _scrollLeft;
 
   @override
   set scrollLeft(int value) {
-    // No-op for fake
+    _scrollLeft = value;
   }
 
   @override
@@ -668,6 +693,13 @@ class FakeDomElement extends FakeDomNode implements DomElement {
 
   @override
   int get clientHeight => 24;
+
+  @override
+  void scrollBy(double left, double top, {bool smooth = false}) {
+    scrollCalls.add((left: left, top: top, smooth: smooth));
+    _scrollLeft += left.round();
+    _scrollTop += top.round();
+  }
 
   @override
   String? get innerHTML {

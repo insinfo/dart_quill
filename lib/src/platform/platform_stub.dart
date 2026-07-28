@@ -48,9 +48,26 @@ class _StubDomAdapter implements DomAdapter {
       null;
 
   @override
+  Map<String, dynamic>? getRangeBounds(
+          DomNode startNode, int startOffset, DomNode endNode, int endOffset) =>
+      null;
+
+  @override
   Map<String, dynamic>? getElementBounds(DomElement element,
           {DomElement? relativeTo}) =>
       null;
+
+  @override
+  DomElement? getParentElement(DomElement element) =>
+      element.parentNode is DomElement
+          ? element.parentNode as DomElement
+          : null;
+
+  @override
+  Map<String, double> getViewportBounds(DomDocument document) => {
+        'width': document.documentElement.clientWidth.toDouble(),
+        'height': document.documentElement.clientHeight.toDouble(),
+      };
 
   @override
   String getComputedStyleProperty(DomElement element, String property) => '';

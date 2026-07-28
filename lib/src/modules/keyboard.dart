@@ -769,8 +769,7 @@ void deleteRange({required Quill quill, required Range range}) {
   if (formats.isNotEmpty) {
     // `Quill.formatLine` in the port takes a single name/value pair.
     formats.forEach((name, value) {
-      quill.formatLine(range.index, 1, name, value,
-          source: EmitterSource.USER);
+      quill.formatLine(range.index, 1, name, value, source: EmitterSource.USER);
     });
   }
   quill.setSelection(Range(range.index, 0), source: EmitterSource.SILENT);
@@ -799,8 +798,7 @@ int? tableSide(dynamic table, Blot row, Blot cell, int offset) {
 /// do port ainda não expõe a constante estática usada por keyboard.ts:647.
 const String _codeBlockTab = '  ';
 
-bool _isTruthy(dynamic value) =>
-    value != null && value != false && value != '';
+bool _isTruthy(dynamic value) => value != null && value != false && value != '';
 
 /// Walks up from [blot] to the enclosing `table-container` blot (the port has
 /// no public `module.getTable`, cf. TODO in `_handleTableEnter`).
@@ -1083,11 +1081,9 @@ dynamic _handleBlockquoteEmptyEnter(
   return null;
 }
 
-dynamic _handleListEmptyEnter(
-    Keyboard keyboard, Range range, Context context) {
-  keyboard.quill
-      .formatLine(range.index, range.length, 'list', false,
-          source: EmitterSource.USER);
+dynamic _handleListEmptyEnter(Keyboard keyboard, Range range, Context context) {
+  keyboard.quill.formatLine(range.index, range.length, 'list', false,
+      source: EmitterSource.USER);
   if (_isTruthy(context.format['indent'])) {
     keyboard.quill.formatLine(range.index, range.length, 'indent', false,
         source: EmitterSource.USER);
@@ -1095,8 +1091,7 @@ dynamic _handleListEmptyEnter(
   return null;
 }
 
-dynamic _handleChecklistEnter(
-    Keyboard keyboard, Range range, Context context) {
+dynamic _handleChecklistEnter(Keyboard keyboard, Range range, Context context) {
   final quill = keyboard.quill;
   final entry = quill.getLine(range.index);
   final line = entry.key;
@@ -1113,7 +1108,7 @@ dynamic _handleChecklistEnter(
     ..retain(1, {'list': 'unchecked'});
   quill.updateContents(delta, source: EmitterSource.USER);
   quill.setSelection(Range(range.index + 1, 0), source: EmitterSource.SILENT);
-  // TODO(G3): depende de `Quill.scrollSelectionIntoView` (fase G2.5).
+  quill.scrollSelectionIntoView();
   return null;
 }
 
@@ -1130,7 +1125,7 @@ dynamic _handleHeaderEnter(Keyboard keyboard, Range range, Context context) {
     ..retain(1, {'header': null});
   quill.updateContents(delta, source: EmitterSource.USER);
   quill.setSelection(Range(range.index + 1, 0), source: EmitterSource.SILENT);
-  // TODO(G3): depende de `Quill.scrollSelectionIntoView` (fase G2.5).
+  quill.scrollSelectionIntoView();
   return null;
 }
 

@@ -705,16 +705,69 @@ class HtmlDomAdapter implements DomAdapter {
       return null;
     }
 
-    final rootElement = rootNode as web.Element;
-    final container = rootElement.parentElement;
-    final containerRect = container?.getBoundingClientRect() ??
-        rootElement.getBoundingClientRect();
     return {
-      'left': rect.left - containerRect.left,
-      'right': rect.right - containerRect.left,
-      'top': rect.top - containerRect.top,
-      'bottom': rect.bottom - containerRect.top,
+      'left': rect.left,
+      'right': rect.right,
+      'top': rect.top,
+      'bottom': rect.bottom,
       'width': rect.width,
+      'height': rect.height,
+    };
+  }
+
+  @override
+  Map<String, dynamic>? getRangeBounds(
+    DomNode startNode,
+    int startOffset,
+    DomNode endNode,
+    int endOffset,
+  ) {
+    final nativeStart = (startNode as _HtmlDomNode).node;
+    final nativeEnd = (endNode as _HtmlDomNode).node;
+    final range = web.document.createRange();
+    final collapsed = nativeStart == nativeEnd && startOffset == endOffset;
+
+    if (!collapsed) {
+      range.setStart(nativeStart, startOffset);
+      range.setEnd(nativeEnd, endOffset);
+      final rect = range.getBoundingClientRect();
+      return {
+        'left': rect.left,
+        'right': rect.right,
+        'top': rect.top,
+        'bottom': rect.bottom,
+        'width': rect.width,
+        'height': rect.height,
+      };
+    }
+
+    var side = 'left';
+    web.DOMRect rect;
+    if (nativeStart.isA<web.Text>()) {
+      final text = nativeStart as web.Text;
+      if (text.data.isEmpty) return null;
+      if (startOffset < text.data.length) {
+        range.setStart(text, startOffset);
+        range.setEnd(text, startOffset + 1);
+      } else {
+        range.setStart(text, startOffset - 1);
+        range.setEnd(text, startOffset);
+        side = 'right';
+      }
+      rect = range.getBoundingClientRect();
+    } else if (nativeStart.isA<web.Element>()) {
+      rect = (nativeStart as web.Element).getBoundingClientRect();
+      if (startOffset > 0) side = 'right';
+    } else {
+      return null;
+    }
+    final x = side == 'right' ? rect.right : rect.left;
+    return {
+      'left': x,
+      'right': x,
+      'top': rect.top,
+      'bottom': rect.bottom,
+      'width': 0.0,
       'height': rect.height,
     };
   }
@@ -742,6 +795,29 @@ class HtmlDomAdapter implements DomAdapter {
       'bottom': top + rect.height,
       'width': rect.width,
       'height': rect.height,
+    };
+  }
+
+  @override
+  DomElement? getParentElement(DomElement element) {
+    final native = (element as _HtmlDomNode).node;
+    final parent = native.parentElement;
+    if (parent != null) return HtmlDomElement(parent);
+    final root = native.getRootNode();
+    if (root.isA<web.ShadowRoot>()) {
+      return HtmlDomElement((root as web.ShadowRoot).host);
+    }
+    return null;
+  }
+
+  @override
+  Map<String, double> getViewportBounds(DomDocument document) {
+    final viewport = web.window.visualViewport;
+    return {
+      'width': viewport?.width ??
+          web.document.documentElement!.clientWidth.toDouble(),
+      'height': viewport?.height ??
+          web.document.documentElement!.clientHeight.toDouble(),
     };
   }
 
@@ -1187,6 +1263,20 @@ class HtmlDomElement extends _HtmlDomNode implements DomElement {
 
   @override
   int get clientHeight => _element.clientHeight;
+
+  @override
+  void scrollBy(double left, double top, {bool smooth = false}) {
+    final options = web.ScrollToOptions(
+      left: left,
+      top: top,
+      behavior: smooth ? 'smooth' : 'instant',
+    );
+    if (_element == web.document.body) {
+      web.window.scrollBy(options);
+    } else {
+      _element.scrollBy(options);
+    }
+  }
 
   @override
   String? get innerHTML {

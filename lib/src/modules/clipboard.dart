@@ -280,7 +280,7 @@ class Clipboard extends Module<ClipboardOptions> {
     final insertedLength = _deltaInsertLength(pastedDelta);
     final newIndex = range.index + insertedLength;
     quill.setSelection(Range(newIndex, 0), source: EmitterSource.SILENT);
-    // quill.scrollSelectionIntoView(); // Placeholder
+    quill.scrollSelectionIntoView();
   }
 
   List<dynamic> prepareMatching(

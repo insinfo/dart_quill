@@ -96,6 +96,9 @@ abstract class DomElement extends DomNode {
   /// Get the element's client height (inside padding).
   int get clientHeight;
 
+  /// Scroll by a relative amount, optionally using smooth browser behavior.
+  void scrollBy(double left, double top, {bool smooth = false});
+
   /// Get or set the HTML content inside the element.
   String? get innerHTML;
   set innerHTML(String? value);
@@ -240,8 +243,16 @@ abstract class DomAdapter {
   void setSelectionByNodes(
       DomNode startNode, int startOffset, DomNode endNode, int endOffset);
   Map<String, dynamic>? getBounds(DomElement root, int index, int length);
+  Map<String, dynamic>? getRangeBounds(
+    DomNode startNode,
+    int startOffset,
+    DomNode endNode,
+    int endOffset,
+  );
   Map<String, dynamic>? getElementBounds(DomElement element,
       {DomElement? relativeTo});
+  DomElement? getParentElement(DomElement element);
+  Map<String, double> getViewportBounds(DomDocument document);
   String getComputedStyleProperty(DomElement element, String property);
   Future<String?> readFileAsDataUrl(dynamic file);
   void focus(DomElement element);

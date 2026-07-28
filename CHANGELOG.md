@@ -1,6 +1,12 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- Public `Quill.scrollRectIntoView`, `scrollSelectionIntoView` and deprecated
+  `scrollIntoView` APIs, backed by ancestor-aware CSSOM nearest scrolling.
+- Platform support for visual viewport bounds, ShadowRoot parent traversal,
+  native DOM-range bounds and instant/smooth relative scrolling.
+- Six VM scroll-algorithm tests and a real Chrome test that selects line 80
+  and verifies its native range is scrolled into the editor viewport.
 - A document-level DOM event bridge for `selectionchange`, `mousedown`,
   `mouseup` and `click`, routing `Emitter.listenDOM` handlers to the correct
   attached Quill instance.
@@ -75,6 +81,9 @@
 - `example/ngdart` editor component wired to the public `dart_quill` package and the `package:web` DOM layer.
 
 ### Changed
+- Non-silent `setSelection` now scrolls the selection into view; clipboard
+  paste and checklist/header Enter handlers explicitly scroll after their
+  silent caret update.
 - Quill instance storage now uses `Expando<Object>` instead of a strong,
   enumerable `Map<DomNode, dynamic>`.
 - Default attributors now use stable singleton instances; namespaced variants
@@ -110,6 +119,9 @@
 - Removed obsolete merge scripts and the vendored `quilljs/` source tree from the active build path, keeping references under `referencias/`.
 
 ### Fixed
+- Native range bounds now resolve through blot DOM positions instead of raw
+  DOM text offsets, preserving logical newlines between blocks and preventing
+  distant selections from overscrolling to the wrong paragraph.
 - Detached editor containers no longer receive globally bridged DOM events,
   and events targeting one editor are not delivered to another.
 - Prevented zero-length `.ql-ui` markers from being hydrated as Cursor blots,
@@ -135,7 +147,7 @@
 - AngularDart example compilation issues caused by missing package wiring and invalid host element typing.
 
 ### Tests
-- 309 VM unit tests, 13 browser/Chrome tests and 3 Puppeteer E2E scenarios
+- 315 VM unit tests, 14 browser/Chrome tests and 3 Puppeteer E2E scenarios
   passing; `dart analyze` clean (2026-07-28).
 - 204 unit tests and 3 Puppeteer E2E scenarios passing after the merge/split port.
 - Port/audit source expanded to `referencias/quilljs/test` for upstream unit, E2E, and fuzz scenarios.

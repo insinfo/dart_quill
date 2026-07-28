@@ -8,6 +8,8 @@ export 'src/core/emitter.dart' show Emitter, EmitterEvents, EmitterSource;
 export 'src/core/module.dart' show Module;
 export 'src/core/selection.dart'
     show Bounds, NativePosition, NormalizedNativeRange, Range;
+export 'src/core/utils/scroll_rect_into_view.dart'
+    show Rect, ScrollRectIntoViewOptions, scrollRectIntoView;
 export 'src/core/theme.dart';
 export 'src/platform/dom.dart';
 
