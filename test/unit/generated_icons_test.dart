@@ -51,7 +51,10 @@ void main() {
   });
 
   group('generated files are up to date', () {
-    for (final generated in [generateQuillIcons(), generateTableBetterIcons()]) {
+    for (final generated in [
+      generateQuillIcons(),
+      generateTableBetterIcons()
+    ]) {
       test(generated.path, () {
         final file = File(generated.path);
         expect(file.existsSync(), isTrue,
@@ -90,8 +93,8 @@ void main() {
 
     test('the table-better set matches the plugin assets', () {
       final ours = readSvgs('lib/assets/icons/svg_table_better');
-      final upstream = readSvgs(
-          'referencias/quill_table_better/1.2.3/src/src/assets/icon');
+      final upstream =
+          readSvgs('referencias/quill_table_better/1.2.3/src/src/assets/icon');
       expect(ours.keys.toSet(), equals(upstream.keys.toSet()));
       for (final key in ours.keys) {
         expect(ours[key], equals(upstream[key]),
@@ -106,8 +109,8 @@ void main() {
       // These used to reuse the plain table / clean icons.
       expect(generated, contains("'table-row-above': _tableInsertRowsIcon"));
       expect(generated, contains("'table-delete-row': _tableDeleteRowsIcon"));
-      expect(
-          generated, contains("'table-delete-column': _tableDeleteColumnsIcon"));
+      expect(generated,
+          contains("'table-delete-column': _tableDeleteColumnsIcon"));
     });
 
     test('every upstream format key is present', () {

@@ -69,54 +69,54 @@ class Scroll extends ScrollBlot {
     element.setAttribute('contenteditable', enabled ? 'true' : 'false');
   }
 
+  /// Parity scroll.ts:79-96.
+  ///
+  /// The line the deletion starts in absorbs the remainder of the line it ends
+  /// in, and then disappears. Two invented branches used to live here — one
+  /// re-resolved `first`/`offset` from `line(index - 1)` when the offset was 0,
+  /// and one removed `last` outright when it held a lone Break. Together they
+  /// swallowed whole lines: deleting one newline in `'code\n\n\n\n'` left
+  /// `'code\n'`, and `deleteText` could not cross a block boundary at all.
   @override
   void deleteAt(int index, int length) {
-    final firstEntry = line(index);
-    final lastEntry = line(index + length);
-    Blot? first = firstEntry.key;
-    var offset = firstEntry.value;
-    final last = lastEntry.key;
+    final first = line(index).key;
+    final offset = line(index).value;
+    final last = line(index + length).key;
 
-    if ((offset <= 0) && index > 0) {
-      final previousEntry = line(index - 1);
-      if (previousEntry.key != null) {
-        first = previousEntry.key;
-        offset = previousEntry.value + 1;
-      }
-    }
+    _scrollDeleteAt(index, length);
 
-    super.deleteAt(index, length);
-
-    if (first != null && last != null && first != last && offset > 0) {
-      if (last is ParentBlot &&
-          last.children.length == 1 &&
-          last.children.first is Break) {
-        last.remove();
-        optimize([], {});
-        return;
-      }
-
+    if (last != null && first != null && first != last && offset > 0) {
       if (first is BlockEmbed || last is BlockEmbed) {
         optimize([], {});
         return;
       }
-
-      Blot? ref;
-      if (last is ParentBlot) {
-        if (last.children.isNotEmpty && last.children.first is Break) {
-          ref = null;
-        } else if (last.children.isNotEmpty) {
-          ref = last.children.first;
-        }
-      }
-
       if (first is ParentBlot && last is ParentBlot) {
+        final head = last.children.isEmpty ? null : last.children.first;
+        final ref = head is Break ? null : head;
         first.moveChildren(last, ref);
         first.remove();
       }
     }
 
     optimize([], {});
+  }
+
+  /// Parity parchment `ScrollBlot.deleteAt` (scroll.ts:80-89), the level the
+  /// Quill `Scroll.deleteAt` above delegates to.
+  ///
+  /// Two things the generic `ParentBlot.deleteAt` cannot do: drain pending
+  /// mutations first, and handle "delete everything" by removing the children
+  /// — the generic path would call `remove()` on the scroll itself, which is a
+  /// deliberate no-op, so `setContents` would silently keep the old document.
+  void _scrollDeleteAt(int index, int length) {
+    update();
+    if (index == 0 && length == this.length()) {
+      for (final child in List<Blot>.from(children)) {
+        child.remove();
+      }
+      return;
+    }
+    super.deleteAt(index, length);
   }
 
   @override

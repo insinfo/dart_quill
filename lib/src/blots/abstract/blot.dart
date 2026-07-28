@@ -449,32 +449,55 @@ abstract class ParentBlot extends Blot {
     }
   }
 
+  /// Parity `LinkedList.forEachAt` (linked-list.ts:70-92): visits every child
+  /// intersecting `[index, index + length)`, with the offset and length local
+  /// to that child.
+  void forEachAt(
+    int index,
+    int length,
+    void Function(Blot child, int offset, int length) callback,
+  ) {
+    if (length <= 0) return;
+    var current = 0;
+    for (final child in List<Blot>.from(children)) {
+      final childLength = child.length();
+      if (current >= index + length) break;
+      if (current + childLength > index) {
+        if (index > current) {
+          callback(
+            child,
+            index - current,
+            math.min(length, current + childLength - index).toInt(),
+          );
+        } else {
+          callback(
+            child,
+            0,
+            math.min(childLength, index + length - current).toInt(),
+          );
+        }
+      }
+      current += childLength;
+    }
+  }
+
+  /// Parity `ParentBlot.deleteAt` (parent.ts:92-99).
+  ///
+  /// Emptied children are *not* removed here — that is the job of the
+  /// `optimize` pass (TextBlot drops empty text, ContainerBlot drops empty
+  /// containers). The previous implementation removed them eagerly and then
+  /// recursed on the same index for the remainder, which double-counted
+  /// lengths and made deletions spanning a block boundary stop early.
   @override
   void deleteAt(int index, int length) {
     if (length <= 0) return;
-
-    var offset = 0;
-    for (final child in List<Blot>.from(children)) {
-      final childLength = child.length();
-      final end = offset + childLength;
-      if (index < end) {
-        final localIndex = index - offset;
-        final removable = math.min(length, childLength - localIndex).toInt();
-        child.deleteAt(localIndex, removable);
-        if (child.length() == 0 ||
-            (child is LeafBlot &&
-                localIndex == 0 &&
-                removable == childLength)) {
-          removeChild(child);
-        }
-        final remaining = length - removable;
-        if (remaining > 0) {
-          deleteAt(index, remaining);
-        }
-        return;
-      }
-      offset = end;
+    if (index == 0 && length == this.length()) {
+      remove();
+      return;
     }
+    forEachAt(index, length, (child, offset, childLength) {
+      child.deleteAt(offset, childLength);
+    });
   }
 
   @override

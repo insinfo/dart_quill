@@ -53,16 +53,9 @@ class Editor {
         }
         index += length;
       } else if (op.isDelete) {
-        var remaining = op.length ?? 0;
-        while (remaining > 0) {
-          final before = scroll.length();
-          scroll.deleteAt(index, remaining);
-          final removed = before - scroll.length();
-          if (removed <= 0) {
-            break;
-          }
-          remaining -= removed;
-        }
+        // One call, as editor.ts does. The retry loop that used to live here
+        // existed only because `Scroll.deleteAt` stopped at a block boundary.
+        scroll.deleteAt(index, op.length ?? 0);
       }
     }
 
