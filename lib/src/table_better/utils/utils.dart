@@ -11,6 +11,8 @@ import '../../blots/abstract/blot.dart';
 import '../../platform/dom.dart';
 import '../../platform/platform.dart';
 import '../config/config.dart';
+import '../formats/header.dart';
+import '../formats/list.dart';
 import '../formats/table.dart';
 
 /// Mirrors the TS `CorrectBound` shape ({left, top, right, bottom, width?,
@@ -36,18 +38,31 @@ class CorrectBound {
 /// Resolves an element's bounding rectangle.
 typedef ElementRectResolver = CorrectBound Function(DomElement element);
 
-CorrectBound _unimplementedElementRect(DomElement element) {
-  // TODO(table-better): lib/src/platform/dom.dart exposes no
-  // getBoundingClientRect equivalent yet. The UI phase must install a real
-  // resolver here (or tests may install a fake one).
-  throw UnimplementedError(
-    'table-better: element bounding rects are not available; '
-    'assign elementRectResolver before using layout-dependent helpers.',
+CorrectBound _defaultElementRect(DomElement element) {
+  // Real layout via the platform adapter (getBoundingClientRect in the
+  // browser). Fake-DOM adapters (VM tests) return null — those tests must
+  // install a fake resolver before exercising layout-dependent helpers.
+  final bounds = domBindings.adapter.getElementBounds(element);
+  if (bounds == null) {
+    throw UnimplementedError(
+      'table-better: element bounding rects are not available on this '
+      'platform adapter; assign elementRectResolver before using '
+      'layout-dependent helpers.',
+    );
+  }
+  double component(String key) => (bounds[key] as num?)?.toDouble() ?? 0;
+  return CorrectBound(
+    left: component('left'),
+    top: component('top'),
+    right: component('right'),
+    bottom: component('bottom'),
+    width: component('width'),
+    height: component('height'),
   );
 }
 
-/// Pluggable layout hook (see [_unimplementedElementRect]).
-ElementRectResolver elementRectResolver = _unimplementedElementRect;
+/// Pluggable layout hook; defaults to the platform adapter's element bounds.
+ElementRectResolver elementRectResolver = _defaultElementRect;
 
 /// TS `addDimensionsUnit`.
 String addDimensionsUnit(String value) {
@@ -96,11 +111,8 @@ void Function() debounce(void Function() cb, int delayMs) {
 /// TS `filterWordStyle` (strips `mso-*` Word artifacts from a style string).
 String filterWordStyle(String s) => s.replaceAll(RegExp(r'mso.*?;'), '');
 
-/// TS `getAlign`.
-///
-/// TODO(table-better): the TS version also inspects `TableList` and
-/// `TableHeader` descendants; those blots are not ported yet, so only
-/// `TableCellBlock` children are considered.
+/// TS `getAlign` (utils/index.ts:60-87) — inspects `TableCellBlock`,
+/// `TableList` and `TableHeader` lines of the cell.
 String getAlign(TableCell cellBlot) {
   const defaultAlign = 'left';
   String? align;
@@ -119,7 +131,12 @@ String getAlign(TableCell cellBlot) {
     return prev == cur;
   }
 
-  for (final child in cellBlot.descendants<TableCellBlock>()) {
+  final children = <ParentBlot>[
+    ...cellBlot.descendants<TableCellBlock>(),
+    ...cellBlot.descendants<TableList>(),
+    ...cellBlot.descendants<TableHeader>(),
+  ];
+  for (final child in children) {
     final childAlign = getChildAlign(child);
     if (isSameValue(align, childAlign)) {
       align = childAlign;
@@ -130,12 +147,16 @@ String getAlign(TableCell cellBlot) {
   return align ?? defaultAlign;
 }
 
-/// TS `getCellChildBlot`.
-///
-/// TODO(table-better): should also consider `ListContainer` and `TableHeader`
-/// descendants once those blots are ported.
+/// TS `getCellChildBlot` (utils/index.ts:89-97) — first cell block, list
+/// container or header of the cell, in that precedence order.
 Blot? getCellChildBlot(TableCell cellBlot) {
   for (final child in cellBlot.descendants<TableCellBlock>()) {
+    return child;
+  }
+  for (final child in cellBlot.descendants<TableListContainer>()) {
+    return child;
+  }
+  for (final child in cellBlot.descendants<TableHeader>()) {
     return child;
   }
   return null;

@@ -158,6 +158,12 @@ bool _enforceRequiredContainer(
 abstract class TableBetterContainer extends Container {
   TableBetterContainer(DomElement domNode) : super(domNode);
 
+  // This hierarchy converges via its own optimize (requiredContainer join +
+  // while-merge below); the base ContainerBlot pass would remove the empty
+  // wrappers the enforcement creates before they adopt their children.
+  @override
+  bool get managesOwnContainerOptimize => true;
+
   /// TS `requiredContainer` blot name (table.ts:851-867); null when the
   /// container has no placement constraint.
   String? get requiredContainerBlotName => null;

@@ -171,8 +171,17 @@ class TableBetter extends Module<TableBetterOptions> {
   }
 
   bool _replaceWithCellBlock(Block line) {
-    final id = line.element.getAttribute('data-cell') ?? cellId();
-    replaceBlotWith(line, TableCellBlock.kBlotName, id);
+    // Parity quill-table-better.ts:354/431 — for list lines the cellId lives
+    // on the ListContainer (data-cell on the <ol>), never on the <li>;
+    // reading the line's own attribute minted a fresh id and detached the
+    // block from its cell grouping.
+    String? id;
+    final parentBlot = line.parent;
+    if (parentBlot is TableListContainer) {
+      id = parentBlot.element.getAttribute('data-cell');
+    }
+    id ??= line.element.getAttribute('data-cell');
+    replaceBlotWith(line, TableCellBlock.kBlotName, id ?? cellId());
     return false;
   }
 
@@ -193,7 +202,13 @@ class TableBetter extends Module<TableBetterOptions> {
   bool _handleCellBlockKey(String key, Range range, Context context) {
     final line = context.line;
     if (context.offset == 0 && line.prev == null) return false;
-    if (context.offset == 0 && line.prev is TableCellBlock) {
+    // Parity quill-table-better.ts:372-381 — the previous sibling may be a
+    // list container or a header line, not only another cell block.
+    final prev = line.prev;
+    if (context.offset == 0 &&
+        (prev is TableCellBlock ||
+            prev is TableListContainer ||
+            prev is TableHeader)) {
       line.remove();
       quill.setSelection(
         Range((range.index - 1).clamp(0, range.index).toInt(), 0),

@@ -502,15 +502,17 @@ void main() {
       expect(node.hasAttribute('style'), isFalse);
     });
 
-    test('layout-dependent helpers throw until a rect resolver is installed',
+    test('layout-dependent helpers use the platform adapter bounds by default',
         () {
       final scroll = _createTableScroll(_twoByTwo);
       final table = _tableOf(scroll);
       final cell = _rowsOf(table).first.children.first as TableCell;
-      expect(
-        () => utils.getCorrectBounds(cell.element),
-        throwsUnimplementedError,
-      );
+      final bounds = utils.getCorrectBounds(cell.element);
+      // The fake DOM adapter synthesizes 120×80 rects; the resolver must
+      // surface them instead of throwing (real browsers surface
+      // getBoundingClientRect through the same adapter hook).
+      expect(bounds.width, 120);
+      expect(bounds.height, 80);
     });
   });
 
