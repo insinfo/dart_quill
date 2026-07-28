@@ -567,6 +567,8 @@ class FakeDomElement extends FakeDomNode implements DomElement {
   @override
   void click() {
     _dataset['clicked'] = 'true';
+    // A real `element.click()` dispatches a click event, so listeners run.
+    dispatchEvent('click', FakeDomMouseEvent(type: 'click', target: this));
   }
 
   @override

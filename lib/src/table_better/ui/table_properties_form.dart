@@ -11,10 +11,10 @@
 /// `saveCellAction`'s percent width plus `text-align` propagation into the
 /// cell's blocks. Positioning follows `updatePropertiesForm`.
 ///
-/// One capability is not ported: the colour *wheel*, which upstream delegates
-/// to the `@jaames/iro` package. The 15-colour palette, the hex input and
-/// "remove colour" are all here; a wheel would mean vendoring a dependency,
-/// which this package deliberately avoids.
+/// The colour wheel upstream delegates to `@jaames/iro` is ported too, in
+/// `ui/color_wheel.dart`, so `createPalette` behaves like the original: the
+/// palette button reveals the wheel, and its own save/cancel row commits the
+/// picked colour to the field.
 library;
 
 import '../../platform/dom.dart';
@@ -22,6 +22,7 @@ import '../assets/icons.dart';
 import '../config/config.dart';
 import '../formats/table.dart';
 import '../formats/list.dart';
+import 'color_wheel.dart';
 import '../language/language.dart';
 import '../utils/utils.dart' as utils;
 import 'properties_form.dart';
@@ -111,6 +112,9 @@ class TablePropertiesForm {
 
   DomElement? saveButton;
   late final DomElement form;
+
+  /// The wheel of each colour field, keyed by property name.
+  final Map<String, ColorWheel> colorWheels = {};
 
   DomDocument get _document => host.container.ownerDocument;
 
@@ -340,8 +344,46 @@ class TablePropertiesForm {
       () => setColorValue(propertyName, ''),
     ));
     container.append(createColorList(propertyName));
-    // Upstream's third section is the `iro` colour wheel; the hex input above
-    // covers the same need without vendoring a dependency.
+    container.append(createPalette(propertyName, container));
+    return container;
+  }
+
+  /// TS `createPalette(propertyName, useLanguage, parent)` — the colour wheel
+  /// behind the palette button, with its own save/cancel row.
+  DomElement createPalette(String propertyName, DomElement parent) {
+    final container = _document.createElement('div');
+    final palette = _document.createElement('div');
+    final wrap = _document.createElement('div');
+
+    final wheel = ColorWheel(
+      document: _document,
+      color: HsvColor.parse(options.attribute[propertyName] ?? ''),
+    );
+    colorWheels[propertyName] = wheel;
+
+    final buttons = createActionBtns((label) {
+      if (label == 'save') {
+        setAttribute(propertyName, wheel.color.hexString, parent);
+        updateInputStatus(parent, false, isColor: true);
+      }
+      palette.classes.add('ql-hidden');
+      parent.classes.add('ql-hidden');
+    }, showLabel: false);
+
+    palette.classes.add('color-picker-palette');
+    palette.classes.add('ql-hidden');
+    wrap.classes.add('color-picker-wrap');
+    wheel.root.classes.add('iro-container');
+    wrap.append(wheel.root);
+    wrap.append(buttons);
+    palette.append(wrap);
+
+    container.append(createColorPickerIcon(
+      tableBetterIcons['palette'] ?? '',
+      _t('colorPicker'),
+      () => toggleHidden(palette),
+    ));
+    container.append(palette);
     return container;
   }
 

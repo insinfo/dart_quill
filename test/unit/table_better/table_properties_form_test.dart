@@ -4,6 +4,7 @@ import 'package:dart_quill/src/table_better/formats/table.dart';
 import 'package:dart_quill/src/table_better/language/language.dart';
 import 'package:dart_quill/src/table_better/register.dart';
 import 'package:dart_quill/src/table_better/table_better.dart';
+import 'package:dart_quill/src/table_better/ui/color_wheel.dart';
 import 'package:dart_quill/src/table_better/ui/table_properties_form.dart';
 import 'package:test/test.dart';
 
@@ -67,13 +68,12 @@ void main() {
       expect(
           form.form.querySelectorAll('.properties-form-header'), hasLength(1));
       expect(form.form.querySelectorAll('.properties-form-row'), isNotEmpty);
-      expect(form.form.querySelectorAll('.properties-form-action-row'),
-          hasLength(1));
+      // One action row for the form, plus one inside each colour wheel palette.
+      final actionRows =
+          form.form.querySelectorAll('.properties-form-action-row');
+      expect(actionRows, isNotEmpty);
 
-      final buttons = form.form
-          .querySelectorAll('.properties-form-action-row')
-          .first
-          .querySelectorAll('button');
+      final buttons = actionRows.last.querySelectorAll('button');
       expect(buttons, hasLength(2));
       expect(buttons.first.getAttribute('label'), equals('save'));
       expect(buttons.last.getAttribute('label'), equals('cancel'));
@@ -90,7 +90,8 @@ void main() {
       expect(list.querySelectorAll('li'), hasLength(15));
       expect(list.querySelectorAll('li').first.getAttribute('data-color'),
           equals('#000000'));
-      expect(colors.first.querySelectorAll('.erase-container'), hasLength(1));
+      // Two icon rows: "remove colour" and the palette (wheel) toggle.
+      expect(colors.first.querySelectorAll('.erase-container'), hasLength(2));
       // The picker starts closed.
       expect(
         colors.first
@@ -320,6 +321,49 @@ void main() {
       expect(form, isNotNull);
       expect(form!.host.selectedCells, hasLength(2));
       expect(form.type, equals('cell'));
+    });
+  });
+
+  group('colour wheel', () {
+    test('each colour field gets a wheel behind the palette button', () {
+      final form = buildForm(
+        type: 'table',
+        attribute: {'background-color': '#ff0000'},
+      );
+
+      expect(form.colorWheels.containsKey('background-color'), isTrue);
+      expect(form.colorWheels['background-color']!.color.hexString,
+          equals('#ff0000'));
+
+      final palettes = form.form.querySelectorAll('.color-picker-palette');
+      expect(palettes, isNotEmpty);
+      expect(palettes.first.classes.contains('ql-hidden'), isTrue);
+      expect(form.form.querySelectorAll('.IroWheel'), isNotEmpty);
+    });
+
+    test('picking on the wheel and saving writes the colour to the field', () {
+      final form = buildForm(
+        type: 'table',
+        attribute: {'background-color': '#ffffff'},
+      );
+      final wheel = form.colorWheels['background-color']!;
+
+      wheel.color = const HsvColor(240, 100, 100);
+      // Scope to this field: a table form has several colour containers.
+      final field = form.form
+          .querySelectorAll('.ql-table-color-container')
+          .firstWhere(
+              (c) => c.getAttribute('data-property') == 'background-color');
+      // The palette's own action row commits it (label 'save').
+      final palette = field.querySelectorAll('.color-picker-palette').first;
+      final saveButton = palette
+          .querySelectorAll('button')
+          .firstWhere((b) => b.getAttribute('label') == 'save');
+      saveButton.click();
+
+      expect(form.attrs['background-color'], equals('#0000ff'));
+      expect(form.getDiffProperties()['background-color'], equals('#0000ff'));
+      expect(palette.classes.contains('ql-hidden'), isTrue);
     });
   });
 }
