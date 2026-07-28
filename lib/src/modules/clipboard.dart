@@ -9,14 +9,26 @@ import '../core/module.dart';
 import '../core/quill.dart';
 import '../core/selection.dart';
 import '../formats/abstract/attributor.dart';
+import '../formats/align.dart';
+import '../formats/background.dart';
+import '../formats/blockquote.dart';
 import '../formats/code.dart';
+import '../formats/color.dart';
+import '../formats/direction.dart';
+import '../formats/font.dart';
+import '../formats/formula.dart';
 import '../formats/header.dart';
 import '../formats/image.dart';
 import '../formats/link.dart';
+import '../formats/list.dart';
+import '../formats/script.dart';
+import '../formats/size.dart';
+import '../formats/table.dart';
 import '../formats/video.dart';
 import '../modules/keyboard.dart';
 import '../platform/dom.dart';
 import 'normalize_external_html/index.dart';
+import 'uploader.dart';
 
 // Placeholder for logger
 class Logger {
@@ -28,14 +40,8 @@ final debug = Logger();
 
 // Track clipboard-specific attributors per scroll instance so applyFormat can
 // determine which custom formats are allowed when converting HTML.
-final _clipboardAttributors =
-    Expando<List<Attributor>>('_clipboardAttributors');
 final _clipboardAttributorsByName =
     Expando<Map<String, Attributor>>('_clipboardAttributorsByName');
-
-List<Attributor> _attributorsForScroll(Scroll scroll) {
-  return _clipboardAttributors[scroll] ?? const <Attributor>[];
-}
 
 Map<String, Attributor> _attributorMapForScroll(Scroll scroll) {
   return _clipboardAttributorsByName[scroll] ?? const <String, Attributor>{};
@@ -53,6 +59,26 @@ class ClipboardOptions {
     this.matchers = const [],
     this.attributors = const [],
   });
+}
+
+// Parity clipboard.ts:50-68 — attributors the clipboard understands even when
+// they are not part of the editor registry, keyed by their DOM key name.
+final Map<String, Attributor> ATTRIBUTE_ATTRIBUTORS = _byKeyName([
+  AlignAttribute.instance,
+  DirectionAttribute.instance,
+]);
+
+final Map<String, Attributor> STYLE_ATTRIBUTORS = _byKeyName([
+  AlignStyle.instance,
+  BackgroundStyle(),
+  ColorStyle.instance,
+  DirectionStyle.instance,
+  FontStyleAttributor.instance,
+  SizeStyle(),
+]);
+
+Map<String, Attributor> _byKeyName(List<Attributor> attributors) {
+  return {for (final attributor in attributors) attributor.keyName: attributor};
 }
 
 final CLIPBOARD_CONFIG = <List<dynamic>>[
@@ -82,9 +108,11 @@ class Clipboard extends Module<ClipboardOptions> {
 
   Clipboard(Quill quill, ClipboardOptions options) : super(quill, options) {
     final attributors = List<Attributor>.from(options.attributors);
-    _clipboardAttributors[quill.scroll] = attributors;
     _clipboardAttributorsByName[quill.scroll] = {
-      for (final attributor in attributors) attributor.attrName: attributor,
+      for (final attributor in attributors) ...{
+        attributor.attrName: attributor,
+        attributor.keyName: attributor,
+      },
     };
 
     quill.root.addEventListener(
@@ -108,24 +136,23 @@ class Clipboard extends Module<ClipboardOptions> {
 
   Delta convert(
       {String? html, String? text, Map<String, dynamic> formats = const {}}) {
-    final hasCodeBlockFormat = formats.containsKey(CodeBlock.kBlotName);
+    // Parity clipboard.ts:104-108 — pasting inside a code block never parses
+    // HTML: the plain text is inserted with the surrounding code-block format.
+    final codeBlockFormat = formats[CodeBlock.kBlotName];
+    if (codeBlockFormat != null && codeBlockFormat != false) {
+      return Delta()
+        ..insert(text ?? '', {CodeBlock.kBlotName: codeBlockFormat});
+    }
     if (html == null) {
       final attrs = formats.isEmpty ? null : Map<String, dynamic>.from(formats);
       return Delta()..insert(text ?? '', attrs);
     }
 
-    var delta = convertHTML(html);
-    if (hasCodeBlockFormat) {
-      delta = applyFormat(delta, CodeBlock.kBlotName,
-          formats[CodeBlock.kBlotName], quill.scroll);
-    } else {
-      delta = _stripAttribute(delta, CodeBlock.kBlotName);
-    }
-
+    final delta = convertHTML(html);
+    // Remove trailing newline
     if (deltaEndsWith(delta, '\n') &&
         (delta.operations.last.attributes == null ||
-            formats['table'] != null ||
-            hasCodeBlockFormat)) {
+            formats['table'] != null)) {
       return _trimTrailingNewline(delta);
     }
     return delta;
@@ -202,19 +229,33 @@ class Clipboard extends Module<ClipboardOptions> {
     }
     final files = e.clipboardData?.files ?? [];
     if (html == null && files.isNotEmpty) {
-      // quill.uploader.upload(range, files); // Placeholder for uploader
-      return;
+      if (_uploadFiles(range, files)) {
+        return;
+      }
     }
     if (html != null && files.isNotEmpty) {
       final doc =
           quill.root.ownerDocument.parser.parseFromString(html, 'text/html');
-      if (doc.body.childNodes.length == 1 &&
-          (doc.body.childNodes.first as DomElement).tagName == 'IMG') {
-        // quill.uploader.upload(range, files); // Placeholder for uploader
-        return;
+      final children = doc.body.childNodes.whereType<DomElement>().toList();
+      if (children.length == 1 && children.first.tagName == 'IMG') {
+        if (_uploadFiles(range, files)) {
+          return;
+        }
       }
     }
     onPaste(range, text: text, html: html);
+  }
+
+  /// Parity clipboard.ts:211-223 — hands pasted files to the uploader module.
+  /// Returns false (so the regular paste path runs) when the module is not
+  /// enabled for this editor.
+  bool _uploadFiles(Range range, List<DomFile> files) {
+    final uploader = quill.getModule('uploader');
+    if (uploader is! Uploader) {
+      return false;
+    }
+    uploader.upload(range, files);
+    return true;
   }
 
   Map<String, dynamic> onCopy(Range range, [bool isCut = false]) {
@@ -285,8 +326,14 @@ Operation _cloneOperation(Operation op) {
   return Operation.delete(op.length ?? 0);
 }
 
+bool _isTruthy(dynamic value) => value != null && value != false && value != '';
+
 Delta applyFormat(Delta delta, String format, dynamic value, Scroll scroll) {
-  final hasRegistryFormat = scroll.query(format, Scope.ANY) != null;
+  // Parity clipboard.ts:286-288 — parchment's `Registry.query` resolves both
+  // blots and attributors, so a registered attributor ('align', 'color', ...)
+  // is enough for the format to survive a paste.
+  final hasRegistryFormat = scroll.query(format, Scope.ANY) != null ||
+      scroll.queryAttributor(format, Scope.ANY) != null;
   final hasAttributor = _attributorMapForScroll(scroll).containsKey(format);
   if (!hasRegistryFormat && !hasAttributor) {
     return delta;
@@ -306,7 +353,7 @@ Delta applyFormat(Delta delta, String format, dynamic value, Scroll scroll) {
     }
 
     final merged = <String, dynamic>{};
-    if (value != null && value != false) {
+    if (_isTruthy(value)) {
       merged[format] = value;
     }
     merged.addAll(existing);
@@ -359,30 +406,6 @@ Delta _trimTrailingNewline(Delta delta) {
   final trimmed = data.substring(0, data.length - 1);
   if (trimmed.isNotEmpty) {
     result.insert(trimmed, last.attributes);
-  }
-  return result;
-}
-
-Delta _stripAttribute(Delta delta, String attribute) {
-  if (delta.isEmpty) {
-    return delta;
-  }
-  final result = Delta();
-  for (final op in delta.operations) {
-    Map<String, dynamic>? attrs = op.attributes;
-    if (attrs != null && attrs.containsKey(attribute)) {
-      attrs = Map<String, dynamic>.from(attrs)..remove(attribute);
-      if (attrs.isEmpty) {
-        attrs = null;
-      }
-    }
-    if (op.isInsert) {
-      result.insert(op.data, attrs);
-    } else if (op.isRetain) {
-      result.retain(op.length ?? 0, attrs);
-    } else if (op.isDelete) {
-      result.delete(op.length ?? 0);
-    }
   }
   return result;
 }
@@ -546,26 +569,57 @@ bool _isBlockEmbedElement(DomElement element) {
   return _isVideoElement(element);
 }
 
+/// Reads an attributor value the way parchment does (attributor.ts:52-56,
+/// class.ts:24-27, style.ts:29-32): a value that fails the whitelist check is
+/// reported as absent instead of being applied verbatim.
+dynamic _attributorValue(Attributor attributor, DomElement node) {
+  final value = attributor.value(node);
+  if (!_isTruthy(value)) {
+    return null;
+  }
+  return attributor.canAdd(node, value) ? value : null;
+}
+
+/// Resolves [name] (an attribute/class/style key or a format name) to an
+/// attributor: clipboard-scoped ones first, then the editor registry.
+Attributor? _resolveAttributor(Scroll scroll, String name) {
+  return _attributorMapForScroll(scroll)[name] ??
+      scroll.queryAttributor(name, Scope.ATTRIBUTE);
+}
+
+/// Parity clipboard.ts:426-455.
 Delta matchAttributor(DomNode node, Delta delta, Scroll scroll) {
   if (node is! DomElement) {
     return delta;
   }
 
-  final attributors = _attributorsForScroll(scroll);
-  if (attributors.isEmpty) {
-    return delta;
-  }
+  final names = <String>[
+    ...Attributor.keys(node),
+    ...ClassAttributor.keys(node),
+    ...StyleAttributor.keys(node),
+  ];
 
   final formats = <String, dynamic>{};
-  for (final attributor in attributors) {
-    final value = attributor.value(node);
-    if (value == null) {
+  for (final name in names) {
+    if (name.isEmpty) {
       continue;
     }
-    if (value is String && value.isEmpty) {
-      continue;
+    var attr = _resolveAttributor(scroll, name);
+    if (attr != null) {
+      final value = _attributorValue(attr, node);
+      formats[attr.attrName] = value;
+      if (_isTruthy(value)) {
+        continue;
+      }
     }
-    formats[attributor.attrName] = value;
+    attr = ATTRIBUTE_ATTRIBUTORS[name];
+    if (attr != null && (attr.attrName == name || attr.keyName == name)) {
+      formats[attr.attrName] = _attributorValue(attr, node);
+    }
+    attr = STYLE_ATTRIBUTORS[name];
+    if (attr != null && (attr.attrName == name || attr.keyName == name)) {
+      formats[attr.attrName] = _attributorValue(attr, node);
+    }
   }
 
   if (formats.isEmpty) {
@@ -579,59 +633,134 @@ Delta matchAttributor(DomNode node, Delta delta, Scroll scroll) {
   return transformed;
 }
 
+/// Blots that only exist to structure the tree. Upstream resolves them to
+/// parchment `ContainerBlot`s (or to the scroll/default block), which produce
+/// neither a format nor a newline in `matchBlot`.
+const _structuralBlotNames = <String>{
+  'block',
+  'break',
+  'cursor',
+  'inline',
+  'scroll',
+  'text',
+  'code-block-container',
+  'list-container',
+  'table-container',
+  'table-body',
+  'table-row',
+};
+
+/// Blots whose DOM node maps to an embed insert instead of a text format.
+// TODO(G4): RegistryEntry carries no `isEmbed`/`static value` information, so
+// embeds still need this explicit list; custom embeds fall back to the block
+// path until the registry exposes blot statics.
+const _embedBlotNames = <String>{
+  Image.kBlotName,
+  Video.kBlotName,
+  Formula.kBlotName,
+};
+
+/// Parity parchment `Registry.query(Node)`: class names win over tag names.
+RegistryEntry? _queryEntryForNode(Scroll scroll, DomElement node) {
+  final className = node.getAttribute('class');
+  if (className != null && className.isNotEmpty) {
+    final byClass = scroll.registry.queryByClassName(className);
+    if (byClass != null) {
+      return byClass;
+    }
+  }
+  final tagName = node.tagName;
+  if (tagName.isEmpty) {
+    return null;
+  }
+  return scroll.registry.queryByTagName(tagName);
+}
+
+/// Port of the `static formats(domNode, scroll)` each blot exposes upstream.
+// TODO(G4): move these into the blot classes (as `static formats`) and expose
+// them through RegistryEntry so third-party blots are covered too.
+dynamic _blotStaticFormats(String blotName, DomElement node, Scroll scroll) {
+  switch (blotName) {
+    case Header.kBlotName:
+      final level = Header.getLevel(node);
+      return level > 0 ? level : null;
+    case ListItem.kBlotName:
+      // Parity list.ts:18-20 — `<li>` carries its own list style.
+      return node.getAttribute('data-list');
+    case CodeBlock.kBlotName:
+      // Parity syntax.ts — the highlighted code block reports its language.
+      return node.getAttribute('data-language') ?? true;
+    case TableCell.kBlotName:
+      return node.getAttribute('data-row');
+    case Link.kBlotName:
+      return Link.getFormat(node);
+    case Script.kBlotName:
+      return Script.getFormat(node);
+    case Blockquote.kBlotName:
+      return true;
+    default:
+      // Parity parchment Inline/BlockBlot.formats: a blot matched through a
+      // single tag name simply reports `true`.
+      return true;
+  }
+}
+
+Delta? _matchEmbedBlot(String blotName, DomElement node) {
+  String? value;
+  final formats = <String, dynamic>{};
+  switch (blotName) {
+    case Image.kBlotName:
+      value = Image.getValue(node);
+      Image.getAttributes(node).forEach((key, attrValue) {
+        if (attrValue != null && attrValue.isNotEmpty) {
+          formats[key] = attrValue;
+        }
+      });
+      break;
+    case Video.kBlotName:
+      value = Video.valueDom(node);
+      Video.formatsDom(node).forEach((key, attrValue) {
+        if (attrValue != null && attrValue.isNotEmpty) {
+          formats[key] = attrValue;
+        }
+      });
+      break;
+    case Formula.kBlotName:
+      value = Formula.getValue(node);
+      break;
+  }
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+  return Delta()..insert({blotName: value}, formats.isEmpty ? null : formats);
+}
+
+/// Parity clipboard.ts:457-490 — resolve the blot for [node] through the
+/// registry instead of hardcoding tag names.
 Delta matchBlot(DomNode node, Delta delta, Scroll scroll) {
   if (node is! DomElement) {
     return delta;
   }
 
-  final tag = node.tagName.toUpperCase();
-
-  if (tag == Image.kTagName) {
-    final value = Image.getValue(node);
-    if (value == null || value.isEmpty) {
-      return delta;
-    }
-    final attrs = <String, dynamic>{};
-    Image.getAttributes(node).forEach((key, attrValue) {
-      if (attrValue != null && attrValue.isNotEmpty) {
-        attrs[key] = attrValue;
-      }
-    });
-    return Delta()
-      ..insert({Image.kBlotName: value}, attrs.isEmpty ? null : attrs);
+  final entry = _queryEntryForNode(scroll, node);
+  if (entry == null) {
+    return delta;
   }
 
-  if (_isVideoElement(node)) {
-    final src = Video.valueDom(node);
-    if (src == null || src.isEmpty) {
-      return delta;
-    }
-    final formats = <String, dynamic>{};
-    Video.formatsDom(node).forEach((key, attrValue) {
-      if (attrValue != null && attrValue.isNotEmpty) {
-        formats[key] = attrValue;
-      }
-    });
-    return Delta()
-      ..insert({Video.kBlotName: src}, formats.isEmpty ? null : formats);
+  final blotName = entry.blotName;
+  if (_embedBlotNames.contains(blotName)) {
+    return _matchEmbedBlot(blotName, node) ?? delta;
+  }
+  if (_structuralBlotNames.contains(blotName)) {
+    return delta;
   }
 
-  if (tag == Link.kTagName) {
-    final href = Link.getFormat(node);
-    if (href == null || href.isEmpty) {
-      return delta;
-    }
-    return applyFormat(delta, Link.kBlotName, href, scroll);
+  final isBlockBlot = Scope.matches(entry.scope, Scope.BLOCK_BLOT);
+  if (isBlockBlot && !deltaEndsWith(delta, '\n')) {
+    delta.insert('\n');
   }
-
-  if (Header.kTagNames.contains(node.tagName)) {
-    if (!deltaEndsWith(delta, '\n')) {
-      delta.insert('\n');
-    }
-    final level = Header.getLevel(node);
-    return applyFormat(delta, Header.kBlotName, level, scroll);
-  }
-  return delta;
+  return applyFormat(
+      delta, blotName, _blotStaticFormats(blotName, node, scroll), scroll);
 }
 
 Delta matchBreak(DomNode node, Delta delta, Scroll scroll) {
@@ -641,8 +770,14 @@ Delta matchBreak(DomNode node, Delta delta, Scroll scroll) {
   return delta;
 }
 
+/// Parity clipboard.ts:499-506 — the code-block blot reports the language of
+/// the `<pre>` element (`true` when the syntax module is not installed).
 Delta matchCodeBlock(DomNode node, Delta delta, Scroll scroll) {
-  return applyFormat(delta, CodeBlock.kBlotName, true, scroll);
+  final match = scroll.query(CodeBlock.kBlotName, Scope.ANY);
+  final language = match == null || node is! DomElement
+      ? true
+      : _blotStaticFormats(CodeBlock.kBlotName, node, scroll);
+  return applyFormat(delta, CodeBlock.kBlotName, language, scroll);
 }
 
 Delta matchIgnore(DomNode node, Delta delta, Scroll scroll) {
@@ -704,12 +839,13 @@ Delta matchIndent(DomNode node, Delta delta, Scroll scroll) {
   return composed;
 }
 
+/// Parity clipboard.ts:541-551.
 Delta matchList(DomNode node, Delta delta, Scroll scroll) {
   final element = node as DomElement;
-  var format = element.tagName == 'OL' ? 'ordered' : 'bullet';
-  final checklistAttr = element.getAttribute('data-list');
-  if (checklistAttr != null && checklistAttr.isNotEmpty) {
-    format = checklistAttr;
+  var format = element.tagName.toUpperCase() == 'OL' ? 'ordered' : 'bullet';
+  final checkedAttr = element.getAttribute('data-checked');
+  if (checkedAttr != null && checkedAttr.isNotEmpty) {
+    format = checkedAttr == 'true' ? 'checked' : 'unchecked';
   }
   return applyFormat(delta, 'list', format, scroll);
 }
@@ -778,19 +914,11 @@ Delta matchStyles(DomNode node, Delta delta, Scroll scroll) {
         formats['script'] = 'super';
       } else if (prop == 'vertical-align' && value == 'sub') {
         formats['script'] = 'sub';
-      } else if (prop == 'color' && value.isNotEmpty) {
-        formats['color'] = value;
-      } else if (prop == 'background-color' && value.isNotEmpty) {
-        formats['background'] = value;
-      } else if (prop == 'font-family' && value.isNotEmpty) {
-        formats['font'] = value.split(',').first.trim();
-      } else if (prop == 'font-size' && value.isNotEmpty) {
-        formats['size'] = value;
-      } else if (prop == 'text-align' && value.isNotEmpty) {
-        formats['align'] = value;
-      } else if (prop == 'direction' && value.isNotEmpty) {
-        formats['direction'] = value;
       }
+      // color/background/font/size/align/direction are intentionally absent:
+      // parity clipboard.ts:579-608 leaves them to `matchAttributor`, which
+      // resolves them through the registered attributors (and therefore
+      // honours their whitelists).
     }
   }
 

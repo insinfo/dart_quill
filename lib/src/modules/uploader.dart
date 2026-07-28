@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import '../blots/abstract/blot.dart';
 import '../core/module.dart';
 import '../core/emitter.dart';
 import '../core/quill.dart';
 import '../core/selection.dart';
 import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
+import '../platform/dom.dart';
 import '../platform/platform.dart';
 
 typedef UploadHandler = FutureOr<void> Function(
@@ -13,6 +15,40 @@ typedef UploadHandler = FutureOr<void> Function(
   List<dynamic> files,
 );
 
+/// Parity uploader.ts:55-81 — reads every file as a data URL and inserts all
+/// of them with a single `updateContents`, so a multi-file drop/paste is one
+/// undo step.
+Future<void> defaultUploadHandler(
+  Quill quill,
+  Range range,
+  List<dynamic> files,
+) async {
+  if (quill.scroll.query('image', Scope.ANY) == null) {
+    return;
+  }
+  final images = <String>[];
+  for (final file in files) {
+    final dataUrl = await domBindings.adapter.readFileAsDataUrl(file);
+    if (dataUrl != null && dataUrl.isNotEmpty) {
+      images.add(dataUrl);
+    }
+  }
+  if (images.isEmpty) {
+    return;
+  }
+  final update = Delta()
+    ..retain(range.index)
+    ..delete(range.length);
+  for (final image in images) {
+    update.insert({'image': image});
+  }
+  quill.updateContents(update, source: EmitterSource.USER);
+  quill.setSelection(
+    Range(range.index + images.length, 0),
+    source: EmitterSource.SILENT,
+  );
+}
+
 class UploaderOptions {
   const UploaderOptions({
     this.mimetypes = const ['image/png', 'image/jpeg'],
@@ -20,6 +56,8 @@ class UploaderOptions {
   });
 
   final List<String> mimetypes;
+
+  /// Custom upload handler; [defaultUploadHandler] is used when null.
   final UploadHandler? handler;
 
   UploaderOptions copyWith({
@@ -59,46 +97,79 @@ class UploaderOptions {
 }
 
 class Uploader extends Module<UploaderOptions> {
-  Uploader(Quill quill, UploaderOptions options) : super(quill, options);
+  Uploader(Quill quill, UploaderOptions options) : super(quill, options) {
+    // Parity uploader.ts:17-38.
+    quill.root.addEventListener('drop', _handleDrop);
+  }
 
-  FutureOr<void> upload(Range range, Iterable<dynamic> rawFiles) async {
-    final accepted = <dynamic>[];
-    for (final file in rawFiles) {
-      if (options.mimetypes.isEmpty) {
-        accepted.add(file);
-        continue;
-      }
-      final type = (file as dynamic)?.type as String?;
-      if (type == null || options.mimetypes.contains(type)) {
-        accepted.add(file);
-      }
+  static const UploaderOptions DEFAULTS = UploaderOptions();
+
+  void _handleDrop(DomEvent event) {
+    event.preventDefault();
+    final files = _filesFromEvent(event);
+    if (files.isEmpty) {
+      return;
     }
-    if (accepted.isEmpty) {
+    // TODO(G4): upstream places the caret at the drop point through
+    // `document.caretRangeFromPoint`/`caretPositionFromPoint`. The DOM adapter
+    // exposes neither, so the files land at the current selection instead.
+    final range = quill.getSelection(focus: true) ??
+        quill.selection.savedRange ??
+        Range(quill.getLength() - 1, 0);
+    upload(range, files);
+  }
+
+  List<dynamic> _filesFromEvent(DomEvent event) {
+    if (event is DomInputEvent) {
+      return event.dataTransfer?.files ?? const <DomFile>[];
+    }
+    if (event is DomClipboardEvent) {
+      return event.clipboardData?.files ?? const <DomFile>[];
+    }
+    // TODO(G4): generic events are not wrapped with a `dataTransfer` accessor
+    // by the platform layer yet; probe the raw event defensively.
+    try {
+      final transfer = (event.rawEvent as dynamic)?.dataTransfer;
+      if (transfer is DomDataTransfer) {
+        return transfer.files;
+      }
+      final files = transfer?.files;
+      if (files is List) {
+        return files;
+      }
+    } catch (_) {
+      // Raw event does not expose a data transfer: nothing to upload.
+    }
+    return const <dynamic>[];
+  }
+
+  String? _mimetypeOf(dynamic file) {
+    if (file is DomFile) {
+      return file.type;
+    }
+    try {
+      return (file as dynamic).type as String?;
+    } catch (_) {
       return null;
     }
-    final handler = options.handler;
-    if (handler != null) {
-      return handler(quill, range, accepted);
-    }
+  }
 
-    if (range.length > 0) {
-      quill.updateContents(
-        Delta()
-          ..retain(range.index)
-          ..delete(range.length),
-        source: EmitterSource.USER,
-      );
-    }
-
-    var index = range.index;
-    for (final file in accepted) {
-      final dataUrl = await domBindings.adapter.readFileAsDataUrl(file);
-      if (dataUrl == null || dataUrl.isEmpty) {
+  FutureOr<void> upload(Range range, Iterable<dynamic> rawFiles) {
+    // Parity uploader.ts:41-52 — only whitelisted mimetypes are uploaded.
+    final uploads = <dynamic>[];
+    for (final file in rawFiles) {
+      if (file == null) {
         continue;
       }
-      quill.insertEmbed(index, 'image', dataUrl, source: EmitterSource.USER);
-      index += 1;
+      final type = _mimetypeOf(file);
+      if (type != null && options.mimetypes.contains(type)) {
+        uploads.add(file);
+      }
     }
-    quill.setSelection(Range(index, 0), source: EmitterSource.SILENT);
+    if (uploads.isEmpty) {
+      return null;
+    }
+    final handler = options.handler ?? defaultUploadHandler;
+    return handler(quill, range, uploads);
   }
 }

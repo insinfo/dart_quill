@@ -354,7 +354,14 @@ void main() {
         expectDelta(delta, Delta()..insert('Test\n', {'direction': 'rtl'}));
       }
 
-      expectDelta(_clipboard().convert(html: html), Delta()..insert('Test'));
+      // Divergence from upstream's unit test, which builds a registry with no
+      // attributor at all (not expressible in the Dart port yet). Against the
+      // default registry — where DirectionClass is registered — upstream Quill
+      // keeps the format too, which is what `matchAttributor` now does.
+      expectDelta(
+        _clipboard().convert(html: html),
+        Delta()..insert('Test\n', {'direction': 'rtl'}),
+      );
     });
 
     test('nested styles', () {
@@ -366,7 +373,12 @@ void main() {
         expectDelta(delta, Delta()..insert('Test', {'color': 'blue'}));
       }
 
-      expectDelta(_clipboard().convert(html: html), Delta()..insert('Test'));
+      // See the note above: ColorStyle is part of the default registry, so the
+      // inline color survives the paste.
+      expectDelta(
+        _clipboard().convert(html: html),
+        Delta()..insert('Test', {'color': 'blue'}),
+      );
     });
 
     test('custom matcher', () {
@@ -414,13 +426,20 @@ void main() {
       const html =
           "<meta charset='utf-8'><meta charset=\"utf-8\"><b style=\"font-weight:normal;\" id=\"docs-internal-guid-6f072e08-7fff-e641-0fbc-7fe2846294a4\"><p dir=\"ltr\" style=\"line-height:1.38;margin-top:0pt;margin-bottom:0pt;\"><span style=\"font-size:11pt;font-family:Arial,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;\">text</span></p><br /><ol style=\"margin-top:0;margin-bottom:0;padding-inline-start:48px;\"><li dir=\"ltr\" style=\"list-style-type:decimal;font-size:11pt;font-family:Arial,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;\" aria-level=\"1\"><p dir=\"ltr\" style=\"line-height:1.38;margin-top:0pt;margin-bottom:0pt;\" role=\"presentation\"><span style=\"font-size:11pt;font-family:Arial,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;\">i1</span></p></li><li dir=\"ltr\" style=\"list-style-type:decimal;font-size:11pt;font-family:Arial,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;\" aria-level=\"1\"><p dir=\"ltr\" style=\"line-height:1.38;margin-top:0pt;margin-bottom:0pt;\" role=\"presentation\"><span style=\"font-size:11pt;font-family:Arial,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;\">i2</span></p></li><ol style=\"margin-top:0;margin-bottom:0;padding-inline-start:48px;\"><li dir=\"ltr\" style=\"list-style-type:lower-alpha;font-size:11pt;font-family:Arial,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;\" aria-level=\"2\"><p dir=\"ltr\" style=\"line-height:1.38;margin-top:0pt;margin-bottom:0pt;\" role=\"presentation\"><span style=\"font-size:11pt;font-family:Arial,sans-serif;color:#000000;background-color:transparent;font-weight:400;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;\">i3</span></p></li></ol></ol><p dir=\"ltr\" style=\"line-height:1.38;margin-top:0pt;margin-bottom:0pt;\"><span style=\"font-size:11pt;font-family:Arial,sans-serif;color:#000000;background-color:transparent;font-weight:700;font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;\">text</span></p></b><br class=\"Apple-interchange-newline\">";
       final delta = _clipboard().convert(html: html);
+      // Google Docs marks every span with an explicit color/background; the
+      // default registry has ColorStyle/BackgroundStyle, so (like upstream
+      // Quill outside its restricted-registry unit test) they are preserved.
+      // The non-whitelisted `font-size: 11pt`, `font-family: Arial` and
+      // `dir="ltr"` are dropped by the attributor whitelists.
+      const gdocs = {'background': 'transparent', 'color': '#000000'};
       expectDelta(
         delta,
         Delta()
-          ..insert('text\n')
-          ..insert('i1\ni2\n', {'list': 'ordered'})
-          ..insert('i3\n', {'list': 'ordered', 'indent': 1})
-          ..insert('text', {'bold': true})
+          ..insert('text', gdocs)
+          ..insert('\n')
+          ..insert('i1\ni2\n', {'list': 'ordered', ...gdocs})
+          ..insert('i3\n', {'list': 'ordered', 'indent': 1, ...gdocs})
+          ..insert('text', {'bold': true, ...gdocs})
           ..insert('\n'),
       );
     });
@@ -428,21 +447,30 @@ void main() {
     test('pre', () {
       const html = '<pre> 01 \n 23 </pre>';
       final clipboard = _clipboard();
-      expectDelta(
-        clipboard.convert(html: html, formats: {'code-block': true}),
-        Delta()..insert(' 01 \n 23 ', {'code-block': true}),
-      );
+      // CodeBlock is part of the default registry, so `matchCodeBlock` applies
+      // the format (upstream expresses the opposite case with a registry that
+      // does not contain CodeBlock).
       expectDelta(
         clipboard.convert(html: html),
-        Delta()..insert(' 01 \n 23 '),
+        Delta()..insert(' 01 \n 23 \n', {'code-block': true}),
+      );
+      // Parity clipboard.ts:104-108 — pasting inside a code block short
+      // circuits: the plain text is used and the HTML is never parsed.
+      expectDelta(
+        clipboard.convert(
+          html: '<b>bold</b>',
+          text: ' 01 \n 23 ',
+          formats: {'code-block': true},
+        ),
+        Delta()..insert(' 01 \n 23 ', {'code-block': true}),
       );
     });
 
     test('pre with newline node', () {
       const html = '<pre><span> 01 </span>\n<span> 23 </span></pre>';
-      final delta =
-          _clipboard().convert(html: html, formats: {'code-block': true});
-      expectDelta(delta, Delta()..insert(' 01 \n 23 ', {'code-block': true}));
+      final delta = _clipboard().convert(html: html);
+      expectDelta(
+          delta, Delta()..insert(' 01 \n 23 \n', {'code-block': true}));
     });
 
     test('ignore empty elements except paragraphs', () {
