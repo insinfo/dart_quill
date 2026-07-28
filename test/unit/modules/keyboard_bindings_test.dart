@@ -2,6 +2,7 @@ import 'package:dart_quill/src/core/emitter.dart';
 import 'package:dart_quill/src/core/quill.dart';
 import 'package:dart_quill/src/core/selection.dart';
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/formats/code.dart';
 import 'package:dart_quill/src/modules/keyboard.dart';
 import 'package:test/test.dart';
 
@@ -78,8 +79,10 @@ void main() {
       final keys = quill.keyboard.bindings.keys.toSet();
       expect(keys, containsAll(<dynamic>['b', 'i', 'u', 'Tab', 'Enter', ' ']));
       expect(keys, containsAll(<dynamic>['Backspace', 'Delete']));
-      expect(keys,
-          containsAll(<dynamic>['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']));
+      expect(
+          keys,
+          containsAll(
+              <dynamic>['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']));
 
       // Tab carries indent/outdent/code-block/remove tab/tab/table tab.
       expect(quill.keyboard.bindings['Tab']!.length, greaterThanOrEqualTo(6));
@@ -121,6 +124,35 @@ void main() {
       expect(quill.getText().startsWith('ab\t'), isTrue);
     });
 
+    test('Tab and Shift+Tab use CodeBlock.TAB for code indentation', () {
+      expect(CodeBlock.TAB, '  ');
+      final quill = createTestQuill();
+      quill.setContents(Delta()
+        ..insert('ab')
+        ..insert('\n', {'code-block': true}));
+      quill.setSelection(const Range(1, 0), source: EmitterSource.USER);
+
+      expect(press(quill, 'Tab'), isTrue);
+      expect(quill.getText(), 'a${CodeBlock.TAB}b\n');
+      expect(quill.getSelection()?.index, 3);
+      expect(quill.getSelection()?.length, 0);
+
+      quill.setSelection(const Range(0, 3), source: EmitterSource.USER);
+      expect(press(quill, 'Tab', shiftKey: true), isTrue);
+      expect(quill.getText(), 'a${CodeBlock.TAB}b\n');
+
+      final leadingQuill = createTestQuill();
+      leadingQuill.setContents(Delta()
+        ..insert('${CodeBlock.TAB}line')
+        ..insert('\n', {'code-block': true}));
+      leadingQuill.setSelection(
+        Range(CodeBlock.TAB.length, 0),
+        source: EmitterSource.USER,
+      );
+      expect(press(leadingQuill, 'Tab', shiftKey: true), isTrue);
+      expect(leadingQuill.getText(), 'line\n');
+    });
+
     test('list autofill turns "1. " into an ordered list', () {
       final quill = createTestQuill();
       quill.insertText(0, '1.');
@@ -159,7 +191,8 @@ void main() {
       expect(lineAttributes(quill, 0)['list'], isNull);
     });
 
-    test('Enter at the end of a header keeps the header on the first line '
+    test(
+        'Enter at the end of a header keeps the header on the first line '
         'only', () {
       final quill = createTestQuill();
       quill.setContents(Delta()

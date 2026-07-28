@@ -2,7 +2,7 @@
 
 **Data:** 2026-07-28
 **Método:** comparação arquivo-a-arquivo e método-a-método entre `referencias/quilljs/src`, `referencias/quill_table_better/1.2.3/src/src` (+ parchment em `referencias/quill_table_better/1.2.3/src/node_modules/parchment/src`) e `lib/`.
-**Baseline de testes:** 318 unitários VM + 14 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo.
+**Baseline de testes:** 319 unitários VM + 14 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo.
 **Complementa:** `doc/PLANO_PORT_COMPLETO.md` (fases F0–F10; F0–F2 concluídas, F7/F8 núcleo entregue). Este documento substitui o detalhamento de lacunas daquele plano.
 
 ---
@@ -193,7 +193,7 @@ Bugs pontuais de alto impacto e baixo risco, sem mudança arquitetural:
 ### G5 — Formats/Themes/UI (3-5 dias) — G5.1/G5.3 CONCLUÍDOS (2026-07-27)
 - [x] G5.1 **BubbleTooltip posicionado** (F1) — o corpo comentado foi portado de bubble.ts:42-59 incluindo o caso multi-linha; **`Tooltip.position` com rects reais e `ql-flip`** (F9) + `isScrollable` guardando o listener de scroll; **handlers de link por tema** (F7) — snow ignora seleção colapsada e prefixa `mailto:`, bubble abre sem preview, handler do usuário vence (`BaseTheme.overridesHandler`); o Ctrl+K do snow delega ao handler. Novo helper `ui/dom_interop{,_stub,_web}.dart` para computed overflow / dispatch de evento (a camada de plataforma não expõe `getComputedStyle`). Testes: `test/unit/themes/tooltip_position_test.dart` (14) + `test/browser/tooltip_position_test.dart` (6).
 - [x] G5.3 `Picker.selectItem` público e despachando `change` no `<select>` nativo (F12); stubs mortos `color-picker.dart`/`icon-picker.dart`, `merge()` duplicada, getter `template` e `BubbleTheme.defaults()` removidos.
-- [~] G5.2 Checklist com `attachUI` e toggle checked/unchecked concluído em G4.3 (F6); `TableRow.checkMerge` já entregue em G1.4; `FontStyle`/`SizeStyle` e todas as demais variantes de attributor registrados por namespace em G4.4. Pendentes: `CodeBlock.TAB`; refinamento de `TableRow.optimize`; unificar `ColorAttributor`; `Link.sanitize` fiel; alinhar integralmente o modelo de `list` ao upstream (avaliar impacto no Delta).
+- [~] G5.2 Checklist com `attachUI` e toggle checked/unchecked concluído em G4.3 (F6); `TableRow.checkMerge` já entregue em G1.4; `FontStyle`/`SizeStyle` e todas as demais variantes de attributor registrados por namespace em G4.4. **Em 2026-07-28:** `CodeBlock.TAB` foi portado e o binding de Tab/Shift+Tab passou a consumir a constante do formato; a classe `ColorAttributor` duplicada e simplificada de `formats/color.dart` foi removida, unificando color/background na implementação especializada que normaliza RGB com validação. Teste de teclado cobre indent/outdent pelo contrato público. Pendentes: refinamento de `TableRow.optimize`; `Link.sanitize` fiel; alinhar integralmente o modelo de `list` ao upstream (avaliar impacto no Delta).
 - [ ] G5.4 Syntax: aplicar realce via diff (C6) + initListener com select de linguagem; vendorizar highlight (F4 do plano antigo).
 
 ### G6 — table-better UI completa (2-3 semanas, maior bloco)

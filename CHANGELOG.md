@@ -1,6 +1,8 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- Upstream-compatible `CodeBlock.TAB` and keyboard coverage for code-block
+  Tab/Shift+Tab indentation.
 - Public basic-table parity APIs: typed `TableContext`, `Table.getTable`,
   direct `insertRow`/`insertColumn`, and idempotent `Table.register`.
 - Public API and table-module tests for cell-relative context, direct
@@ -85,6 +87,9 @@
 - `example/ngdart` editor component wired to the public `dart_quill` package and the `package:web` DOM layer.
 
 ### Changed
+- Code-block keyboard bindings now consume the format's public indentation
+  constant, and color/background share one validated RGB-normalizing
+  `ColorAttributor` implementation.
 - Basic table registry definitions are now shared by global initialization and
   `Table.register`, preventing the two registration paths from diverging.
 - Non-silent `setSelection` now scrolls the selection into view; clipboard
@@ -153,7 +158,7 @@
 - AngularDart example compilation issues caused by missing package wiring and invalid host element typing.
 
 ### Tests
-- 318 VM unit tests, 14 browser/Chrome tests and 3 Puppeteer E2E scenarios
+- 319 VM unit tests, 14 browser/Chrome tests and 3 Puppeteer E2E scenarios
   passing; `dart analyze` clean (2026-07-28).
 - 204 unit tests and 3 Puppeteer E2E scenarios passing after the merge/split port.
 - Port/audit source expanded to `referencias/quilljs/test` for upstream unit, E2E, and fuzz scenarios.

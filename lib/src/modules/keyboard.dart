@@ -8,6 +8,7 @@ import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
 import '../blots/block.dart';
 import '../blots/text.dart';
 import '../blots/abstract/blot.dart';
+import '../formats/code.dart';
 import '../platform/dom.dart';
 import '../platform/platform.dart';
 
@@ -792,12 +793,6 @@ int? tableSide(dynamic table, Blot row, Blot cell, int offset) {
   return null;
 }
 
-/// Indentation unit of a code block.
-///
-/// TODO(G3): depende de `CodeBlock.TAB` (fase G5.2) — o formato `code-block`
-/// do port ainda não expõe a constante estática usada por keyboard.ts:647.
-const String _codeBlockTab = '  ';
-
 bool _isTruthy(dynamic value) => value != null && value != false && value != '';
 
 /// Walks up from [blot] to the enclosing `table-container` blot (the port has
@@ -841,7 +836,7 @@ dynamic _handleCodeBlockTab(
   bool indent,
 ) {
   final quill = keyboard.quill;
-  final tab = _codeBlockTab;
+  const tab = CodeBlock.TAB;
   if (range.length == 0 && !_eventShiftKey(context.event)) {
     quill.insertText(range.index, tab, source: EmitterSource.USER);
     quill.setSelection(Range(range.index + tab.length, 0),

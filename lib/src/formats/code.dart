@@ -50,11 +50,15 @@ class CodeBlockContainer extends ContainerBlot {
   }
 
   @override
-  CodeBlockContainer clone() => CodeBlockContainer(element.cloneNode(deep: true));
+  CodeBlockContainer clone() =>
+      CodeBlockContainer(element.cloneNode(deep: true));
 }
 
 class CodeBlock extends Block {
   CodeBlock(DomElement domNode) : super(domNode);
+
+  /// Indentation unit used by Quill's code-block keyboard bindings.
+  static const String TAB = '  ';
 
   static const String kBlotName = 'code-block';
   static const String kClassName = 'ql-code-block';
