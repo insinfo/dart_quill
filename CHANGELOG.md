@@ -1,6 +1,9 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- A document-level DOM event bridge for `selectionchange`, `mousedown`,
+  `mouseup` and `click`, routing `Emitter.listenDOM` handlers to the correct
+  attached Quill instance.
 - Quill-compatible named registration paths through `Quill.registerPath`,
   `importDefinition` and `registeredDefinitions`, allowing all attribute,
   class and style attributor variants to coexist without `attrName`
@@ -72,6 +75,8 @@
 - `example/ngdart` editor component wired to the public `dart_quill` package and the `package:web` DOM layer.
 
 ### Changed
+- Quill instance storage now uses `Expando<Object>` instead of a strong,
+  enumerable `Map<DomNode, dynamic>`.
 - Default attributors now use stable singleton instances; namespaced variants
   remain importable while only the intended `formats/*` aliases are installed
   into editor registries.
@@ -105,6 +110,8 @@
 - Removed obsolete merge scripts and the vendored `quilljs/` source tree from the active build path, keeping references under `referencias/`.
 
 ### Fixed
+- Detached editor containers no longer receive globally bridged DOM events,
+  and events targeting one editor are not delivered to another.
 - Prevented zero-length `.ql-ui` markers from being hydrated as Cursor blots,
   which leaked the cursor FEFF guard into list and table-list text.
 - Checklist scalar Delta values (`checked`/`unchecked`) are retained on list
@@ -128,7 +135,7 @@
 - AngularDart example compilation issues caused by missing package wiring and invalid host element typing.
 
 ### Tests
-- 307 VM unit tests, 13 browser/Chrome tests and 3 Puppeteer E2E scenarios
+- 309 VM unit tests, 13 browser/Chrome tests and 3 Puppeteer E2E scenarios
   passing; `dart analyze` clean (2026-07-28).
 - 204 unit tests and 3 Puppeteer E2E scenarios passing after the merge/split port.
 - Port/audit source expanded to `referencias/quilljs/test` for upstream unit, E2E, and fuzz scenarios.

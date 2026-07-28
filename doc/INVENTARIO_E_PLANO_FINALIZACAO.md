@@ -2,7 +2,7 @@
 
 **Data:** 2026-07-28
 **Método:** comparação arquivo-a-arquivo e método-a-método entre `referencias/quilljs/src`, `referencias/quill_table_better/1.2.3/src/src` (+ parchment em `referencias/quill_table_better/1.2.3/src/node_modules/parchment/src`) e `lib/`.
-**Baseline de testes:** 307 unitários VM + 13 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo.
+**Baseline de testes:** 309 unitários VM + 13 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo.
 **Complementa:** `doc/PLANO_PORT_COMPLETO.md` (fases F0–F10; F0–F2 concluídas, F7/F8 núcleo entregue). Este documento substitui o detalhamento de lacunas daquele plano.
 
 ---
@@ -169,7 +169,7 @@ Bugs pontuais de alto impacto e baixo risco, sem mudança arquitetural:
 - [~] G2.2 `Selection`: **`format()` com o contrato correto** — com seleção colapsada agora estaciona um `Cursor` no caret e o formata (formato pendente), em vez de não fazer nada; com range aplica direto. Em 2026-07-28 foram portados `normalizeNative` e `normalizedToRange`, usados pelo `Input` para converter `StaticRange` do navegador em `Range` do Quill. *Pendente: `rangeToNative`/`setNativeRange`/`update(source)` e integração completa do Cursor com a seleção nativa.* (C2 parcial)
 - [x] G2.3 `Editor`: `getFormat` (delegando ao `Scroll.getFormat`, que já implementa combineFormats fiel), `removeFormat` fiel (diff contra texto puro + sufixo da linha), `isBlank`, `getContentsRange(i,l)`, `getText(i,l)`, `insertContents` + normalização CRLF (C3). *Pendente: `getHTML`/`convertHTML` baseado em blots (hoje `deltaToSemanticHTML` bespoke).*
   - ⚠️ **Achado bloqueante para G1.10:** `Quill.removeFormat` NÃO pôde ser trocado para o `Editor.removeFormat` fiel — o diff produz um `retain {list: null}` que o `Editor.update` bespoke não aplica (o clean deixa a lista intacta). Isso é evidência concreta de que **o `applyDelta` fiel é pré-requisito** de vários itens de paridade; a versão bespoke de `Quill.removeFormat` foi mantida com a nota no código.
-- [ ] G2.4 Emitter: bridge global DOM (selectionchange/mousedown/mouseup/click) (C5 parte 2); `instances` via Expando (C13).
+- [x] G2.4 **Emitter global e instâncias fracas** (2026-07-28): bridge instalado uma vez por `DomDocument` para `selectionchange`/`mousedown`/`mouseup`/`click`, roteando somente aos `.ql-container` anexados e respeitando o alvo de cada `listenDOM`; `QuillInstances` usa `Expando<Object>` em vez de `Map<DomNode, dynamic>`, eliminando a retenção forte e a enumeração de editores. Fake DOM ganhou selector `.class` no documento para testar o mesmo caminho do browser. Testes: `emitter_test.dart` (bridge, detach e isolamento entre editores) + `instances_test.dart`. (C5 parte 2, C13)
 - [ ] G2.5 `scrollRectIntoView` fiel + `Quill.scrollSelectionIntoView` (C15).
 
 ### G3 — Keyboard completo — CONCLUÍDO (2026-07-27)

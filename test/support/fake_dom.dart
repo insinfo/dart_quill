@@ -243,7 +243,10 @@ class _SelectorMatcher {
   _SelectorMatcher(String selector) {
     final trimmed = selector.trim();
     final bracketIndex = trimmed.indexOf('[');
-    if (trimmed.startsWith('[')) {
+    if (trimmed.startsWith('.')) {
+      className = trimmed.substring(1);
+      tag = null;
+    } else if (trimmed.startsWith('[')) {
       tag = null;
       _parseAttribute(trimmed);
     } else if (bracketIndex == -1) {
@@ -255,6 +258,7 @@ class _SelectorMatcher {
   }
 
   String? tag;
+  String? className;
   String? attribute;
   String? operatorSymbol;
   String? value;
@@ -288,6 +292,9 @@ class _SelectorMatcher {
 
   bool matches(FakeDomElement element) {
     if (tag != null && element.tagName != tag) {
+      return false;
+    }
+    if (className != null && !element.classes.contains(className!)) {
       return false;
     }
     if (attribute == null) {

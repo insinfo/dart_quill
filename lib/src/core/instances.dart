@@ -1,7 +1,7 @@
 import '../platform/dom.dart';
 
 class QuillInstances {
-  final Map<DomNode, dynamic> _instances = <DomNode, dynamic>{};
+  final Expando<Object> _instances = Expando<Object>('quillInstances');
 
   T? get<T>(DomNode? node) {
     if (node == null) {
@@ -16,15 +16,7 @@ class QuillInstances {
   }
 
   void unregister(DomNode node) {
-    _instances.remove(node);
-  }
-
-  Iterable<T> values<T>() sync* {
-    for (final value in _instances.values) {
-      if (value is T) {
-        yield value;
-      }
-    }
+    _instances[node] = null;
   }
 }
 

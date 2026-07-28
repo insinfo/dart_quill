@@ -1,4 +1,38 @@
 import '../platform/dom.dart';
+import '../platform/platform.dart';
+import 'instances.dart';
+
+const _globalDomEvents = [
+  'selectionchange',
+  'mousedown',
+  'mouseup',
+  'click',
+];
+
+final Expando<bool> _bridgedDocuments = Expando<bool>('quillEmitterDomBridge');
+
+/// Install Quill's global DOM event bridge once for the active document.
+///
+/// Events are routed only to editors whose `.ql-container` is currently
+/// attached to that document, matching upstream emitter.ts.
+void ensureGlobalDomEventBridge() {
+  final document = domBindings.adapter.document;
+  if (_bridgedDocuments[document] ?? false) return;
+  _bridgedDocuments[document] = true;
+
+  for (final eventName in _globalDomEvents) {
+    document.addEventListener(eventName, (event) {
+      for (final container in document.querySelectorAll('.ql-container')) {
+        final instance = quillInstances.get<dynamic>(container);
+        if (instance == null) continue;
+        final emitter = (instance as dynamic).emitter;
+        if (emitter is Emitter) {
+          emitter.handleDOM(eventName, event);
+        }
+      }
+    });
+  }
+}
 
 class EmitterSource {
   const EmitterSource();

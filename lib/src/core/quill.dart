@@ -238,6 +238,7 @@ class Quill {
 
     theme.init();
     quillInstances.register<Quill>(container, this);
+    ensureGlobalDomEventBridge();
   }
 
   DomElement addContainer(String className, [DomElement? refNode]) {
