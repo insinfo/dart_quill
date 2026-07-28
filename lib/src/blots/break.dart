@@ -7,7 +7,10 @@ class Break extends EmbedBlot {
 
   static const String kBlotName = 'break';
   static const String tagName = 'BR';
-  static const int kScope = Scope.BLOCK_BLOT;
+  // Parity: parchment LeafBlot.scope = Scope.INLINE_BLOT (leaf.ts:6); Break
+  // inherits it. BLOCK_BLOT here broke Scroll.insertBefore wrapping and
+  // bubbleFormats' scope-boundary check.
+  static const int kScope = Scope.INLINE_BLOT;
 
   static Break create() {
     final node = domBindings.adapter.document.createElement(tagName);

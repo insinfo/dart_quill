@@ -30,10 +30,43 @@ class Italic extends InlineBlot {
     Map<String, dynamic>? context,
   ]) {
     super.optimize(mutations, context);
+    // Parity: TS Italic extends Bold and inherits its optimize — normalize
+    // <i> to <em> moving the children into the replacement (the previous
+    // unwrap+insertBefore dropped the content), then merge equal siblings.
     if (element.tagName != kTagNames.first) {
-      unwrap();
-      parent?.insertBefore(Italic.create(), next);
+      final parentBlot = parent;
+      if (parentBlot is ParentBlot) {
+        final replacement = scroll.create(kBlotName) as ParentBlot;
+        parentBlot.insertBefore(replacement, next);
+        moveChildren(replacement, null);
+        remove();
+        replacement.optimize(mutations, context);
+        return;
+      }
     }
+
+    final previous = prev;
+    if (previous is Italic && previous.parent == parent) {
+      moveChildren(previous, null);
+      remove();
+      previous.optimize(mutations, context);
+      return;
+    }
+
+    final following = next;
+    if (following is Italic && following.parent == parent) {
+      following.moveChildren(this, null);
+      following.remove();
+    }
+  }
+
+  @override
+  void format(String name, dynamic value) {
+    if (name == kBlotName && value == false) {
+      unwrap();
+      return;
+    }
+    super.format(name, value);
   }
 
   @override

@@ -12,6 +12,7 @@ class RegistryEntry {
     required this.create,
     this.tagNames = const <String>[],
     this.classNames = const <String>[],
+    this.requiredContainerBlotName,
   });
 
   final String blotName;
@@ -19,6 +20,11 @@ class RegistryEntry {
   final Blot Function([dynamic value]) create;
   final List<String> tagNames;
   final List<String> classNames;
+
+  /// blotName of this blot's required container (parchment
+  /// `statics.requiredContainer`), so registry filtering can pull the whole
+  /// container chain in (see createRegistryWithFormats).
+  final String? requiredContainerBlotName;
 }
 
 class Registry {
@@ -104,6 +110,13 @@ class Registry {
     }
     return entry.create(value);
   }
+
+  /// Parity parchment `Registry.query(Scope)` (registry.ts:82-88): a scope
+  /// query resolves to the default 'block' or 'inline' blot by level.
+  RegistryEntry? queryScope(int scope) {
+    final name = (scope & Scope.BLOCK) != 0 ? 'block' : 'inline';
+    return _entries[name];
+  }
 }
 
 class Scope {
@@ -164,8 +177,70 @@ abstract class Blot {
   void format(String name, dynamic value) {}
 
   void formatAt(int index, int length, String name, dynamic value) {
+    shadowFormatAt(index, length, name, value);
+  }
+
+  /// Parity `ShadowBlot.formatAt` (shadow.ts:89-104): isolate the range and
+  /// either wrap it in the queried blot or wrap it in a same-scope parent and
+  /// apply the attributor there. Exposed separately from [formatAt] so
+  /// EmbedBlot.format can reach the base behavior without recursing through
+  /// its own formatAt override.
+  void shadowFormatAt(int index, int length, String name, dynamic value) {
     if (length <= 0) return;
-    format(name, value);
+    final isTruthy = value != null && value != false && value != '';
+    if (scroll.query(name, Scope.BLOT) != null && isTruthy) {
+      final blot = isolate(index, length);
+      blot.wrap(name, value);
+    } else if (scroll.queryAttributor(name, Scope.ATTRIBUTE) != null) {
+      final parentEntry = scroll.registry.queryScope(scope);
+      if (parentEntry == null) return;
+      final blot = isolate(index, length);
+      final wrapper = scroll.create(parentEntry.blotName);
+      if (wrapper is! ParentBlot) return;
+      blot.wrapWith(wrapper);
+      wrapper.format(name, value);
+    }
+  }
+
+  /// Parity `ShadowBlot.isolate` (shadow.ts:115-122).
+  Blot isolate(int index, int length) {
+    final target = split(index);
+    if (target == null) {
+      throw StateError('Attempt to isolate at end of blot');
+    }
+    target.split(length);
+    return target;
+  }
+
+  /// Parity `ShadowBlot.wrap(name, value)` (shadow.ts:172-185).
+  ParentBlot wrap(String name, [dynamic value]) {
+    final wrapper = scroll.create(name, value);
+    if (wrapper is! ParentBlot) {
+      throw ArgumentError('Cannot wrap blot in non-parent "$name"');
+    }
+    return wrapWith(wrapper);
+  }
+
+  /// Wrap in an existing parent blot (TS wrap with a Parent argument).
+  ParentBlot wrapWith(ParentBlot wrapper) {
+    parent?.insertBefore(wrapper, next);
+    wrapper.appendChild(this);
+    return wrapper;
+  }
+
+  /// Parity `ShadowBlot.replaceWith(name, value)` (shadow.ts:151-159).
+  Blot replaceWith(String name, [dynamic value]) {
+    return replaceWithBlot(scroll.create(name, value));
+  }
+
+  /// Replace with an existing blot (TS replaceWith with a Blot argument);
+  /// ParentBlot overrides to move the children over first.
+  Blot replaceWithBlot(Blot replacement) {
+    if (parent != null) {
+      parent!.insertBefore(replacement, next);
+      remove();
+    }
+    return replacement;
   }
 
   void insertAt(int index, String value, [dynamic def]);
@@ -203,6 +278,25 @@ abstract class Blot {
       return parent!.find(query, bubble: true);
     }
     return const MapEntry(null, -1);
+  }
+
+  /// Parity `ShadowBlot.update(mutations, context)` — reconcile this blot
+  /// with DOM mutations targeting it. Base implementation is a no-op.
+  void applyMutations(
+    List<DomMutationRecord> mutations,
+    Map<String, dynamic> context,
+  ) {}
+
+  /// Depth from the scroll root (used to order mutation dispatch
+  /// children-first).
+  int get depth {
+    var count = 0;
+    Blot? current = parent;
+    while (current != null) {
+      count += 1;
+      current = current.parent;
+    }
+    return count;
   }
 }
 
@@ -389,6 +483,91 @@ abstract class ParentBlot extends Blot {
     for (final child in toMove) {
       target.insertBefore(child, ref);
     }
+  }
+
+  @override
+  Blot replaceWithBlot(Blot replacement) {
+    // Parity parent.ts:285-292 — a parent hands its children to the
+    // replacement before being swapped out.
+    if (replacement is ParentBlot) {
+      moveChildren(replacement, null);
+    }
+    return super.replaceWithBlot(replacement);
+  }
+
+  /// Parity `ParentBlot.update` (parent.ts:334-397): reconcile the child
+  /// blot list with the element's live childNodes after a childList
+  /// mutation — reusing blots whose nodes are still present, hydrating
+  /// blots for new nodes, and detaching blots whose nodes left.
+  @override
+  void applyMutations(
+    List<DomMutationRecord> mutations,
+    Map<String, dynamic> context,
+  ) {
+    final touchesChildList = mutations.any((mutation) =>
+        mutation.type == 'childList' && identical(mutation.target, domNode));
+    if (touchesChildList) {
+      syncChildrenFromDom(context);
+    }
+  }
+
+  /// Rebuilds [children] to match `element.childNodes`, reusing existing
+  /// blots and hydrating new nodes through the scroll's registry.
+  void syncChildrenFromDom(Map<String, dynamic> context) {
+    final byNode = <DomNode, Blot>{
+      for (final child in children) child.domNode: child,
+    };
+    final desired = <Blot>[];
+    for (final node in List<DomNode>.from(element.childNodes)) {
+      final existing = byNode.remove(node);
+      if (existing != null) {
+        desired.add(existing);
+        continue;
+      }
+      final hydrated = scroll.hydrateDomNode(node);
+      if (hydrated != null) {
+        desired.add(hydrated);
+      }
+    }
+
+    // Blots whose nodes were removed from the DOM detach from the model
+    // (without touching the DOM again).
+    for (final orphan in byNode.values) {
+      final index = children.indexOf(orphan);
+      if (index != -1) {
+        children.removeAt(index);
+      }
+      orphan.parent = null;
+      orphan.prev = null;
+      orphan.next = null;
+    }
+
+    // Relink in DOM order.
+    children
+      ..clear()
+      ..addAll(desired);
+    Blot? previous;
+    for (final child in children) {
+      child.parent = this;
+      child.prev = previous;
+      previous?.next = child;
+      previous = child;
+    }
+    previous?.next = null;
+  }
+
+  /// Parity `ParentBlot.splitAfter(child)` (parent.ts:316-325): clone this
+  /// parent after itself and move every sibling following [child] into it.
+  ParentBlot splitAfter(Blot child) {
+    final after = clone() as ParentBlot;
+    parent?.insertBefore(after, next);
+    var current = child.next;
+    while (current != null) {
+      final following = current.next;
+      after.appendChild(current);
+      current = following;
+    }
+    return after;
   }
 
   void _ensureChildDomParent(
@@ -684,6 +863,44 @@ abstract class BlockBlot extends ParentBlot {
 
 abstract class ContainerBlot extends ParentBlot {
   ContainerBlot(DomElement domNode) : super(domNode);
+
+  /// Parity parchment container.ts:13-17. The tagName comparison is a Dart
+  /// addition: unlike upstream, some Dart containers vary their tag by value
+  /// (ListContainer renders OL or UL), and merging across tags would corrupt
+  /// the DOM.
+  bool checkMerge() {
+    final following = next;
+    return following != null &&
+        following.blotName == blotName &&
+        following.domNode is DomElement &&
+        (following.domNode as DomElement).tagName == element.tagName;
+  }
+
+  /// Containers that run their own single-pass convergence (table_better's
+  /// requiredContainer join creates empty wrappers that only adopt children
+  /// later in the same optimize pass) opt out of the base empty-removal and
+  /// sibling merge, which would otherwise delete those wrappers mid-flight.
+  bool get managesOwnContainerOptimize => false;
+
+  @override
+  void optimize([
+    List<DomMutationRecord>? mutations,
+    Map<String, dynamic>? context,
+  ]) {
+    super.optimize(mutations, context);
+    if (managesOwnContainerOptimize) return;
+    // Parity parent.ts:258-267 — empty containers remove themselves.
+    if (children.isEmpty) {
+      remove();
+      return;
+    }
+    // Parity container.ts:39-45 — absorb the next sibling when mergeable.
+    final following = next;
+    if (following is ParentBlot && following.prev == this && checkMerge()) {
+      following.moveChildren(this, null);
+      following.remove();
+    }
+  }
 }
 
 abstract class LeafBlot extends Blot {
@@ -744,6 +961,23 @@ abstract class EmbedBlot extends LeafBlot {
   EmbedBlot(DomElement domNode) : super(domNode);
 
   DomElement get element => domNode as DomElement;
+
+  @override
+  void format(String name, dynamic value) {
+    // Parity parchment embed.ts:9-14 — the base shadow formatAt wraps the
+    // embed; subclasses override format() without touching formatAt.
+    shadowFormatAt(0, length(), name, value);
+  }
+
+  @override
+  void formatAt(int index, int length, String name, dynamic value) {
+    // Parity parchment embed.ts:16-23.
+    if (index == 0 && length == this.length()) {
+      format(name, value);
+    } else {
+      super.formatAt(index, length, name, value);
+    }
+  }
 }
 
 abstract class ScrollBlot extends ParentBlot {
@@ -758,6 +992,10 @@ abstract class ScrollBlot extends ParentBlot {
       registry.queryAttributor(name, scope);
 
   Blot create(String name, [dynamic value]) => registry.create(name, value);
+
+  /// Hydrates a blot (and its subtree) from a live DOM node; used by the
+  /// mutation-reconciliation path. Implemented by Scroll.
+  Blot? hydrateDomNode(DomNode node);
 
   void update([
     List<DomMutationRecord>? mutations,

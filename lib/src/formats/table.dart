@@ -190,6 +190,36 @@ class TableRow extends Container {
   @override
   int get scope => kScope;
 
+  String? _rowIdOf(Blot blot) => blot is TableCell ? blot.rowId : null;
+
+  @override
+  bool checkMerge() {
+    // Parity table.ts:66-77 — only merge rows whose head/tail cells agree on
+    // the same data-row id.
+    if (!super.checkMerge()) return false;
+    final following = next;
+    if (following is! ParentBlot ||
+        children.isEmpty ||
+        following.children.isEmpty) {
+      return false;
+    }
+    final thisHead = _rowIdOf(children.first);
+    final thisTail = _rowIdOf(children.last);
+    final nextHead = _rowIdOf(following.children.first);
+    final nextTail = _rowIdOf(following.children.last);
+    return thisHead != null &&
+        thisHead == thisTail &&
+        thisHead == nextHead &&
+        thisHead == nextTail;
+  }
+
+  // NOTE(G1.10): table.ts:79-97 also splits a row whose cells carry
+  // different data-row ids (splitAfter + re-optimize). That depends on the
+  // TS applyDelta insertion semantics; with the current Dart Editor.update
+  // path it fights the table module's boundary normalization (an empty
+  // split-off cell must be pulled OUT of the table as a paragraph, not kept
+  // in its own row). Port it together with Scroll.insertContents.
+
   int rowOffset() {
     final parentBlot = parent;
     if (parentBlot == null) {

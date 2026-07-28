@@ -44,6 +44,26 @@ class TextBlot extends LeafBlot {
   }
 
   @override
+  void optimize([
+    List<DomMutationRecord>? mutations,
+    Map<String, dynamic>? context,
+  ]) {
+    // Parity parchment text.ts:50-59 — drop empty text nodes and merge with
+    // an adjacent TextBlot so the document doesn't fragment progressively
+    // after splits/formats.
+    super.optimize(mutations, context);
+    if (textNode.data.isEmpty) {
+      remove();
+      return;
+    }
+    final following = next;
+    if (following is TextBlot && identical(following.prev, this)) {
+      textNode.data = textNode.data + following.textNode.data;
+      following.remove();
+    }
+  }
+
+  @override
   void insertAt(int index, String value, [dynamic def]) {
     final data = textNode.data;
     if (index < 0 || index > data.length) {

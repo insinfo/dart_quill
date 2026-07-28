@@ -10,8 +10,6 @@ class Inline extends InlineBlot {
   static const String kTagName = 'SPAN';
   static const int kScope = Scope.INLINE_BLOT;
 
-  late final AttributorStore attributes = AttributorStore(element);
-
   static Inline create() =>
       Inline(domBindings.adapter.document.createElement(kTagName));
 
@@ -23,35 +21,6 @@ class Inline extends InlineBlot {
 
   @override
   Inline clone() => Inline(element.cloneNode(deep: false));
-
-  Attributor? _lookupAttributor(String name) =>
-      isAttached ? scroll.queryAttributor(name, Scope.INLINE_ATTRIBUTE) : null;
-
-  void _ensureAttributesBuilt() {
-    if (isAttached) {
-      attributes.ensureBuilt(_lookupAttributor);
-    }
-  }
-
-  @override
-  void format(String name, dynamic value) {
-    final attribute = _lookupAttributor(name);
-    if (attribute == null) {
-      super.format(name, value);
-      return;
-    }
-    _ensureAttributesBuilt();
-    attributes.attribute(attribute, value);
-    if (attributes.values().isEmpty) {
-      unwrap();
-    }
-  }
-
-  @override
-  Map<String, dynamic> formats() {
-    _ensureAttributesBuilt();
-    return attributes.values();
-  }
 }
 
 abstract class InlineBlot extends ParentBlot {
@@ -70,6 +39,10 @@ abstract class InlineBlot extends ParentBlot {
 
   InlineBlot(DomElement domNode) : super(domNode);
 
+  /// Parity parchment inline.ts — every inline carries an attributor store
+  /// (color/background/font/size wrappers live here).
+  late final AttributorStore attributes = AttributorStore(element);
+
   static int compare(String self, String other) {
     final selfIndex = InlineBlot.order.indexOf(self);
     final otherIndex = InlineBlot.order.indexOf(other);
@@ -82,34 +55,45 @@ abstract class InlineBlot extends ParentBlot {
     return self.compareTo(other);
   }
 
-  @override
-  void format(String name, dynamic value) {
-    if (value) {
-      addClass(name);
-    } else {
-      removeClass(name);
+  Attributor? _lookupAttributor(String name) =>
+      isAttached ? scroll.queryAttributor(name, Scope.INLINE_ATTRIBUTE) : null;
+
+  void _ensureAttributesBuilt() {
+    if (isAttached) {
+      attributes.ensureBuilt(_lookupAttributor);
     }
   }
 
   @override
-  void formatAt(int index, int length, String name, dynamic value) {
-    // Delegate to base implementation
-    super.formatAt(index, length, name, value);
+  void format(String name, dynamic value) {
+    // Parity parchment inline.ts:62-85.
+    if (name == blotName && (value == null || value == false)) {
+      unwrap();
+      return;
+    }
+    final attribute = _lookupAttributor(name);
+    if (attribute != null) {
+      _ensureAttributesBuilt();
+      attributes.attribute(attribute, value);
+      return;
+    }
+    final isTruthy = value != null && value != false && value != '';
+    if (isTruthy &&
+        isAttached &&
+        scroll.query(name, Scope.INLINE) != null &&
+        (name != blotName || formats()[name] != value)) {
+      replaceWith(name, value);
+    }
   }
 
   @override
   Map<String, dynamic> formats() {
-    return {
-      for (final token in element.classes.values) token: true,
-    };
-  }
-
-  void addClass(String name) {
-    element.classes.add(name);
-  }
-
-  void removeClass(String name) {
-    element.classes.remove(name);
+    // Parity parchment inline.ts:87-94 — attributor values only; concrete
+    // formats (Bold, Link, ...) add their own blotName entry in overrides.
+    // The previous behavior (every CSS class becomes a format) minted
+    // phantom formats like ql-cursor.
+    _ensureAttributesBuilt();
+    return attributes.values();
   }
 
   void unwrap() {
@@ -121,7 +105,15 @@ abstract class InlineBlot extends ParentBlot {
     }
   }
 
-  // wrap intentionally unimplemented in this simplified base.
+  bool _formatsEqual(Map<String, dynamic> a, Map<String, dynamic> b) {
+    if (a.length != b.length) return false;
+    for (final entry in a.entries) {
+      if (!b.containsKey(entry.key) || b[entry.key] != entry.value) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   @override
   void optimize([
@@ -133,6 +125,23 @@ abstract class InlineBlot extends ParentBlot {
     if (parentInline is InlineBlot &&
         InlineBlot.compare(blotName, parentInline.blotName) > 0) {
       _reorderWithParent(parentInline);
+      return;
+    }
+    // Parity parchment inline.ts:113-128 — a span with no formats unwraps;
+    // adjacent siblings with identical formats merge.
+    final currentFormats = formats();
+    if (currentFormats.isEmpty && blotName == Inline.kBlotName) {
+      unwrap();
+      return;
+    }
+    final following = next;
+    if (following is InlineBlot &&
+        following.prev == this &&
+        following.blotName == blotName &&
+        following.element.tagName == element.tagName &&
+        _formatsEqual(currentFormats, following.formats())) {
+      following.moveChildren(this, null);
+      following.remove();
     }
   }
 

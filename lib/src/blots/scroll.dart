@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:dart_quill/src/core/emitter.dart';
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
 
@@ -183,29 +185,41 @@ class Scroll extends ScrollBlot {
   }
 
   List<Blot> lines([int index = 0, int length = 0x7fffffff]) {
-    final result = <Blot>[];
-    var offset = 0;
-    var remaining = length;
-    for (final child in children) {
-      final childLength = child.length();
-      final end = offset + childLength;
-      if (end <= index) {
+    // Parity scroll.ts:234-257 — recurse into containers respecting the
+    // range (the previous version returned ALL of a container's lines even
+    // when the range covered only part of it, so formatLine could format
+    // lines outside the selection inside lists/tables).
+    List<Blot> getLines(ParentBlot blot, int blotIndex, int blotLength) {
+      final result = <Blot>[];
+      var lengthLeft = blotLength;
+      var offset = 0;
+      for (final child in blot.children) {
+        final childLength = child.length();
+        final end = offset + childLength;
+        if (end > blotIndex && offset < blotIndex + blotLength) {
+          final childIndex = math.max(0, blotIndex - offset);
+          final visited = (math.min(end, blotIndex + blotLength) -
+                  math.max(offset, blotIndex))
+              .toInt();
+          if (isLine(child)) {
+            result.add(child);
+          } else if (child is ContainerBlot) {
+            result.addAll(getLines(child, childIndex, lengthLeft));
+          }
+          lengthLeft -= visited;
+        }
         offset = end;
-        continue;
+        if (offset >= blotIndex + blotLength) {
+          break;
+        }
       }
-      if (isLine(child)) {
-        result.add(child);
-      } else if (child is ContainerBlot) {
-        result.addAll(child.descendants<Blot>(predicate: isLine));
-      }
-      remaining -= childLength;
-      if (remaining <= 0) {
-        break;
-      }
-      offset = end;
+      return result;
     }
-    return result;
+
+    return getLines(this, index, length);
   }
+
+  static const int _kMaxOptimizeIterations = 100;
 
   @override
   void optimize([
@@ -213,13 +227,29 @@ class Scroll extends ScrollBlot {
     Map<String, dynamic>? context,
   ]) {
     if (_batch != null) return;
-    super.optimize(mutations, context);
-    if (children.isEmpty) {
-      final block = _createBlock();
-      appendChild(block);
-    }
-    final records = mutations ?? const <DomMutationRecord>[];
     final scope = context ?? <String, dynamic>{};
+    final records = List<DomMutationRecord>.from(
+        mutations ?? const <DomMutationRecord>[]);
+
+    // Parity parchment scroll.ts:106-181 — converge: each optimize pass may
+    // mutate the DOM (merges, unwraps, requiredContainer wrapping); drain
+    // the observer and re-run until quiescent, with a hard iteration cap.
+    var remaining = _kMaxOptimizeIterations;
+    while (true) {
+      super.optimize(mutations, scope);
+      if (children.isEmpty) {
+        final block = _createBlock();
+        appendChild(block);
+      }
+      final produced = observer?.takeRecords() ?? const <DomMutationRecord>[];
+      if (produced.isEmpty) break;
+      records.addAll(produced);
+      remaining -= 1;
+      if (remaining <= 0) {
+        throw StateError('[Parchment] Maximum optimize iterations exceeded');
+      }
+    }
+
     if (records.isNotEmpty) {
       emitter.emit(EmitterEvents.SCROLL_OPTIMIZE, records, scope);
     }
@@ -233,7 +263,8 @@ class Scroll extends ScrollBlot {
 
   @override
   void remove() {
-    throw UnsupportedError('Scroll cannot be removed');
+    // Parity with scroll.ts:276-278 — the root is never removed; ignore
+    // silently so optimize passes that try to drop it keep running.
   }
 
   @override
@@ -258,9 +289,44 @@ class Scroll extends ScrollBlot {
       return;
     }
     final source = context != null ? context['source'] : EmitterSource.USER;
+    final ctx = context ?? <String, dynamic>{};
     emitter.emit(EmitterEvents.SCROLL_BEFORE_UPDATE, source, filtered);
+
+    // Parity parchment scroll.ts:183-213 — group mutations by owning blot
+    // and let each blot reconcile itself (children before parents so a
+    // parent's childList resync sees settled subtrees).
+    final mutationsMap = <Blot, List<DomMutationRecord>>{};
+    for (final record in filtered) {
+      final blot = find(record.target, bubble: true).key;
+      if (blot == null) continue;
+      mutationsMap.putIfAbsent(blot, () => []).add(record);
+    }
+    final targets = mutationsMap.keys.toList()
+      ..sort((a, b) => b.depth.compareTo(a.depth));
+    for (final blot in targets) {
+      if (!identical(blot, this) && blot.parent == null) continue;
+      blot.applyMutations(mutationsMap[blot]!, ctx);
+      _invalidateEnclosingBlockCache(blot);
+    }
+
     emitter.emit(EmitterEvents.SCROLL_UPDATE, source, filtered);
+    optimize(filtered, ctx);
   }
+
+  void _invalidateEnclosingBlockCache(Blot blot) {
+    Blot? current = blot;
+    while (current != null) {
+      if (current is Block) {
+        current.invalidateCache();
+        return;
+      }
+      current = current.parent;
+    }
+  }
+
+  /// Public hydration entry used by ParentBlot.syncChildrenFromDom.
+  @override
+  Blot? hydrateDomNode(DomNode node) => _blotFromDomNode(node);
 
   void updateEmbedAt(int index, String key, dynamic change) {
     final result = descendant((blot) => blot is BlockEmbed, index);
@@ -271,6 +337,102 @@ class Scroll extends ScrollBlot {
   }
 
   void handleDragStart(DomEvent event) => event.preventDefault();
+
+  /// Parity scroll.ts:139-210 — the canonical delta→blots insertion path.
+  void insertContents(int index, Delta delta) {
+    final renderBlocks =
+        deltaToRenderBlocks(delta.concat(Delta()..insert('\n')));
+    if (renderBlocks.isEmpty) return;
+    final last = renderBlocks.removeLast();
+
+    batchStart();
+
+    var insertIndex = index;
+    if (renderBlocks.isNotEmpty) {
+      final first = renderBlocks.removeAt(0);
+      final isBlock = first['type'] == 'block';
+      final firstDelta = isBlock
+          ? first['delta'] as Delta
+          : (Delta()..insert({first['key'] as String: first['value']}));
+      final firstLength = _characterLength(firstDelta);
+      final hasBlockEmbedAt =
+          descendant((blot) => blot is BlockEmbed, insertIndex).key != null;
+      final shouldInsertNewlineChar = isBlock &&
+          (firstLength == 0 || (!hasBlockEmbedAt && insertIndex < length()));
+      insertInlineContents(this, insertIndex, firstDelta);
+      final newlineCharLength = isBlock ? 1 : 0;
+      final lineEndIndex = insertIndex + firstLength + newlineCharLength;
+      if (shouldInsertNewlineChar) {
+        insertAt(lineEndIndex - 1, '\n');
+      }
+
+      final lineEntry = line(insertIndex);
+      final formats = bubbleFormats(lineEntry.key);
+      final attributes = Delta.diffAttributes(
+              formats, first['attributes'] as Map<String, dynamic>) ??
+          <String, dynamic>{};
+      attributes.forEach((name, value) {
+        formatAt(lineEndIndex - 1, 1, name, value);
+      });
+
+      insertIndex = lineEndIndex;
+    }
+
+    var refEntry = _childAtIndex(insertIndex);
+    var refBlot = refEntry.key;
+    var refBlotOffset = refEntry.value;
+    if (renderBlocks.isNotEmpty) {
+      if (refBlot != null) {
+        refBlot = refBlot.split(refBlotOffset);
+        refBlotOffset = 0;
+      }
+
+      for (final renderBlock in renderBlocks) {
+        if (renderBlock['type'] == 'block') {
+          final block = createBlock(
+              Map<String, dynamic>.from(renderBlock['attributes'] as Map),
+              refBlot);
+          insertInlineContents(block, 0, renderBlock['delta'] as Delta);
+        } else {
+          final blockEmbed =
+              create(renderBlock['key'] as String, renderBlock['value']);
+          insertBefore(blockEmbed, refBlot);
+          (renderBlock['attributes'] as Map).forEach((name, value) {
+            blockEmbed.format('$name', value);
+          });
+        }
+      }
+    }
+
+    if (last['type'] == 'block') {
+      final lastDelta = last['delta'] as Delta;
+      if (lastDelta.isNotEmpty) {
+        final offset =
+            refBlot != null ? this.offset(refBlot) + refBlotOffset : length();
+        insertInlineContents(this, offset, lastDelta);
+      }
+    }
+
+    batchEnd();
+    optimize([], {});
+  }
+
+  /// Direct child containing [index] (LinkedList.find equivalent); null when
+  /// the index is at or past the end.
+  MapEntry<Blot?, int> _childAtIndex(int index) {
+    var offset = 0;
+    for (final child in children) {
+      final childLength = child.length();
+      if (index < offset + childLength) {
+        return MapEntry(child, index - offset);
+      }
+      offset += childLength;
+    }
+    return const MapEntry(null, 0);
+  }
+
+  static int _characterLength(Delta delta) => delta.operations
+      .fold<int>(0, (total, op) => total + (op.length ?? 0));
 
   List<Map<String, dynamic>> deltaToRenderBlocks(Delta delta) {
     final renderBlocks = <Map<String, dynamic>>[];

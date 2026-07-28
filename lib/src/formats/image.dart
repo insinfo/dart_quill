@@ -80,8 +80,9 @@ class Image extends Embed {
 
   @override
   Map<String, dynamic> formats() {
-    final attributes = getAttributes(element);
-    return {kBlotName: getValue(element), ...attributes};
+    // Parity image.ts:18-28 — only the whitelisted attributes (alt/height/
+    // width/...) are formats; the src is the embed's value, not a format.
+    return getAttributes(element);
   }
 
   @override

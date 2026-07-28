@@ -23,7 +23,17 @@ abstract class Attributor {
     return _kScopeAttribute;
   }
 
-  bool canAdd(DomElement domNode, dynamic value) => true;
+  /// Parity attributor.ts:40-49 — whitelist check with quote stripping for
+  /// string values (e.g. font-family: "Arial" matches whitelist 'Arial').
+  bool canAdd(DomElement domNode, dynamic value) {
+    final whitelist = config['whitelist'];
+    if (whitelist is! List) return true;
+    if (value is String) {
+      return whitelist.contains(value.replaceAll(RegExp('["\']'), ''));
+    }
+    return whitelist.contains(value);
+  }
+
   dynamic value(DomElement domNode) => domNode.getAttribute(keyName);
   bool add(DomElement domNode, dynamic value) {
     if (!canAdd(domNode, value)) return false;
@@ -108,11 +118,6 @@ abstract class ClassAttributor extends Attributor {
   ClassAttributor(String attrName, String keyName, Map<String, dynamic> config) : super(attrName, keyName, config);
 
   @override
-  bool canAdd(DomElement domNode, dynamic value) {
-    return config['whitelist'] == null || (config['whitelist'] as List).contains(value);
-  }
-
-  @override
   dynamic value(DomElement domNode) {
     final classes = domNode.classes.values.where((name) => name.startsWith('$keyName-'));
     if (classes.isNotEmpty) {
@@ -137,18 +142,29 @@ abstract class ClassAttributor extends Attributor {
     for (final cls in toRemove) {
       domNode.classes.remove(cls);
     }
+    // Parity class.ts:31-33 — drop the attribute entirely when empty.
+    if (domNode.classes.values.isEmpty) {
+      domNode.removeAttribute('class');
+    }
   }
 
-  static List<String> keys(DomElement domNode) => domNode.classes.values.toList();
+  /// Parity class.ts:11-15 — each class name is reduced to its attributor
+  /// keyName by dropping the trailing value segment
+  /// ("ql-align-center" → "ql-align"), so AttributorStore.build can
+  /// rediscover class attributors from pre-existing HTML.
+  static List<String> keys(DomElement domNode) {
+    return (domNode.getAttribute('class') ?? '')
+        .split(RegExp(r'\s+'))
+        .where((name) => name.isNotEmpty)
+        .map((name) {
+      final parts = name.split('-');
+      return parts.sublist(0, parts.length - 1).join('-');
+    }).toList();
+  }
 }
 
 abstract class StyleAttributor extends Attributor {
   StyleAttributor(String attrName, String keyName, Map<String, dynamic> config) : super(attrName, keyName, config);
-
-  @override
-  bool canAdd(DomElement domNode, dynamic value) {
-    return config['whitelist'] == null || (config['whitelist'] as List).contains(value);
-  }
 
   @override
   dynamic value(DomElement domNode) {

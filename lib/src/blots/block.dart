@@ -61,6 +61,10 @@ class Block extends BlockBlot {
 
   final Map<String, dynamic> _cache = <String, dynamic>{};
 
+  /// Drops the cached delta/length after out-of-band DOM mutations (the
+  /// scroll's reconciliation pipeline calls this for affected lines).
+  void invalidateCache() => _cache.clear();
+
   /// Applied block-level attributors (align, indent, direction, ...),
   /// mirroring parchment BlockBlot's `attributes: AttributorStore`.
   late final AttributorStore attributes = AttributorStore(element);
@@ -377,6 +381,48 @@ class BlockEmbed extends EmbedBlot {
 
   static const String kBlotName = 'blockEmbed';
   static const int kScope = Scope.BLOCK_BLOT;
+
+  /// Parity block.ts:131-153 — block embeds carry block attributors
+  /// (align/indent/direction on a full-line image or video).
+  late final AttributorStore attributes = AttributorStore(element);
+
+  Attributor? _lookupBlockAttributor(String name) =>
+      isAttached ? scroll.queryAttributor(name, Scope.BLOCK_ATTRIBUTE) : null;
+
+  void _ensureAttributesBuilt() {
+    if (isAttached) {
+      attributes.ensureBuilt(_lookupBlockAttributor);
+    }
+  }
+
+  /// The applied block-attributor values (merged into the delta line).
+  Map<String, dynamic> attributeValues() {
+    _ensureAttributesBuilt();
+    return attributes.values();
+  }
+
+  /// Parity block.ts:140-145.
+  Delta delta() {
+    final merged = {...formats(), ...attributeValues()};
+    return Delta()..insert(value(), merged.isEmpty ? null : merged);
+  }
+
+  @override
+  void format(String name, dynamic value) {
+    // Parity block.ts:147-153 — only block attributors apply; anything else
+    // is dropped silently.
+    final attribute = _lookupBlockAttributor(name);
+    if (attribute != null) {
+      _ensureAttributesBuilt();
+      attributes.attribute(attribute, value);
+    }
+  }
+
+  @override
+  void formatAt(int index, int length, String name, dynamic value) {
+    // Parity block.ts:155-157.
+    format(name, value);
+  }
 
   @override
   String get blotName => BlockEmbed.kBlotName;
