@@ -4,6 +4,7 @@ import '../blots/break.dart';
 import '../blots/cursor.dart';
 import '../blots/inline.dart';
 import '../blots/text.dart';
+import '../formats/abstract/attributor.dart';
 import '../formats/align.dart';
 import '../formats/background.dart';
 import '../formats/bold.dart';
@@ -342,14 +343,36 @@ void _registerFormats() {
     Quill.register(entry);
   }
 
-  // Default attributors, mirroring quill.ts core registration.
+  // Named attributor variants. These exact paths coexist even when multiple
+  // variants share the same attrName (e.g. align class/style).
+  final attributorNamespaces = <String, Attributor>{
+    'attributors/attribute/direction': DirectionAttribute.instance,
+    'attributors/class/align': AlignClass.instance,
+    'attributors/class/background': BackgroundClass.instance,
+    'attributors/class/color': ColorClass.instance,
+    'attributors/class/direction': DirectionClass.instance,
+    'attributors/class/font': FontClass.instance,
+    'attributors/class/size': SizeClass.instance,
+    'attributors/style/align': AlignStyle.instance,
+    'attributors/style/background': BackgroundStyle.instance,
+    'attributors/style/color': ColorStyle.instance,
+    'attributors/style/direction': DirectionStyle.instance,
+    'attributors/style/font': FontStyleAttributor.instance,
+    'attributors/style/size': SizeStyle.instance,
+  };
+  for (final entry in attributorNamespaces.entries) {
+    Quill.registerPath(entry.key, entry.value, overwrite: true);
+  }
+
+  // Active default formats, mirroring the second registration map in
+  // quill.ts. These are the variants installed into each editor registry.
   Quill.register(AlignClass.instance);
   Quill.register(DirectionClass.instance);
   Quill.register(IndentClass);
   Quill.register(ColorStyle.instance);
-  Quill.register(BackgroundStyle());
+  Quill.register(BackgroundStyle.instance);
   Quill.register(FontClass.instance);
-  Quill.register(SizeClass());
+  Quill.register(SizeClass.instance);
 }
 
 KeyboardOptions _resolveKeyboardOptions(dynamic options) {

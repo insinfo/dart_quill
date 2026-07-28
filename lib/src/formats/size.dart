@@ -7,12 +7,17 @@ final Map<String, dynamic> config = {
 };
 
 class SizeClass extends ClassAttributor {
-  SizeClass() : super('size', 'ql-size', config);
+  static final SizeClass instance = SizeClass._();
+
+  SizeClass._() : super('size', 'ql-size', config);
 }
 
 class SizeStyle extends StyleAttributor {
-  SizeStyle() : super('size', 'font-size', {
-    'scope': Scope.INLINE,
-    'whitelist': ['10px', '18px', '32px'],
-  });
+  static final SizeStyle instance = SizeStyle._();
+
+  SizeStyle._()
+      : super('size', 'font-size', {
+          'scope': Scope.INLINE,
+          'whitelist': ['10px', '18px', '32px'],
+        });
 }

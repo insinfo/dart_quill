@@ -1,6 +1,14 @@
 ## Unreleased - 2026-07-11
 
 ### Added
+- Quill-compatible named registration paths through `Quill.registerPath`,
+  `importDefinition` and `registeredDefinitions`, allowing all attribute,
+  class and style attributor variants to coexist without `attrName`
+  collisions.
+- Public exports for extension-facing blots, registry types, attributors,
+  formats, modules, base themes, pickers, tooltips, icons and DOM contracts.
+- Public API tests covering all 13 upstream attributor namespaces, the active
+  `formats/*` aliases and package-entrypoint type availability.
 - Native DOM range abstractions for `InputEvent.getTargetRanges()` and browser
   selections, plus Quill-compatible `Selection.normalizeNative` and
   `normalizedToRange`.
@@ -64,6 +72,11 @@
 - `example/ngdart` editor component wired to the public `dart_quill` package and the `package:web` DOM layer.
 
 ### Changed
+- Default attributors now use stable singleton instances; namespaced variants
+  remain importable while only the intended `formats/*` aliases are installed
+  into editor registries.
+- Angular examples explicitly hide the exported Quill `Input` module so
+  ngdart's `@Input` annotation remains unambiguous.
 - `Input` now replaces the non-collapsed native `beforeinput` target range
   instead of trusting a potentially stale logical selection.
 - `UINode` now uses the typed keyboard `Context`, computed text direction and
@@ -115,7 +128,7 @@
 - AngularDart example compilation issues caused by missing package wiring and invalid host element typing.
 
 ### Tests
-- 304 VM unit tests, 13 browser/Chrome tests and 3 Puppeteer E2E scenarios
+- 307 VM unit tests, 13 browser/Chrome tests and 3 Puppeteer E2E scenarios
   passing; `dart analyze` clean (2026-07-28).
 - 204 unit tests and 3 Puppeteer E2E scenarios passing after the merge/split port.
 - Port/audit source expanded to `referencias/quilljs/test` for upstream unit, E2E, and fuzz scenarios.

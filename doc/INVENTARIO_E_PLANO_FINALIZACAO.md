@@ -2,7 +2,7 @@
 
 **Data:** 2026-07-28
 **Método:** comparação arquivo-a-arquivo e método-a-método entre `referencias/quilljs/src`, `referencias/quill_table_better/1.2.3/src/src` (+ parchment em `referencias/quill_table_better/1.2.3/src/node_modules/parchment/src`) e `lib/`.
-**Baseline de testes:** 304 unitários VM + 13 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo.
+**Baseline de testes:** 307 unitários VM + 13 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo.
 **Complementa:** `doc/PLANO_PORT_COMPLETO.md` (fases F0–F10; F0–F2 concluídas, F7/F8 núcleo entregue). Este documento substitui o detalhamento de lacunas daquele plano.
 
 ---
@@ -184,16 +184,16 @@ Bugs pontuais de alto impacto e baixo risco, sem mudança arquitetural:
 1. **`Scroll.deleteAt` apaga demais em blocos vazios**: em `'code\n\n\n\n'`, `updateContents(retain(6)+delete(1))` produz `'code\n'` — três newlines somem. Reproduz também com parágrafos simples. Afeta backspace/delete em linhas vazias.
 2. **`Quill.deleteText` não apaga através de fronteira de bloco**: `Editor.deleteText` chama `Scroll.deleteAt` uma única vez (só `Editor.update` tem o laço `while (remaining > 0)`), então `deleteText(3, 5)` sobre `'Title\nbody\n'` remove só 3 caracteres **e ainda emite um delta que não corresponde ao documento**.
 
-### G4 — Clipboard/Uploader/Input/UINode (3-5 dias) — G4.1–G4.3 CONCLUÍDOS (2026-07-28)
+### G4 — Clipboard/Uploader/Input/UINode (3-5 dias) — CONCLUÍDO (2026-07-28)
 - [x] G4.1 ATTRIBUTE/STYLE_ATTRIBUTORS + `matchAttributor` real; `matchBlot` genérico via registry; short-circuit code-block; `matchCodeBlock` com linguagem; `matchList` via `data-checked` (C7). Testes: `clipboard_attributors_test.dart` + expectativas de conversão atualizadas para o registry padrão.
 - [x] G4.2 Uploader: listener de drop + `DEFAULTS.handler`, filtro de mimetype correto, uma única operação Delta para múltiplos arquivos e integração no paste (C10). *Pendente de plataforma: obter o índice pelo ponto do drop (`caretRangeFromPoint`) e expor `dataTransfer` em eventos de drop genéricos.*
 - [x] G4.3 **Input fiel ao `beforeinput`**: `DomInputEvent.getTargetRanges()`/`DomNativeRange`, rejeição de range colapsado, normalização DOM→Quill e substituição do range nativo (não da seleção lógica desatualizada), incluindo texto vindo de `dataTransfer` e replacement vazio. **UINode funcional**: handler recebe `Context`, direção via computed style, escuta one-shot de `document.selectionchange` com TTL e move o range nativo para depois de `.ql-ui`. `ParentBlot.attachUI` foi portado; hidratação/reconciliação ignoram o nó UI de comprimento zero (evita transformá-lo em Cursor e vazar FEFF); checklist checked/unchecked agora alterna por mouse/touch. Testes: 5 novos de Input + 2 de UINode/checklist, além da regressão table-better existente. (C14, C11, F6 parcial)
-- [ ] G4.4 Namespaces `attributors/*` e chaves de registro não-colidentes (F5); export público de formats/ui/themes/modules em `dart_quill.dart`.
+- [x] G4.4 **Registros não-colidentes e API pública**: os 13 caminhos upstream `attributors/attribute|class|style/*` são registrados pelo caminho exato e coexistem mesmo compartilhando `attrName`; os aliases `formats/*` continuam instalando somente o default correto no registry do editor. `Quill.registerPath`, `importDefinition` e `registeredDefinitions` fornecem a contraparte Dart da registry de imports. `dart_quill.dart` agora exporta blots/registry, attributors e formatos, módulos principais, BaseTheme, pickers/tooltip/ícones e tipos DOM necessários para extensões; os exemplos Angular escondem o módulo `Input` para não colidir com `@Input`. Testes: `public_api_test.dart` (namespaces, aliases e smoke da superfície pública). (F5)
 
 ### G5 — Formats/Themes/UI (3-5 dias) — G5.1/G5.3 CONCLUÍDOS (2026-07-27)
 - [x] G5.1 **BubbleTooltip posicionado** (F1) — o corpo comentado foi portado de bubble.ts:42-59 incluindo o caso multi-linha; **`Tooltip.position` com rects reais e `ql-flip`** (F9) + `isScrollable` guardando o listener de scroll; **handlers de link por tema** (F7) — snow ignora seleção colapsada e prefixa `mailto:`, bubble abre sem preview, handler do usuário vence (`BaseTheme.overridesHandler`); o Ctrl+K do snow delega ao handler. Novo helper `ui/dom_interop{,_stub,_web}.dart` para computed overflow / dispatch de evento (a camada de plataforma não expõe `getComputedStyle`). Testes: `test/unit/themes/tooltip_position_test.dart` (14) + `test/browser/tooltip_position_test.dart` (6).
 - [x] G5.3 `Picker.selectItem` público e despachando `change` no `<select>` nativo (F12); stubs mortos `color-picker.dart`/`icon-picker.dart`, `merge()` duplicada, getter `template` e `BubbleTheme.defaults()` removidos.
-- [~] G5.2 Checklist com `attachUI` e toggle checked/unchecked concluído em G4.3 (F6); `TableRow.checkMerge` já entregue em G1.4. Pendentes: `CodeBlock.TAB`; refinamento de `TableRow.optimize`; unificar `ColorAttributor`; `FontStyle`/`SizeStyle` registrados; `Link.sanitize` fiel; alinhar integralmente o modelo de `list` ao upstream (avaliar impacto no Delta).
+- [~] G5.2 Checklist com `attachUI` e toggle checked/unchecked concluído em G4.3 (F6); `TableRow.checkMerge` já entregue em G1.4; `FontStyle`/`SizeStyle` e todas as demais variantes de attributor registrados por namespace em G4.4. Pendentes: `CodeBlock.TAB`; refinamento de `TableRow.optimize`; unificar `ColorAttributor`; `Link.sanitize` fiel; alinhar integralmente o modelo de `list` ao upstream (avaliar impacto no Delta).
 - [ ] G5.4 Syntax: aplicar realce via diff (C6) + initListener com select de linguagem; vendorizar highlight (F4 do plano antigo).
 
 ### G6 — table-better UI completa (2-3 semanas, maior bloco)
@@ -214,7 +214,7 @@ Ordem interna (dependências primeiro):
 ### G7 — Assets e API pública (2-3 dias)
 - [ ] G7.1 `.styl` do Quill → CSS definitivo embutido (core/snow/bubble); `QuillAssets.inject()` (F3 do plano antigo).
 - [ ] G7.2 Ícones SVG oficiais completos (72) como alternativa ao tema Tabler.
-- [ ] G7.3 Superfície pública: exports completos, `Quill.import`-like, dartdoc.
+- [~] G7.3 Superfície pública: exports de extensão e `Quill.import`-like entregues em G4.4 (`importDefinition`, pois `import` é palavra reservada em Dart); pendem revisão final de compatibilidade e dartdoc.
 
 ### G8 — DOCX/PDF restantes (1-2 semanas)
 - [ ] G8.1 Import: `w:numPr`→list real; alinhamento do 1º parágrafo; fixtures Word/LibreOffice/Google (F7.4/F7.5 do plano antigo).

@@ -70,11 +70,11 @@ final Map<String, Attributor> ATTRIBUTE_ATTRIBUTORS = _byKeyName([
 
 final Map<String, Attributor> STYLE_ATTRIBUTORS = _byKeyName([
   AlignStyle.instance,
-  BackgroundStyle(),
+  BackgroundStyle.instance,
   ColorStyle.instance,
   DirectionStyle.instance,
   FontStyleAttributor.instance,
-  SizeStyle(),
+  SizeStyle.instance,
 ]);
 
 Map<String, Attributor> _byKeyName(List<Attributor> attributors) {

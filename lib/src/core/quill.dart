@@ -89,6 +89,7 @@ class Quill {
 
   static final Map<String, RegistryEntry> _formatRegistry = {};
   static final Map<String, Attributor> _attributorRegistry = {};
+  static final Map<String, dynamic> _imports = {};
   static final Map<String, ModuleFactory> _moduleRegistry = {};
   static final Map<String, ThemeBuilder> _themeRegistry = {
     'default': (quill, options) => Theme(quill, options),
@@ -99,6 +100,14 @@ class Quill {
   static Iterable<RegistryEntry> get registeredFormats =>
       _formatRegistry.values;
 
+  /// Registered definitions keyed by Quill-compatible paths such as
+  /// `formats/bold` and `attributors/style/color`.
+  static Map<String, dynamic> get registeredDefinitions =>
+      Map<String, dynamic>.unmodifiable(_imports);
+
+  /// Dart equivalent of `Quill.import(path)` (`import` is a language keyword).
+  static dynamic importDefinition(String path) => _imports[path];
+
   static void debugMode(quill_logger.DebugLevel? level) {
     quill_logger.setLoggerLevel(level);
   }
@@ -108,22 +117,37 @@ class Quill {
   static void register(dynamic definition, [bool overwrite = false]) {
     if (definition is RegistryEntry) {
       final name = definition.blotName;
-      if (!overwrite && _formatRegistry.containsKey(name)) {
-        return;
-      }
-      _formatRegistry[name] = definition;
+      registerPath('formats/$name', definition, overwrite: overwrite);
       return;
     }
     if (definition is Attributor) {
       final name = definition.attrName;
-      if (!overwrite && _attributorRegistry.containsKey(name)) {
-        return;
-      }
-      _attributorRegistry[name] = definition;
+      registerPath('formats/$name', definition, overwrite: overwrite);
       return;
     }
     throw ArgumentError(
         'Unsupported registration type: ${definition.runtimeType}');
+  }
+
+  /// Register a definition under an exact Quill import path.
+  ///
+  /// Attributor namespace entries intentionally do not become the active
+  /// format for an editor. Only `formats/*` aliases are installed into its
+  /// Parchment registry, matching upstream Quill's registration semantics.
+  static void registerPath(
+    String path,
+    dynamic definition, {
+    bool overwrite = false,
+  }) {
+    if (!overwrite && _imports.containsKey(path)) return;
+    _imports[path] = definition;
+
+    if (!path.startsWith('formats/')) return;
+    if (definition is RegistryEntry) {
+      _formatRegistry[definition.blotName] = definition;
+    } else if (definition is Attributor) {
+      _attributorRegistry[definition.attrName] = definition;
+    }
   }
 
   static void registerModule(String name, ModuleFactory factory,
@@ -132,6 +156,7 @@ class Quill {
       return;
     }
     _moduleRegistry[name] = factory;
+    _imports['modules/$name'] = factory;
   }
 
   static void registerTheme(String name, ThemeBuilder builder,
@@ -140,6 +165,7 @@ class Quill {
       return;
     }
     _themeRegistry[name] = builder;
+    _imports['themes/$name'] = builder;
   }
 
   static dynamic createModule(Quill quill, String name, dynamic options) {
@@ -253,9 +279,7 @@ class Quill {
     bool indexFromRange = false,
     int? shift,
   }) {
-    if (!isEnabled() &&
-        source == EmitterSource.USER &&
-        !allowReadOnlyEdits) {
+    if (!isEnabled() && source == EmitterSource.USER && !allowReadOnlyEdits) {
       return Delta();
     }
     final tracksSelection = index != null || indexFromRange;
@@ -537,8 +561,7 @@ class Quill {
         source: source, index: index, shift: text.length);
   }
 
-  Delta deleteText(int index, int length,
-      {String source = EmitterSource.API}) {
+  Delta deleteText(int index, int length, {String source = EmitterSource.API}) {
     return modify(() {
       editor.deleteText(index, length);
       return Delta()

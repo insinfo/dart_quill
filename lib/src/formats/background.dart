@@ -6,9 +6,13 @@ final Map<String, dynamic> config = {
 };
 
 class BackgroundClass extends ClassAttributor {
-  BackgroundClass() : super('background', 'ql-bg', config);
+  static final BackgroundClass instance = BackgroundClass._();
+
+  BackgroundClass._() : super('background', 'ql-bg', config);
 }
 
 class BackgroundStyle extends ColorAttributor {
-  BackgroundStyle() : super('background', 'background-color', config);
+  static final BackgroundStyle instance = BackgroundStyle._();
+
+  BackgroundStyle._() : super('background', 'background-color', config);
 }

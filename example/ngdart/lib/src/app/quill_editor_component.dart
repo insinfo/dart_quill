@@ -1,4 +1,4 @@
-import 'package:dart_quill/dart_quill.dart';
+import 'package:dart_quill/dart_quill.dart' hide Input;
 import 'package:dart_quill/src/platform/html_dom.dart';
 import 'package:ngdart/angular.dart';
 import 'package:web/web.dart' as web;
