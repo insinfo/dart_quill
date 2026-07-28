@@ -502,6 +502,156 @@ class CellSelectionController {
     return data;
   }
 
+  /// TS `onCapturePaste(e)` — pastes a copied grid into the current selection,
+  /// growing the table when the payload does not fit.
+  ///
+  /// Deviation: the TS locates the destination cells by intersecting pixel
+  /// bounds (`getPasteComputeBounds` + `getComputeSelectedTds`). The logical
+  /// grid gives the same rectangle directly: it starts at the anchor cell and
+  /// spans the pasted rows and columns.
+  ///
+  /// Returns false when there is nothing to paste, so the caller can let the
+  /// native paste through.
+  bool pasteGrid(String html) {
+    if (selection.selectedTds.isEmpty) return false;
+    final copyRows = _parseCopyRows(html);
+    if (copyRows.isEmpty) return false;
+    final anchor = _anchor ?? selection.selectedCells.firstOrNull;
+    if (anchor == null) return false;
+    final origin = selection.coordinateOf(anchor);
+    if (origin == null) return false;
+
+    quill.history.cutoff();
+
+    // TS `getCopyColumns(container)` — the widest row decides the width.
+    final copyColumns = copyRows
+        .map((row) => row.fold<int>(0, (sum, td) => sum + _colspanOf(td)))
+        .fold<int>(0, (widest, width) => width > widest ? width : widest);
+
+    _growToFit(origin, copyRows.length, copyColumns);
+
+    final pasted = <DomElement>[];
+    for (var rowOffset = 0; rowOffset < copyRows.length; rowOffset++) {
+      final copyCells = copyRows[rowOffset];
+      var column = origin.column;
+      for (final copyTd in copyCells) {
+        final target = _cellAtCoordinate(origin.row + rowOffset, column);
+        if (target != null) {
+          final replacement = pasteSelectedTd(target, copyTd);
+          if (replacement != null) pasted.add(replacement.element);
+        }
+        column += _colspanOf(copyTd);
+      }
+    }
+
+    if (pasted.isNotEmpty) setSelectedTds(pasted);
+    host.updateMenus?.call();
+    quill.scrollSelectionIntoView();
+    return true;
+  }
+
+  /// TS `pasteSelectedTd(selectedTd, copyTd)` — the destination cell adopts the
+  /// copied cell's formats (keeping its own `data-row`) and content.
+  TableCell? pasteSelectedTd(TableCell target, DomElement copyTd) {
+    final id = target.element.getAttribute('data-row');
+    final formats = <String, String>{
+      ...TableCell.formatsFromNode(copyTd),
+      if (id != null) 'data-row': id,
+    };
+    final replacement =
+        replaceBlotWith(target, target.blotName, formats) as TableCell;
+
+    // Replace the cell's content with the copied one, converted through the
+    // clipboard so inline formats survive.
+    for (final child in replacement.children.toList()) {
+      child.remove();
+    }
+    final block = quill.scroll.create(
+      replacement.blotName == TableTh.kBlotName
+          ? TableThBlock.kBlotName
+          : TableCellBlock.kBlotName,
+      cellId(),
+    ) as TableCellBlock;
+    replacement.appendChild(block);
+
+    final text = (copyTd.textContent ?? '').trim();
+    if (text.isNotEmpty) {
+      final index = quill.scroll.offset(block);
+      quill.insertText(index, text, source: EmitterSource.USER);
+    }
+    return replacement;
+  }
+
+  /// Inserts the rows and columns the pasted grid needs beyond the table's
+  /// current size (TS `getPasteInfo` + `insertColumnCell` + `insertRow`).
+  void _growToFit(({int row, int column}) origin, int rows, int columns) {
+    final existingRows = table.descendants<TableRow>().length;
+    final missingRows = origin.row + rows - existingRows;
+    for (var i = 0; i < missingRows; i++) {
+      table.insertRow(table.descendants<TableRow>().length, 1);
+    }
+
+    final body = table.tbody();
+    if (body == null) return;
+    for (final row in body.children.whereType<TableRow>()) {
+      var width = 0;
+      for (final cell in row.children.whereType<TableCell>()) {
+        width += _colspanOf(cell.element);
+      }
+      final missing = origin.column + columns - width;
+      if (missing <= 0) continue;
+      final last = row.children.whereType<TableCell>().lastOrNull;
+      final id = last?.element.getAttribute('data-row') ?? tableId();
+      for (var i = 0; i < missing; i++) {
+        table.insertColumnCell(row, id, null);
+      }
+    }
+  }
+
+  /// The cell occupying a grid coordinate, spans included.
+  TableCell? _cellAtCoordinate(int row, int column) {
+    for (final cell in table.descendants<TableCell>()) {
+      final coordinate = selection.coordinateOf(cell);
+      if (coordinate == null) continue;
+      final colspan = _colspanOf(cell.element);
+      final rowspan = _rowspanOf(cell.element);
+      if (coordinate.row <= row &&
+          row < coordinate.row + rowspan &&
+          coordinate.column <= column &&
+          column < coordinate.column + colspan) {
+        return cell;
+      }
+    }
+    return null;
+  }
+
+  /// Parses the pasted HTML into rows of `<td>`/`<th>` elements.
+  List<List<DomElement>> _parseCopyRows(String html) {
+    if (html.trim().isEmpty) return const [];
+    final document =
+        quill.root.ownerDocument.parser.parseFromString(html, 'text/html');
+    final rows = <List<DomElement>>[];
+    for (final row in document.body.querySelectorAll('tr')) {
+      final cells = <DomElement>[];
+      for (final cell in row.childNodes.whereType<DomElement>()) {
+        final tag = cell.tagName.toUpperCase();
+        if (tag == 'TD' || tag == 'TH') cells.add(cell);
+      }
+      if (cells.isNotEmpty) rows.add(cells);
+    }
+    return rows;
+  }
+
+  int _colspanOf(DomElement node) {
+    final value = int.tryParse(node.getAttribute('colspan') ?? '') ?? 1;
+    return value < 1 ? 1 : value;
+  }
+
+  int _rowspanOf(DomElement node) {
+    final value = int.tryParse(node.getAttribute('rowspan') ?? '') ?? 1;
+    return value < 1 ? 1 : value;
+  }
+
   // --- helpers ------------------------------------------------------------
 
   void _detachDragListeners() {

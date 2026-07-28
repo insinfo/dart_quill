@@ -342,4 +342,95 @@ void main() {
       expect(ctrl.copyData(), isNull);
     });
   });
+
+  group('grid paste', () {
+    String gridHtml(List<List<String>> rows) {
+      final buffer = StringBuffer('<table><tbody>');
+      for (final row in rows) {
+        buffer.write('<tr>');
+        for (final cell in row) {
+          buffer.write('<td>$cell</td>');
+        }
+        buffer.write('</tr>');
+      }
+      return (buffer..write('</tbody></table>')).toString();
+    }
+
+    test('pastes a grid into the selection, cell by cell', () {
+      final (module: _, :table, :ctrl) = withTable(rows: 3, columns: 3);
+      ctrl.setSelected(cellAt(table, 0, 0), false);
+
+      expect(
+        ctrl.pasteGrid(gridHtml([
+          ['a1', 'a2'],
+          ['b1', 'b2'],
+        ])),
+        isTrue,
+      );
+
+      expect(cellAt(table, 0, 0).textContent, contains('a1'));
+      expect(cellAt(table, 0, 1).textContent, contains('a2'));
+      expect(cellAt(table, 1, 0).textContent, contains('b1'));
+      expect(cellAt(table, 1, 1).textContent, contains('b2'));
+      // The pasted cells end up selected.
+      expect(ctrl.selectedTds, hasLength(4));
+    });
+
+    test('a payload larger than the table grows it', () {
+      final (module: _, :table, :ctrl) = withTable(rows: 1, columns: 1);
+      ctrl.setSelected(cellAt(table, 0, 0), false);
+
+      ctrl.pasteGrid(gridHtml([
+        ['a1', 'a2'],
+        ['b1', 'b2'],
+      ]));
+
+      expect(table.descendants<TableRow>(), hasLength(2));
+      for (final row in table.descendants<TableRow>()) {
+        expect(row.children.whereType<TableCell>().length,
+            greaterThanOrEqualTo(2));
+      }
+      expect(cellAt(table, 1, 1).textContent, contains('b2'));
+    });
+
+    test('pasting away from the origin grows only what is missing', () {
+      final (module: _, :table, :ctrl) = withTable(rows: 2, columns: 2);
+      ctrl.setSelected(cellAt(table, 1, 1), false);
+
+      ctrl.pasteGrid(gridHtml([
+        ['x1', 'x2'],
+      ]));
+
+      // One extra column was needed to the right of the anchor.
+      expect(table.descendants<TableRow>(), hasLength(2));
+      expect(cellAt(table, 1, 1).textContent, contains('x1'));
+      expect(cellAt(table, 1, 2).textContent, contains('x2'));
+    });
+
+    test('the destination keeps its own data-row', () {
+      final (module: _, :table, :ctrl) = withTable(rows: 2, columns: 2);
+      final target = cellAt(table, 0, 0);
+      final rowId = target.getAttribute('data-row');
+      ctrl.setSelected(target, false);
+
+      ctrl.pasteGrid(
+          '<table><tbody><tr><td data-row="foreign">v</td></tr></tbody></table>');
+
+      expect(cellAt(table, 0, 0).getAttribute('data-row'), equals(rowId));
+    });
+
+    test('html without a table falls through to the native paste', () {
+      final (module: _, :table, :ctrl) = withTable();
+      ctrl.setSelected(cellAt(table, 0, 0), false);
+      expect(ctrl.pasteGrid('<p>plain text</p>'), isFalse);
+    });
+
+    test('an empty selection falls through to the native paste', () {
+      final (module: _, table: _, :ctrl) = withTable();
+      ctrl.clear();
+      expect(
+          ctrl.pasteGrid('<table><tbody><tr><td>a</td></tr></tbody></table>'),
+          isFalse);
+    });
+  });
 }

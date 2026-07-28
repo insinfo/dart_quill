@@ -498,6 +498,18 @@ class TableBetter extends Module<TableBetterOptions> {
   /// TS `updateMenus()` (quill-table-better.ts:316).
   void updateMenus() => tableMenus.updateMenus();
 
+  /// Routes a paste to the active cell selection (TS `onCapturePaste`).
+  ///
+  /// Returns false when no table has cells selected, so the clipboard module
+  /// falls back to its normal paste.
+  bool pasteGridIntoSelection(String html) {
+    for (final controller in _cellSelections.values) {
+      if (controller.selectedTds.isEmpty) continue;
+      if (controller.pasteGrid(html)) return true;
+    }
+    return false;
+  }
+
   /// TS `hideTools()` (quill-table-better.ts:214) — clears the cell selections
   /// and hides the floating menus. The operate-line overlay joins in G6.5.
   void hideTools() {

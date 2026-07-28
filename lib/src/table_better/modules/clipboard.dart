@@ -55,6 +55,15 @@ class TableClipboard extends Clipboard {
 
   @override
   void onPaste(Range range, {String? text, String? html}) {
+    // Parity cell-selection.ts `onCapturePaste`: with cells selected, a copied
+    // grid is pasted cell-by-cell into the selection instead of flowing into
+    // the caret's line.
+    if (html != null && html.isNotEmpty) {
+      final module = quill.getModule('table-better');
+      if (module != null && (module as dynamic).pasteGridIntoSelection(html)) {
+        return;
+      }
+    }
     final formats = quill.getFormat(range.index);
     final pastedDelta = getTableDelta(html: html, text: text, formats: formats);
     final change = (Delta()
