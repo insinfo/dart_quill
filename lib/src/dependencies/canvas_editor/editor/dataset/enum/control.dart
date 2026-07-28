@@ -1,11 +1,4 @@
-enum ControlType {
-  text,
-  select,
-  checkbox,
-  radio,
-  date,
-  number
-}
+enum ControlType { text, select, checkbox, radio, date, number }
 
 enum ControlComponent {
   prefix,
@@ -25,7 +18,4 @@ enum ControlIndentation {
 }
 
 // 控件状态
-enum ControlState {
-  active,
-  inactive
-}
+enum ControlState { active, inactive }

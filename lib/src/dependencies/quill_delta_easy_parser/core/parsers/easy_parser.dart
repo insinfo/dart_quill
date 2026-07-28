@@ -5,7 +5,6 @@ import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/parsers
 
 import '../../../dart_quill_delta/dart_quill_delta.dart' as fq;
 
-
 /// Represents a parser that converts the Quill Delta operations into a structured document format.
 @Deprecated('RichTextParser is not longer supported, and '
     'it will be removed in future releases. '

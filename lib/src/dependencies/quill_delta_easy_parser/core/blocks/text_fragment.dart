@@ -2,7 +2,6 @@ import 'package:collection/collection.dart';
 import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/blocks/document.dart';
 import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/extensions/extensions.dart';
 
-
 import '../../utils/map_equals.dart';
 
 /// Represents a portion of the text into a [Line], separated by

@@ -72,7 +72,9 @@ PdfImageData? _decodeJpeg(Uint8List bytes) {
     }
     final int marker = bytes[offset + 1];
     offset += 2;
-    if (marker == 0xd8 || marker == 0xd9 || (marker >= 0xd0 && marker <= 0xd7)) {
+    if (marker == 0xd8 ||
+        marker == 0xd9 ||
+        (marker >= 0xd0 && marker <= 0xd7)) {
       continue;
     }
     if (offset + 2 > bytes.length) break;
@@ -154,9 +156,8 @@ PdfImageData? _decodePng(Uint8List bytes) {
       );
     case 3: // paleta
       if (palette == null) return null;
-      final String hex = palette
-          .map((int b) => b.toRadixString(16).padLeft(2, '0'))
-          .join();
+      final String hex =
+          palette.map((int b) => b.toRadixString(16).padLeft(2, '0')).join();
       final int hival = palette.length ~/ 3 - 1;
       return PdfImageData(
         width: width,
@@ -164,8 +165,7 @@ PdfImageData? _decodePng(Uint8List bytes) {
         colorSpace: '[/Indexed /DeviceRGB $hival <$hex>]',
         bitsPerComponent: bitDepth,
         filter: '/FlateDecode',
-        decodeParms:
-            '<< /Predictor 15 /Colors 1 /BitsPerComponent $bitDepth '
+        decodeParms: '<< /Predictor 15 /Colors 1 /BitsPerComponent $bitDepth '
             '/Columns $width >>',
         data: idatBytes,
       );

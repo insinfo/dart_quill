@@ -38,7 +38,8 @@ class Link extends InlineBlot {
       return url;
     }
     final isAllowed =
-        kProtocolWhitelist.firstWhereOrNull((allowed) => allowed == scheme) != null;
+        kProtocolWhitelist.firstWhereOrNull((allowed) => allowed == scheme) !=
+            null;
     return isAllowed ? url : kSanitizedUrl;
   }
 

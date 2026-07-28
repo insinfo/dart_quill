@@ -65,8 +65,8 @@ Delta docxToDelta(Uint8List bytes) {
 /// paragraphs with a literal marker ("1. "/"2. " for ordered, a bullet for
 /// unordered) — see the library-level limitations note.
 Uint8List deltaToDocx(Delta delta) {
-  final List<IElement> elements = QuillDeltaConverter.fromDelta(
-      <String, dynamic>{'ops': delta.toJson()});
+  final List<IElement> elements =
+      QuillDeltaConverter.fromDelta(<String, dynamic>{'ops': delta.toJson()});
   _materializeListMarkers(elements);
   final DocxFile file = DocxReader.createEmpty();
   final List<IElement> original = DocxToElementConverter.convert(file).main;

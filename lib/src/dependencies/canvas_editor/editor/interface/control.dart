@@ -345,7 +345,8 @@ abstract class IControlInstance {
   void setElement(IElement element);
   IElement getElement();
   List<IElement> getValue({IControlContext? context});
-  int setValue(List<IElement> data, {IControlContext? context, IControlRuleOption? options});
+  int setValue(List<IElement> data,
+      {IControlContext? context, IControlRuleOption? options});
   int? keydown(dynamic evt);
   int cut();
 }

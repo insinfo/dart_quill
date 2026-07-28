@@ -550,8 +550,7 @@ class Syntax extends Module<SyntaxOptions> {
         final value = tokenAttributor.value(node);
         if (value != null && value != false && value != '') {
           return delta.compose(
-            Delta()
-              ..retain(delta.length, {CodeToken.kBlotName: value}),
+            Delta()..retain(delta.length, {CodeToken.kBlotName: value}),
           );
         }
         return delta;

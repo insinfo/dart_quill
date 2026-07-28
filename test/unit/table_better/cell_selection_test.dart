@@ -79,8 +79,7 @@ void main() {
         isFalse);
   });
 
-  test('mergeCells merges a rectangle into the top-left cell with colspan',
-      () {
+  test('mergeCells merges a rectangle into the top-left cell with colspan', () {
     final scroll = createScroll(
       _tableHtml,
       registry: createRegistry(registerTableBetterFormats()),
@@ -104,9 +103,8 @@ void main() {
     expect(merged.element.textContent, 'ab');
     // Children adopt the surviving cell's id (setChildrenId parity).
     final ids = merged.children
-        .map((child) => (child as TableCellBlock)
-            .element
-            .getAttribute('data-cell'))
+        .map((child) =>
+            (child as TableCellBlock).element.getAttribute('data-cell'))
         .toSet();
     expect(ids.length, 1);
     // Merged cell stays selected.
@@ -155,8 +153,7 @@ void main() {
     final rows = table.descendants<TableRow>().toList();
     final cellBlot = rows[1].children.whereType<TableCell>().first;
     expect(cellBlot.element.hasAttribute('rowspan'), isFalse);
-    final lastRowCells =
-        rows[2].children.whereType<TableCell>().toList();
+    final lastRowCells = rows[2].children.whereType<TableCell>().toList();
     expect(lastRowCells.length, 3);
     expect(lastRowCells.first.element.textContent ?? '', isEmpty,
         reason: 'new empty cell fills the freed grid slot');
@@ -164,8 +161,7 @@ void main() {
     expect(lastRowCells[1].element.textContent, 'f');
   });
 
-  test('splitCells expands a colspan+rowspan cell across rows and columns',
-      () {
+  test('splitCells expands a colspan+rowspan cell across rows and columns', () {
     const html = '''
 <table class="ql-table-better"><tbody>
 <tr><td data-row="m1" colspan="2" rowspan="2"><p class="ql-table-block" data-cell="m">m</p></td>
@@ -214,8 +210,8 @@ void main() {
     final firstRow =
         table.descendants<TableRow>().first.children.whereType<TableCell>();
     expect(firstRow.length, 3);
-    expect(
-        firstRow.every((cell) => !cell.element.hasAttribute('colspan')), isTrue);
+    expect(firstRow.every((cell) => !cell.element.hasAttribute('colspan')),
+        isTrue);
   });
 
   test('convertToHeaderRow moves the selected row and rows above into thead',
@@ -274,8 +270,7 @@ void main() {
     expect(firstRowCells[1].element.getAttribute('colspan'), '2');
   });
 
-  test('copyTableData serializes the whole table with a leading paragraph',
-      () {
+  test('copyTableData serializes the whole table with a leading paragraph', () {
     final scroll = createScroll(
       _tableHtml,
       registry: createRegistry(registerTableBetterFormats()),

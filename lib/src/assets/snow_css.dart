@@ -1441,5 +1441,4 @@ html[data-color-theme=dark] .ql-snow .ql-transparent {
 }
 
 
-'''
-;
+''';

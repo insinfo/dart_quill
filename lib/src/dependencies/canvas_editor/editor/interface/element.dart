@@ -489,6 +489,7 @@ class IElement
   /// 'auto' (value = múltiplo de single), 'atLeast' ou 'exact' (value = px).
   String? lineSpacingRule;
   double? lineSpacingValue;
+
   /// `w:before`/`w:after` do parágrafo em px (aplicados no offsetY da
   /// primeira linha do parágrafo/do seguinte).
   double? paraSpacingBefore;

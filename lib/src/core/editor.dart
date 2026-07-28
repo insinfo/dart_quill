@@ -97,13 +97,17 @@ class Editor {
   Delta formatText(int index, int length, String name, dynamic value) {
     scroll.formatAt(index, length, name, value);
     _update();
-    return Delta()..retain(index)..retain(length, {name: value});
+    return Delta()
+      ..retain(index)
+      ..retain(length, {name: value});
   }
 
   Delta insertEmbed(int index, String type, dynamic data) {
     scroll.insertAt(index, type, data);
     _update();
-    return Delta()..retain(index)..insert({type: data});
+    return Delta()
+      ..retain(index)
+      ..insert({type: data});
   }
 
   /// Parity editor.ts `insertContents`: inserts a full delta (multiline,
@@ -139,7 +143,9 @@ class Editor {
       });
     }
     _update();
-    return Delta()..retain(index)..insert(text, formats);
+    return Delta()
+      ..retain(index)
+      ..insert(text, formats);
   }
 
   void _update() {
@@ -153,8 +159,10 @@ class Editor {
     for (var i = 0; i < childrenList.length; i++) {
       final child = childrenList[i];
       final isLast = i == childrenList.length - 1;
-      final shouldSkipSentinel = isLast && tempDelta.isNotEmpty &&
-          child is Block && _isTrivialSentinelBlock(child);
+      final shouldSkipSentinel = isLast &&
+          tempDelta.isNotEmpty &&
+          child is Block &&
+          _isTrivialSentinelBlock(child);
       if (shouldSkipSentinel) {
         continue;
       }
@@ -238,7 +246,9 @@ class Editor {
           .concat(Delta()..insert('\n'));
     }
     final contents = getContentsRange(index, length + suffixLength);
-    final diff = contents.diff(Delta()..insert(text)..concat(suffix));
+    final diff = contents.diff(Delta()
+      ..insert(text)
+      ..concat(suffix));
     final change = (Delta()..retain(index)).concat(diff);
     update(change, EmitterSource.USER);
     return change;

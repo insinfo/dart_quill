@@ -3,10 +3,11 @@ import 'abstract/attributor.dart';
 import '../platform/dom.dart';
 
 class IndentAttributor extends ClassAttributor {
-  IndentAttributor() : super('indent', 'ql-indent', {
-    'scope': Scope.BLOCK,
-    'whitelist': [1, 2, 3, 4, 5, 6, 7, 8],
-  });
+  IndentAttributor()
+      : super('indent', 'ql-indent', {
+          'scope': Scope.BLOCK,
+          'whitelist': [1, 2, 3, 4, 5, 6, 7, 8],
+        });
 
   @override
   bool add(DomElement node, dynamic value) {
@@ -26,7 +27,8 @@ class IndentAttributor extends ClassAttributor {
 
   @override
   bool canAdd(DomElement node, dynamic value) {
-    return super.canAdd(node, value) || super.canAdd(node, int.tryParse(value.toString()));
+    return super.canAdd(node, value) ||
+        super.canAdd(node, int.tryParse(value.toString()));
   }
 
   @override

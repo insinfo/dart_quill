@@ -314,13 +314,12 @@ String getCopyTd(String html) {
   return html
       .replaceAll(RegExp(r'data-(?!list)[a-z]+="[^"]*"'), '')
       .replaceAllMapped(RegExp(r'class="[^"]*"'), (match) {
-        return match
-            .group(0)!
-            .replaceAll(RegExp(r'ql-cell-[^"]*'), '')
-            .replaceFirst(RegExp(r'ql-table-[^"]*'), '')
-            .replaceAll(RegExp(r'table-list(?:[^"]*)?'), '');
-      })
-      .replaceAll(RegExp(r'class="\s*"'), '');
+    return match
+        .group(0)!
+        .replaceAll(RegExp(r'ql-cell-[^"]*'), '')
+        .replaceFirst(RegExp(r'ql-table-[^"]*'), '')
+        .replaceAll(RegExp(r'table-list(?:[^"]*)?'), '');
+  }).replaceAll(RegExp(r'class="\s*"'), '');
 }
 
 /// TS `getCorrectBounds`. Layout-dependent (see [elementRectResolver]).
@@ -467,8 +466,9 @@ String rgbToHex(String value) {
       .replaceFirst(RegExp(r'[^\d]+$'), '');
   final hex = inner
       .split(',')
-      .map((component) =>
-          (int.tryParse(component.trim()) ?? 0).toRadixString(16).padLeft(2, '0'))
+      .map((component) => (int.tryParse(component.trim()) ?? 0)
+          .toRadixString(16)
+          .padLeft(2, '0'))
       .join();
   return '#$hex';
 }
@@ -569,7 +569,8 @@ void updateTableWidth(
       for (final col in colgroup.element.querySelectorAll('col')) {
         final raw = getInlineStyleValue(col, 'width');
         if (raw != null && raw.isNotEmpty) {
-          width += double.tryParse(raw.replaceAll(RegExp(r'[^\d.\-]'), '')) ?? 0;
+          width +=
+              double.tryParse(raw.replaceAll(RegExp(r'[^\d.\-]'), '')) ?? 0;
         }
       }
       setElementProperty(temporary.element, {'width': '${formatNum(width)}%'});

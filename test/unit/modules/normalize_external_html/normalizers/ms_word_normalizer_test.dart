@@ -43,7 +43,8 @@ void main() {
 
       final secondList = children[1];
       expect(secondList.tagName, 'UL');
-      final secondItems = secondList.childNodes.whereType<DomElement>().toList();
+      final secondItems =
+          secondList.childNodes.whereType<DomElement>().toList();
       expect(secondItems.length, 1);
       expect(secondItems[0].getAttribute('class'), 'ql-indent-3');
       expect(secondItems[0].getAttribute('data-list'), 'ordered');

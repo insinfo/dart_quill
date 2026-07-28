@@ -115,11 +115,13 @@ class AttributorStore {
 }
 
 abstract class ClassAttributor extends Attributor {
-  ClassAttributor(String attrName, String keyName, Map<String, dynamic> config) : super(attrName, keyName, config);
+  ClassAttributor(String attrName, String keyName, Map<String, dynamic> config)
+      : super(attrName, keyName, config);
 
   @override
   dynamic value(DomElement domNode) {
-    final classes = domNode.classes.values.where((name) => name.startsWith('$keyName-'));
+    final classes =
+        domNode.classes.values.where((name) => name.startsWith('$keyName-'));
     if (classes.isNotEmpty) {
       return classes.first.substring(keyName.length + 1);
     }
@@ -164,7 +166,8 @@ abstract class ClassAttributor extends Attributor {
 }
 
 abstract class StyleAttributor extends Attributor {
-  StyleAttributor(String attrName, String keyName, Map<String, dynamic> config) : super(attrName, keyName, config);
+  StyleAttributor(String attrName, String keyName, Map<String, dynamic> config)
+      : super(attrName, keyName, config);
 
   @override
   dynamic value(DomElement domNode) {
@@ -239,8 +242,7 @@ abstract class ColorAttributor extends StyleAttributor {
     if (raw == null || !raw.startsWith('rgb(')) return raw;
 
     // Convert rgb(r, g, b) to hex #rrggbb
-    final numeric = raw
-        .replaceAll(RegExp(r'[^\d,]'), '');
+    final numeric = raw.replaceAll(RegExp(r'[^\d,]'), '');
     final components = numeric.split(',');
     if (components.length != 3) return raw;
 

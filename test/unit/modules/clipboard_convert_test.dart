@@ -23,8 +23,9 @@ void main() {
 
   group('Clipboard.convert', () {
     Clipboard _clipboard({List<Attributor> attributors = const []}) {
-      final options =
-          attributors.isEmpty ? null : ClipboardOptions(attributors: attributors);
+      final options = attributors.isEmpty
+          ? null
+          : ClipboardOptions(attributors: attributors);
       final quill = createTestQuill(clipboardOptions: options);
       return quill.clipboard;
     }
@@ -53,7 +54,6 @@ void main() {
     });
 
     test('multiple whitespaces', () {
-
       final delta = _clipboard().convert(html: '<div>1   2    3</div>');
       expectDelta(delta, Delta()..insert('1 2 3'));
     });
@@ -66,7 +66,6 @@ void main() {
           ..insert('0 ')
           ..insert('1', {'bold': true})
           ..insert(' 2'),
-
       );
     });
 
@@ -83,7 +82,6 @@ void main() {
     });
 
     test('consecutive intentional whitespace', () {
-
       final delta = _clipboard()
           .convert(html: '<strong>&nbsp;&nbsp;1&nbsp;&nbsp;</strong>');
       expectDelta(
@@ -94,7 +92,6 @@ void main() {
 
     test('intentional whitespace at line start/end', () {
       expectDelta(
-
         _clipboard().convert(html: '<p>0 &nbsp;</p><p>&nbsp; 2</p>'),
         Delta()
           ..insert('0  \n')
@@ -106,7 +103,6 @@ void main() {
           ..insert('0 \n')
           ..insert(' 2'),
       );
-
     });
 
     test('newlines between inline elements', () {
@@ -133,20 +129,17 @@ void main() {
     });
 
     test('space between empty paragraphs', () {
-
       final delta = _clipboard().convert(html: '<p></p> <p></p>');
       expectDelta(delta, Delta()..insert('\n'));
     });
 
     test('newline between empty paragraphs', () {
-
       final delta = _clipboard().convert(html: '<p></p>\n<p></p>');
       expectDelta(delta, Delta()..insert('\n'));
     });
 
     test('break', () {
       const html =
-
           '<div>0<br>1</div><div>2<br></div><div>3</div><div><br>4</div><div><br></div><div>5</div>';
       final delta = _clipboard().convert(html: html);
       expectDelta(delta, Delta()..insert('0\n1\n2\n3\n\n4\n\n5'));
@@ -169,7 +162,6 @@ void main() {
       expectDelta(delta, Delta()..insert('One\nTwo'));
     });
 
-
     test('alias', () {
       final delta = _clipboard().convert(html: '<b>Bold</b><i>Italic</i>');
       expectDelta(
@@ -180,11 +172,9 @@ void main() {
       );
     });
 
-
     test('nested list', () {
       final delta = _clipboard().convert(
         html: '<ol><li>One</li><li class="ql-indent-1">Alpha</li></ol>',
-
       );
       expectDelta(
         delta,
@@ -254,8 +244,7 @@ void main() {
     });
 
     test('html table', () {
-      const html =
-          '<table>'
+      const html = '<table>'
           '<thead><tr><td>A1</td><td>A2</td><td>A3</td></tr></thead>'
           '<tbody><tr><td>B1</td><td></td><td>B3</td></tr></tbody>'
           '</table>';
@@ -312,8 +301,7 @@ void main() {
 
     test('wrapped block embed', () {
       final delta = _clipboard().convert(
-        html:
-            '<h1>01<a href="/"><iframe src="#"></iframe></a>34</h1><p>67</p>',
+        html: '<h1>01<a href="/"><iframe src="#"></iframe></a>34</h1><p>67</p>',
       );
       expectDelta(
         delta,
@@ -469,8 +457,7 @@ void main() {
     test('pre with newline node', () {
       const html = '<pre><span> 01 </span>\n<span> 23 </span></pre>';
       final delta = _clipboard().convert(html: html);
-      expectDelta(
-          delta, Delta()..insert(' 01 \n 23 \n', {'code-block': true}));
+      expectDelta(delta, Delta()..insert(' 01 \n 23 \n', {'code-block': true}));
     });
 
     test('ignore empty elements except paragraphs', () {

@@ -128,8 +128,8 @@ Uint8List deltaToPdf(
   Delta delta, {
   PdfExportOptions options = const PdfExportOptions(),
 }) {
-  final List<IElement> elements = QuillDeltaConverter.fromDelta(
-      <String, dynamic>{'ops': delta.toJson()});
+  final List<IElement> elements =
+      QuillDeltaConverter.fromDelta(<String, dynamic>{'ops': delta.toJson()});
   return _PdfLayoutEngine(options).render(elements);
 }
 
@@ -298,8 +298,8 @@ class _PdfLayoutEngine {
     return _writer.build(title: options.title, producer: 'dart_quill');
   }
 
-  _PageSink _newSink() => _PageSink(
-      PdfContentBuilder(pageHeightPt: options.pageHeight, k: 1));
+  _PageSink _newSink() =>
+      _PageSink(PdfContentBuilder(pageHeightPt: options.pageHeight, k: 1));
 
   void _flushPage() {
     _writer.addPage(
@@ -485,8 +485,7 @@ class _PdfLayoutEngine {
     bool defaultBold = false,
     String? link,
   }) {
-    double size =
-        element.size != null ? element.size! * _pxToPt : defaultSize;
+    double size = element.size != null ? element.size! * _pxToPt : defaultSize;
     double baselineShift = 0;
     if (element.type == ElementType.superscript) {
       baselineShift = size * 0.33;
@@ -612,8 +611,7 @@ class _PdfLayoutEngine {
       }
       if (current.isEmpty || height == 0) {
         height = _emptyLineHeight;
-        ascent = _metricsFor(options.fontFamily)
-            .ascentPx(options.baseFontSize);
+        ascent = _metricsFor(options.fontFamily).ascentPx(options.baseFontSize);
       }
       lines.add(_Line(
           segs: current, width: w < 0 ? 0 : w, ascent: ascent, height: height));
@@ -907,8 +905,7 @@ class _PdfLayoutEngine {
     double height = 0;
     for (final _Block block in blocks) {
       if (block is! _ParagraphBlock) continue; // nested tables are skipped
-      final List<_Line> lines =
-          _breakLines(block.runs, width - block.indent);
+      final List<_Line> lines = _breakLines(block.runs, width - block.indent);
       if (lines.isEmpty) {
         height += _emptyLineHeight;
         continue;

@@ -291,13 +291,34 @@ class TableBetter extends Module<TableBetterOptions> {
     return controllerFor(table).selection;
   }
 
-  /// Lazily wires a [CellSelectionController] (click/Shift-click layer) for
+  /// Lazily wires a [CellSelectionController] (drag/click/keyboard layer) for
   /// [table]. Controllers of removed tables are disposed on text-change.
   CellSelectionController controllerFor(TableContainer table) {
     return _cellSelections.putIfAbsent(
       table,
-      () => CellSelectionController(root: quill.root, table: table),
+      () => CellSelectionController(
+        quill: quill,
+        root: quill.root,
+        table: table,
+        host: CellSelectionHost(
+          hideTools: hideTools,
+          showTools: showTools,
+          toggleHeaderRowSwitch: tableMenus.toggleHeaderRowSwitch,
+          disableMenu: tableMenus.disableMenu,
+          updateMenus: tableMenus.updateMenus,
+          deleteColumn: tableMenus.deleteColumn,
+          deleteRow: tableMenus.deleteRow,
+          toolbarContainer: _toolbarContainer,
+          toolbarButtons: options.toolbarButtons,
+        ),
+      ),
     );
+  }
+
+  DomElement? get _toolbarContainer {
+    final toolbar = quill.getModule('toolbar');
+    if (toolbar == null) return null;
+    return (toolbar as dynamic).container as DomElement?;
   }
 
   /// TS `getTable(range)` (quill-table-better.ts:133).
@@ -449,9 +470,12 @@ class TableBetter extends Module<TableBetterOptions> {
     final table = context.table;
     final cell = context.cell;
     if (table == null || cell == null) return;
-    final selection = controllerFor(table).selection;
-    if (force || !selection.isActive) {
-      selection.setSelected(cell.element);
+    final controller = controllerFor(table);
+    // TS `showTools`: disable the non-whitelisted toolbar inputs, then park the
+    // selection on the caret's cell (quill-table-better.ts:290-298).
+    controller.setDisabled(true);
+    if (force || !controller.selection.isActive) {
+      controller.setSelected(cell.element, force);
     }
     tableMenus.updateTable(table.element);
     tableMenus.showMenus();
@@ -466,6 +490,7 @@ class TableBetter extends Module<TableBetterOptions> {
   void hideTools() {
     for (final controller in _cellSelections.values) {
       controller.clear();
+      controller.setDisabled(false);
     }
     tableMenus.hideMenus();
     tableMenus.destroyTablePropertiesForm();

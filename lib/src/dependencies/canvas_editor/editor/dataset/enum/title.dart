@@ -1,12 +1,12 @@
 enum TitleLevel {
-	first('first'),
-	second('second'),
-	third('third'),
-	fourth('fourth'),
-	fifth('fifth'),
-	sixth('sixth');
+  first('first'),
+  second('second'),
+  third('third'),
+  fourth('fourth'),
+  fifth('fifth'),
+  sixth('sixth');
 
-	final String value;
+  final String value;
 
-	const TitleLevel(this.value);
+  const TitleLevel(this.value);
 }

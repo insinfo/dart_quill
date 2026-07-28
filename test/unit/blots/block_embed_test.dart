@@ -52,7 +52,8 @@ void main() {
 
   group('Block Embed', () {
     test('insert', () {
-      final scroll = createScroll('<p>0123</p>', registry: createRegistry(formats));
+      final scroll =
+          createScroll('<p>0123</p>', registry: createRegistry(formats));
       scroll.insertAt(2, 'video', '#');
       expectHTML(
         scroll.domNode as FakeDomElement,
@@ -61,7 +62,8 @@ void main() {
     });
 
     test('split newline', () {
-      final scroll = createScroll('<p>0123</p>', registry: createRegistry(formats));
+      final scroll =
+          createScroll('<p>0123</p>', registry: createRegistry(formats));
       scroll.insertAt(4, 'video', '#');
       expectHTML(
         scroll.domNode as FakeDomElement,
@@ -70,7 +72,8 @@ void main() {
     });
 
     test('insert end of document', () {
-      final scroll = createScroll('<p>0123</p>', registry: createRegistry(formats));
+      final scroll =
+          createScroll('<p>0123</p>', registry: createRegistry(formats));
       scroll.insertAt(5, 'video', '#');
       expectHTML(
         scroll.domNode as FakeDomElement,

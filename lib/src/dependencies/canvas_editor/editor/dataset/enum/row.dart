@@ -1,7 +1,1 @@
-enum RowFlex {
-  left,
-  center,
-  right,
-  alignment,
-  justify
-}
+enum RowFlex { left, center, right, alignment, justify }

@@ -118,8 +118,7 @@ void main() {
 
     test('a pasted <pre> reports its language', () {
       expectDelta(
-        clipboard()
-            .convert(html: '<pre data-language="dart">var x = 1;</pre>'),
+        clipboard().convert(html: '<pre data-language="dart">var x = 1;</pre>'),
         Delta()..insert('var x = 1;\n', {'code-block': 'dart'}),
       );
     });
@@ -128,8 +127,7 @@ void main() {
   group('Clipboard.matchBlot', () {
     test('handles blockquote through the registry', () {
       expectDelta(
-        clipboard()
-            .convert(html: '<blockquote>Quote</blockquote><p>After</p>'),
+        clipboard().convert(html: '<blockquote>Quote</blockquote><p>After</p>'),
         Delta()
           ..insert('Quote\n', {'blockquote': true})
           ..insert('After'),
@@ -198,7 +196,8 @@ void main() {
       expect(textChanges, 1);
       // getContents() currently serialises an image blot as text (unrelated
       // core issue), so assert on the DOM the editor produced.
-      expect(quill.root.innerHTML, contains('<img src="data:image/png;base64,"'));
+      expect(
+          quill.root.innerHTML, contains('<img src="data:image/png;base64,"'));
     });
 
     test('uses the configured handler when provided', () async {

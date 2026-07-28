@@ -1,10 +1,10 @@
 enum MoveDirection {
-	up('top'),
-	down('down'),
-	left('left'),
-	right('right');
+  up('top'),
+  down('down'),
+  left('left'),
+  right('right');
 
-	final String value;
+  final String value;
 
-	const MoveDirection(this.value);
+  const MoveDirection(this.value);
 }

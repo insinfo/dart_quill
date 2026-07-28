@@ -27,8 +27,7 @@ void main() {
     final quill = setup();
     quill.editor.insertContents(
       0,
-      Delta()
-        ..insert('abc\ndef\nghi'),
+      Delta()..insert('abc\ndef\nghi'),
     );
     final text = quill.getText();
     expect(text, startsWith('abc\ndef\nghi'));

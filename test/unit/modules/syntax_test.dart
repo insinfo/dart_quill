@@ -95,7 +95,8 @@ void main() {
             highlighter: (text, language) {
               // Marks every leading `final ` as a keyword token.
               final delta = Delta();
-              for (final line in text.substring(0, text.length - 1).split('\n')) {
+              for (final line
+                  in text.substring(0, text.length - 1).split('\n')) {
                 if (line.startsWith('final ')) {
                   delta.insert('final', {'code-token': 'keyword'});
                   delta.insert(line.substring(5));

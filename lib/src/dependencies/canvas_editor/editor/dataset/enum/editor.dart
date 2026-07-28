@@ -9,10 +9,7 @@ enum EditorComponent {
   comment
 }
 
-enum EditorContext {
-  page,
-  table
-}
+enum EditorContext { page, table }
 
 enum EditorMode {
   edit, // 编辑模式（文档可编辑、辅助元素均存在）
@@ -24,28 +21,12 @@ enum EditorMode {
   design // 设计模式（不可删除、只读等配置不控制）
 }
 
-enum EditorZone {
-  header,
-  main,
-  footer
-}
+enum EditorZone { header, main, footer }
 
-enum PageMode {
-  paging,
-  continuity
-}
+enum PageMode { paging, continuity }
 
-enum PaperDirection {
-  vertical,
-  horizontal
-}
+enum PaperDirection { vertical, horizontal }
 
-enum WordBreak {
-  breakAll,
-  breakWord
-}
+enum WordBreak { breakAll, breakWord }
 
-enum RenderMode {
-  speed,
-  compatibility
-}
+enum RenderMode { speed, compatibility }

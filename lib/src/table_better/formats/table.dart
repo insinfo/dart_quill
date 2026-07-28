@@ -26,7 +26,12 @@ import '../config/config.dart';
 import '../utils/utils.dart' as utils;
 
 /// TS `TABLE_ATTRIBUTE`.
-const List<String> tableAttribute = ['border', 'cellspacing', 'style', 'data-class'];
+const List<String> tableAttribute = [
+  'border',
+  'cellspacing',
+  'style',
+  'data-class'
+];
 
 /// TS `STYLE_RULES`.
 const List<String> styleRules = ['color', 'border', 'width', 'height'];
@@ -484,10 +489,7 @@ class TableCell extends TableBetterContainer {
       caseSensitive: false,
     );
     return outerHtml(element).replaceAllMapped(reg, (match) {
-      return match
-          .group(0)!
-          .replaceFirst('ol', 'ul')
-          .replaceFirst('ol', 'ul');
+      return match.group(0)!.replaceFirst('ol', 'ul').replaceFirst('ol', 'ul');
     });
   }
 
@@ -1212,8 +1214,9 @@ class TableContainer extends TableBetterContainer {
       } else {
         var correctLeft = 0.0;
         var correctRight = 0.0;
-        Blot? colBlot =
-            colgroupBlot.children.isNotEmpty ? colgroupBlot.children.first : null;
+        Blot? colBlot = colgroupBlot.children.isNotEmpty
+            ? colgroupBlot.children.first
+            : null;
         while (colBlot != null) {
           final col = colBlot as TableCol;
           // TODO(table-better): layout-dependent — requires a real
@@ -1288,8 +1291,7 @@ class TableContainer extends TableBetterContainer {
     }
     final parentBlot = isTh ? theadBlot : body;
     if (parentBlot == null) return;
-    final refBlot =
-        isTh ? _childAt(theadBlot, index) : _childAt(body, index);
+    final refBlot = isTh ? _childAt(theadBlot, index) : _childAt(body, index);
     final ref = refBlot is TableRow ? refBlot : null;
     final prevBlot = ref ?? _childAt(body, index - 1);
     if (prevBlot is! TableRow) return;

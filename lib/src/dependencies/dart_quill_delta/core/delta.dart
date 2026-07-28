@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:collection/collection.dart';
 import '../../diff_match_patch/diff_match_patch.dart' as dmp;
 
-
 import 'operation.dart';
 import 'delta_iterator.dart';
 
@@ -219,8 +218,7 @@ class Delta {
     if (attrEmbed.isEmpty) {
       return <String, dynamic>{};
     }
-    final baseEmbedAttrs =
-        _filterAttributes(baseOp.attributes, embed: true);
+    final baseEmbedAttrs = _filterAttributes(baseOp.attributes, embed: true);
     Map<String, dynamic>? baseData;
     if (baseOp.isInsert && baseOp.data is Map) {
       baseData = (baseOp.data as Map).map(
@@ -234,10 +232,9 @@ class Delta {
       if (handler == null) {
         return;
       }
-      final baseValue =
-          baseData != null && baseData.containsKey(key)
-              ? baseData[key]
-              : baseEmbedAttrs[key];
+      final baseValue = baseData != null && baseData.containsKey(key)
+          ? baseData[key]
+          : baseEmbedAttrs[key];
       final inverted = handler.invert(value, baseValue);
       if (inverted != null) {
         result[key] = inverted;
@@ -499,8 +496,7 @@ class Delta {
         final merged = _mergeAttributes(regularAttributes, embedAttributes);
         return Operation.retain(thisOp.length, merged);
       } else if (thisOp.isInsert) {
-        final otherEmbed =
-            _filterAttributes(otherAttributes, embed: true);
+        final otherEmbed = _filterAttributes(otherAttributes, embed: true);
         var data = thisOp.data;
         if (otherEmbed.isNotEmpty) {
           final composedData = _composeEmbedData(
@@ -757,8 +753,7 @@ class Delta {
           } else if (op.isRetain && op.isNotPlain) {
             final regularInvert = invertAttributes(
               _mapOrNull(_filterAttributes(op.attributes, embed: false)),
-              _mapOrNull(
-                  _filterAttributes(baseOp.attributes, embed: false)),
+              _mapOrNull(_filterAttributes(baseOp.attributes, embed: false)),
             );
             final embedInvert = _invertEmbedAttributes(op.attributes, baseOp);
             final merged = _mergeAttributes(

@@ -160,8 +160,7 @@ class PdfWriter {
     String title = 'Documento',
     String producer = 'canvas_text_editor',
   }) {
-    _set(_catalogId,
-        ascii.encode('<< /Type /Catalog /Pages $_pagesId 0 R >>'));
+    _set(_catalogId, ascii.encode('<< /Type /Catalog /Pages $_pagesId 0 R >>'));
     _set(
       _pagesId,
       ascii.encode('<< /Type /Pages /Count ${_pageIds.length} '

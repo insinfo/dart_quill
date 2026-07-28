@@ -1,9 +1,9 @@
 enum AreaMode {
-	edit('edit'),
-	readonly('readonly'),
-	form('form');
+  edit('edit'),
+  readonly('readonly'),
+  form('form');
 
-	final String value;
+  final String value;
 
-	const AreaMode(this.value);
+  const AreaMode(this.value);
 }

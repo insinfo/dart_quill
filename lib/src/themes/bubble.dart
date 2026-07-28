@@ -102,8 +102,7 @@ class BubbleTooltip extends BaseTooltip {
     if (arrow != null) {
       arrow.style?.marginLeft = '';
       if (shift != 0) {
-        arrow.style?.marginLeft =
-            '${-1 * shift - arrow.offsetWidth / 2}px';
+        arrow.style?.marginLeft = '${-1 * shift - arrow.offsetWidth / 2}px';
       }
     }
     return shift;

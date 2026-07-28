@@ -978,6 +978,35 @@ class FakeDomEvent implements DomEvent {
   }
 }
 
+class FakeDomMouseEvent extends FakeDomEvent implements DomMouseEvent {
+  FakeDomMouseEvent({
+    required String type,
+    DomNode? target,
+    this.clientX = 0,
+    this.clientY = 0,
+    this.detail = 1,
+    this.altKey = false,
+    this.ctrlKey = false,
+    this.metaKey = false,
+    this.shiftKey = false,
+  }) : super(type, target);
+
+  @override
+  final num clientX;
+  @override
+  final num clientY;
+  @override
+  final int detail;
+  @override
+  final bool altKey;
+  @override
+  final bool ctrlKey;
+  @override
+  final bool metaKey;
+  @override
+  final bool shiftKey;
+}
+
 class FakeDomKeyboardEvent extends FakeDomEvent implements DomKeyboardEvent {
   FakeDomKeyboardEvent({
     required String type,

@@ -113,8 +113,7 @@ void main() {
       expect(plain?['italic'], isNot(isTrue));
     });
 
-    test('round-trip preserves line formats (header/align) on their lines',
-        () {
+    test('round-trip preserves line formats (header/align) on their lines', () {
       final delta = docxToDelta(deltaToDocx(_buildSampleDelta()));
 
       final headerLine = _lineAttributesOf(delta, 'Document Header');
@@ -128,8 +127,8 @@ void main() {
           reason: 'center alignment should survive on the centered line');
 
       // Lines that were not aligned must not gain alignment.
-      expect(_lineAttributesOf(delta, 'Plain paragraph text')?['align'],
-          isNull);
+      expect(
+          _lineAttributesOf(delta, 'Plain paragraph text')?['align'], isNull);
       expect(_lineAttributesOf(delta, '2. Second item')?['align'], isNull);
     });
 

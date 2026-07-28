@@ -478,6 +478,33 @@ class HtmlDomClipboardEvent extends HtmlDomEvent implements DomClipboardEvent {
   }
 }
 
+class HtmlDomMouseEvent extends HtmlDomEvent implements DomMouseEvent {
+  HtmlDomMouseEvent(super.nativeEvent);
+
+  web.MouseEvent get _mouseEvent => nativeEvent as web.MouseEvent;
+
+  @override
+  num get clientX => _mouseEvent.clientX;
+
+  @override
+  num get clientY => _mouseEvent.clientY;
+
+  @override
+  int get detail => _mouseEvent.detail;
+
+  @override
+  bool get altKey => _mouseEvent.altKey;
+
+  @override
+  bool get ctrlKey => _mouseEvent.ctrlKey;
+
+  @override
+  bool get metaKey => _mouseEvent.metaKey;
+
+  @override
+  bool get shiftKey => _mouseEvent.shiftKey;
+}
+
 class HtmlDomKeyboardEvent extends HtmlDomEvent implements DomKeyboardEvent {
   HtmlDomKeyboardEvent(super.nativeEvent);
 
@@ -982,7 +1009,9 @@ class HtmlDomDocument implements DomDocument {
   @override
   void addEventListener(String type, DomEventListener listener) {
     final wrapped = (web.Event event) {
-      listener(HtmlDomEvent(event));
+      listener(event.isA<web.MouseEvent>()
+          ? HtmlDomMouseEvent(event)
+          : HtmlDomEvent(event));
     }.toJS;
     _documentListeners[listener] = wrapped;
     web.document.addEventListener(type, wrapped);
@@ -1161,6 +1190,8 @@ class HtmlDomElement extends _HtmlDomNode implements DomElement {
         listener(HtmlDomClipboardEvent(event));
       } else if (['keydown', 'keyup', 'keypress'].contains(type)) {
         listener(HtmlDomKeyboardEvent(event));
+      } else if (event.isA<web.MouseEvent>()) {
+        listener(HtmlDomMouseEvent(event));
       } else {
         listener(HtmlDomEvent(event));
       }

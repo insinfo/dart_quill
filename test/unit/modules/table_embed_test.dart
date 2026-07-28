@@ -26,12 +26,16 @@ void main() {
                 }
               ],
               'columns': [
-                {'insert': {'id': '22222222'}},
+                {
+                  'insert': {'id': '22222222'}
+                },
                 {
                   'insert': {'id': '33333333'},
                   'attributes': {'width': 30},
                 },
-                {'insert': {'id': '44444444'}},
+                {
+                  'insert': {'id': '44444444'}
+                },
               ],
               'cells': {
                 '1:2': {
@@ -47,7 +51,9 @@ void main() {
           ..retain(1, {
             'table-embed': {
               'rows': [
-                {'insert': {'id': '55555555'}},
+                {
+                  'insert': {'id': '55555555'}
+                },
               ],
             },
           });
@@ -55,19 +61,25 @@ void main() {
           ..insert({
             'table-embed': {
               'rows': [
-                {'insert': {'id': '55555555'}},
+                {
+                  'insert': {'id': '55555555'}
+                },
                 {
                   'insert': {'id': '11111111'},
                   'attributes': {'height': 20},
                 },
               ],
               'columns': [
-                {'insert': {'id': '22222222'}},
+                {
+                  'insert': {'id': '22222222'}
+                },
                 {
                   'insert': {'id': '33333333'},
                   'attributes': {'width': 30},
                 },
-                {'insert': {'id': '44444444'}},
+                {
+                  'insert': {'id': '44444444'}
+                },
               ],
               'cells': {
                 '2:2': {
@@ -93,12 +105,16 @@ void main() {
                 }
               ],
               'columns': [
-                {'insert': {'id': '22222222'}},
+                {
+                  'insert': {'id': '22222222'}
+                },
                 {
                   'insert': {'id': '33333333'},
                   'attributes': {'width': 30},
                 },
-                {'insert': {'id': '44444444'}},
+                {
+                  'insert': {'id': '44444444'}
+                },
               ],
               'cells': {
                 '1:2': {
@@ -114,8 +130,12 @@ void main() {
           ..retain(1, {
             'table-embed': {
               'rows': [
-                {'insert': {'id': '55555555'}},
-                {'insert': {'id': '66666666'}},
+                {
+                  'insert': {'id': '55555555'}
+                },
+                {
+                  'insert': {'id': '66666666'}
+                },
               ],
             },
           });
@@ -123,20 +143,28 @@ void main() {
           ..insert({
             'table-embed': {
               'rows': [
-                {'insert': {'id': '55555555'}},
-                {'insert': {'id': '66666666'}},
+                {
+                  'insert': {'id': '55555555'}
+                },
+                {
+                  'insert': {'id': '66666666'}
+                },
                 {
                   'insert': {'id': '11111111'},
                   'attributes': {'height': 20},
                 },
               ],
               'columns': [
-                {'insert': {'id': '22222222'}},
+                {
+                  'insert': {'id': '22222222'}
+                },
                 {
                   'insert': {'id': '33333333'},
                   'attributes': {'width': 30},
                 },
-                {'insert': {'id': '44444444'}},
+                {
+                  'insert': {'id': '44444444'}
+                },
               ],
               'cells': {
                 '3:2': {
@@ -156,19 +184,25 @@ void main() {
           ..insert({
             'table-embed': {
               'rows': [
-                {'insert': {'id': '11111111'}},
+                {
+                  'insert': {'id': '11111111'}
+                },
                 {
                   'insert': {'id': '22222222'},
                   'attributes': {'height': 20},
                 },
               ],
               'columns': [
-                {'insert': {'id': '33333333'}},
+                {
+                  'insert': {'id': '33333333'}
+                },
                 {
                   'insert': {'id': '44444444'},
                   'attributes': {'width': 30},
                 },
-                {'insert': {'id': '55555555'}},
+                {
+                  'insert': {'id': '55555555'}
+                },
               ],
               'cells': {
                 '2:2': {
@@ -188,7 +222,9 @@ void main() {
           ..retain(1, {
             'table-embed': {
               'rows': [
-                {'insert': {'id': '66666666'}},
+                {
+                  'insert': {'id': '66666666'}
+                },
               ],
               'cells': {
                 '3:2': {
@@ -206,20 +242,28 @@ void main() {
           ..insert({
             'table-embed': {
               'rows': [
-                {'insert': {'id': '66666666'}},
-                {'insert': {'id': '11111111'}},
+                {
+                  'insert': {'id': '66666666'}
+                },
+                {
+                  'insert': {'id': '11111111'}
+                },
                 {
                   'insert': {'id': '22222222'},
                   'attributes': {'height': 20},
                 },
               ],
               'columns': [
-                {'insert': {'id': '33333333'}},
+                {
+                  'insert': {'id': '33333333'}
+                },
                 {
                   'insert': {'id': '44444444'},
                   'attributes': {'width': 30},
                 },
-                {'insert': {'id': '55555555'}},
+                {
+                  'insert': {'id': '55555555'}
+                },
               ],
               'cells': {
                 '3:2': {
@@ -250,12 +294,16 @@ void main() {
                 }
               ],
               'columns': [
-                {'insert': {'id': '22222222'}},
+                {
+                  'insert': {'id': '22222222'}
+                },
                 {
                   'insert': {'id': '33333333'},
                   'attributes': {'width': 30},
                 },
-                {'insert': {'id': '44444444'}},
+                {
+                  'insert': {'id': '44444444'}
+                },
               ],
               'cells': {
                 '1:2': {
@@ -286,8 +334,12 @@ void main() {
                 }
               ],
               'columns': [
-                {'insert': {'id': '22222222'}},
-                {'insert': {'id': '44444444'}},
+                {
+                  'insert': {'id': '22222222'}
+                },
+                {
+                  'insert': {'id': '44444444'}
+                },
               ],
             },
           });
@@ -327,7 +379,9 @@ void main() {
           ..insert({
             'table-embed': {
               'rows': [
-                {'insert': {'id': '11111111'}},
+                {
+                  'insert': {'id': '11111111'}
+                },
               ],
             },
           });
@@ -353,8 +407,12 @@ void main() {
           ..retain(1, {
             'table-embed': {
               'rows': [
-                {'insert': {'id': '11111111'}},
-                {'insert': {'id': '22222222'}},
+                {
+                  'insert': {'id': '11111111'}
+                },
+                {
+                  'insert': {'id': '22222222'}
+                },
                 {
                   'insert': {'id': '33333333'},
                   'attributes': {'height': 100},
@@ -365,8 +423,12 @@ void main() {
                   'insert': {'id': '44444444'},
                   'attributes': {'width': 100},
                 },
-                {'insert': {'id': '55555555'}},
-                {'insert': {'id': '66666666'}},
+                {
+                  'insert': {'id': '55555555'}
+                },
+                {
+                  'insert': {'id': '66666666'}
+                },
               ],
             },
           });
@@ -410,7 +472,7 @@ void main() {
               ],
             },
           });
-  expectDelta(change1.transform(change2, false), expected);
+        expectDelta(change1.transform(change2, false), expected);
       });
 
       test('transform cells', () {
@@ -418,7 +480,9 @@ void main() {
           ..retain(1, {
             'table-embed': {
               'rows': [
-                {'insert': {'id': '22222222'}},
+                {
+                  'insert': {'id': '22222222'}
+                },
               ],
               'cells': {
                 '8:1': {
@@ -475,7 +539,7 @@ void main() {
               },
             },
           });
-  expectDelta(change1.transform(change2, false), expected);
+        expectDelta(change1.transform(change2, false), expected);
       });
 
       test('transform cell attributes', () {
@@ -509,7 +573,7 @@ void main() {
               },
             },
           });
-  expectDelta(change1.transform(change2, false), expected);
+        expectDelta(change1.transform(change2, false), expected);
 
         final expectedPriority = Delta()
           ..retain(1, {
@@ -525,11 +589,17 @@ void main() {
           ..insert({
             'table-embed': {
               'rows': [
-                {'insert': {'id': '11111111'}},
-                {'insert': {'id': '22222222'}},
+                {
+                  'insert': {'id': '11111111'}
+                },
+                {
+                  'insert': {'id': '22222222'}
+                },
               ],
               'columns': [
-                {'insert': {'id': '33333333'}},
+                {
+                  'insert': {'id': '33333333'}
+                },
                 {
                   'insert': {'id': '44444444'},
                   'attributes': {'width': 100},
@@ -553,7 +623,9 @@ void main() {
           ..retain(1, {
             'table-embed': {
               'rows': [
-                {'insert': {'id': '11111111'}},
+                {
+                  'insert': {'id': '11111111'}
+                },
               ],
               'columns': [
                 {'retain': 1},
@@ -572,12 +644,20 @@ void main() {
           ..insert({
             'table-embed': {
               'rows': [
-                {'insert': {'id': '11111111'}},
-                {'insert': {'id': '22222222'}},
+                {
+                  'insert': {'id': '11111111'}
+                },
+                {
+                  'insert': {'id': '22222222'}
+                },
               ],
               'columns': [
-                {'insert': {'id': '33333333'}},
-                {'insert': {'id': '44444444'}},
+                {
+                  'insert': {'id': '33333333'}
+                },
+                {
+                  'insert': {'id': '44444444'}
+                },
               ],
               'cells': {
                 '1:2': {
@@ -593,7 +673,9 @@ void main() {
           ..retain(1, {
             'table-embed': {
               'rows': [
-                {'insert': {'id': '55555555'}},
+                {
+                  'insert': {'id': '55555555'}
+                },
               ],
               'cells': {
                 '2:2': {
@@ -631,12 +713,20 @@ void main() {
           ..insert({
             'table-embed': {
               'rows': [
-                {'insert': {'id': '11111111'}},
-                {'insert': {'id': '22222222'}},
+                {
+                  'insert': {'id': '11111111'}
+                },
+                {
+                  'insert': {'id': '22222222'}
+                },
               ],
               'columns': [
-                {'insert': {'id': '33333333'}},
-                {'insert': {'id': '44444444'}},
+                {
+                  'insert': {'id': '33333333'}
+                },
+                {
+                  'insert': {'id': '44444444'}
+                },
               ],
               'cells': {
                 '1:2': {
@@ -662,7 +752,9 @@ void main() {
             'table-embed': {
               'columns': [
                 {'retain': 1},
-                {'insert': {'id': '44444444'}},
+                {
+                  'insert': {'id': '44444444'}
+                },
               ],
               'cells': {
                 '1:2': {

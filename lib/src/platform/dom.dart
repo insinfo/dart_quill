@@ -176,6 +176,20 @@ abstract class DomClipboardEvent extends DomEvent {
   DomDataTransfer? get clipboardData;
 }
 
+/// DOM mouse/pointer event abstraction.
+///
+/// `detail` is the click counter browsers expose on `MouseEvent`; table-better
+/// uses `detail >= 3` to recognise a triple click.
+abstract class DomMouseEvent extends DomEvent {
+  num get clientX;
+  num get clientY;
+  int get detail;
+  bool get altKey;
+  bool get ctrlKey;
+  bool get metaKey;
+  bool get shiftKey;
+}
+
 /// DOM keyboard event abstraction.
 abstract class DomKeyboardEvent extends DomEvent {
   String get key;

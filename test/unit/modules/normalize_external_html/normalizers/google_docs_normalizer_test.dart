@@ -21,9 +21,8 @@ void main() {
       final doc = FakeDomDocument.fromHtml(html);
       normalizeGoogleDocs(doc);
 
-      final elementChildren = doc.body.childNodes
-          .whereType<DomElement>()
-          .toList(growable: false);
+      final elementChildren =
+          doc.body.childNodes.whereType<DomElement>().toList(growable: false);
 
       expect(elementChildren.length, 3);
       expect(elementChildren[0].tagName, 'SPAN');

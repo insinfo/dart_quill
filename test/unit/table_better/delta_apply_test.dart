@@ -47,9 +47,8 @@ void main() {
     for (final row in rows) {
       final cells = row.children.whereType<TableCell>().toList();
       expect(cells, hasLength(2));
-      final ids = cells
-          .map((cell) => cell.element.getAttribute('data-row'))
-          .toSet();
+      final ids =
+          cells.map((cell) => cell.element.getAttribute('data-row')).toSet();
       expect(ids, hasLength(1), reason: 'cells of a row share data-row');
       for (final cell in cells) {
         expect(cell.children.first, isA<TableCellBlock>());

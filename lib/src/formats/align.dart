@@ -9,19 +9,19 @@ final Map<String, dynamic> alignConfig = {
 
 class AlignAttribute extends Attributor {
   static final AlignAttribute instance = AlignAttribute._();
-  
+
   AlignAttribute._() : super('align', 'align', alignConfig);
 }
 
 class AlignClass extends ClassAttributor {
   static final AlignClass instance = AlignClass._();
-  
+
   AlignClass._() : super('align', 'ql-align', alignConfig);
 }
 
 class AlignStyle extends StyleAttributor {
   static final AlignStyle instance = AlignStyle._();
-  
+
   AlignStyle._() : super('align', 'text-align', alignConfig);
 
   @override

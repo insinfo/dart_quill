@@ -9,13 +9,13 @@ final Map<String, dynamic> fontConfig = {
 
 class FontClass extends ClassAttributor {
   static final FontClass instance = FontClass._();
-  
+
   FontClass._() : super('font', 'ql-font', fontConfig);
 }
 
 class FontStyleAttributor extends StyleAttributor {
   static final FontStyleAttributor instance = FontStyleAttributor._();
-  
+
   FontStyleAttributor._() : super('font', 'font-family', fontConfig);
 
   @override

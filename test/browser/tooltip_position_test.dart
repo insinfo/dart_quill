@@ -21,8 +21,8 @@ class _Fixture {
   final Quill quill;
   final Tooltip tooltip;
 
-  web.HTMLElement get root => (tooltip.root as HtmlDomElement).node
-      as web.HTMLElement;
+  web.HTMLElement get root =>
+      (tooltip.root as HtmlDomElement).node as web.HTMLElement;
 
   /// Root position relative to the bounds container, as laid out.
   double get left =>

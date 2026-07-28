@@ -3,7 +3,6 @@ import 'package:collection/collection.dart';
 import 'line.dart';
 import 'paragraph.dart';
 
-
 /// Represents a structured document consisting of paragraphs.
 class Document {
   /// List of paragraphs contained within the document.

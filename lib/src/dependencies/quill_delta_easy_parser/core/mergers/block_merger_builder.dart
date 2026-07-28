@@ -1,4 +1,3 @@
-
 import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/blocks/line.dart';
 import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/blocks/paragraph.dart';
 import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/core/mergers/base/merger_builder.dart';

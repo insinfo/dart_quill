@@ -148,7 +148,8 @@ void main() {
       expect(first.children.length, 1);
       expect(second.children.length, 1);
       expect(
-        (second.children.first as TableCellBlock).element
+        (second.children.first as TableCellBlock)
+            .element
             .getAttribute('data-cell'),
         'cell-2',
       );
@@ -195,8 +196,7 @@ void main() {
       expect(table.element.getAttribute('border'), '1');
       expect(table.element.getAttribute('cellspacing'), '0');
       expect(table.element.getAttribute('class'), 'ql-table-better custom');
-      final formats =
-          temporary.formats()[TableTemporary.kBlotName] as Map;
+      final formats = temporary.formats()[TableTemporary.kBlotName] as Map;
       expect(formats['data-class'], 'ql-table-better custom');
       expect(formats['border'], '1');
 
@@ -239,12 +239,14 @@ void main() {
       }
       // Existing rows untouched.
       expect(
-        (rows.first.children.first as TableCell).element
+        (rows.first.children.first as TableCell)
+            .element
             .getAttribute('data-row'),
         'row-a',
       );
       expect(
-        (rows.last.children.first as TableCell).element
+        (rows.last.children.first as TableCell)
+            .element
             .getAttribute('data-row'),
         'row-b',
       );
@@ -258,7 +260,8 @@ void main() {
       expect(rows.length, 3);
       expect(rows.last.children.length, 2);
       expect(
-        (rows.last.children.first as TableCell).element
+        (rows.last.children.first as TableCell)
+            .element
             .getAttribute('data-row'),
         isNot(anyOf('row-a', 'row-b')),
       );
@@ -472,8 +475,8 @@ void main() {
     });
 
     test('getCopyTd removes data attributes and table classes', () {
-      final result = utils
-          .getCopyTd('<td data-row="r1" class="ql-cell-selected">x</td>');
+      final result =
+          utils.getCopyTd('<td data-row="r1" class="ql-cell-selected">x</td>');
       expect(result, isNot(contains('data-row')));
       expect(result, isNot(contains('class')));
       expect(result, contains('>x</td>'));
@@ -489,8 +492,7 @@ void main() {
       expect(combined.bottom, 40);
     });
 
-    test('setElementProperty and removeElementProperty edit inline styles',
-        () {
+    test('setElementProperty and removeElementProperty edit inline styles', () {
       final scroll = _createTableScroll('<p><br></p>');
       final node = scroll.element;
       utils.setElementProperty(node, {'width': '10px', 'height': '5px'});

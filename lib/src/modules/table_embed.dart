@@ -97,7 +97,8 @@ Map<String, dynamic> _compactTableData(
   return (row: row, column: column);
 }
 
-String _stringifyCellIdentity(int row, int column) => '${row + 1}:${column + 1}';
+String _stringifyCellIdentity(int row, int column) =>
+    '${row + 1}:${column + 1}';
 
 int? _composePosition(Delta delta, int index) {
   var newIndex = index;
@@ -306,8 +307,7 @@ final EmbedHandler tableHandler = EmbedHandler(
       _composeTableData(a, b, keepNull: keepNull),
   transform: (dynamic a, dynamic b, bool priority) =>
       _transformTableData(a, b, priority),
-  invert: (dynamic change, dynamic base) =>
-      _invertTableData(change, base),
+  invert: (dynamic change, dynamic base) => _invertTableData(change, base),
 );
 
 class TableEmbed extends Module<dynamic> {

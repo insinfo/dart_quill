@@ -8,7 +8,6 @@ import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/enums/enums.
 import 'package:dart_quill/src/dependencies/quill_delta_easy_parser/extensions/extensions.dart';
 import '../../../dart_quill_delta/dart_quill_delta.dart' as fq;
 
-
 /// A Easy-to-use converter that transform Quill Delta into a Document formatting.
 class DocumentParser {
   DocumentParser({

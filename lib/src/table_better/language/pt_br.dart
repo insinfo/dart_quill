@@ -41,7 +41,8 @@ const Map<String, String> ptBR = {
   'alTblR': 'Alinhar tabela à direita',
   'save': 'Salvar',
   'cancel': 'Cancelar',
-  'colorMsg': 'A cor é inválida. Tente "#FF0000" ou "rgb(255,0,0)" ou "vermelho".',
+  'colorMsg':
+      'A cor é inválida. Tente "#FF0000" ou "rgb(255,0,0)" ou "vermelho".',
   'dimsMsg':
       'O valor é inválido. Tente "10px" ou "2em" ou "2%" ou simplesmente "2".',
   'colorPicker': 'Seletor de cor',

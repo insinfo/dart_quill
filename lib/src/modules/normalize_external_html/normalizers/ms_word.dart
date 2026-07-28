@@ -2,7 +2,8 @@ import '../../../platform/dom.dart';
 
 final _ignoreRegexp = RegExp(r'\bmso-list:[^;]*ignore', caseSensitive: false);
 final _idRegexp = RegExp(r'\bmso-list:[^;]*\bl(\d+)', caseSensitive: false);
-final _indentRegexp = RegExp(r'\bmso-list:[^;]*\blevel(\d+)', caseSensitive: false);
+final _indentRegexp =
+    RegExp(r'\bmso-list:[^;]*\blevel(\d+)', caseSensitive: false);
 
 class _ParsedListItem {
   _ParsedListItem({
@@ -31,9 +32,8 @@ _ParsedListItem? _parseListItem(DomElement element, String html) {
   }
 
   final indentMatch = style == null ? null : _indentRegexp.firstMatch(style);
-  final indent = indentMatch == null
-      ? 1
-      : (int.tryParse(indentMatch.group(1) ?? '') ?? 1);
+  final indent =
+      indentMatch == null ? 1 : (int.tryParse(indentMatch.group(1) ?? '') ?? 1);
 
   final typeRegexp = RegExp(
     '@list l$id:level$indent\\s*\\{[^\\}]*mso-level-number-format:\\s*([\\w-]+)',
@@ -101,9 +101,10 @@ void _normalizeListItem(DomDocument doc) {
         break;
       }
       final next = pending.first;
-    final nextSibling = _nextElementSibling(current.element);
-    if (nextSibling != null && next.element == nextSibling &&
-      next.id == current.id) {
+      final nextSibling = _nextElementSibling(current.element);
+      if (nextSibling != null &&
+          next.element == nextSibling &&
+          next.id == current.id) {
         current = pending.removeAt(0);
         continue;
       }
@@ -134,8 +135,7 @@ void _normalizeListItem(DomDocument doc) {
 
 void normalizeMsWord(DomDocument doc) {
   final root = doc.documentElement;
-  if (root.getAttribute('xmlns:w') ==
-      'urn:schemas-microsoft-com:office:word') {
+  if (root.getAttribute('xmlns:w') == 'urn:schemas-microsoft-com:office:word') {
     _normalizeListItem(doc);
   }
 }
