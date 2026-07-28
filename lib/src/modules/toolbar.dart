@@ -520,8 +520,16 @@ class _TableGridPicker {
               'box-sizing:border-box;background:#fff;';
         cell.addEventListener('mouseenter', (_) => highlight(row, column));
         cell.addEventListener('click', (event) {
-          final module = quill.getModule('table');
-          if (module is Table) module.insertTable(row, column);
+          // Parity toolbar-table.ts — the grid belongs to quill-table-better:
+          // when its module is active the insertion must produce table-better
+          // blots (temporary/colgroup/data-row), not the basic table module's.
+          final better = quill.getModule('table-better');
+          if (better != null) {
+            (better as dynamic).insertTable(row, column);
+          } else {
+            final module = quill.getModule('table');
+            if (module is Table) module.insertTable(row, column);
+          }
           hide();
           event.preventDefault();
           event.stopPropagation();
