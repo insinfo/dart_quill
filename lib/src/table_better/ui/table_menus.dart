@@ -21,6 +21,7 @@ import '../formats/table.dart';
 import '../language/language.dart';
 import '../utils/utils.dart' as utils;
 import 'cell_selection.dart';
+import 'table_properties_form.dart';
 
 /// One entry of a menu's dropdown list (TS `Children[key]`).
 class TableMenuChild {
@@ -256,9 +257,12 @@ class TableMenus {
   /// TS `options.menus` — names of the menus to show, in order.
   final List<String>? menus;
 
-  /// Invoked for the `table`/`cell` menus; the properties form lives in its
-  /// own layer (G6.6), so the menus only announce the request.
+  /// Optional override for the properties form lifecycle; when absent the
+  /// menus build a [TablePropertiesForm] themselves, as upstream does.
   final void Function(TableMenus menus, String type)? onOpenProperties;
+
+  /// TS `this.tablePropertiesForm`.
+  TablePropertiesForm? tablePropertiesForm;
 
   late final DomElement root;
   late final DomEventListener _clickListener;
@@ -802,12 +806,57 @@ class TableMenus {
         : getSelectedTdAttrs(cells.first);
   }
 
-  void openTableProperties() => onOpenProperties?.call(this, 'table');
+  /// TS: the `table` menu handler builds the form with the table's attributes.
+  void openTableProperties() {
+    if (onOpenProperties != null) {
+      onOpenProperties!(this, 'table');
+      return;
+    }
+    _openProperties('table', tablePropertiesAttributes());
+  }
 
-  void openCellProperties() => onOpenProperties?.call(this, 'cell');
+  /// TS: the `cell` menu handler builds the form with the cells' attributes.
+  void openCellProperties() {
+    if (onOpenProperties != null) {
+      onOpenProperties!(this, 'cell');
+      return;
+    }
+    _openProperties('cell', cellPropertiesAttributes());
+  }
+
+  void _openProperties(String type, Map<String, String> attribute) {
+    destroyTablePropertiesForm();
+    final target = table;
+    if (target == null) return;
+    final bounds = getCorrectBounds(target);
+    tablePropertiesForm = TablePropertiesForm(
+      type: type,
+      attribute: attribute,
+      host: TablePropertiesFormHost(
+        container: quill.container,
+        language: language,
+        table: tableBlot,
+        selectedCells: cellSelection?.selectedCells ?? const [],
+        containerBounds: bounds[1],
+        targetBounds: bounds[0],
+        onClose: () {
+          tablePropertiesForm = null;
+          showMenus();
+          updateMenus();
+        },
+      ),
+    )..updatePropertiesForm();
+  }
 
   /// TS `destroyTablePropertiesForm()`.
-  void destroyTablePropertiesForm() => onOpenProperties?.call(this, 'close');
+  void destroyTablePropertiesForm() {
+    if (onOpenProperties != null) {
+      onOpenProperties!(this, 'close');
+      return;
+    }
+    tablePropertiesForm?.removePropertiesForm();
+    tablePropertiesForm = null;
+  }
 
   // --- helpers ------------------------------------------------------------
 
