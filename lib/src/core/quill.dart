@@ -521,6 +521,18 @@ class Quill {
   }
 
   void setSelection(Range range, {String source = EmitterSource.API}) {
+    // Parity selection.ts rangeToNative: both endpoints are clamped to
+    // scroll.length() - 1 — the caret can never sit past the final newline.
+    // Upstream stores the clamped value too (setNativeRange → update reads
+    // the native selection back), so the logical range must match.
+    final maxIndex = math.max(0, scroll.length() - 1);
+    final clampedIndex = math.max(0, math.min(range.index, maxIndex));
+    final clampedEnd =
+        math.max(clampedIndex, math.min(range.index + range.length, maxIndex));
+    if (clampedIndex != range.index ||
+        clampedEnd - clampedIndex != range.length) {
+      range = Range(clampedIndex, clampedEnd - clampedIndex);
+    }
     selection.setSelection(range, source);
     final start = _domPosition(range.index);
     final end = _domPosition(range.index + range.length, inclusive: true);

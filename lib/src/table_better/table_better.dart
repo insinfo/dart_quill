@@ -431,7 +431,10 @@ class TableBetter extends Module<TableBetterOptions> {
     final offset = quill.scroll.offset(table);
     table.remove();
     hideTools();
-    quill.scroll.optimize([], {});
+    // TS calls quill.update(USER): the tree changed outside the delta
+    // pipeline, so the document delta must be reconciled — without it,
+    // getContents() keeps reporting the removed table.
+    quill.update(EmitterSource.USER);
     final length = quill.scroll.length();
     quill.setSelection(
       Range(offset.clamp(0, length).toInt(), 0),
@@ -440,14 +443,15 @@ class TableBetter extends Module<TableBetterOptions> {
   }
 
   /// TS `deleteTableTemporary(source)` (quill-table-better.ts:124).
-  void deleteTableTemporary() {
+  void deleteTableTemporary([String source = EmitterSource.API]) {
     final temporaries =
         quill.scroll.descendants<TableTemporary>().toList(growable: false);
     for (final temporary in temporaries) {
       temporary.remove();
     }
     hideTools();
-    quill.scroll.optimize([], {});
+    // TS: quill.update(source) — reconcile the delta after the direct removal.
+    quill.update(source);
   }
 
   /// TS `registerToolbarTable(toolbarTable)` (quill-table-better.ts:281).

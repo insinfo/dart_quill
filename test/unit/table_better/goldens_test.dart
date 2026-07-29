@@ -107,18 +107,7 @@ void main() {
 /// Cases the port answers differently, with the root cause. Every entry is a
 /// compatibility debt, not an accepted difference — a table written by the JS
 /// plugin does not survive a round trip through the port in any of them.
-const Map<String, String> _knownDivergences = {
-  // ---- insertTable after existing content --------------------------------
-  'insertTable / a table after existing text':
-      'the port leaves an extra empty line before the table — the `isExtra` '
-          'branch of insertTable adds a newline upstream does not',
-
-  // ---- the two delete entry points ---------------------------------------
-  'table editing / deleting the temporary blot':
-      'deleteTableTemporary leaves the table-temporary line in the document',
-  'table editing / deleting the whole table':
-      'deleteTable leaves the table-temporary line behind',
-};
+const Map<String, String> _knownDivergences = {};
 
 void _applyAction(
     Quill quill, TableBetter module, Map<String, dynamic> action) {
