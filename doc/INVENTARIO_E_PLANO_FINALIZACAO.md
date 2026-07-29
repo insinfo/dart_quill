@@ -433,3 +433,7 @@ diretórios, e atualizar o Quill vira: copiar os SVGs, rodar o gerador, rodar os
 - Paridade comportamental com Quill 2.0.3: 26 bindings, paste com attributors, formato pendente no cursor, embeds com guards, checklist clicável, syntax com realce aplicado.
 - table-better completo: menus flutuantes, seleção por arrasto, resize visual, propriedades com paleta, seletor 10×10 inserindo tabela table-better, 16 idiomas.
 - DOCX abre/exporta fiel; PDF visualmente equivalente.
+
+
+Próximos alvos no plano
+G6.9 pendentes (setCellRowspan, fixes de clipboard do §4.2), restante do G2.2 (rangeToNative/setNativeRange), G7.2/G7.3 (ícones/dartdoc), e os blocos G8 (DOCX/PDF) e G9 (QA/empacotamento).
