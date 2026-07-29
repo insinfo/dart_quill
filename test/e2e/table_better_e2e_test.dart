@@ -21,22 +21,31 @@ void main() {
   var serverStarted = false;
 
   setUpAll(() async {
-    final build = await Process.run(
-      Platform.resolvedExecutable,
-      const [
-        'run',
-        'webdev',
-        'build',
-        '--no-release',
-        '--output',
-        'web:build/e2e',
-        '--',
-        '--delete-conflicting-outputs',
-      ],
-      workingDirectory: Directory.current.path,
-    );
-    if (build.exitCode != 0) {
-      throw StateError('Web build failed:\n${build.stdout}\n${build.stderr}');
+    // On a cold checkout the first build_runner pass can exit 0 having
+    // written only `.build.manifest`; verify the merged output and retry
+    // once before giving up.
+    for (var attempt = 0; attempt < 2; attempt++) {
+      final build = await Process.run(
+        Platform.resolvedExecutable,
+        const [
+          'run',
+          'webdev',
+          'build',
+          '--no-release',
+          '--output',
+          'web:build/e2e',
+          '--',
+          '--delete-conflicting-outputs',
+        ],
+        workingDirectory: Directory.current.path,
+      );
+      if (build.exitCode != 0) {
+        throw StateError('Web build failed:\n${build.stdout}\n${build.stderr}');
+      }
+      if (File('build/e2e/index.html').existsSync()) break;
+      if (attempt == 1) {
+        throw StateError('Web build produced no index.html in build/e2e');
+      }
     }
     final handler = createStaticHandler(
       Directory('build/e2e').absolute.path,
@@ -155,6 +164,60 @@ void main() {
       final text =
           await page.$eval<String>('.ql-editor', '(el) => el.textContent');
       expect(text, 'plain bold');
+    });
+  });
+
+  group('link and color pickers (real input)', () {
+    test('the link button opens the tooltip and saving creates the anchor',
+        () async {
+      await resetEditor();
+      await page.type('.ql-editor', 'quilljs');
+      await selectAll();
+      await page.click('.ql-toolbar button.ql-link');
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      final tooltip = await page.evaluate<Map<String, dynamic>>('''() => {
+        const el = document.querySelector('.ql-tooltip');
+        return {
+          visible: el != null && !el.classList.contains('ql-hidden'),
+          editing: el?.classList.contains('ql-editing'),
+          mode: el?.getAttribute('data-mode'),
+        };
+      }''');
+      expect(tooltip['visible'], isTrue,
+          reason: 'the link editor must stay open after the toolbar click '
+              '($tooltip)');
+      expect(tooltip['editing'], isTrue);
+      expect(tooltip['mode'], 'link');
+
+      // Type the URL into the tooltip input and confirm with Enter.
+      await page.type('.ql-tooltip input', 'https://quilljs.com');
+      await page.keyboard.press(Key.enter);
+      final result = await page.evaluate<Map<String, dynamic>>('''() => ({
+        href: document.querySelector('.ql-editor a')?.getAttribute('href'),
+        text: document.querySelector('.ql-editor a')?.textContent,
+        hidden: document.querySelector('.ql-tooltip')
+            .classList.contains('ql-hidden'),
+      })''');
+      expect(result['href'], 'https://quilljs.com');
+      expect(result['text'], 'quilljs');
+      expect(result['hidden'], isTrue,
+          reason: 'saving closes the tooltip');
+    });
+
+    test('the color picker applies a text color to the selection', () async {
+      await resetEditor();
+      await page.type('.ql-editor', 'colorido');
+      await selectAll();
+      await page.click('.ql-toolbar .ql-color-picker.ql-color .ql-picker-label');
+      await page.click(
+          '.ql-toolbar .ql-color-picker.ql-color '
+          '.ql-picker-item[data-value="#e60000"]');
+      final colored = await page.evaluate<String?>(
+          '() => document.querySelector(".ql-editor span")'
+          '?.style?.color ?? null');
+      expect(colored, 'rgb(230, 0, 0)',
+          reason: 'the swatch click must color the selected text');
     });
   });
 

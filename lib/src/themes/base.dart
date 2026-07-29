@@ -71,10 +71,19 @@ class BaseTheme extends Theme {
         document.body.removeEventListener('click', listener);
         return;
       }
-      if (tooltip != null &&
-          !tooltip!.root.contains(e.target) &&
-          !quill.hasFocus()) {
-        tooltip!.hide();
+      // Parity base.ts:63-69 — the tooltip only hides on an outside click
+      // when neither the editor nor the tooltip's own textbox holds focus.
+      // Without the textbox guard, opening the link editor (whose
+      // `textbox.select()` moves focus to the input) was undone by the click
+      // event of the very toolbar press that opened it.
+      final currentTooltip = tooltip;
+      if (currentTooltip != null && !currentTooltip.root.contains(e.target)) {
+        final textboxFocused = currentTooltip is BaseTooltip &&
+            currentTooltip.textbox != null &&
+            domBindings.adapter.hasFocus(currentTooltip.textbox!);
+        if (!textboxFocused && !quill.hasFocus()) {
+          currentTooltip.hide();
+        }
       }
       if (pickers != null) {
         pickers!.forEach((picker) {

@@ -33,6 +33,10 @@ void main() {
     ],
     ['bold', 'italic', 'underline'],
     [
+      {'color': []},
+      {'background': []},
+    ],
+    [
       {'list': 'ordered'},
       {'list': 'bullet'},
       {'align': []},
