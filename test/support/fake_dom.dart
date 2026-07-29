@@ -11,6 +11,20 @@ class FakeDomAdapter implements DomAdapter {
   DomSelectionRange? selectionRange;
   DomNativeRange? nativeSelectionRange;
 
+  // The fake DOM has no live native selection: Selection stays in its
+  // logical mode, which is what the VM suite exercises.
+  @override
+  bool get supportsNativeSelection => false;
+
+  @override
+  bool hasFocus(DomElement root) =>
+      root is FakeDomElement && root.getAttribute('data-focused') == 'true';
+
+  @override
+  void clearNativeSelection() {
+    nativeSelectionRange = null;
+  }
+
   @override
   DomMutationObserver createMutationObserver(
     void Function(List<DomMutationRecord> records, DomMutationObserver observer)

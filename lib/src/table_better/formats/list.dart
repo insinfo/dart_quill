@@ -61,6 +61,12 @@ class TableListContainer extends TableBetterContainer {
   @override
   Map<String, dynamic> formats() => {kBlotName: formatsFromNode(element)};
 
+  /// Upstream's ListContainer inherits `allowedChildren = [ListItem]` from
+  /// quill's list format (formats/list.ts); TableList is a ListItem subclass.
+  @override
+  bool Function(Blot child)? get allowedChildren => (child) =>
+      child is ListItem;
+
   @override
   TableListContainer clone() =>
       TableListContainer(element.cloneNode(deep: false));

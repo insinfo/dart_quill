@@ -105,6 +105,15 @@ class _LayoutAdapter implements DomAdapter {
 
   @override
   String? get platform => inner.platform;
+
+  @override
+  bool get supportsNativeSelection => inner.supportsNativeSelection;
+
+  @override
+  bool hasFocus(DomElement root) => inner.hasFocus(root);
+
+  @override
+  void clearNativeSelection() => inner.clearNativeSelection();
 }
 
 _LayoutAdapter _installLayoutAdapter() {

@@ -17,7 +17,7 @@ Quill _createQuill(String html) {
 void main() {
   group('Table Module', () {
     group('insert table', () {
-      test('creates a contextual toolbar with Tabler table actions', () {
+      test('creates a contextual toolbar honoring the icon theme', () {
         final quill = _createQuill('<p><br></p>');
         final table = quill.getModule('table') as Table;
         quill.setSelection(const Range(0, 0));
@@ -35,7 +35,10 @@ void main() {
         expect(contextToolbar.getAttribute('role'), 'toolbar');
         expect(actions.first.getAttribute('title'), 'Inserir linha acima');
         expect(actions.last.getAttribute('title'), 'Excluir tabela');
-        expect(actions.first.innerHTML, contains('ti-row-insert-top'));
+        // Default icon theme is QuillIconTheme.svg: official inline SVGs,
+        // never Tabler webfont glyphs.
+        expect(actions.first.innerHTML, contains('<svg'));
+        expect(actions.first.innerHTML, isNot(contains('ti-')));
       });
 
       test('merge right and split preserve logical column count', () {

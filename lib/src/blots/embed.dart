@@ -48,8 +48,8 @@ abstract class Embed extends EmbedBlot {
   /// Parity embed.ts:33-37.
   @override
   int index(DomNode node, int offset) {
-    if (identical(node, leftGuard)) return 0;
-    if (identical(node, rightGuard)) return 1;
+    if (node == leftGuard) return 0;
+    if (node == rightGuard) return 1;
     return offset > 0 ? 1 : 0;
   }
 
@@ -59,7 +59,7 @@ abstract class Embed extends EmbedBlot {
     EmbedContextRange? range;
     final text = node.data.split(kGuardText).join('');
     final document = domBindings.adapter.document;
-    if (identical(node, leftGuard)) {
+    if (node == leftGuard) {
       final previous = prev;
       if (previous is TextBlot) {
         final prevLength = previous.length();
@@ -76,7 +76,7 @@ abstract class Embed extends EmbedBlot {
           startOffset: text.length,
         );
       }
-    } else if (identical(node, rightGuard)) {
+    } else if (node == rightGuard) {
       final following = next;
       if (following is TextBlot) {
         following.insertAt(0, text);
@@ -109,8 +109,7 @@ abstract class Embed extends EmbedBlot {
   void update(List<DomMutationRecord> mutations, Map<String, dynamic> context) {
     for (final mutation in mutations) {
       if (mutation.type == 'characterData' &&
-          (identical(mutation.target, leftGuard) ||
-              identical(mutation.target, rightGuard))) {
+          (mutation.target == leftGuard || mutation.target == rightGuard)) {
         final range = restore(mutation.target as DomText);
         if (range != null) {
           context['range'] = range;

@@ -353,17 +353,32 @@ TableCell? getCorrectCellBlot(Blot? blot) {
   return null;
 }
 
-/// TS `getCorrectContainerWidth`.
+/// TS `getCorrectContainerWidth` (utils/index.ts:240-248).
 ///
-/// TODO(table-better): the TS version subtracts the editor's computed
-/// horizontal padding; computed styles are unavailable through the platform
-/// abstraction, so this falls back to the raw `clientWidth`.
+/// The TS reads `~~computedStyle.getPropertyValue('padding-left')` — but
+/// `getComputedStyle` returns lengths WITH the unit (`"12px"`), and JS `~~`
+/// of a non-numeric string is 0 (ToNumber gives NaN, ToInt32(NaN) is 0), so
+/// the upstream subtraction is a no-op in practice. Ported literally: only a
+/// unitless computed value (never produced by browsers) would subtract.
 double getCorrectContainerWidth() {
   final container = domBindings.adapter.document.querySelector('.ql-editor');
   if (container == null) {
     throw StateError('table-better: no .ql-editor container found');
   }
-  return container.clientWidth.toDouble();
+  final adapter = domBindings.adapter;
+  final pl = _jsToInt32(adapter.getComputedStyleProperty(container, 'padding-left'));
+  final pr = _jsToInt32(adapter.getComputedStyleProperty(container, 'padding-right'));
+  return (container.clientWidth - pl - pr).toDouble();
+}
+
+/// JS `~~value` on a string: ToInt32(ToNumber(value)); NaN becomes 0.
+int _jsToInt32(String? value) {
+  if (value == null) return 0;
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return 0; // ToNumber('') is 0
+  final parsed = double.tryParse(trimmed);
+  if (parsed == null || parsed.isNaN || parsed.isInfinite) return 0;
+  return parsed.truncate();
 }
 
 /// TS `getCorrectWidth`.
@@ -373,14 +388,19 @@ String getCorrectWidth(double width, bool isPercent) {
   return '${((width / w) * 100).toStringAsFixed(2)}%';
 }
 
-/// TS `getElementStyle`.
-///
-/// TODO(table-better): computed styles are unavailable through the platform
-/// abstraction; only inline styles (the `style` attribute) are read.
+/// TS `getElementStyle` (utils/index.ts:256-266): the inline declaration
+/// wins; an empty inline value falls through (`||`) to the computed style.
+/// Off-browser the computed style is unavailable and resolves to `''`.
 Map<String, String> getElementStyle(DomElement node, List<String> rules) {
   final inline = parseInlineStyle(node);
+  String resolve(String rule) {
+    final inlineValue = inline[rule];
+    if (inlineValue != null && inlineValue.isNotEmpty) return inlineValue;
+    return domBindings.adapter.getComputedStyleProperty(node, rule);
+  }
+
   return {
-    for (final rule in rules) rule: rgbToHex(inline[rule] ?? ''),
+    for (final rule in rules) rule: rgbToHex(resolve(rule)),
   };
 }
 

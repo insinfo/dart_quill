@@ -135,7 +135,11 @@ class Emitter {
     }
   }
 
-  void listenDOM(String type, DomElement target, Function listener) {
+  /// A null [target] stands for the document (upstream registers
+  /// `selectionchange`/dragging listeners on `document`/`document.body`):
+  /// those listeners fire for every routed event of [type] regardless of the
+  /// event's target, since the abstraction has no document-as-node type.
+  void listenDOM(String type, DomElement? target, Function listener) {
     final listeners = _domListeners.putIfAbsent(type, () => <_DomListener>[]);
     listeners.add(_DomListener(node: target, handler: listener));
   }
@@ -147,7 +151,8 @@ class Emitter {
     }
     final target = event.target;
     for (final entry in List<_DomListener>.from(listeners)) {
-      if (entry.node == target || entry.node.contains(target)) {
+      final node = entry.node;
+      if (node == null || node == target || node.contains(target)) {
         final positional = <dynamic>[event, ...args];
         Function.apply(entry.handler, positional);
       }
@@ -158,6 +163,6 @@ class Emitter {
 class _DomListener {
   _DomListener({required this.node, required this.handler});
 
-  final DomElement node;
+  final DomElement? node;
   final Function handler;
 }

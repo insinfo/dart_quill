@@ -115,6 +115,12 @@ const String _tableInsertColumnsIcon =
 const String _tableInsertRowsIcon =
     r'''<svg viewbox="0 0 18 18"><g class="ql-fill ql-stroke ql-thin ql-transparent"><rect height="3" rx="0.5" ry="0.5" width="7" x="4.5" y="2.5"></rect><rect height="3" rx="0.5" ry="0.5" width="7" x="4.5" y="12.5"></rect></g><rect class="ql-fill ql-stroke ql-thin" height="3" rx="0.5" ry="0.5" width="7" x="8.5" y="7.5"></rect><polygon class="ql-fill ql-stroke ql-thin" points="4.5 11 2.5 9 4.5 7 4.5 11"></polygon><line class="ql-stroke" x1="6" x2="4" y1="9" y2="9"></line></svg>''';
 
+const String _tableMergeCellsIcon =
+    r'''<svg viewbox="0 0 18 18"><rect class="ql-stroke" height="4" width="12" x="3" y="7"></rect><path class="ql-fill ql-transparent" d="M2,2V16H16V2H2ZM14,14H10V11H8v3H4V4H8V7h2V4h4V14Z"></path></svg>''';
+
+const String _tableUnmergeCellsIcon =
+    r'''<svg viewbox="0 0 18 18"><rect class="ql-stroke" height="4" width="12" x="3" y="7"></rect><path class="ql-fill ql-transparent" d="M2,2V16H16V2H2ZM14,14H10V11H8v3H4V4H8V7h2V4h4V14Z"></path><line class="ql-stroke" x1="12" x2="12" y1="11" y2="7"></line><line class="ql-stroke" x1="9" x2="9" y1="11" y2="7"></line><line class="ql-stroke" x1="6" x2="6" y1="11" y2="7"></line></svg>''';
+
 const String _underlineIcon =
     r'''<svg viewbox="0 0 18 18"><path class="ql-stroke" d="M5,3V9a4.012,4.012,0,0,0,4,4H9a4.012,4.012,0,0,0,4-4V3"></path><rect class="ql-fill" height="1" rx="0.5" ry="0.5" width="12" x="3" y="15"></rect></svg>''';
 
@@ -184,4 +190,6 @@ const Map<String, dynamic> defaultIcons = {
   'table-delete-row': _tableDeleteRowsIcon,
   'table-delete-column': _tableDeleteColumnsIcon,
   'table-delete': _tableDeleteCellsIcon,
+  'table-merge': _tableMergeCellsIcon,
+  'table-split': _tableUnmergeCellsIcon,
 };

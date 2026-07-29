@@ -433,8 +433,13 @@ class HtmlDomMutationRecord implements DomMutationRecord {
 
   final web.MutationRecord _native;
 
+  // Nodes are wrapped with their PROPER wrapper types (element/text): the
+  // reconciliation layer runs `is DomText` checks and `as DomText` casts on
+  // record targets, and a bare _HtmlDomNode wrapper made every one of them
+  // fail in the real browser (the fake DOM hands back the original objects,
+  // which is why the VM suite never saw it).
   @override
-  DomNode get target => _HtmlDomNode(_native.target);
+  DomNode get target => _wrapNode(_native.target);
 
   @override
   String get type => _native.type;
@@ -442,27 +447,23 @@ class HtmlDomMutationRecord implements DomMutationRecord {
   @override
   List<DomNode> get addedNodes {
     final nodes = _native.addedNodes;
-    return [
-      for (var i = 0; i < nodes.length; i++) _HtmlDomNode(nodes.item(i)!)
-    ];
+    return [for (var i = 0; i < nodes.length; i++) _wrapNode(nodes.item(i)!)];
   }
 
   @override
   List<DomNode> get removedNodes {
     final nodes = _native.removedNodes;
-    return [
-      for (var i = 0; i < nodes.length; i++) _HtmlDomNode(nodes.item(i)!)
-    ];
+    return [for (var i = 0; i < nodes.length; i++) _wrapNode(nodes.item(i)!)];
   }
 
   @override
   DomNode? get previousSibling => _native.previousSibling == null
       ? null
-      : _HtmlDomNode(_native.previousSibling!);
+      : _wrapNode(_native.previousSibling!);
 
   @override
   DomNode? get nextSibling =>
-      _native.nextSibling == null ? null : _HtmlDomNode(_native.nextSibling!);
+      _native.nextSibling == null ? null : _wrapNode(_native.nextSibling!);
 }
 
 class HtmlDomClipboardEvent extends HtmlDomEvent implements DomClipboardEvent {
@@ -621,6 +622,22 @@ class HtmlDomAdapter implements DomAdapter {
     if (native.isA<web.HTMLElement>()) {
       (native as web.HTMLElement).blur();
     }
+  }
+
+  @override
+  bool get supportsNativeSelection => true;
+
+  @override
+  bool hasFocus(DomElement root) {
+    final rootNode = (root as _HtmlDomNode).node;
+    final active = web.document.activeElement;
+    if (active == null || !rootNode.isA<web.Node>()) return false;
+    return identical(active, rootNode) || rootNode.contains(active);
+  }
+
+  @override
+  void clearNativeSelection() {
+    web.window.getSelection()?.removeAllRanges();
   }
 
   @override

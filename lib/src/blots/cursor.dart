@@ -28,6 +28,13 @@ class Cursor extends EmbedBlot {
   /// composition (cursor.ts:76 checks `selection.composing`).
   bool Function()? isComposing;
 
+  /// Hook the Selection layer sets so [restore] can read the CURRENT native
+  /// selection (cursor.ts:77 `this.selection.getNativeRange()`) — the
+  /// restored caret is remapped from where the user's caret actually is,
+  /// never synthesized. Null off-browser.
+  ({DomNode startNode, int startOffset, DomNode endNode, int endOffset})?
+      Function()? nativeRangeProvider;
+
   DomText get textNode => _textNode;
 
   static Cursor create([dynamic value]) {
@@ -84,7 +91,7 @@ class Cursor extends EmbedBlot {
   /// Parity cursor.ts:56-59.
   @override
   int index(DomNode node, int offset) {
-    if (identical(node, _textNode)) return 0;
+    if (node == _textNode) return 0;
     return offset > 0 ? 1 : 0;
   }
 
@@ -94,49 +101,83 @@ class Cursor extends EmbedBlot {
     return MapEntry(_textNode, _textNode.data.length);
   }
 
-  /// Parity cursor.ts:75-151 (without native-range remapping, which needs
-  /// the G2 Selection layer): pull any typed text out of the cursor into an
-  /// adjacent TextBlot and reset the guard contents.
+  /// Parity cursor.ts:75-151: pull any typed text out of the cursor into a
+  /// merged adjacent TextBlot, ALWAYS remove the cursor (a parented leftover
+  /// re-enters restore on the next selection update and re-assigns the guard
+  /// data, which collapses the browser caret), and remap the CURRENT native
+  /// selection onto the merged text.
   EmbedContextRange? restore() {
     if (isComposing?.call() ?? false) return null;
     if (parent == null) return null;
+    final range = nativeRangeProvider?.call();
 
     // Undo the browser's occasional push-down of sibling nodes into the
-    // cursor span (cursor.ts:84-90).
+    // cursor span (cursor.ts:80-89).
     final parentNode = element.parentNode;
     if (parentNode is DomElement) {
       while (element.lastChild != null &&
-          !identical(element.lastChild, _textNode)) {
+          element.lastChild != _textNode) {
         parentNode.insertBefore(element.lastChild!, element);
       }
     }
 
     final prevTextBlot = prev is TextBlot ? prev as TextBlot : null;
+    final prevTextLength = prevTextBlot?.length() ?? 0;
     final nextTextBlot = next is TextBlot ? next as TextBlot : null;
+    final nextText = nextTextBlot != null ? '${nextTextBlot.value()}' : '';
     final newText = _textNode.data.split(kContents).join('');
     _textNode.data = kContents;
 
-    DomNode rangeNode;
-    int rangeOffset;
+    // Proactively merge the TextBlots around the cursor so optimization does
+    // not lose the caret (cursor.ts:101-121).
+    Blot mergedTextBlot;
     if (prevTextBlot != null) {
-      final prevLength = prevTextBlot.length();
-      prevTextBlot.insertAt(prevLength, newText);
-      rangeNode = prevTextBlot.domNode;
-      rangeOffset = prevLength + newText.length;
-      remove();
+      mergedTextBlot = prevTextBlot;
+      if (newText.isNotEmpty || nextTextBlot != null) {
+        prevTextBlot.insertAt(prevTextBlot.length(), newText + nextText);
+        nextTextBlot?.remove();
+      }
     } else if (nextTextBlot != null) {
-      nextTextBlot.insertAt(0, newText);
-      rangeNode = nextTextBlot.domNode;
-      rangeOffset = newText.length;
+      mergedTextBlot = nextTextBlot;
+      if (newText.isNotEmpty) {
+        nextTextBlot.insertAt(0, newText);
+      }
     } else {
       final newTextNode = domBindings.adapter.document.createTextNode(newText);
       final blot = TextBlot(newTextNode);
       parent!.insertBefore(blot, this);
-      rangeNode = newTextNode;
-      rangeOffset = newText.length;
+      mergedTextBlot = blot;
     }
-    if (newText.isEmpty) return null;
-    return EmbedContextRange(startNode: rangeNode, startOffset: rangeOffset);
+
+    remove();
+    if (range != null) {
+      // Parity cursor.ts:126-148 — carry the user's caret onto the merged
+      // text (`- 1` strips the FEFF guard character).
+      int? remapOffset(DomNode node, int offset) {
+        if (prevTextBlot != null && node == prevTextBlot.domNode) {
+          return offset;
+        }
+        if (node == _textNode) {
+          return prevTextLength + offset - 1;
+        }
+        if (nextTextBlot != null && node == nextTextBlot.domNode) {
+          return prevTextLength + newText.length + offset;
+        }
+        return null;
+      }
+
+      final start = remapOffset(range.startNode, range.startOffset);
+      final end = remapOffset(range.endNode, range.endOffset);
+      if (start != null && end != null) {
+        return EmbedContextRange(
+          startNode: mergedTextBlot.domNode,
+          startOffset: start,
+          endNode: mergedTextBlot.domNode,
+          endOffset: end,
+        );
+      }
+    }
+    return null;
   }
 
   @override
@@ -150,7 +191,7 @@ class Cursor extends EmbedBlot {
   void update(List<DomMutationRecord> mutations, Map<String, dynamic> context) {
     final touched = mutations.any((mutation) =>
         mutation.type == 'characterData' &&
-        identical(mutation.target, _textNode));
+        mutation.target == _textNode);
     if (touched) {
       final range = restore();
       if (range != null) {

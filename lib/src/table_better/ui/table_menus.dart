@@ -398,7 +398,7 @@ class TableMenus {
   /// TS `toggleAttribute(list, tooltip, e)`.
   void toggleAttribute(DomElement? list, DomElement tooltip) {
     final previousList = prevList;
-    if (previousList != null && !identical(previousList, list)) {
+    if (previousList != null && previousList != list) {
       previousList.classes.add('ql-hidden');
       prevTooltip?.classes.remove('ql-table-tooltip-hidden');
     }
@@ -431,7 +431,7 @@ class TableMenus {
     }
     showMenus();
     updateMenus(target);
-    if ((target != null && !identical(target, table)) || scroll) {
+    if ((target != null && target != table) || scroll) {
       updateScroll(false);
     }
     table = target;
@@ -886,7 +886,7 @@ class TableMenus {
       if (node is DomElement && node.tagName.toUpperCase() == 'TABLE') {
         return node;
       }
-      if (identical(node, quill.root)) return null;
+      if (node == quill.root) return null;
       node = node.parentNode;
     }
     return null;

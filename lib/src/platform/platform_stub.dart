@@ -80,6 +80,15 @@ class _StubDomAdapter implements DomAdapter {
 
   @override
   String? get platform => null;
+
+  @override
+  bool get supportsNativeSelection => false;
+
+  @override
+  bool hasFocus(DomElement root) => false;
+
+  @override
+  void clearNativeSelection() {}
 }
 
 /// Creates the platform-specific DOM adapter

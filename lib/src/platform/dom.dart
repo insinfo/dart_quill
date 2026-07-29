@@ -278,6 +278,18 @@ abstract class DomAdapter {
 
   /// Removes focus from [element] when it currently holds it.
   void blur(DomElement element);
+
+  /// Whether this platform exposes a real native selection
+  /// (`document.getSelection()`); false on the VM / fake DOM, where the
+  /// Selection keeps its logical model instead.
+  bool get supportsNativeSelection;
+
+  /// Whether `document.activeElement` is [root] or a descendant of it
+  /// (parity selection.ts `hasFocus`).
+  bool hasFocus(DomElement root);
+
+  /// `document.getSelection().removeAllRanges()`.
+  void clearNativeSelection();
   String? get userAgent;
   String? get platform;
 }

@@ -117,6 +117,7 @@ class OperateLine {
     container.append(inner);
     quill.container.append(container);
     line = container;
+    updateCell(container);
   }
 
   /// TS `createDragBlock()`.
@@ -126,6 +127,72 @@ class OperateLine {
     utils.setElementProperty(block, getProperty(options!).dragBlockProps);
     dragBlock = block;
     quill.container.append(block);
+    updateCell(block);
+  }
+
+  /// TS `updateCell(node)` (operate-line.ts:361-422) — the drag wiring: a
+  /// mousedown on the overlay arms document-level drag/mouseup listeners, and
+  /// the mouseup persists the resize through [setCellRect] / [setCellsRect].
+  void updateCell(DomElement? node) {
+    if (node == null) return;
+    final nodeIsLine = isLine(node);
+
+    void handleDrag(DomEvent e) {
+      e.preventDefault();
+      if (!drag) return;
+      final clientX = e is DomMouseEvent ? e.clientX : 0;
+      final clientY = e is DomMouseEvent ? e.clientY : 0;
+      if (nodeIsLine) {
+        updateDragLine(clientX, clientY);
+        hideDragBlock();
+      } else {
+        updateDragBlock(clientX, clientY);
+        hideLine();
+      }
+    }
+
+    void handleMouseup(DomEvent e) {
+      e.preventDefault();
+      final current = options;
+      if (current == null) return;
+      final clientX = e is DomMouseEvent ? e.clientX : 0;
+      final clientY = e is DomMouseEvent ? e.clientY : 0;
+      if (nodeIsLine) {
+        setCellRect(current.cellNode, clientX, clientY);
+        toggleLineChildClass(false);
+      } else {
+        final tableBounds = utils.elementRectResolver(current.tableNode);
+        setCellsRect(current.cellNode, clientX - tableBounds.right,
+            clientY - tableBounds.bottom);
+        dragBlock?.classes.remove('ql-operate-block-move');
+        hideDragBlock();
+        hideDragTable();
+      }
+      drag = false;
+      _document.removeEventListener('mousemove', handleDrag);
+      _document.removeEventListener('mouseup', handleMouseup);
+    }
+
+    void handleMousedown(DomEvent e) {
+      e.preventDefault();
+      final current = options;
+      if (current == null) return;
+      if (nodeIsLine) {
+        toggleLineChildClass(true);
+      } else {
+        if (dragTable != null) {
+          utils.setElementProperty(
+              dragTable!, getDragTableProperty(current.tableNode));
+        } else {
+          createDragTable(current.tableNode);
+        }
+      }
+      drag = true;
+      _document.addEventListener('mousemove', handleDrag);
+      _document.addEventListener('mouseup', handleMouseup);
+    }
+
+    node.addEventListener('mousedown', handleMousedown);
   }
 
   /// TS `createDragTable(table)`.
@@ -562,7 +629,7 @@ class OperateLine {
   bool _containedByRoot(DomNode node) {
     DomNode? current = node;
     while (current != null) {
-      if (identical(current, quill.root)) return true;
+      if (current == quill.root) return true;
       current = current.parentNode;
     }
     return false;
@@ -586,7 +653,7 @@ class OperateLine {
         final table = resolveTable(node);
         if (table == null) return null;
         for (final blot in table.descendants<TableCell>()) {
-          if (identical(blot.element, cell)) return blot;
+          if (blot.element == cell) return blot;
         }
         return null;
       }

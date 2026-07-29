@@ -25,29 +25,35 @@ class TableClipboard extends Clipboard {
   ///
   /// Content copied from a table carries structural attributes. External
   /// content (or ordinary lists/headers pasted into a cell) receives the
-  /// current cell formats, matching `getTableDelta` in the reference plugin.
+  /// current cell formats, matching `getTableDelta` in the reference plugin
+  /// (clipboard.ts:39-59): the caret cell's formats are spread LAST, so they
+  /// override whatever the copied ops carried — pasted lines are re-homed
+  /// into the destination cell.
   Delta getTableDelta(
       {String? html, String? text, Map<String, dynamic>? formats}) {
     final activeFormats =
         formats ?? quill.getFormat(quill.selection.getRange()?.index ?? 0);
     final delta = convert(html: html, text: text, formats: activeFormats);
-    if (activeFormats.containsKey('table-cell-block') ||
-        activeFormats.containsKey('table-th-block')) {
+    if (_truthy(activeFormats['table-cell-block']) ||
+        _truthy(activeFormats['table-th-block'])) {
       final result = Delta();
       for (final op in delta.operations) {
         final attributes = op.attributes ?? const <String, dynamic>{};
-        if (attributes.containsKey('table-temporary')) {
+        // External copied tables or table contents copied within an editor.
+        if (_truthy(attributes['table-temporary'])) {
           return Delta();
         }
-        final isStructured = attributes.containsKey('table-cell-block') ||
-            attributes.containsKey('table-th-block');
-        final needsContext = attributes.containsKey('header') ||
-            attributes.containsKey('list') ||
-            !isStructured;
+        // Process externally pasted lists or headers or text. The TS
+        // condition (`!cellBlock || !thBlock`) is true for every op — no op
+        // carries both keys — so every op is stamped, matching upstream.
+        final needsContext = _truthy(attributes['header']) ||
+            _truthy(attributes['list']) ||
+            !_truthy(attributes['table-cell-block']) ||
+            !_truthy(attributes['table-th-block']);
         result.insert(
           op.data,
           needsContext
-              ? <String, dynamic>{...activeFormats, ...attributes}
+              ? <String, dynamic>{...attributes, ...activeFormats}
               : attributes,
         );
       }
@@ -74,9 +80,20 @@ class TableClipboard extends Clipboard {
           ..delete(range.length))
         .concat(pastedDelta);
     quill.updateContents(change, source: EmitterSource.USER);
+    // Parity clipboard.ts:31-35 — `delta.length() - range.length`, where
+    // `length()` sums op lengths (the deleted range contributes to it).
     quill.setSelection(
-      Range(range.index + pastedDelta.length, 0),
+      Range(_contentLength(change) - range.length, 0),
       source: EmitterSource.SILENT,
     );
+    quill.scrollSelectionIntoView();
   }
 }
+
+/// JS truthiness for attribute values (`op?.attributes?.header`).
+bool _truthy(dynamic value) =>
+    value != null && value != false && value != '' && value != 0;
+
+/// TS `delta.length()` — sum of op lengths, not the operation count.
+int _contentLength(Delta delta) =>
+    delta.operations.fold<int>(0, (length, op) => length + (op.length ?? 0));

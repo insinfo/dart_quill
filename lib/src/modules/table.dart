@@ -8,9 +8,11 @@ import '../core/module.dart';
 import '../core/quill.dart';
 import '../core/selection.dart';
 import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
+import '../core/theme.dart';
 import '../formats/table.dart';
 import '../platform/dom.dart';
 import '../platform/platform.dart';
+import '../ui/icons.dart' as ui_icons;
 
 class TableOptions {
   const TableOptions();
@@ -113,6 +115,10 @@ class Table extends Module<TableOptions> {
       ('arrows-split', 'Dividir célula', 'table-split', splitCell),
       ('table-off', 'Excluir tabela', 'table-delete', deleteTable),
     ];
+    // The context toolbar honors the editor's icon theme: Tabler webfont
+    // glyphs when the theme asked for them, the official SVG set otherwise
+    // (the demo runs QuillIconTheme.svg and used to render empty <i> tags).
+    final useTabler = quill.theme.options.iconTheme == QuillIconTheme.tabler;
     for (final action in actions) {
       final button = quill.container.ownerDocument.createElement('button');
       button
@@ -121,8 +127,9 @@ class Table extends Module<TableOptions> {
         ..setAttribute('aria-label', action.$2)
         ..setAttribute('data-table-action', action.$3)
         ..style.cssText = _contextButtonStyle
-        ..innerHTML =
-            '<i class="ti ti-${_tablerIcon(action.$1)}" aria-hidden="true"></i>';
+        ..innerHTML = useTabler
+            ? '<i class="ti ti-${_tablerIcon(action.$1)}" aria-hidden="true"></i>'
+            : _svgIcon(action.$3);
       button.addEventListener('mousedown', (event) {
         event.preventDefault();
         event.stopPropagation();
@@ -152,9 +159,24 @@ class Table extends Module<TableOptions> {
     quill.root.addEventListener('keyup', (_) => updateContextToolbar());
     quill.root.addEventListener('scroll', (_) => updateContextToolbar());
     quill.emitter.on(EmitterEvents.SELECTION_CHANGE,
-        (dynamic _range, dynamic _oldRange, dynamic _source) {
+        (dynamic range, dynamic _oldRange, dynamic _source) {
+      // A selection that settles outside any table drops the click anchor,
+      // so the toolbar follows the caret instead of a stale cell.
+      if (range is Range && getTable(range).cell == null) {
+        _activeCell = null;
+        _activeCellElement = null;
+      }
       updateContextToolbar();
     });
+  }
+
+  /// Official-set SVG for a context-toolbar action, sized to the button (the
+  /// inlined sources carry only a viewBox; without explicit dimensions the
+  /// browser falls back to 300x150 and the icon overflows).
+  static String _svgIcon(String action) {
+    final icon = ui_icons.icons[action];
+    if (icon is! String) return '';
+    return icon.replaceFirst('<svg ', '<svg width="18" height="18" ');
   }
 
   static const String _contextButtonStyle =
@@ -165,10 +187,23 @@ class Table extends Module<TableOptions> {
       'color:#444;font-size:18px;line-height:1;cursor:pointer;';
 
   void updateContextToolbar() {
+    // A cell captured on click may be gone by now (table deleted, undo, cell
+    // removed) — a detached anchor must never keep the toolbar alive.
+    var activeElement = _activeCellElement;
+    if (activeElement != null && !quill.root.contains(activeElement)) {
+      _activeCell = null;
+      _activeCellElement = null;
+      activeElement = null;
+    }
     final context = getTable(quill.selection.getRange());
-    final cell = _activeCell ?? context.cell;
-    final cellElement = _activeCellElement ?? cell?.element;
+    if (context.cell != null) {
+      _activeCell = context.cell;
+      _activeCellElement = context.cell!.element;
+      activeElement = _activeCellElement;
+    }
+    final cellElement = activeElement;
     if (cellElement == null) {
+      _contextToolbar.style.display = 'none';
       return;
     }
     final anchor = context.table?.element ?? cellElement;

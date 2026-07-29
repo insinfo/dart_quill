@@ -148,6 +148,8 @@ const Map<String, String> _quillExtraIconMap = {
   'table-delete-row': 'table-delete-rows',
   'table-delete-column': 'table-delete-columns',
   'table-delete': 'table-delete-cells',
+  'table-merge': 'table-merge-cells',
+  'table-split': 'table-unmerge-cells',
 };
 
 GeneratedFile generateQuillIcons() {

@@ -201,7 +201,7 @@ class TableBetter extends Module<TableBetterOptions> {
   /// Resolves the [TableContainer] blot behind a `<table>` element.
   TableContainer? _tableForElement(DomElement element) {
     for (final table in quill.scroll.descendants<TableContainer>()) {
-      if (identical(table.element, element)) return table;
+      if (table.element == element) return table;
     }
     return null;
   }
@@ -298,16 +298,20 @@ class TableBetter extends Module<TableBetterOptions> {
   }
 
   bool _handleHeaderEnter(Range range, Context context) {
+    // Parity quill-table-better.ts:328-343 — the retain key is `header`
+    // (TableHeader.format's first branch turns `header: null` into a cell
+    // block), so the emitted TEXT_CHANGE delta matches upstream's.
     final delta = Delta()
       ..retain(range.index)
       ..insert('\n', context.format)
       ..retain(math.max(0, context.line.length() - context.offset - 1))
-      ..retain(1, {TableHeader.kBlotName: null});
+      ..retain(1, {'header': null});
     quill.updateContents(delta, source: EmitterSource.USER);
     quill.setSelection(
       Range(range.index + 1, 0),
       source: EmitterSource.SILENT,
     );
+    quill.scrollSelectionIntoView();
     return false;
   }
 
@@ -478,6 +482,12 @@ class TableBetter extends Module<TableBetterOptions> {
       }
     }
     if (button == null) return;
+    // The theme may have rendered the toolbar before this module registered
+    // the icon (upstream sets it at import time); backfill the button markup.
+    final iconMarkup = icons[ToolbarTable.kBlotName];
+    if (iconMarkup is String && !(button.innerHTML ?? '').contains('<svg')) {
+      button.innerHTML = iconMarkup;
+    }
     tableSelect = TableSelect(document: quill.root.ownerDocument);
     button.append(tableSelect!.root);
     button.addEventListener('click', (event) {
@@ -494,7 +504,11 @@ class TableBetter extends Module<TableBetterOptions> {
   bool _isInside(DomNode? target, DomNode ancestor) {
     DomNode? node = target;
     while (node != null) {
-      if (identical(node, ancestor)) return true;
+      // `==` (native-node equality): each `parentNode` step hands back a
+      // fresh wrapper, so `identical` treated every click as outside the
+      // button and the document listener re-hid the grid on the click that
+      // had just opened it.
+      if (node == ancestor) return true;
       node = node.parentNode;
     }
     return false;

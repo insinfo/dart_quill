@@ -140,9 +140,6 @@ class Quill {
     root = doc.createElement('div');
     root.classes.add('ql-editor');
     container.append(root);
-    root.addEventListener('mousedown', (_) => domBindings.adapter.focus(root));
-    root.addEventListener('mouseup', (_) => _syncNativeSelection());
-    root.addEventListener('keyup', (_) => _syncNativeSelection());
 
     scroll = Scroll(Registry(), root, emitter: emitter);
     // Editable by default (parity quill.ts, which relies on the
@@ -304,7 +301,10 @@ class Quill {
   /// matched the snapshot.
   Delta update([String source = EmitterSource.USER]) {
     scroll.update(null, {'source': source});
-    return modify(() => editor.syncFromDocument(), source: source);
+    final change = modify(() => editor.syncFromDocument(), source: source);
+    // Parity quill.ts:986-990 — the selection reconciles after the scroll.
+    selection.update(source);
+    return change;
   }
 
   Delta getContents() {
@@ -386,12 +386,14 @@ class Quill {
     return selection.getFormat(index, length);
   }
 
+  /// Parity quill.ts `getSelection(focus)`: optionally refocus (restoring the
+  /// saved range), drain pending DOM mutations, then read the live selection.
   Range? getSelection({bool focus = false}) {
     if (focus) {
       this.focus();
     }
-    final nativeRange = _syncNativeSelection();
-    return nativeRange ?? selection.getRange();
+    update();
+    return selection.getRange();
   }
 
   /// Parity quill.ts — driven by the root's contenteditable state.
@@ -413,10 +415,18 @@ class Quill {
     return leaf.position(leafEntry.value, inclusive);
   }
 
+  /// Parity quill.ts `focus(options)` — Selection restores the saved range.
   void focus({bool preventScroll = false}) {
+    if (domBindings.adapter.supportsNativeSelection) {
+      selection.focus();
+      if (!preventScroll) {
+        scrollSelectionIntoView();
+      }
+      return;
+    }
+    // Logical mode (VM / fake DOM): preserve this port's original behavior.
     final previousScrollTop = preventScroll ? root.scrollTop : null;
     domBindings.adapter.focus(root);
-    selection.focus();
     final range = selection.getRange() ?? selection.savedRange;
     if (range != null) {
       final start = _domPosition(range.index);
@@ -482,12 +492,17 @@ class Quill {
         clampedEnd - clampedIndex != range.length) {
       range = Range(clampedIndex, clampedEnd - clampedIndex);
     }
-    selection.setSelection(range, source);
-    final start = _domPosition(range.index);
-    final end = _domPosition(range.index + range.length, inclusive: true);
-    if (start != null && end != null) {
-      domBindings.adapter
-          .setSelectionByNodes(start.key, start.value, end.key, end.value);
+    if (domBindings.adapter.supportsNativeSelection) {
+      // Parity quill.ts:823-829 — Selection owns the native write + events.
+      selection.setRange(range, source: source);
+    } else {
+      selection.setSelection(range, source);
+      final start = _domPosition(range.index);
+      final end = _domPosition(range.index + range.length, inclusive: true);
+      if (start != null && end != null) {
+        domBindings.adapter
+            .setSelectionByNodes(start.key, start.value, end.key, end.value);
+      }
     }
     if (source != EmitterSource.SILENT) {
       scrollSelectionIntoView();
@@ -549,20 +564,6 @@ class Quill {
         ..retain(index)
         ..delete(length);
     }, source: source, index: index, shift: -length);
-  }
-
-  Range? _syncNativeSelection({String source = EmitterSource.USER}) {
-    final nativeRange = domBindings.adapter.getSelectionRange(root);
-    if (nativeRange == null) {
-      return null;
-    }
-    final documentLength = scroll.length();
-    final normalizedIndex = nativeRange.index.clamp(0, documentLength);
-    final normalizedLength =
-        nativeRange.length.clamp(0, documentLength - normalizedIndex);
-    final range = Range(normalizedIndex, normalizedLength);
-    selection.setSelection(range, source);
-    return range;
   }
 
   Map<String, dynamic>? getBounds(int index, [int length = 0]) {

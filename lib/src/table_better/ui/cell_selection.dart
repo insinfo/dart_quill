@@ -209,7 +209,7 @@ class CellSelection {
 
   TableCell? _cellForElement(DomElement target) {
     for (final cell in table.descendants<TableCell>()) {
-      if (identical(cell.element, target)) return cell;
+      if (cell.element == target) return cell;
     }
     return null;
   }

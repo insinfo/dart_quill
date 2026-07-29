@@ -648,8 +648,10 @@ abstract class ParentBlot extends Blot {
     List<DomMutationRecord> mutations,
     Map<String, dynamic> context,
   ) {
+    // `==` (native-node equality), never `identical`: browser mutation
+    // records wrap each node in a fresh adapter object.
     final touchesChildList = mutations.any((mutation) =>
-        mutation.type == 'childList' && identical(mutation.target, domNode));
+        mutation.type == 'childList' && mutation.target == domNode);
     if (touchesChildList) {
       syncChildrenFromDom(context);
     }
@@ -753,7 +755,7 @@ abstract class ParentBlot extends Blot {
 
     ParentBlot? wrapperBlot;
     for (final candidate in children) {
-      if (candidate is ParentBlot && identical(candidate.domNode, domParent)) {
+      if (candidate is ParentBlot && candidate.domNode == domParent) {
         wrapperBlot = candidate;
         break;
       }
@@ -953,9 +955,27 @@ abstract class ParentBlot extends Blot {
       }
     }
 
-    return bubble && parent != null
-        ? parent!.find(query, bubble: true)
-        : const MapEntry(null, -1);
+    if (bubble) {
+      if (parent != null) {
+        return parent!.find(query, bubble: true);
+      }
+      // Root reached: climb the DOM ancestor chain, like parchment's
+      // `Registry.find(node, bubble)`. This is how a mutation targeting an
+      // INTERNAL node (the cursor's or an embed guard's text node, a newly
+      // typed text node with no blot yet) resolves to its owning blot —
+      // without it, native typing over those nodes was silently dropped.
+      if (query is DomNode) {
+        DomNode? current = query.parentNode;
+        while (current != null) {
+          final ancestor = find(current, bubble: false);
+          if (ancestor.key != null) {
+            return ancestor;
+          }
+          current = current.parentNode;
+        }
+      }
+    }
+    return const MapEntry(null, -1);
   }
 
   bool contains(Blot blot) {

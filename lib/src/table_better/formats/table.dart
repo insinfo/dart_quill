@@ -10,9 +10,9 @@
 /// * `checkMerge()` + container merging: parchment's `ContainerBlot.optimize`
 ///   merges a container into its identically named next sibling; this is
 ///   reproduced in [TableBetterContainer.optimize].
-/// * `allowedChildren` / `requiredContainer` enforcement: not implemented.
-///   TODO(table-better): approximate structural enforcement in optimize()
-///   like `lib/src/formats/table.dart` does, once the module phase needs it.
+/// * `allowedChildren` (table.ts:850-872) + `requiredContainer` enforcement:
+///   each container declares its predicate and [TableBetterContainer.optimize]
+///   runs the generic `enforceAllowedChildren` before its own convergence.
 /// * `wrap` / `replaceWith` / `splitAfter`: implemented locally
 ///   ([wrapBlot], [replaceBlotWith], [TableBetterContainer.splitAfter]).
 import 'dart:math' as math;
@@ -24,6 +24,8 @@ import '../../platform/dom.dart';
 import '../../platform/platform.dart';
 import '../config/config.dart';
 import '../utils/utils.dart' as utils;
+import 'header.dart';
+import 'list.dart';
 
 /// TS `TABLE_ATTRIBUTE`.
 const List<String> tableAttribute = [
@@ -135,6 +137,36 @@ bool _enforceRequiredContainer(
   Blot blot,
   String wrapperName,
   bool Function(Blot) satisfied,
+  List<DomMutationRecord>? mutations, [
+  Map<String, dynamic>? context,
+]) {
+  // Ordering guard, needed because the Dart optimize runs children before
+  // parents: when the CURRENT parent's `allowedChildren` rejects this blot,
+  // parchment's enforcement (which runs on the mutated parent first) would
+  // relocate it before any requiredContainer wrap could fire. Wrapping here
+  // instead would nest a fresh container chain inside the rejecting parent
+  // (e.g. a TableRow created inside a TableCell by `setCellRowspan`'s
+  // format() detour would grow a whole nested <table>). Skip the wrap; the
+  // parent's `enforceAllowedChildren` expels the blot on this same pass and
+  // the wrap re-runs, if still needed, once it lands somewhere legal.
+  final parentBlot = blot.parent;
+  if (parentBlot is ContainerBlot) {
+    final allows = parentBlot.allowedChildren;
+    if (allows != null && !allows(blot)) return false;
+  }
+  return _enforceRequiredContainerUnchecked(
+    blot,
+    wrapperName,
+    satisfied,
+    mutations,
+    context,
+  );
+}
+
+bool _enforceRequiredContainerUnchecked(
+  Blot blot,
+  String wrapperName,
+  bool Function(Blot) satisfied,
   List<DomMutationRecord>? mutations,
   Map<String, dynamic>? context,
 ) {
@@ -189,6 +221,12 @@ abstract class TableBetterContainer extends Container {
     Map<String, dynamic>? context,
   ]) {
     super.optimize(mutations, context);
+    // Parity parent.ts:250-256 — every parent optimize enforces its
+    // `allowedChildren` (the table.ts:850-872 assignments). This is what
+    // dissolves the tr+td detour of `TableCellBlock.format('table-cell')`
+    // (setCellRowspan) back into the surrounding row structure.
+    enforceAllowedChildren();
+    if (parent == null) return; // expelled a block child by unwrapping itself
     if (children.isEmpty) {
       remove();
       return;
@@ -469,6 +507,15 @@ class TableCell extends TableBetterContainer {
   @override
   bool isRequiredContainer(Blot blot) => blot is TableRow;
 
+  // TS table.ts:869 — `TableCell.allowedChildren = [TableCellBlock,
+  // TableHeader, ListContainer]`; TableTh inherits it, and `is` covers the
+  // TableThBlock subclass exactly like `instanceof` upstream.
+  @override
+  bool Function(Blot child)? get allowedChildren => (child) =>
+      child is TableCellBlock ||
+      child is TableHeader ||
+      child is TableListContainer;
+
   String? _childCellId(Blot child) =>
       utils.getCellId(child.formats()[child.blotName]);
 
@@ -613,6 +660,12 @@ class TableRow extends TableBetterContainer {
   @override
   bool isRequiredContainer(Blot blot) => blot is TableBody;
 
+  // TS table.ts:864 — `TableRow.allowedChildren = [TableCell]` (a TableTh is
+  // a TableCell subclass, so it is allowed too, as upstream's instanceof).
+  @override
+  bool Function(Blot child)? get allowedChildren => (child) =>
+      child is TableCell;
+
   String? _dataRow(Blot child) {
     final formats = child.formats()[child.blotName];
     return formats is Map ? formats['data-row'] as String? : null;
@@ -671,6 +724,10 @@ class TableThRow extends TableRow {
 
   @override
   bool isRequiredContainer(Blot blot) => blot is TableThead;
+
+  /// TS table.ts:866 — `TableThRow.allowedChildren = [TableTh]`.
+  @override
+  bool Function(Blot child)? get allowedChildren => (child) => child is TableTh;
 }
 
 /// TS `TableBody` — the `<tbody>` container.
@@ -702,6 +759,12 @@ class TableBody extends TableBetterContainer {
 
   @override
   bool isRequiredContainer(Blot blot) => blot is TableContainer;
+
+  /// TS table.ts:856 — `TableBody.allowedChildren = [TableRow]` (covers the
+  /// TableThRow subclass, like `instanceof` upstream).
+  @override
+  bool Function(Blot child)? get allowedChildren => (child) =>
+      child is TableRow;
 }
 
 /// TS `TableThead` — the `<thead>` container.
@@ -721,6 +784,11 @@ class TableThead extends TableBody {
 
   @override
   TableThead clone() => TableThead(element.cloneNode(deep: false));
+
+  /// TS table.ts:858 — `TableThead.allowedChildren = [TableThRow]`.
+  @override
+  bool Function(Blot child)? get allowedChildren => (child) =>
+      child is TableThRow;
 }
 
 /// TS `TableTemporary` — the `<temporary>` element that carries the table's
@@ -919,6 +987,11 @@ class TableColgroup extends TableBetterContainer {
 
   @override
   bool isRequiredContainer(Blot blot) => blot is TableContainer;
+
+  /// TS table.ts:861 — `TableColgroup.allowedChildren = [TableCol]`.
+  @override
+  bool Function(Blot child)? get allowedChildren => (child) =>
+      child is TableCol;
 }
 
 /// Entry of the `columnCells` work lists built by `insertColumn`/`deleteRow`.
@@ -953,6 +1026,15 @@ class TableContainer extends TableBetterContainer {
 
   @override
   int get scope => kScope;
+
+  /// TS table.ts:850 — `TableContainer.allowedChildren = [TableBody,
+  /// TableThead, TableTemporary, TableColgroup]`.
+  @override
+  bool Function(Blot child)? get allowedChildren => (child) =>
+      child is TableBody ||
+      child is TableThead ||
+      child is TableTemporary ||
+      child is TableColgroup;
 
   @override
   TableContainer clone() => TableContainer(element.cloneNode(deep: false));
@@ -1379,11 +1461,11 @@ class TableContainer extends TableBetterContainer {
     replaceBlotWith(cell, blotName, formats);
   }
 
-  /// TS `setCellRowspan(parentElement)`.
+  /// TS `setCellRowspan(parentElement)` (table.ts:736-757).
   ///
-  /// TODO(table-better): the final `childBlot.format(blotName, formats)` call
-  /// relies on parchment's optimize normalization (allowedChildren
-  /// enforcement) to restore a valid tree; that machinery is not ported yet.
+  /// The final `childBlot.format(blotName, formats)` detours through a fresh
+  /// tr+td inside the old cell; `enforceAllowedChildren` + the data-row row
+  /// merge dissolve it back into the surrounding structure, as in parchment.
   void setCellRowspan(DomElement? parentElement) {
     while (parentElement != null) {
       final children = parentElement.querySelectorAll('td[rowspan]');

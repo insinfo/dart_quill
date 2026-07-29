@@ -295,7 +295,7 @@ class CellSelectionController {
     _detachDragListeners();
     _mousemoveListener = (moveEvent) {
       final endTd = _cellFromTarget(moveEvent.target);
-      if (endTd == null || identical(endTd, startTd)) return;
+      if (endTd == null || endTd == startTd) return;
       selectRange(startTd, endTd);
       // TS blurs so the browser's own text selection does not fight the grid.
       quill.blur();
@@ -397,7 +397,7 @@ class CellSelectionController {
       return;
     }
     final td = key == 'ArrowLeft' ? selection.startTd : selection.endTd;
-    if (td == null || !identical(td, cell.element)) {
+    if (td == null || td != cell.element) {
       setSelected(cell.element, false);
       host.showTools(false);
     }
@@ -700,7 +700,7 @@ class CellSelectionController {
   TableCell? _bind(DomElement element) {
     for (final container in quill.scroll.descendants<TableContainer>()) {
       for (final cell in container.descendants<TableCell>()) {
-        if (identical(cell.element, element)) {
+        if (cell.element == element) {
           selection.rebind(container);
           return cell;
         }
@@ -711,7 +711,7 @@ class CellSelectionController {
 
   TableCell? _cellFromTarget(DomNode? target) {
     DomNode? node = target;
-    while (node != null && !identical(node, root)) {
+    while (node != null && node != root) {
       if (node is DomElement) {
         final tag = node.tagName.toUpperCase();
         if (tag == 'TD' || tag == 'TH') {
