@@ -1,0 +1,1007 @@
+{
+  "quill": "2.0.3",
+  "generator": "tool/gen_goldens.dart",
+  "note": "Generated — do not edit. See the README block in cases.json.",
+  "results": [
+    {
+      "group": "setContents normalisation",
+      "name": "plain text without a trailing newline",
+      "contents": [
+        {
+          "insert": "hello\n"
+        }
+      ],
+      "text": "hello\n"
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "trailing newlines are kept except the last",
+      "contents": [
+        {
+          "insert": "a\n\n\n"
+        }
+      ],
+      "text": "a\n\n\n"
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "empty document",
+      "contents": [
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\n"
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "line format on the newline",
+      "contents": [
+        {
+          "insert": "Title"
+        },
+        {
+          "attributes": {
+            "header": 1
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "body\n"
+        }
+      ],
+      "text": "Title\nbody\n"
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "multi-line insert with a block format after it",
+      "contents": [
+        {
+          "insert": "one\ntwo\nthree"
+        },
+        {
+          "attributes": {
+            "header": 2
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "one\ntwo\nthree\n"
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "block embed at the end without a preceding newline",
+      "contents": [
+        {
+          "insert": "text\n"
+        },
+        {
+          "insert": {
+            "video": "https://example.com/v"
+          }
+        }
+      ],
+      "text": "text\n"
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "block embed at the start",
+      "contents": [
+        {
+          "insert": {
+            "video": "https://example.com/v"
+          }
+        },
+        {
+          "insert": "after\n"
+        }
+      ],
+      "text": "after\n"
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "block embed with an attribute",
+      "contents": [
+        {
+          "attributes": {
+            "align": "center"
+          },
+          "insert": {
+            "video": "https://example.com/v"
+          }
+        },
+        {
+          "insert": "after\n"
+        }
+      ],
+      "text": "after\n"
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "inline embed between text",
+      "contents": [
+        {
+          "insert": "a"
+        },
+        {
+          "insert": {
+            "image": "https://example.com/i.png"
+          }
+        },
+        {
+          "insert": "b\n"
+        }
+      ],
+      "text": "ab\n"
+    },
+    {
+      "group": "inline formats",
+      "name": "bold italic underline strike",
+      "contents": [
+        {
+          "attributes": {
+            "bold": true
+          },
+          "insert": "b"
+        },
+        {
+          "attributes": {
+            "italic": true
+          },
+          "insert": "i"
+        },
+        {
+          "attributes": {
+            "underline": true
+          },
+          "insert": "u"
+        },
+        {
+          "attributes": {
+            "strike": true
+          },
+          "insert": "s"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "bius\n"
+    },
+    {
+      "group": "inline formats",
+      "name": "nested inline formats merge into one op",
+      "contents": [
+        {
+          "attributes": {
+            "italic": true,
+            "bold": true
+          },
+          "insert": "xy"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "xy\n"
+    },
+    {
+      "group": "inline formats",
+      "name": "link colour background font size",
+      "contents": [
+        {
+          "attributes": {
+            "link": "https://example.com"
+          },
+          "insert": "l"
+        },
+        {
+          "attributes": {
+            "color": "#ff0000"
+          },
+          "insert": "c"
+        },
+        {
+          "attributes": {
+            "background": "#00ff00"
+          },
+          "insert": "g"
+        },
+        {
+          "attributes": {
+            "font": "monospace"
+          },
+          "insert": "f"
+        },
+        {
+          "attributes": {
+            "size": "large"
+          },
+          "insert": "z"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "lcgfz\n"
+    },
+    {
+      "group": "inline formats",
+      "name": "script and code",
+      "contents": [
+        {
+          "attributes": {
+            "script": "super"
+          },
+          "insert": "sup"
+        },
+        {
+          "attributes": {
+            "script": "sub"
+          },
+          "insert": "sub"
+        },
+        {
+          "attributes": {
+            "code": true
+          },
+          "insert": "code"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "supsubcode\n"
+    },
+    {
+      "group": "block formats",
+      "name": "headers one through six",
+      "contents": [
+        {
+          "insert": "h1"
+        },
+        {
+          "attributes": {
+            "header": 1
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "h2"
+        },
+        {
+          "attributes": {
+            "header": 2
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "h3"
+        },
+        {
+          "attributes": {
+            "header": 3
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "h4"
+        },
+        {
+          "attributes": {
+            "header": 4
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "h5"
+        },
+        {
+          "attributes": {
+            "header": 5
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "h6"
+        },
+        {
+          "attributes": {
+            "header": 6
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "h1\nh2\nh3\nh4\nh5\nh6\n"
+    },
+    {
+      "group": "block formats",
+      "name": "blockquote and code block",
+      "contents": [
+        {
+          "insert": "quoted"
+        },
+        {
+          "attributes": {
+            "blockquote": true
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "line1"
+        },
+        {
+          "attributes": {
+            "code-block": "plain"
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "line2"
+        },
+        {
+          "attributes": {
+            "code-block": "plain"
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "quoted\nline1\nline2\n"
+    },
+    {
+      "group": "block formats",
+      "name": "align and direction and indent",
+      "contents": [
+        {
+          "insert": "c"
+        },
+        {
+          "attributes": {
+            "align": "center"
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "r"
+        },
+        {
+          "attributes": {
+            "align": "right"
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "i"
+        },
+        {
+          "attributes": {
+            "indent": 2
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "d"
+        },
+        {
+          "attributes": {
+            "direction": "rtl"
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "c\nr\ni\nd\n"
+    },
+    {
+      "group": "block formats",
+      "name": "ordered and bullet lists",
+      "contents": [
+        {
+          "insert": "one"
+        },
+        {
+          "attributes": {
+            "list": "ordered"
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "two"
+        },
+        {
+          "attributes": {
+            "list": "ordered"
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "three"
+        },
+        {
+          "attributes": {
+            "list": "bullet"
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "one\ntwo\nthree\n"
+    },
+    {
+      "group": "block formats",
+      "name": "checked and unchecked list items",
+      "contents": [
+        {
+          "insert": "done"
+        },
+        {
+          "attributes": {
+            "list": "checked"
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "todo"
+        },
+        {
+          "attributes": {
+            "list": "unchecked"
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "done\ntodo\n"
+    },
+    {
+      "group": "block formats",
+      "name": "indented list items",
+      "contents": [
+        {
+          "insert": "a"
+        },
+        {
+          "attributes": {
+            "list": "bullet"
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "b"
+        },
+        {
+          "attributes": {
+            "indent": 1,
+            "list": "bullet"
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "c"
+        },
+        {
+          "attributes": {
+            "indent": 2,
+            "list": "bullet"
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "a\nb\nc\n"
+    },
+    {
+      "group": "html to delta",
+      "name": "two paragraphs",
+      "contents": [
+        {
+          "insert": "one\ntwo\n"
+        }
+      ],
+      "text": "one\ntwo\n"
+    },
+    {
+      "group": "html to delta",
+      "name": "heading and blockquote",
+      "contents": [
+        {
+          "insert": "Title"
+        },
+        {
+          "attributes": {
+            "header": 2
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "quoted"
+        },
+        {
+          "attributes": {
+            "blockquote": true
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "Title\nquoted\n"
+    },
+    {
+      "group": "html to delta",
+      "name": "nested inline tags",
+      "contents": [
+        {
+          "attributes": {
+            "bold": true
+          },
+          "insert": "bold "
+        },
+        {
+          "attributes": {
+            "italic": true,
+            "bold": true
+          },
+          "insert": "and italic"
+        },
+        {
+          "insert": " plain\n"
+        }
+      ],
+      "text": "bold and italic plain\n"
+    },
+    {
+      "group": "html to delta",
+      "name": "anchor",
+      "contents": [
+        {
+          "insert": "see "
+        },
+        {
+          "attributes": {
+            "link": "https://example.com"
+          },
+          "insert": "this"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "see this\n"
+    },
+    {
+      "group": "html to delta",
+      "name": "inline style colour",
+      "contents": [
+        {
+          "attributes": {
+            "color": "#ff0000"
+          },
+          "insert": "red"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "red\n"
+    },
+    {
+      "group": "html to delta",
+      "name": "quill align and indent classes",
+      "contents": [
+        {
+          "insert": "centred"
+        },
+        {
+          "attributes": {
+            "align": "center"
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "indented"
+        },
+        {
+          "attributes": {
+            "indent": 2
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "centred\nindented\n"
+    },
+    {
+      "group": "html to delta",
+      "name": "unordered list",
+      "contents": [
+        {
+          "insert": "a"
+        },
+        {
+          "attributes": {
+            "list": "bullet"
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "b"
+        },
+        {
+          "attributes": {
+            "list": "bullet"
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "a\nb\n"
+    },
+    {
+      "group": "html to delta",
+      "name": "ordered list",
+      "contents": [
+        {
+          "insert": "a"
+        },
+        {
+          "attributes": {
+            "list": "ordered"
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "b"
+        },
+        {
+          "attributes": {
+            "list": "ordered"
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "a\nb\n"
+    },
+    {
+      "group": "html to delta",
+      "name": "preformatted block",
+      "contents": [
+        {
+          "insert": "code line"
+        },
+        {
+          "attributes": {
+            "code-block": "plain"
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "code line\n"
+    },
+    {
+      "group": "html to delta",
+      "name": "image and line break",
+      "contents": [
+        {
+          "insert": "before\nafter\n"
+        },
+        {
+          "insert": {
+            "image": "https://example.com/i.png"
+          }
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "before\nafter\n\n"
+    },
+    {
+      "group": "html to delta",
+      "name": "plain text nodes and whitespace collapsing",
+      "contents": [
+        {
+          "insert": "spaced out\n"
+        }
+      ],
+      "text": "spaced out\n"
+    },
+    {
+      "group": "html to delta",
+      "name": "table is flattened when the table module is absent",
+      "contents": [
+        {
+          "insert": "a"
+        },
+        {
+          "attributes": {
+            "table": "1"
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "b"
+        },
+        {
+          "attributes": {
+            "table": "1"
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "a\nb\n"
+    },
+    {
+      "group": "editing",
+      "name": "insertText plain",
+      "contents": [
+        {
+          "insert": "hello world\n"
+        }
+      ],
+      "text": "hello world\n"
+    },
+    {
+      "group": "editing",
+      "name": "insertText with a format",
+      "contents": [
+        {
+          "insert": "hello"
+        },
+        {
+          "attributes": {
+            "bold": true
+          },
+          "insert": "!"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "hello!\n"
+    },
+    {
+      "group": "editing",
+      "name": "insertText of a newline splits the block",
+      "contents": [
+        {
+          "insert": "Ti"
+        },
+        {
+          "attributes": {
+            "header": 1
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "tle"
+        },
+        {
+          "attributes": {
+            "header": 1
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "Ti\ntle\n"
+    },
+    {
+      "group": "editing",
+      "name": "deleteText inside a line",
+      "contents": [
+        {
+          "insert": "hello\n"
+        }
+      ],
+      "text": "hello\n"
+    },
+    {
+      "group": "editing",
+      "name": "deleteText across a block boundary",
+      "contents": [
+        {
+          "insert": "Titdy\n"
+        }
+      ],
+      "text": "Titdy\n"
+    },
+    {
+      "group": "editing",
+      "name": "deleting a newline merges the following line into the first",
+      "contents": [
+        {
+          "insert": "onetwo\n"
+        }
+      ],
+      "text": "onetwo\n"
+    },
+    {
+      "group": "editing",
+      "name": "deleting the whole document",
+      "contents": [
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\n"
+    },
+    {
+      "group": "editing",
+      "name": "formatText applies an inline format",
+      "contents": [
+        {
+          "attributes": {
+            "bold": true
+          },
+          "insert": "hello"
+        },
+        {
+          "insert": " world\n"
+        }
+      ],
+      "text": "hello world\n"
+    },
+    {
+      "group": "editing",
+      "name": "formatText removes an inline format",
+      "contents": [
+        {
+          "insert": "hello world\n"
+        }
+      ],
+      "text": "hello world\n"
+    },
+    {
+      "group": "editing",
+      "name": "formatLine applies a block format",
+      "contents": [
+        {
+          "insert": "one"
+        },
+        {
+          "attributes": {
+            "header": 2
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "two\n"
+        }
+      ],
+      "text": "one\ntwo\n"
+    },
+    {
+      "group": "editing",
+      "name": "formatLine across two lines",
+      "contents": [
+        {
+          "insert": "one"
+        },
+        {
+          "attributes": {
+            "align": "center"
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "two"
+        },
+        {
+          "attributes": {
+            "align": "center"
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "one\ntwo\n"
+    },
+    {
+      "group": "editing",
+      "name": "removeFormat clears inline and block formats",
+      "contents": [
+        {
+          "insert": "hello\n"
+        }
+      ],
+      "text": "hello\n"
+    },
+    {
+      "group": "editing",
+      "name": "removeFormat on part of a line",
+      "contents": [
+        {
+          "attributes": {
+            "italic": true
+          },
+          "insert": "ab"
+        },
+        {
+          "insert": "cd"
+        },
+        {
+          "attributes": {
+            "italic": true
+          },
+          "insert": "ef"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "abcdef\n"
+    },
+    {
+      "group": "editing",
+      "name": "updateContents retain with attributes",
+      "contents": [
+        {
+          "attributes": {
+            "bold": true
+          },
+          "insert": "hello"
+        },
+        {
+          "insert": " world\n"
+        }
+      ],
+      "text": "hello world\n"
+    },
+    {
+      "group": "editing",
+      "name": "updateContents insert and delete in one pass",
+      "contents": [
+        {
+          "insert": "hello there\n"
+        }
+      ],
+      "text": "hello there\n"
+    },
+    {
+      "group": "editing",
+      "name": "insertEmbed of a block embed",
+      "contents": [
+        {
+          "insert": "before\n"
+        },
+        {
+          "insert": {
+            "video": "https://example.com/v"
+          }
+        }
+      ],
+      "text": "before\n"
+    },
+    {
+      "group": "editing",
+      "name": "insertEmbed of an inline embed",
+      "contents": [
+        {
+          "insert": "a"
+        },
+        {
+          "insert": {
+            "image": "https://example.com/i.png"
+          }
+        },
+        {
+          "insert": "b\n"
+        }
+      ],
+      "text": "ab\n"
+    },
+    {
+      "group": "editing",
+      "name": "successive edits compose",
+      "contents": [
+        {
+          "attributes": {
+            "bold": true
+          },
+          "insert": "one"
+        },
+        {
+          "insert": " and  three"
+        },
+        {
+          "attributes": {
+            "header": 3
+          },
+          "insert": "\n"
+        }
+      ],
+      "text": "one and  three\n"
+    }
+  ]
+}

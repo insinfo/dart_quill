@@ -87,6 +87,22 @@ abstract class InlineBlot extends ParentBlot {
   }
 
   @override
+  void formatAt(int index, int length, String name, dynamic value) {
+    // Parity parchment inline.ts:96-111. Without this the attributor branch
+    // reached the element of the *whole* blot, so clearing `color` over one
+    // character cleared it for every character in the span — losing formatting
+    // the caller never asked to touch. Isolating first confines the change to
+    // the requested range, exactly as a blot format already did.
+    if (formats()[name] != null ||
+        (isAttached && scroll.queryAttributor(name, Scope.ATTRIBUTE) != null)) {
+      final blot = isolate(index, length);
+      blot.format(name, value);
+      return;
+    }
+    super.formatAt(index, length, name, value);
+  }
+
+  @override
   Map<String, dynamic> formats() {
     // Parity parchment inline.ts:87-94 — attributor values only; concrete
     // formats (Bold, Link, ...) add their own blotName entry in overrides.

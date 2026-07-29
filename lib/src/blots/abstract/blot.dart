@@ -849,57 +849,27 @@ abstract class ParentBlot extends Blot {
     return result;
   }
 
+  /// Parity `ParentBlot.split` (parchment parent.ts:141-159).
+  ///
+  /// The previous implementation delegated to the child that straddles [index]
+  /// and returned *its* remainder, so splitting `<strong>abc</strong>` at 1
+  /// handed back a TextBlot and left the `<strong>` whole. Every caller that
+  /// relies on split to divide the wrapper — `isolate`, and through it
+  /// `Inline.formatAt` — silently did nothing. The parent must clone itself and
+  /// move the tail children into the clone.
   @override
   Blot? split(int index, {bool force = false}) {
-    final totalLength = length();
     if (!force) {
-      if (index <= 0) return this;
-      if (index >= totalLength) return next;
+      if (index == 0) return this;
+      if (index == length()) return next;
     }
-
-    var offset = 0;
-    for (var i = 0; i < children.length; i++) {
-      final child = children[i];
-      final childLength = child.length();
-      final end = offset + childLength;
-
-      if (index < end) {
-        final remainder = child.split(index - offset, force: force);
-        if (!force) {
-          return remainder ?? child.next?.parent ?? child.parent;
-        }
-
-        final splitParent = clone() as ParentBlot;
-        parent?.insertBefore(splitParent, next);
-
-        Blot? move = remainder ?? child.next;
-        while (move != null) {
-          final nextMove = move.next;
-          splitParent.insertBefore(move, null);
-          move = nextMove;
-        }
-        return splitParent;
-      }
-
-      if (index == end) {
-        final splitParent = clone() as ParentBlot;
-        parent?.insertBefore(splitParent, next);
-        final tail = List<Blot>.from(children.skip(i + 1));
-        for (final tailChild in tail) {
-          splitParent.appendChild(tailChild);
-        }
-        return splitParent;
-      }
-      offset = end;
-    }
-
-    if (force) {
-      final splitParent = clone() as ParentBlot;
-      parent?.insertBefore(splitParent, next);
-      return splitParent;
-    }
-
-    return next;
+    final after = clone() as ParentBlot;
+    parent?.insertBefore(after, next);
+    forEachAt(index, length(), (child, offset, _) {
+      final split = child.split(offset, force: force);
+      if (split != null) after.appendChild(split);
+    });
+    return after;
   }
 
   @override

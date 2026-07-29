@@ -1,0 +1,429 @@
+{
+  "_readme": [
+    "Shared fixture list for the Delta compatibility goldens.",
+    "",
+    "`tool/gen_goldens.dart` runs every case against the real quill 2.0.3 in a",
+    "headless Chrome and records the resulting Delta in quill_2.0.3.json;",
+    "test/unit/goldens_test.dart replays the same cases against this port and",
+    "compares op by op. Add a case here and re-run the generator — never edit the",
+    "recorded file by hand.",
+    "",
+    "setup: either {\"delta\": ops} (setContents) or {\"html\": \"...\"} (paste path,",
+    "via clipboard.convert + setContents). actions: quill API calls applied in",
+    "order afterwards."
+  ],
+
+  "cases": [
+    {
+      "group": "setContents normalisation",
+      "name": "plain text without a trailing newline",
+      "setup": {"delta": [{"insert": "hello"}]}
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "trailing newlines are kept except the last",
+      "setup": {"delta": [{"insert": "a\n\n\n"}]}
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "empty document",
+      "setup": {"delta": []}
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "line format on the newline",
+      "setup": {
+        "delta": [
+          {"insert": "Title"},
+          {"insert": "\n", "attributes": {"header": 1}},
+          {"insert": "body\n"}
+        ]
+      }
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "multi-line insert with a block format after it",
+      "setup": {
+        "delta": [
+          {"insert": "one\ntwo\nthree"},
+          {"insert": "\n", "attributes": {"header": 2}}
+        ]
+      }
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "block embed at the end without a preceding newline",
+      "setup": {
+        "delta": [
+          {"insert": "text"},
+          {"insert": {"video": "https://example.com/v"}}
+        ]
+      }
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "block embed at the start",
+      "setup": {
+        "delta": [
+          {"insert": {"video": "https://example.com/v"}},
+          {"insert": "after\n"}
+        ]
+      }
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "block embed with an attribute",
+      "setup": {
+        "delta": [
+          {"insert": {"video": "https://example.com/v"}, "attributes": {"align": "center"}},
+          {"insert": "after\n"}
+        ]
+      }
+    },
+    {
+      "group": "setContents normalisation",
+      "name": "inline embed between text",
+      "setup": {
+        "delta": [
+          {"insert": "a"},
+          {"insert": {"image": "https://example.com/i.png"}},
+          {"insert": "b\n"}
+        ]
+      }
+    },
+
+    {
+      "group": "inline formats",
+      "name": "bold italic underline strike",
+      "setup": {
+        "delta": [
+          {"insert": "b", "attributes": {"bold": true}},
+          {"insert": "i", "attributes": {"italic": true}},
+          {"insert": "u", "attributes": {"underline": true}},
+          {"insert": "s", "attributes": {"strike": true}},
+          {"insert": "\n"}
+        ]
+      }
+    },
+    {
+      "group": "inline formats",
+      "name": "nested inline formats merge into one op",
+      "setup": {
+        "delta": [
+          {"insert": "x", "attributes": {"bold": true, "italic": true}},
+          {"insert": "y", "attributes": {"bold": true, "italic": true}},
+          {"insert": "\n"}
+        ]
+      }
+    },
+    {
+      "group": "inline formats",
+      "name": "link colour background font size",
+      "setup": {
+        "delta": [
+          {"insert": "l", "attributes": {"link": "https://example.com"}},
+          {"insert": "c", "attributes": {"color": "#ff0000"}},
+          {"insert": "g", "attributes": {"background": "#00ff00"}},
+          {"insert": "f", "attributes": {"font": "monospace"}},
+          {"insert": "z", "attributes": {"size": "large"}},
+          {"insert": "\n"}
+        ]
+      }
+    },
+    {
+      "group": "inline formats",
+      "name": "script and code",
+      "setup": {
+        "delta": [
+          {"insert": "sup", "attributes": {"script": "super"}},
+          {"insert": "sub", "attributes": {"script": "sub"}},
+          {"insert": "code", "attributes": {"code": true}},
+          {"insert": "\n"}
+        ]
+      }
+    },
+
+    {
+      "group": "block formats",
+      "name": "headers one through six",
+      "setup": {
+        "delta": [
+          {"insert": "h1"}, {"insert": "\n", "attributes": {"header": 1}},
+          {"insert": "h2"}, {"insert": "\n", "attributes": {"header": 2}},
+          {"insert": "h3"}, {"insert": "\n", "attributes": {"header": 3}},
+          {"insert": "h4"}, {"insert": "\n", "attributes": {"header": 4}},
+          {"insert": "h5"}, {"insert": "\n", "attributes": {"header": 5}},
+          {"insert": "h6"}, {"insert": "\n", "attributes": {"header": 6}}
+        ]
+      }
+    },
+    {
+      "group": "block formats",
+      "name": "blockquote and code block",
+      "setup": {
+        "delta": [
+          {"insert": "quoted"}, {"insert": "\n", "attributes": {"blockquote": true}},
+          {"insert": "line1"}, {"insert": "\n", "attributes": {"code-block": "plain"}},
+          {"insert": "line2"}, {"insert": "\n", "attributes": {"code-block": "plain"}}
+        ]
+      }
+    },
+    {
+      "group": "block formats",
+      "name": "align and direction and indent",
+      "setup": {
+        "delta": [
+          {"insert": "c"}, {"insert": "\n", "attributes": {"align": "center"}},
+          {"insert": "r"}, {"insert": "\n", "attributes": {"align": "right"}},
+          {"insert": "i"}, {"insert": "\n", "attributes": {"indent": 2}},
+          {"insert": "d"}, {"insert": "\n", "attributes": {"direction": "rtl"}}
+        ]
+      }
+    },
+    {
+      "group": "block formats",
+      "name": "ordered and bullet lists",
+      "setup": {
+        "delta": [
+          {"insert": "one"}, {"insert": "\n", "attributes": {"list": "ordered"}},
+          {"insert": "two"}, {"insert": "\n", "attributes": {"list": "ordered"}},
+          {"insert": "three"}, {"insert": "\n", "attributes": {"list": "bullet"}}
+        ]
+      }
+    },
+    {
+      "group": "block formats",
+      "name": "checked and unchecked list items",
+      "setup": {
+        "delta": [
+          {"insert": "done"}, {"insert": "\n", "attributes": {"list": "checked"}},
+          {"insert": "todo"}, {"insert": "\n", "attributes": {"list": "unchecked"}}
+        ]
+      }
+    },
+    {
+      "group": "block formats",
+      "name": "indented list items",
+      "setup": {
+        "delta": [
+          {"insert": "a"}, {"insert": "\n", "attributes": {"list": "bullet"}},
+          {"insert": "b"}, {"insert": "\n", "attributes": {"list": "bullet", "indent": 1}},
+          {"insert": "c"}, {"insert": "\n", "attributes": {"list": "bullet", "indent": 2}}
+        ]
+      }
+    },
+
+    {
+      "group": "html to delta",
+      "name": "two paragraphs",
+      "setup": {"html": "<p>one</p><p>two</p>"}
+    },
+    {
+      "group": "html to delta",
+      "name": "heading and blockquote",
+      "setup": {"html": "<h2>Title</h2><blockquote>quoted</blockquote>"}
+    },
+    {
+      "group": "html to delta",
+      "name": "nested inline tags",
+      "setup": {"html": "<p><strong>bold <em>and italic</em></strong> plain</p>"}
+    },
+    {
+      "group": "html to delta",
+      "name": "anchor",
+      "setup": {"html": "<p>see <a href=\"https://example.com\">this</a></p>"}
+    },
+    {
+      "group": "html to delta",
+      "name": "inline style colour",
+      "setup": {"html": "<p><span style=\"color: rgb(255, 0, 0);\">red</span></p>"}
+    },
+    {
+      "group": "html to delta",
+      "name": "quill align and indent classes",
+      "setup": {"html": "<p class=\"ql-align-center\">centred</p><p class=\"ql-indent-2\">indented</p>"}
+    },
+    {
+      "group": "html to delta",
+      "name": "unordered list",
+      "setup": {"html": "<ul><li>a</li><li>b</li></ul>"}
+    },
+    {
+      "group": "html to delta",
+      "name": "ordered list",
+      "setup": {"html": "<ol><li>a</li><li>b</li></ol>"}
+    },
+    {
+      "group": "html to delta",
+      "name": "preformatted block",
+      "setup": {"html": "<pre>code line</pre>"}
+    },
+    {
+      "group": "html to delta",
+      "name": "image and line break",
+      "setup": {"html": "<p>before<br>after</p><p><img src=\"https://example.com/i.png\"></p>"}
+    },
+    {
+      "group": "html to delta",
+      "name": "plain text nodes and whitespace collapsing",
+      "setup": {"html": "<p>  spaced   out  </p>"}
+    },
+    {
+      "group": "html to delta",
+      "name": "table is flattened when the table module is absent",
+      "setup": {"html": "<table><tr><td>a</td><td>b</td></tr></table>"}
+    },
+
+    {
+      "group": "editing",
+      "name": "insertText plain",
+      "setup": {"delta": [{"insert": "hello\n"}]},
+      "actions": [{"method": "insertText", "args": [5, " world"]}]
+    },
+    {
+      "group": "editing",
+      "name": "insertText with a format",
+      "setup": {"delta": [{"insert": "hello\n"}]},
+      "actions": [{"method": "insertText", "args": [5, "!", {"bold": true}]}]
+    },
+    {
+      "group": "editing",
+      "name": "insertText of a newline splits the block",
+      "setup": {
+        "delta": [
+          {"insert": "Title"}, {"insert": "\n", "attributes": {"header": 1}}
+        ]
+      },
+      "actions": [{"method": "insertText", "args": [2, "\n"]}]
+    },
+    {
+      "group": "editing",
+      "name": "deleteText inside a line",
+      "setup": {"delta": [{"insert": "hello world\n"}]},
+      "actions": [{"method": "deleteText", "args": [5, 6]}]
+    },
+    {
+      "group": "editing",
+      "name": "deleteText across a block boundary",
+      "setup": {"delta": [{"insert": "Title\nbody\n"}]},
+      "actions": [{"method": "deleteText", "args": [3, 5]}]
+    },
+    {
+      "group": "editing",
+      "name": "deleting a newline merges the following line into the first",
+      "setup": {
+        "delta": [
+          {"insert": "one"}, {"insert": "\n", "attributes": {"header": 1}},
+          {"insert": "two\n"}
+        ]
+      },
+      "actions": [{"method": "deleteText", "args": [3, 1]}]
+    },
+    {
+      "group": "editing",
+      "name": "deleting the whole document",
+      "setup": {"delta": [{"insert": "a\nb\nc\n"}]},
+      "actions": [{"method": "deleteText", "args": [0, 6]}]
+    },
+    {
+      "group": "editing",
+      "name": "formatText applies an inline format",
+      "setup": {"delta": [{"insert": "hello world\n"}]},
+      "actions": [{"method": "formatText", "args": [0, 5, "bold", true]}]
+    },
+    {
+      "group": "editing",
+      "name": "formatText removes an inline format",
+      "setup": {
+        "delta": [
+          {"insert": "hello", "attributes": {"bold": true}},
+          {"insert": " world\n"}
+        ]
+      },
+      "actions": [{"method": "formatText", "args": [0, 5, "bold", false]}]
+    },
+    {
+      "group": "editing",
+      "name": "formatLine applies a block format",
+      "setup": {"delta": [{"insert": "one\ntwo\n"}]},
+      "actions": [{"method": "formatLine", "args": [0, 1, "header", 2]}]
+    },
+    {
+      "group": "editing",
+      "name": "formatLine across two lines",
+      "setup": {"delta": [{"insert": "one\ntwo\n"}]},
+      "actions": [{"method": "formatLine", "args": [0, 8, "align", "center"]}]
+    },
+    {
+      "group": "editing",
+      "name": "removeFormat clears inline and block formats",
+      "setup": {
+        "delta": [
+          {"insert": "hello", "attributes": {"bold": true}},
+          {"insert": "\n", "attributes": {"header": 1}}
+        ]
+      },
+      "actions": [{"method": "removeFormat", "args": [0, 5]}]
+    },
+    {
+      "group": "editing",
+      "name": "removeFormat on part of a line",
+      "setup": {
+        "delta": [
+          {"insert": "abcdef", "attributes": {"italic": true}},
+          {"insert": "\n"}
+        ]
+      },
+      "actions": [{"method": "removeFormat", "args": [2, 2]}]
+    },
+    {
+      "group": "editing",
+      "name": "updateContents retain with attributes",
+      "setup": {"delta": [{"insert": "hello world\n"}]},
+      "actions": [
+        {
+          "method": "updateContents",
+          "args": [[{"retain": 5, "attributes": {"bold": true}}]]
+        }
+      ]
+    },
+    {
+      "group": "editing",
+      "name": "updateContents insert and delete in one pass",
+      "setup": {"delta": [{"insert": "hello world\n"}]},
+      "actions": [
+        {
+          "method": "updateContents",
+          "args": [[{"retain": 6}, {"delete": 5}, {"insert": "there"}]]
+        }
+      ]
+    },
+    {
+      "group": "editing",
+      "name": "insertEmbed of a block embed",
+      "setup": {"delta": [{"insert": "before\n"}]},
+      "actions": [
+        {"method": "insertEmbed", "args": [7, "video", "https://example.com/v"]}
+      ]
+    },
+    {
+      "group": "editing",
+      "name": "insertEmbed of an inline embed",
+      "setup": {"delta": [{"insert": "ab\n"}]},
+      "actions": [
+        {"method": "insertEmbed", "args": [1, "image", "https://example.com/i.png"]}
+      ]
+    },
+    {
+      "group": "editing",
+      "name": "successive edits compose",
+      "setup": {"delta": [{"insert": "one two three\n"}]},
+      "actions": [
+        {"method": "formatText", "args": [0, 3, "bold", true]},
+        {"method": "deleteText", "args": [3, 4]},
+        {"method": "insertText", "args": [3, " and "]},
+        {"method": "formatLine", "args": [0, 1, "header", 3]}
+      ]
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 **Data:** 2026-07-28
 **Método:** comparação arquivo-a-arquivo e método-a-método entre `referencias/quilljs/src`, `referencias/quill_table_better/1.2.3/src/src` (+ parchment em `referencias/quill_table_better/1.2.3/src/node_modules/parchment/src`) e `lib/`.
-**Baseline de testes:** 494 unitários VM + 14 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo. *(atualizado em 2026-07-28)*
+**Baseline de testes:** 536 unitários (8 marcados como divergência conhecida) VM + 14 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo. *(atualizado em 2026-07-28)*
 **Complementa:** `doc/PLANO_PORT_COMPLETO.md` (fases F0–F10; F0–F2 concluídas, F7/F8 núcleo entregue). Este documento substitui o detalhamento de lacunas daquele plano.
 
 ---
@@ -244,6 +244,23 @@ Ordem interna (dependências primeiro):
     - ⚠️ **Não incluído:** `referencias/quill_table_better/1.2.3/quill_table_better.css` (847 l.) *não* é o dist do plugin — é uma cópia adaptada com 14 regras `[data-color-theme=dark]` acrescentadas à mão (comentários em pt-BR). Ficou de fora do asset da biblioteca; quem quiser o tema escuro sobrepõe a própria folha, que é justamente o que a regra "CSS em arquivo" do §6 permite.
     - **Teste novo** `test/unit/table_better/stylesheet_test.dart` (13 casos): constrói menus, formulário de tabela e de célula, grade 10×10, overlay de resize e as classes de seleção no fake DOM, coleta **toda** classe que chega ao DOM e exige uma regra na folha. Pega a falha silenciosa (widget renderizado sem estilo) que nenhum teste de comportamento pega. Sobreviveram quatro exclusões, todas confirmadas como sem regra **no upstream também** (`icon`, vinda do próprio `<svg>` do iconfont; `ql-table-dropdown-icon`; `ql-table-block`; `ql-table-header`) e o prefixo `Iro*` da roda de cores — para o qual há um teste dedicado provando que cada camada leva `style` inline, como o iro.js faz, e portanto não precisa de CSS.
 - Testes: cenários E2E Puppeteer para menus/resize/properties; unit para toda a lógica de grade.
+
+### G10 — Goldens de compatibilidade de Delta (2026-07-28)
+
+**Motivação:** até aqui a compatibilidade com o Quill original era argumentada por inspeção do TS. Não é prova. Um documento escrito pelo Quill upstream tem de carregar aqui sem perder nada, e o inverso também.
+
+- [x] **G10.1 Infraestrutura.** `test/goldens/cases.json` (49 casos, fonte de verdade compartilhada) → `tool/gen_goldens.dart` roda cada caso no **quill 2.0.3 real**, em Chrome headless via Puppeteer, e grava `test/goldens/quill_2.0.3.json` → `test/unit/goldens_test.dart` repete os mesmos casos no port e compara op a op. O gerador tem `--check` para CI. O build do Quill não é vendorizado: `npm install quill@2.0.3` e `--quill <dir>`. Cobre normalização do `setContents`, formatos inline, formatos de bloco, HTML→Delta pelo `clipboard.convert` e as APIs de edição (`insertText`/`deleteText`/`formatText`/`formatLine`/`removeFormat`/`updateContents`/`insertEmbed`).
+- [x] **G10.2 Primeira rodada: 10 incompatibilidades reais, 2 causas de parchment corrigidas.**
+  - **`ParentBlot.split` não dividia o próprio blot** (parent.ts:141-159). A versão do port delegava ao filho que cruza o índice e devolvia *o resto dele*: dividir `<strong>abc</strong>` em 1 devolvia um `TextBlot` e deixava o `<strong>` inteiro. Todo chamador que depende do split para partir o wrapper — `isolate`, e através dele o `formatAt` — não fazia nada. Agora o pai se clona e move a cauda, como o parchment.
+  - **`InlineBlot.formatAt` não existia** (inline.ts:96-111). Sem ele o ramo de attributor atingia o elemento do blot **inteiro**: limpar `color` em um caractere limpava a cor de todos. Efeito observável: `setContents` com `color`/`background`/`font` em ops consecutivas **perdia a formatação de todas menos a última** — perda de dados silenciosa em qualquer documento com cor.
+  - Nenhum dos dois seria encontrado por inspeção: os testes existentes cobriam os casos de blot (bold), que funcionavam, e não os de attributor.
+- [~] **G10.3 Oito divergências restantes, registradas em `_knownDivergences` com a causa raiz.** Não são "diferenças aceitáveis" — em todas se perde informação:
+  1. **Normalização de bloco vazio no fim do documento (5 casos).** O port descarta um parágrafo vazio final onde o upstream o mantém (`a
+
+
+` vira duas linhas em vez de três) e **acrescenta** um parágrafo em volta de block embed onde o upstream não tem nenhum. Mesma raiz: como o scroll representa o último bloco.
+  2. **`code-block` carrega a linguagem no upstream, um booleano aqui (2 casos).** O `quill.js` registra `modules/syntax`, cujo `SyntaxCodeBlock.formats()` lê `data-language` com default `"plain"`; o port só instala isso com o módulo syntax ligado, então o default reporta `true`. Todo bloco de código escrito por um Quill padrão perde a linguagem aqui.
+  3. **Lista checked/unchecked colapsa para `ordered` (1 caso).** É o G5.2 — tipo no container + tag OL/UL em vez de `data-list` no `<li>`. Agora com prova em vez de suspeita.
 
 ### G7 — Assets e API pública (2-3 dias)
 - [ ] G7.1 `.styl` do Quill → CSS definitivo em **`lib/assets/quill.core.css`, `quill.snow.css` e `quill.bubble.css`** (arquivos, não `const String` — ver §6); `QuillAssets` emite `<link rel="stylesheet">` para `packages/dart_quill/assets/…`.
