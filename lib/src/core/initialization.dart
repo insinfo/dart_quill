@@ -252,26 +252,21 @@ void _registerFormats() {
         return header;
       },
     ),
+    // Parity list.ts: the container is always an OL and carries no value —
+    // the list kind lives in each <li>'s data-list attribute. A pasted <ul>
+    // never reaches the registry; the clipboard's matchList converts it.
     RegistryEntry(
       blotName: ListContainer.kBlotName,
       scope: ListContainer.kScope,
-      tagNames: const ['OL', 'UL'],
-      create: ([dynamic value]) {
-        if (value is DomElement) return ListContainer(value);
-        final resolved = value is String ? value : 'bullet';
-        return ListContainer.create(resolved);
-      },
+      tagNames: const [ListContainer.kTagName],
+      create: ListContainer.create,
     ),
     RegistryEntry(
       blotName: ListItem.kBlotName,
       scope: ListItem.kScope,
       tagNames: const [ListItem.kTagName],
       requiredContainerBlotName: ListContainer.kBlotName,
-      create: ([dynamic value]) {
-        if (value is DomElement) return ListItem(value);
-        final resolved = value is String ? value : 'bullet';
-        return ListItem.create(resolved);
-      },
+      create: ListItem.create,
     ),
     RegistryEntry(
       blotName: Script.kBlotName,

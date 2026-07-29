@@ -21,8 +21,6 @@ class CodeBlockContainer extends ContainerBlot {
   static const String kClassName = 'ql-code-block-container';
   static const String kTagName = 'DIV';
   static const int kScope = Scope.BLOCK_BLOT;
-  static final List<Type> allowedChildren = [CodeBlock];
-
   static CodeBlockContainer create([dynamic value]) {
     final node = domBindings.adapter.document.createElement(kTagName);
     node.setAttribute('spellcheck', 'false');

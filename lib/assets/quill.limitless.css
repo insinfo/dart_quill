@@ -196,3 +196,151 @@
     align-self: auto;
   }
 }
+
+/* Dark theme overrides for the Snow toolbar (previously hand-added to
+   quill.snow.css). quill.snow.css is now byte-faithful to the compiled
+   upstream 2.0.3 stylus sources, so app-level theming lives here, in the
+   integration layer, per the asset rule in doc/INVENTARIO (§6). */
+/* ===============================
+   Custom dark-theme overrides
+   New Sali (data-color-theme=dark)
+================================= */
+[data-color-theme=dark] .ql-snow.ql-toolbar,
+[data-color-theme=dark] .ql-snow .ql-toolbar,
+html[data-color-theme=dark] .ql-snow.ql-toolbar,
+html[data-color-theme=dark] .ql-snow .ql-toolbar {
+    border-color: var(--border-color, #3b4252);
+    background-color: var(--card-bg, #2a2f3a);
+}
+[data-color-theme=dark] .ql-snow.ql-toolbar button,
+[data-color-theme=dark] .ql-snow .ql-toolbar button,
+[data-color-theme=dark] .ql-snow .ql-picker,
+[data-color-theme=dark] .ql-snow .ql-picker-label,
+[data-color-theme=dark] .ql-snow .ql-picker-item,
+html[data-color-theme=dark] .ql-snow.ql-toolbar button,
+html[data-color-theme=dark] .ql-snow .ql-toolbar button,
+html[data-color-theme=dark] .ql-snow .ql-picker,
+html[data-color-theme=dark] .ql-snow .ql-picker-label,
+html[data-color-theme=dark] .ql-snow .ql-picker-item {
+    color: var(--body-color, #fff);
+}
+[data-color-theme=dark] .ql-snow .ql-stroke,
+[data-color-theme=dark] .ql-snow .ql-stroke-miter,
+html[data-color-theme=dark] .ql-snow .ql-stroke,
+html[data-color-theme=dark] .ql-snow .ql-stroke-miter {
+    stroke: var(--body-color, #fff);
+}
+[data-color-theme=dark] .ql-snow .ql-fill,
+[data-color-theme=dark] .ql-snow .ql-stroke.ql-fill,
+html[data-color-theme=dark] .ql-snow .ql-fill,
+html[data-color-theme=dark] .ql-snow .ql-stroke.ql-fill {
+    fill: var(--body-color, #fff);
+}
+[data-color-theme=dark] .ql-snow.ql-toolbar button:hover,
+[data-color-theme=dark] .ql-snow .ql-toolbar button:hover,
+[data-color-theme=dark] .ql-snow.ql-toolbar button.ql-active,
+[data-color-theme=dark] .ql-snow .ql-toolbar button.ql-active,
+[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label:hover,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label:hover,
+[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label.ql-active,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label.ql-active,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item:hover,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item.ql-selected,
+html[data-color-theme=dark] .ql-snow.ql-toolbar button:hover,
+html[data-color-theme=dark] .ql-snow .ql-toolbar button:hover,
+html[data-color-theme=dark] .ql-snow.ql-toolbar button.ql-active,
+html[data-color-theme=dark] .ql-snow .ql-toolbar button.ql-active,
+html[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label:hover,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label:hover,
+html[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label.ql-active,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label.ql-active,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item:hover,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item.ql-selected {
+    color: var(--primary, #0d6efd);
+}
+[data-color-theme=dark] .ql-snow.ql-toolbar button:hover .ql-fill,
+[data-color-theme=dark] .ql-snow .ql-toolbar button:hover .ql-fill,
+[data-color-theme=dark] .ql-snow.ql-toolbar button.ql-active .ql-fill,
+[data-color-theme=dark] .ql-snow .ql-toolbar button.ql-active .ql-fill,
+[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label:hover .ql-fill,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label:hover .ql-fill,
+[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label.ql-active .ql-fill,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label.ql-active .ql-fill,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item:hover .ql-fill,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item.ql-selected .ql-fill,
+[data-color-theme=dark] .ql-snow.ql-toolbar button:hover .ql-stroke,
+[data-color-theme=dark] .ql-snow .ql-toolbar button:hover .ql-stroke,
+[data-color-theme=dark] .ql-snow.ql-toolbar button.ql-active .ql-stroke,
+[data-color-theme=dark] .ql-snow .ql-toolbar button.ql-active .ql-stroke,
+[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label:hover .ql-stroke,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label:hover .ql-stroke,
+[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label.ql-active .ql-stroke,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label.ql-active .ql-stroke,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item:hover .ql-stroke,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item.ql-selected .ql-stroke,
+[data-color-theme=dark] .ql-snow.ql-toolbar button:hover .ql-stroke-miter,
+[data-color-theme=dark] .ql-snow .ql-toolbar button:hover .ql-stroke-miter,
+[data-color-theme=dark] .ql-snow.ql-toolbar button.ql-active .ql-stroke-miter,
+[data-color-theme=dark] .ql-snow .ql-toolbar button.ql-active .ql-stroke-miter,
+[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label:hover .ql-stroke-miter,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label:hover .ql-stroke-miter,
+[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label.ql-active .ql-stroke-miter,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label.ql-active .ql-stroke-miter,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item:hover .ql-stroke-miter,
+[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item.ql-selected .ql-stroke-miter,
+html[data-color-theme=dark] .ql-snow.ql-toolbar button:hover .ql-fill,
+html[data-color-theme=dark] .ql-snow .ql-toolbar button:hover .ql-fill,
+html[data-color-theme=dark] .ql-snow.ql-toolbar button.ql-active .ql-fill,
+html[data-color-theme=dark] .ql-snow .ql-toolbar button.ql-active .ql-fill,
+html[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label:hover .ql-fill,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label:hover .ql-fill,
+html[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label.ql-active .ql-fill,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label.ql-active .ql-fill,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item:hover .ql-fill,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item.ql-selected .ql-fill,
+html[data-color-theme=dark] .ql-snow.ql-toolbar button:hover .ql-stroke,
+html[data-color-theme=dark] .ql-snow .ql-toolbar button:hover .ql-stroke,
+html[data-color-theme=dark] .ql-snow.ql-toolbar button.ql-active .ql-stroke,
+html[data-color-theme=dark] .ql-snow .ql-toolbar button.ql-active .ql-stroke,
+html[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label:hover .ql-stroke,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label:hover .ql-stroke,
+html[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label.ql-active .ql-stroke,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label.ql-active .ql-stroke,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item:hover .ql-stroke,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item.ql-selected .ql-stroke,
+html[data-color-theme=dark] .ql-snow.ql-toolbar button:hover .ql-stroke-miter,
+html[data-color-theme=dark] .ql-snow .ql-toolbar button:hover .ql-stroke-miter,
+html[data-color-theme=dark] .ql-snow.ql-toolbar button.ql-active .ql-stroke-miter,
+html[data-color-theme=dark] .ql-snow .ql-toolbar button.ql-active .ql-stroke-miter,
+html[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label:hover .ql-stroke-miter,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label:hover .ql-stroke-miter,
+html[data-color-theme=dark] .ql-snow.ql-toolbar .ql-picker-label.ql-active .ql-stroke-miter,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-label.ql-active .ql-stroke-miter,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item:hover .ql-stroke-miter,
+html[data-color-theme=dark] .ql-snow .ql-toolbar .ql-picker-item.ql-selected .ql-stroke-miter {
+    stroke: var(--primary, #0d6efd);
+    fill: var(--primary, #0d6efd);
+}
+[data-color-theme=dark] .ql-snow .ql-picker-options,
+html[data-color-theme=dark] .ql-snow .ql-picker-options {
+    background-color: var(--card-bg, #2a2f3a);
+    border-color: var(--border-color, #3b4252);
+}
+[data-color-theme=dark] .ql-snow .ql-picker.ql-expanded .ql-picker-label,
+html[data-color-theme=dark] .ql-snow .ql-picker.ql-expanded .ql-picker-label {
+    color: var(--gray-200, #dbe0e7);
+}
+[data-color-theme=dark] .ql-snow .ql-picker.ql-expanded .ql-picker-label .ql-fill,
+html[data-color-theme=dark] .ql-snow .ql-picker.ql-expanded .ql-picker-label .ql-fill {
+    fill: var(--gray-200, #dbe0e7);
+}
+[data-color-theme=dark] .ql-snow .ql-picker.ql-expanded .ql-picker-label .ql-stroke,
+[data-color-theme=dark] .ql-snow .ql-picker.ql-expanded .ql-picker-label .ql-stroke-miter,
+html[data-color-theme=dark] .ql-snow .ql-picker.ql-expanded .ql-picker-label .ql-stroke,
+html[data-color-theme=dark] .ql-snow .ql-picker.ql-expanded .ql-picker-label .ql-stroke-miter {
+    stroke: var(--gray-200, #dbe0e7);
+}
+[data-color-theme=dark] .ql-snow .ql-transparent,
+html[data-color-theme=dark] .ql-snow .ql-transparent {
+    opacity: .7;
+}

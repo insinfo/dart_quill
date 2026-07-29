@@ -52,8 +52,6 @@ class TableContainer extends Container {
   static const String kBlotName = 'table-container';
   static const String kTagName = 'TABLE';
   static const int kScope = Scope.BLOCK_BLOT;
-  static const List<Type> allowedChildren = [TableBody];
-
   static TableContainer create([dynamic value]) {
     if (value is DomElement) {
       return TableContainer(value);
@@ -180,7 +178,6 @@ class TableBody extends Container {
   static const String kBlotName = 'table-body';
   static const String kTagName = 'TBODY';
   static const int kScope = Scope.BLOCK_BLOT;
-  static const List<Type> allowedChildren = [TableRow];
   static const Type requiredContainer = TableContainer;
 
   // The list/table hierarchies build their own containers (the container's
@@ -213,7 +210,6 @@ class TableRow extends Container {
   static const String kBlotName = 'table-row';
   static const String kTagName = 'TR';
   static const int kScope = Scope.BLOCK_BLOT;
-  static const List<Type> allowedChildren = [TableCell];
   static const Type requiredContainer = TableBody;
 
   // The list/table hierarchies build their own containers (the container's

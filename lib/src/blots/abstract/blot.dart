@@ -698,6 +698,16 @@ abstract class ParentBlot extends Blot {
     previous?.next = null;
   }
 
+  /// Parity `ParentBlot.unwrap()` (parent.ts:327-332): dissolve this parent,
+  /// moving its children up into the grandparent in place.
+  void unwrap() {
+    final target = parent;
+    if (target != null) {
+      moveChildren(target, next);
+    }
+    remove();
+  }
+
   /// Parity `ParentBlot.splitAfter(child)` (parent.ts:316-325): clone this
   /// parent after itself and move every sibling following [child] into it.
   ParentBlot splitAfter(Blot child) {
@@ -995,6 +1005,61 @@ abstract class ContainerBlot extends ParentBlot {
   /// sibling merge, which would otherwise delete those wrappers mid-flight.
   bool get managesOwnContainerOptimize => false;
 
+  /// Parity `statics.allowedChildren` consumed by parent.ts:168-195. Parchment
+  /// matches by `instanceof`; the Dart counterpart is a predicate. Null (the
+  /// default) means the container declares nothing and no enforcement runs.
+  bool Function(Blot child)? get allowedChildren => null;
+
+  /// Parity `ParentBlot.enforceAllowedChildren()` (parent.ts:168-195): a child
+  /// that does not belong is expelled — a block-scope child is isolated by
+  /// splitting the container around it and unwrapping (this is how clearing a
+  /// list format pops the new paragraph out of the `<ol>`), a foreign parent
+  /// is dissolved in place, and a stray leaf is removed.
+  void enforceAllowedChildren() {
+    final allows = allowedChildren;
+    if (allows == null) return;
+    for (final child in List<Blot>.from(children)) {
+      if (allows(child)) continue;
+      if (Scope.matches(child.scope, Scope.BLOCK_BLOT)) {
+        if (child.next != null) {
+          splitAfter(child);
+        }
+        if (child.prev != null) {
+          splitAfter(child.prev!);
+        }
+        final holder = child.parent;
+        if (holder is ParentBlot) {
+          holder.unwrap();
+        }
+        // Parity `done = true` — one expulsion per pass; optimize converges.
+        return;
+      } else if (child is ParentBlot) {
+        child.unwrap();
+      } else {
+        child.remove();
+      }
+    }
+  }
+
+  // Parity container.ts:19-37 — the structural APIs re-enforce afterwards.
+  @override
+  void deleteAt(int index, int length) {
+    super.deleteAt(index, length);
+    enforceAllowedChildren();
+  }
+
+  @override
+  void formatAt(int index, int length, String name, dynamic value) {
+    super.formatAt(index, length, name, value);
+    enforceAllowedChildren();
+  }
+
+  @override
+  void insertAt(int index, String value, [dynamic def]) {
+    super.insertAt(index, value, def);
+    enforceAllowedChildren();
+  }
+
   @override
   void optimize([
     List<DomMutationRecord>? mutations,
@@ -1002,6 +1067,9 @@ abstract class ContainerBlot extends ParentBlot {
   ]) {
     super.optimize(mutations, context);
     if (managesOwnContainerOptimize) return;
+    // Parity parent.ts:250-256 (ParentBlot.optimize enforces before the
+    // container-level merge below).
+    enforceAllowedChildren();
     // Parity parent.ts:258-267 — empty containers remove themselves.
     if (children.isEmpty) {
       remove();

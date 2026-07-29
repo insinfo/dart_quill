@@ -86,11 +86,15 @@ void main() {
       expect(quill.getFormat(0)['list'], equals('ordered'));
     });
 
-    test('formatLine list bullet wraps into <ul><li>', () {
+    test('formatLine list bullet wraps into <ol><li data-list="bullet">', () {
+      // Upstream model (list.ts): the container is always an <ol>; the kind
+      // lives in the <li>'s data-list attribute and CSS renders the bullet.
       final quill = createTestQuill(initialHtml: '<p>item</p>');
       quill.formatLine(0, 1, 'list', 'bullet');
       final root = quill.root as FakeDomElement;
-      expect(root.querySelectorAll('ul').length, equals(1));
+      expect(root.querySelectorAll('ol').length, equals(1));
+      final item = root.querySelectorAll('li').single;
+      expect(item.getAttribute('data-list'), equals('bullet'));
       expect(quill.getFormat(0)['list'], equals('bullet'));
     });
 

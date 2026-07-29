@@ -4,18 +4,22 @@ import '../blots/scroll.dart';
 import '../platform/dom.dart';
 import '../platform/platform.dart';
 
+/// Parity quill `formats/list.ts` — the upstream data model, exactly:
+/// the container is ALWAYS an `<ol>` and carries no value; the whole list
+/// format ('ordered' | 'bullet' | 'checked' | 'unchecked') lives in the
+/// `data-list` attribute of each `<li>`. Two adjacent lists of different
+/// kinds are one `<ol>` whose items differ in `data-list` — rendering is
+/// CSS's job (`li[data-list=bullet]` etc.), not the DOM structure's.
 class ListContainer extends ContainerBlot {
   ListContainer(DomElement domNode) : super(domNode);
 
   static const String kBlotName = 'list-container';
+  static const String kTagName = 'OL';
   static const int kScope = Scope.BLOCK_BLOT;
 
-  static ListContainer create(String value) {
-    final type = (value == 'ordered' || value == 'bullet') ? value : 'ordered';
-    final tag = type == 'ordered' ? 'OL' : 'UL';
-    final node = domBindings.adapter.document.createElement(tag);
-    node.dataset['list'] = type;
-    return ListContainer(node);
+  static ListContainer create([dynamic value]) {
+    if (value is DomElement) return ListContainer(value);
+    return ListContainer(domBindings.adapter.document.createElement(kTagName));
   }
 
   @override
@@ -24,53 +28,25 @@ class ListContainer extends ContainerBlot {
   @override
   int get scope => kScope;
 
+  // Parity list.ts: `ListContainer.allowedChildren = [ListItem]`. This is what
+  // pops a paragraph out of the `<ol>` when a line's list format is cleared.
   @override
-  dynamic value() => children.map((child) => child.value()).toList();
+  bool Function(Blot child)? get allowedChildren => (child) => child is ListItem;
 
   @override
-  Map<String, dynamic> formats() {
-    final type = element.dataset['list'];
-    if (type == 'ordered' || type == 'bullet') {
-      return {'list': type};
-    }
-    final tag = element.tagName.toLowerCase();
-    if (tag == 'ol') return {'list': 'ordered'};
-    if (tag == 'ul') return {'list': 'bullet'};
-    return const {};
-  }
-
-  @override
-  void format(String name, dynamic value) {
-    if (name != 'list') {
-      super.format(name, value);
-      return;
-    }
-    final type = value == 'ordered' ? 'ordered' : 'bullet';
-    element.dataset['list'] = type;
-  }
-
-  @override
-  ListContainer clone() => ListContainer(element.cloneNode(deep: true));
-
-  void mergeWith(ListContainer other) {
-    // Move all children from other list to this list
-    while (other.children.isNotEmpty) {
-      final child = other.children.first;
-      insertBefore(child, null);
-    }
-    other.remove();
-  }
+  ListContainer clone() => ListContainer(element.cloneNode(deep: false));
 }
 
-// Mirrors quill's list.ts where ListItem extends Block, so line-level
-// machinery (isLine, getFormat, newline accounting) treats it as a line.
+/// Parity quill `formats/list.ts` ListItem.
 class ListItem extends Block {
   ListItem(DomElement domNode) : super(domNode) {
+    // Parity list.ts:26-41 — the checklist toggle is wired in the constructor
+    // and attached as the line's UI node.
     final ui = domNode.ownerDocument.createElement('span');
     void toggleChecklist(DomEvent event) {
       final root = scroll;
       if (root is Scroll && !root.isEnabled()) return;
-      final format = element.dataset['list'];
+      final format = element.getAttribute('data-list');
       if (format == 'checked') {
         this.format('list', 'unchecked');
         event.preventDefault();
@@ -88,20 +64,13 @@ class ListItem extends Block {
   static const String kBlotName = 'list';
   static const String kTagName = 'LI';
   static const int kScope = Scope.BLOCK_BLOT;
-  static const Type requiredContainer = ListContainer;
 
-  // The list/table hierarchies build their own containers (the container's
-  // tag and value matter), so they opt out of the generic
-  // `requiredContainer` wrapping in `Blot.optimize`.
-  @override
-  bool get managesOwnRequiredContainer => true;
-
-  static ListItem create(String value) {
+  static ListItem create([dynamic value]) {
+    if (value is DomElement) return ListItem(value);
     final node = domBindings.adapter.document.createElement(kTagName);
-    // The type is kept on the item until optimize() wraps it into the
-    // matching ListContainer (ordered/bullet move to the container;
-    // checked/unchecked stay on the item).
-    node.dataset['list'] = value;
+    if (value != null && value != false && '$value'.isNotEmpty) {
+      node.setAttribute('data-list', '$value');
+    }
     return ListItem(node);
   }
 
@@ -113,120 +82,27 @@ class ListItem extends Block {
 
   @override
   Map<String, dynamic> formats() {
-    final Map<String, dynamic> parentFormats = parent is ListContainer
-        ? (parent as ListContainer).formats()
-        : const <String, dynamic>{};
-    final marker = element.dataset['list'];
-    if (marker == 'checked' || marker == 'unchecked') {
-      return {
-        ...super.formats(),
-        'list': {
-          'type': parentFormats['list'],
-          'checked': marker == 'checked',
-        }
-      };
-    }
-    return {...super.formats(), ...parentFormats};
+    // Parity list.ts:20-22 — the value is the `data-list` attribute.
+    final list = element.getAttribute('data-list');
+    return {
+      ...super.formats(),
+      if (list != null && list.isNotEmpty) kBlotName: list,
+    };
   }
 
   @override
   void format(String name, dynamic value) {
-    if (name != kBlotName) {
-      super.format(name, value);
-      return;
-    }
-    if (value == null || value == false) {
-      // Match Quill's ListItem.format: clearing the list delegates to Block,
-      // which replaces the <li> with a normal paragraph. Our list container
-      // is explicit, so place that paragraph beside (not inside) the list.
-      final list = parent;
-      final outer = list?.parent;
-      if (list is ListContainer && outer != null) {
-        final replacement = scroll.create(Block.kBlotName) as Block;
-        outer.insertBefore(replacement, list);
-        moveChildren(replacement, null);
-        for (final entry in super.formats().entries) {
-          if (entry.key != kBlotName) {
-            replacement.format(entry.key, entry.value);
-          }
-        }
-        remove();
-        if (list.children.isEmpty) {
-          list.remove();
-        }
-      } else {
-        super.format(name, value);
-      }
-      return;
-    }
-    if (value is Map) {
-      final checked = value['checked'];
-      if (checked != null) {
-        element.dataset['list'] = checked ? 'checked' : 'unchecked';
-      }
-      if (parent != null && value['type'] != null) {
-        parent!.format('list', value['type']);
-      }
-    } else if (value == 'checked' || value == 'unchecked') {
-      // Quill's public Delta representation uses these scalar values.
-      // Keep the checklist state on the LI; the surrounding container still
-      // owns the ordered/bullet list type in this port.
-      element.dataset['list'] = value;
+    // Parity list.ts:43-49 — a truthy list value only rewrites `data-list`;
+    // everything else (including clearing) is Block's business, which
+    // replaces the `<li>` with a paragraph that the container then expels.
+    final truthy = value != null && value != false && value != '';
+    if (name == kBlotName && truthy) {
+      element.setAttribute('data-list', '$value');
     } else {
-      element.dataset.remove('list');
-      parent?.format('list', value);
+      super.format(name, value);
     }
   }
 
   @override
-  void optimize(
-      [List<DomMutationRecord>? mutations, Map<String, dynamic>? context]) {
-    super.optimize(mutations, context);
-
-    // Ensure proper container: mirror parchment's wrap() — the container is
-    // inserted into the tree BEFORE the item is moved into it.
-    final parent = this.parent;
-    if (parent != null && parent is! ListContainer) {
-      final marker = element.dataset['list'];
-      final type =
-          (marker == 'ordered' || marker == 'bullet') ? marker! : 'ordered';
-      final container = ListContainer.create(type);
-      parent.insertBefore(container, this);
-      container.appendChild(this);
-      if (marker == 'ordered' || marker == 'bullet') {
-        element.dataset.remove('list');
-        element.removeAttribute('data-list');
-      }
-    }
-
-    // Merge adjacent lists of same type
-    if (parent != null && parent is ListContainer) {
-      if (prev != null && prev is ListItem) {
-        final prevParent = prev!.parent;
-        if (prevParent != null &&
-            prevParent != parent &&
-            prevParent is ListContainer &&
-            prevParent.formats()['list'] == parent.formats()['list']) {
-          parent.mergeWith(prevParent);
-        }
-      }
-      if (next != null && next is ListItem) {
-        final nextParent = next!.parent;
-        if (nextParent != null &&
-            nextParent != parent &&
-            nextParent is ListContainer &&
-            nextParent.formats()['list'] == parent.formats()['list']) {
-          parent.mergeWith(nextParent);
-        }
-      }
-    }
-
-    // Handle empty lists
-    if (parent != null && parent is ListContainer && parent.children.isEmpty) {
-      parent.remove();
-    }
-  }
-
-  @override
-  ListItem clone() => ListItem(element.cloneNode(deep: true));
+  ListItem clone() => ListItem(element.cloneNode(deep: false));
 }

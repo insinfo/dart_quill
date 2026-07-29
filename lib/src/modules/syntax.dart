@@ -275,8 +275,6 @@ class SyntaxCodeBlockContainer extends code_format.CodeBlockContainer {
   static const String kClassName = code_format.CodeBlockContainer.kClassName;
   static const String kTagName = code_format.CodeBlockContainer.kTagName;
   static const int kScope = code_format.CodeBlockContainer.kScope;
-  static final List<Type> allowedChildren = [SyntaxCodeBlock];
-
   bool forceNext = false;
   String? cachedText;
 

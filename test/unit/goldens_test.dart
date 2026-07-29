@@ -78,12 +78,7 @@ void main() {
 ///
 /// These are not "acceptable differences". A document written by upstream Quill
 /// and loaded here — or the reverse — loses information in every one of them.
-const Map<String, String> _knownDivergences = {
-  // ---- list model (tracked as G5.2) --------------------------------------
-  'block formats / checked and unchecked list items':
-      'checked/unchecked collapse to `ordered`: the port keeps the list type on '
-          'the container + OL/UL tag instead of `data-list` on the <li> (G5.2)',
-};
+const Map<String, String> _knownDivergences = {};
 
 void _applySetup(Quill quill, Map<String, dynamic> setup) {
   final html = setup['html'];
