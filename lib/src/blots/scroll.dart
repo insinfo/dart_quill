@@ -555,8 +555,11 @@ class Scroll extends ScrollBlot {
     }
 
     if (node is DomElement) {
-      final entry = registry.queryByTagName(node.tagName, scope: Scope.ANY) ??
-          registry.queryByClassName(node.className ?? '', scope: Scope.ANY);
+      // Class beats tag (parchment query(node) checks classes first), and the
+      // tag falls back to registration order — see Registry.scanByTagName.
+      final entry =
+          registry.queryByClassName(node.className ?? '', scope: Scope.ANY) ??
+              registry.scanByTagName(node.tagName, scope: Scope.ANY);
       final blotName = entry?.blotName ?? Block.kBlotName;
       final blot = create(blotName, node);
       if (blot is ParentBlot) {

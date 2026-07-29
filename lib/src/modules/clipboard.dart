@@ -636,6 +636,10 @@ Delta matchAttributor(DomNode node, Delta delta, Scroll scroll) {
 /// Blots that only exist to structure the tree. Upstream resolves them to
 /// parchment `ContainerBlot`s (or to the scroll/default block), which produce
 /// neither a format nor a newline in `matchBlot`.
+// Upstream's filter is `'formats' in match`: parchment containers declare no
+// static `formats`, so matchBlot never reports them. Containers that DO
+// declare one (quill-table-better's table-cell) opt back in through
+// `RegistryEntry.staticFormats`.
 const _structuralBlotNames = <String>{
   'block',
   'break',
@@ -647,7 +651,11 @@ const _structuralBlotNames = <String>{
   'list-container',
   'table-container',
   'table-body',
+  'table-thead',
   'table-row',
+  'table-th-row',
+  'table-colgroup',
+  'table-list-container',
 };
 
 /// Blots whose DOM node maps to an embed insert instead of a text format.
@@ -751,7 +759,12 @@ Delta matchBlot(DomNode node, Delta delta, Scroll scroll) {
   if (_embedBlotNames.contains(blotName)) {
     return _matchEmbedBlot(blotName, node) ?? delta;
   }
-  if (_structuralBlotNames.contains(blotName)) {
+  // Parity clipboard.ts matchBlot: `'formats' in match` — a blot that declares
+  // its own static formats reports through it even when it is a container
+  // (quill-table-better's table-cell returns the attribute map the `<td>`
+  // carries, `{}` when bare, and that empty map is truthy upstream, so the
+  // format is still applied).
+  if (entry.staticFormats == null && _structuralBlotNames.contains(blotName)) {
     return delta;
   }
 
@@ -759,8 +772,10 @@ Delta matchBlot(DomNode node, Delta delta, Scroll scroll) {
   if (isBlockBlot && !deltaEndsWith(delta, '\n')) {
     delta.insert('\n');
   }
-  return applyFormat(
-      delta, blotName, _blotStaticFormats(blotName, node, scroll), scroll);
+  final value = entry.staticFormats != null
+      ? entry.staticFormats!(node)
+      : _blotStaticFormats(blotName, node, scroll);
+  return applyFormat(delta, blotName, value, scroll);
 }
 
 Delta matchBreak(DomNode node, Delta delta, Scroll scroll) {

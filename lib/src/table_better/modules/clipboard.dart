@@ -9,9 +9,12 @@ import '../utils/clipboard_matchers.dart';
 class TableClipboard extends Clipboard {
   TableClipboard(Quill quill, ClipboardOptions options)
       : super(quill, options) {
-    matchers.removeWhere(
-      (pair) => pair[0] == 'tr' && identical(pair[1], matchTable),
-    );
+    // The plugin does NOT remove quill's own `tr` matcher: core matchTable
+    // keeps prepending `table: rowNumber` to every cell op, and that key is
+    // what applyDelta consumes FIRST — the line becomes a core `table` block
+    // (still a Block, so the cell text stays put) before `table-cell-block`
+    // and `table-cell` restructure it. Removing it reordered the attribute
+    // keys and broke the whole paste convergence.
     addMatcher('tr', matchTableBetterRow);
     addMatcher('td, th', matchTableBetterCell);
     addMatcher('col', matchTableBetterCol);

@@ -62,13 +62,12 @@ Delta matchTableBetterRow(DomNode node, Delta delta, Scroll scroll) {
   final blotName = node.querySelectorAll('th').isNotEmpty
       ? TableTh.kBlotName
       : TableCell.kBlotName;
-  // The cell format's value is the attribute map the `<td>` is built from, so
-  // the row number goes in as `data-row` rather than as a bare number.
-  // `TableCell.create` reads keys off this map; a scalar leaves the cell with
-  // no `data-row` at all, which is what made pasted tables lose their row
-  // grouping. Verified against the plugin's own `clipboard.convert` output,
-  // recorded in the golden as `converted`.
-  return applyTableFormat(delta, blotName, {'data-row': row});
+  // TS matchTable applies the bare row number, and only as a fallback: ops
+  // from non-empty cells already carry the cell format (core matchBlot put
+  // the `<td>`'s own attribute map there and matchTableCell enriched it with
+  // `data-row`), so applyFormat skips them. The scalar only ever lands on ops
+  // that bypassed matchTableCell, exactly as upstream.
+  return applyTableFormat(delta, blotName, row);
 }
 
 Delta matchTableBetterCell(DomNode node, Delta delta, Scroll scroll) {
@@ -85,10 +84,16 @@ Delta matchTableBetterCell(DomNode node, Delta delta, Scroll scroll) {
 
   final rows = table.querySelectorAll('tr');
   final cells = rowNode.querySelectorAll(tagName.toLowerCase());
-  final row = node.getAttribute('data-row') ?? '${rows.indexOf(rowNode) + 1}';
+  // TS: `node.getAttribute('data-row') || rows.indexOf(...) + 1` — a string
+  // when the cell carries its id (internal copy), a NUMBER when computed for
+  // an external table. The type reaches the Delta, so it must match.
+  final rowAttr = node.getAttribute('data-row');
+  final dynamic row =
+      (rowAttr != null && rowAttr.isNotEmpty) ? rowAttr : rows.indexOf(rowNode) + 1;
   final firstElement = node.childNodes.whereType<DomElement>().firstOrNull;
-  final cellId =
-      firstElement?.getAttribute('data-cell') ?? '${cells.indexOf(node) + 1}';
+  final cellAttr = firstElement?.getAttribute('data-cell');
+  final dynamic cellId =
+      (cellAttr != null && cellAttr.isNotEmpty) ? cellAttr : cells.indexOf(node) + 1;
 
   var result = delta;
   if (result.length == 0) {

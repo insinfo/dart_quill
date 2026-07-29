@@ -1,13 +1,17 @@
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
 import 'package:dart_quill/src/modules/clipboard.dart';
 import 'package:dart_quill/src/table_better/modules/clipboard.dart';
+import 'package:dart_quill/src/table_better/register.dart';
 import 'package:test/test.dart';
 
 import '../../support/quill_test_helpers.dart';
 import '../../support/test_helpers.dart';
 
 void main() {
-  setUpAll(ensureQuillTestInitialized);
+  setUpAll(() {
+    ensureQuillTestInitialized();
+    registerTableBetter(replaceClipboard: false);
+  });
 
   setUp(() {
     final body = testAdapter.document.body;
@@ -17,7 +21,12 @@ void main() {
   });
 
   test('preserves table, columns, headers and cell ids', () {
-    final quill = createTestQuill();
+    // The plugin's clipboard never exists without the module: `register()`
+    // installs the table blots first, and matchBlot needs them in the
+    // registry to report the cell's own attribute map.
+    final quill = createTestQuill(
+      modules: {'table-better': const <String, dynamic>{}},
+    );
     final clipboard = TableClipboard(quill, const ClipboardOptions());
     const html = '<table border="1" cellspacing="2" class="invoice" '
         'style="width: 80%; mso-padding-alt: 0;">'
@@ -37,20 +46,28 @@ void main() {
             'data-class': 'invoice',
           }
         })
-        ..insert('\n', {
+        // `span="2"` is two columns: matchBlot emits one `\n` for the `<col>`
+        // itself (as upstream does — see the colgroup golden's `converted`)
+        // and matchTableCol prepends span-1 more. The old single-op
+        // expectation encoded a lost column.
+        ..insert('\n\n', {
           'table-col': {'width': '120'}
         })
-        // `table-th`'s value is the attribute map the `<th>` is built from.
-        // This used to expect the bare row number; the plugin's own
-        // `clipboard.convert`, recorded in the table-better golden as
-        // `converted`, shows `{data-row: N}`.
+        // Faithful to the plugin's own `clipboard.convert` (recorded in the
+        // table-better golden as `converted`): quill's core `tr` matcher
+        // contributes `table: rowNumber` — the plugin does not remove it —
+        // matchBlot reports the `<th>`'s own attribute map (so the explicit
+        // `data-row="header"` survives on the first cell), and computed ids
+        // are numbers while ids read from attributes stay strings.
         ..insert('Name\n', {
-          'table-th': {'data-row': 1},
+          'table': 1,
           'table-th-block': 'name',
+          'table-th': {'data-row': 'header'},
         })
         ..insert('Value\n', {
+          'table': 1,
+          'table-th-block': 2,
           'table-th': {'data-row': 1},
-          'table-th-block': '2',
         }),
     );
   });

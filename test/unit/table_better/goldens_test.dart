@@ -108,36 +108,6 @@ void main() {
 /// compatibility debt, not an accepted difference — a table written by the JS
 /// plugin does not survive a round trip through the port in any of them.
 const Map<String, String> _knownDivergences = {
-  // ---- pasting a table builds the wrong structure (10 cases) ------------
-  // Narrowed twice. First with the `converted` field the generator records —
-  // the plugin's own `clipboard.convert` output — which showed the matchers
-  // were at fault and got them fixed. Then, once the fake DOM's innerHTML
-  // stopped hiding `data-*` attributes, the remaining defect became visible:
-  //
-  //   port:   <tr><td data-row="1">a</td></tr>
-  //           <tr><td><p class="ql-table-block" data-cell="1"><br></p></td></tr>
-  //           <tr><td data-row="1">b</td></tr>…
-  //   plugin: <tr><td data-row="1"><p class="ql-table-block" data-cell="1">a</p></td>
-  //               <td data-row="1"><p class="ql-table-block" data-cell="2">b</p></td></tr>
-  //
-  // `data-row` *is* written — an earlier note here said otherwise, which was an
-  // artefact of the truncated serializer, not a real defect. Two things are
-  // actually wrong: `table-cell-block` lands on a new empty line instead of
-  // wrapping the cell's text, and the resulting cells never merge into one row.
-  // Both point at `Scroll.insertContents` / `deltaToRenderBlocks` — the path
-  // `dangerouslyPasteHTML` takes and `setContents` does not. The same delta
-  // applied through `setContents` produces exactly the upstream structure.
-  'table html to delta / a plain 2x2 table': _pasteBroken,
-  'table html to delta / a table with a colgroup': _pasteBroken,
-  'table html to delta / a table with a header row': _pasteBroken,
-  'table html to delta / colspan and rowspan': _pasteBroken,
-  'table html to delta / cell styles survive the paste': _pasteBroken,
-  'table html to delta / a table carrying its own style': _pasteBroken,
-  'table html to delta / block content inside a cell': _pasteBroken,
-  'table html to delta / a list inside a cell': _pasteBroken,
-  'table html to delta / inline formatting inside a cell': _pasteBroken,
-  'table html to delta / text around a table': _pasteBroken,
-
   // ---- insertTable after existing content --------------------------------
   'insertTable / a table after existing text':
       'the port leaves an extra empty line before the table — the `isExtra` '
@@ -149,11 +119,6 @@ const Map<String, String> _knownDivergences = {
   'table editing / deleting the whole table':
       'deleteTable leaves the table-temporary line behind',
 };
-
-const String _pasteBroken =
-    'insertContents puts `table-cell-block` on a new empty line instead of '
-    'wrapping the cell text, and the cells never merge into one row (see the '
-    'comment above the map)';
 
 void _applyAction(
     Quill quill, TableBetter module, Map<String, dynamic> action) {

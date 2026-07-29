@@ -250,8 +250,13 @@ class TableCellBlock extends Block {
   ) {
     final node = _createElement(tagName);
     _setClassAttribute(node, className);
-    if (value is String && value.isNotEmpty) {
-      node.setAttribute('data-cell', value);
+    // TS `if (value) node.setAttribute('data-cell', value)` — a pasted table's
+    // delta carries numeric cell ids (matchTableCell counts the cells), and
+    // they must be honored, not replaced with a freshly minted id.
+    final resolved =
+        value == null || value == false || value == '' ? null : '$value';
+    if (resolved != null) {
+      node.setAttribute('data-cell', resolved);
     } else {
       node.setAttribute('data-cell', cellId());
     }

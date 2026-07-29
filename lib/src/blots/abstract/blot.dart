@@ -13,6 +13,7 @@ class RegistryEntry {
     this.tagNames = const <String>[],
     this.classNames = const <String>[],
     this.requiredContainerBlotName,
+    this.staticFormats,
   });
 
   final String blotName;
@@ -25,16 +26,34 @@ class RegistryEntry {
   /// `statics.requiredContainer`), so registry filtering can pull the whole
   /// container chain in (see createRegistryWithFormats).
   final String? requiredContainerBlotName;
+
+  /// Counterpart of the upstream `static formats(domNode)` — what this blot
+  /// reports for a DOM node it matched, used by the clipboard's `matchBlot`
+  /// (clipboard.ts `'formats' in match`). Null means the blot declares none
+  /// and callers fall back to their own dispatch.
+  final dynamic Function(DomElement node)? staticFormats;
 }
 
 class Registry {
   final Map<String, RegistryEntry> _entries = {};
+  // Tag lookup mirrors parchment registry.ts: one entry per tag, where a
+  // later registration overwrites an earlier one unless the newcomer is
+  // class-scoped ("this.tags[tag] == null || definition.className == null").
+  // This is what makes a TD resolve to quill-table-better's table-cell once
+  // the plugin registers, exactly as upstream.
+  final Map<String, RegistryEntry> _tags = {};
   // Attributors are looked up both by attrName (format name) and keyName
   // (DOM attribute/class/style key), mirroring parchment's Registry.
   final Map<String, Attributor> _attributors = {};
 
   void register(RegistryEntry entry) {
     _entries[entry.blotName] = entry;
+    for (final tag in entry.tagNames) {
+      final upper = tag.toUpperCase();
+      if (_tags[upper] == null || entry.classNames.isEmpty) {
+        _tags[upper] = entry;
+      }
+    }
   }
 
   void registerAttributor(Attributor attributor) {
@@ -69,6 +88,24 @@ class Registry {
   }
 
   RegistryEntry? queryByTagName(String tagName, {int scope = Scope.ANY}) {
+    // Parity parchment registry.ts query(node): the tag map holds exactly one
+    // entry per tag (see register), so lookup is a map hit, not a scan of
+    // registration order.
+    final entry = _tags[tagName.toUpperCase()];
+    if (entry == null || !Scope.matches(entry.scope, scope)) {
+      return null;
+    }
+    return entry;
+  }
+
+  /// First registered entry carrying [tagName], in registration order.
+  ///
+  /// Hydration of pre-existing DOM wants the base blot for an ambiguous tag
+  /// (a bare `<tr>` is a table-row even though quill-table-better registers
+  /// `table-th-row` for TR later); upstream has no equivalent path — initial
+  /// HTML goes through the clipboard there — so this is deliberately NOT the
+  /// parchment tag map that [queryByTagName] exposes.
+  RegistryEntry? scanByTagName(String tagName, {int scope = Scope.ANY}) {
     final upper = tagName.toUpperCase();
     for (final entry in _entries.values) {
       if (!Scope.matches(entry.scope, scope)) {
@@ -709,9 +746,11 @@ abstract class ParentBlot extends Blot {
     if (wrapperBlot == null) {
       final scrollBlot = scroll;
       final registry = scrollBlot.registry;
-      var entry = registry.queryByTagName(domParent.tagName, scope: Scope.ANY);
-      entry ??= registry.queryByClassName(domParent.className ?? '',
+      // Class beats tag, and the tag resolves in registration order — this is
+      // the hydration path, not the clipboard's parchment tag map.
+      var entry = registry.queryByClassName(domParent.className ?? '',
           scope: Scope.ANY);
+      entry ??= registry.scanByTagName(domParent.tagName, scope: Scope.ANY);
 
       if (entry == null) {
         element.insertBefore(child.domNode, domParent);

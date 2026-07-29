@@ -91,12 +91,18 @@ List<RegistryEntry> registerTableBetterFormats() {
       scope: TableCell.kScope,
       tagNames: const [TableCell.kTagName],
       create: TableCell.create,
+      // TS TableCell `static formats(domNode)` — the attribute map an external
+      // `<td>` carries ({} when bare). matchBlot applies it during a paste,
+      // which is what hands matchTableCell an attribute to enrich with
+      // `data-row`.
+      staticFormats: TableCell.formatsFromNode,
     ),
     RegistryEntry(
       blotName: TableTh.kBlotName,
       scope: TableCell.kScope,
       tagNames: const [TableTh.kTagName],
       create: TableTh.create,
+      staticFormats: TableCell.formatsFromNode,
     ),
     RegistryEntry(
       blotName: TableRow.kBlotName,
@@ -128,6 +134,7 @@ List<RegistryEntry> registerTableBetterFormats() {
       tagNames: const [TableTemporary.kTagName],
       classNames: const [TableTemporary.kClassName],
       create: TableTemporary.create,
+      staticFormats: TableTemporary.formatsFromNode,
     ),
     RegistryEntry(
       blotName: TableContainer.kBlotName,
@@ -140,6 +147,7 @@ List<RegistryEntry> registerTableBetterFormats() {
       scope: TableCol.kScope,
       tagNames: const [TableCol.kTagName],
       create: TableCol.create,
+      staticFormats: TableCol.formatsFromNode,
     ),
     RegistryEntry(
       blotName: TableColgroup.kBlotName,
