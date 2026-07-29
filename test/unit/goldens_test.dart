@@ -90,16 +90,6 @@ const Map<String, String> _knownDivergences = {
       'same leading-paragraph defect, with the embed attribute along for the '
           'ride',
   
-  // ---- code-block carries a language upstream, a boolean here ------------
-  // quill.js registers modules/syntax, whose SyntaxCodeBlock.formats() reads
-  // `data-language` defaulting to "plain"; the port only installs that when the
-  // syntax module is switched on, so its default code-block reports `true`.
-  // Every code block written by a standard Quill loses its language here.
-  'block formats / blockquote and code block':
-      'code-block is `true` here, `"plain"` upstream — the language is lost',
-  'html to delta / preformatted block':
-      'same: <pre> converts to code-block `true` instead of `"plain"`',
-
   // ---- list model (tracked as G5.2) --------------------------------------
   'block formats / checked and unchecked list items':
       'checked/unchecked collapse to `ordered`: the port keeps the list type on '

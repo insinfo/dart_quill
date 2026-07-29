@@ -317,6 +317,14 @@ void _registerFormats() {
     Quill.register(entry);
   }
 
+  // Parity quill.ts: registering `modules/syntax` at load invokes
+  // `Syntax.register()` (Quill.register calls a module's static register —
+  // quill.ts:175), which overwrites 'code-block' with SyntaxCodeBlock in the
+  // GLOBAL registry, syntax module on or off. That is why a standard Quill
+  // reports the code block's language (`data-language`, default "plain")
+  // instead of `true` — proven by the G10 goldens.
+  Syntax.register();
+
   // Named attributor variants. These exact paths coexist even when multiple
   // variants share the same attrName (e.g. align class/style).
   final attributorNamespaces = <String, Attributor>{
