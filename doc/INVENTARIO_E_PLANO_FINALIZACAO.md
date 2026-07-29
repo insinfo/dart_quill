@@ -7,7 +7,7 @@
 
 ---
 
-não pode ter devios malucos do upstream , não pode gerar delta diferente do upstrem o delta gerado pelo quill original typescript tem que ser compativel com este port dart e o delta dest port tem que ser compativel com o spstrem não pode ter atalhos ou cambiarras que quebrem a compatibilidade entre ambos é vital que siga a risca a implementação original para não ter bugs e problemas de compatibilidade
+não pode ter devios malucos do upstream, não pode gerar delta diferente do upstream, o delta gerado pelo quill original typescript tem que ser compativel com este port dart e o delta deste port tem que ser compativel com o upstream, não pode ter atalhos ou gambiarras que quebrem a compatibilidade entre ambos é vital que siga a risca a implementação original para não ter bugs e problemas de compatibilidade
 
 
 ## 0. Sumário executivo
@@ -278,7 +278,18 @@ Ordem interna (dependências primeiro):
 
 - [~] **G10.6 Paste de tabela — matcher corrigido, defeito estreitado (2026-07-28).** O gerador passou a gravar também o **`converted`**: a saída do `clipboard.convert` do próprio plugin para o mesmo HTML. Isso troca dedução por medida e dividiu o problema em dois:
   - **✓ Corrigido — `matchTableBetterRow` produzia um escalar.** O port aplicava `table-cell`/`table-th` com o *número da linha* como valor; o plugin aplica **`{data-row: N}`**, que é o mapa de atributos com que o `<td>` é construído (`TableCell.create` lê as chaves dele). Com um escalar, `applyCellAttributes` não tem o que iterar e a célula nasce **sem `data-row`** — linhas sem identidade, impossíveis de agrupar. O delta de `convert` do port agora bate com o do plugin, atributo por atributo. *Um teste meu (`clipboard_test.dart`) esperava o escalar; foi corrigido contra o `converted` gravado.*
-  - ⚠️ **Pendente — a aplicação desse formato.** Mesmo com o delta certo, montar o DOM ainda erra: `<td>a</td><td><p class="ql-table-block"><br></p></td><td>b</td>…` contra o `<td data-row="1"><p class="ql-table-block">a</p></td>…` do plugin. O `data-row` não chega ao elemento, o texto da célula fica sem o wrapper `table-cell-block` e sai uma célula fantasma depois de cada real. O defeito está na cadeia `TableCellBlock.format` → `wrap`, não mais nos matchers. Os 10 casos seguem marcados, agora com essa causa.
+  - **✓ Corrigido — o `innerHTML` do fake DOM escondia atributos.** O serializer só emitia uma **whitelist** (`src`/`href`/`class`/`id`/…), então `data-row`, `data-cell`, `style`, `colspan` eram invisíveis. Não é cosmético: uma tabela construída **corretamente** parecia ter perdido os ids de linha, e foi isso que produziu a nota anterior deste item — que dizia que o `data-row` nunca era escrito. **Estava errado.** O serializer agora emite todos os atributos (whitelist primeiro, para manter a ordem das expectativas existentes; o resto em ordem alfabética). Um fake DOM pode ser pequeno, mas não pode esconder estado que lhe pediram para guardar.
+  - ⚠️ **Pendente, agora localizado de verdade — `Scroll.insertContents`.** Com o serializer honesto, o defeito real aparece:
+
+    ```
+    port:   <tr><td data-row="1">a</td></tr>
+            <tr><td><p class="ql-table-block" data-cell="1"><br></p></td></tr>
+            <tr><td data-row="1">b</td></tr>…
+    plugin: <tr><td data-row="1"><p class="ql-table-block" data-cell="1">a</p></td>
+                <td data-row="1"><p class="ql-table-block" data-cell="2">b</p></td></tr>
+    ```
+
+    O `data-row` **é** escrito. O que erra: o `table-cell-block` cai numa linha vazia nova em vez de embrulhar o texto da célula, e as células nunca se fundem numa linha só. **Prova de localização:** o *mesmo delta* aplicado por `setContents` produz exatamente a estrutura do upstream (`<td data-row="7"><p class="ql-table-block" data-cell="1">a</p></td>`). Ou seja, o `applyDelta` está certo e o defeito está no caminho que só o `dangerouslyPasteHTML` percorre — `Scroll.insertContents`/`deltaToRenderBlocks`. Os 10 casos seguem marcados com essa causa.
 
 ### G7 — Assets e API pública (2-3 dias)
 - [ ] G7.1 `.styl` do Quill → CSS definitivo em **`lib/assets/quill.core.css`, `quill.snow.css` e `quill.bubble.css`** (arquivos, não `const String` — ver §6); `QuillAssets` emite `<link rel="stylesheet">` para `packages/dart_quill/assets/…`.

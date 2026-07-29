@@ -802,6 +802,15 @@ void _serializeHtmlNode(FakeDomNode node, StringBuffer buffer) {
   if (node is FakeDomElement) {
     final tag = node.tagName.toLowerCase();
     buffer.write('<$tag');
+    // Well-known attributes first, so existing expectations keep their order;
+    // then everything else, alphabetically.
+    //
+    // This list used to be the *only* thing serialized, which meant
+    // `data-row`, `data-cell`, `style`, `colspan` and friends were invisible in
+    // `innerHTML`. That is not a cosmetic gap: it made a correctly built table
+    // look like one that had lost its row ids, and sent a debugging session
+    // after a bug that was not there. A fake DOM may be small, but it must not
+    // hide state it was asked to store.
     const attributeOrder = [
       'src',
       'href',
@@ -813,25 +822,36 @@ void _serializeHtmlNode(FakeDomNode node, StringBuffer buffer) {
       'height',
       'alt',
     ];
-    for (final name in attributeOrder) {
+    void writeAttribute(String name) {
       if (name == 'class') {
         final className = node.className;
         if (className != null && className.isNotEmpty) {
           buffer.write(' class="$className"');
         }
-        continue;
+        return;
       }
       if (name == 'id') {
         final id = node.id;
         if (id != null && id.isNotEmpty) {
           buffer.write(' id="$id"');
         }
-        continue;
+        return;
       }
       final value = node.getAttribute(name);
       if (value != null) {
         buffer.write(' $name="$value"');
       }
+    }
+
+    for (final name in attributeOrder) {
+      writeAttribute(name);
+    }
+    final rest = node.attributeNames
+        .where((name) => !attributeOrder.contains(name))
+        .toList()
+      ..sort();
+    for (final name in rest) {
+      writeAttribute(name);
     }
     buffer.write('>');
     if (_voidHtmlElements.contains(tag)) {
