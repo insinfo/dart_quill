@@ -1021,24 +1021,43 @@ int _quillNodeLength(web.Node node) {
 }
 
 class HtmlDomDocument implements DomDocument {
-  final Map<DomEventListener, JSFunction> _documentListeners = {};
+  /// Registrations keyed by `(type, listener)` and **shared across wrapper
+  /// instances**.
+  ///
+  /// `element.ownerDocument` mints a NEW wrapper on every call, so an
+  /// instance-level map made `removeEventListener` a silent no-op: the
+  /// caller that added the listener and the caller that removed it held
+  /// different wrappers. Document-level listeners therefore accumulated
+  /// forever — the table resize armed a fresh `mousemove`/`mouseup` pair on
+  /// every drag and never released them, so any later click replayed every
+  /// past drag (the "table resizes forever" bug).
+  static final Map<(String, DomEventListener), JSFunction> _documentListeners =
+      {};
+
+  /// The native document these listeners attach to.
+  web.Document get nativeDocument => web.document;
 
   @override
   void addEventListener(String type, DomEventListener listener) {
+    final key = (type, listener);
+    // DOM semantics: re-adding the same listener for the same type is a
+    // no-op. Without this guard a second add would orphan the first native
+    // registration (it could no longer be removed).
+    if (_documentListeners.containsKey(key)) return;
     final wrapped = (web.Event event) {
       listener(event.isA<web.MouseEvent>()
           ? HtmlDomMouseEvent(event)
           : HtmlDomEvent(event));
     }.toJS;
-    _documentListeners[listener] = wrapped;
-    web.document.addEventListener(type, wrapped);
+    _documentListeners[key] = wrapped;
+    nativeDocument.addEventListener(type, wrapped);
   }
 
   @override
   void removeEventListener(String type, DomEventListener listener) {
-    final wrapped = _documentListeners.remove(listener);
+    final wrapped = _documentListeners.remove((type, listener));
     if (wrapped != null) {
-      web.document.removeEventListener(type, wrapped);
+      nativeDocument.removeEventListener(type, wrapped);
     }
   }
 
@@ -1094,6 +1113,21 @@ class _HtmlDomDocumentWrapper extends HtmlDomDocument {
   final web.Document _doc;
 
   _HtmlDomDocumentWrapper(this._doc);
+
+  /// Listeners belong to THIS document, not the global one (a parsed
+  /// clipboard document must not receive the editor's handlers).
+  @override
+  web.Document get nativeDocument => _doc;
+
+  /// Wrappers are minted per `ownerDocument` call; equality by native
+  /// document keeps `==` meaningful for callers that compare documents.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is _HtmlDomDocumentWrapper && other._doc == _doc);
+
+  @override
+  int get hashCode => _doc.hashCode;
 
   @override
   DomElement createElement(String tag) {

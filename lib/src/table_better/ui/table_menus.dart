@@ -627,7 +627,7 @@ class TableMenus {
     updateMenus();
   }
 
-  /// TS `deleteTable()`.
+  /// TS `deleteTable()` (table-menus.ts:485-492).
   void deleteTable() {
     final blot = tableBlot;
     if (blot == null) return;
@@ -635,7 +635,11 @@ class TableMenus {
     blot.remove();
     hideTools();
     hideMenus();
-    quill.scroll.optimize([], {});
+    // The blot was removed outside the delta pipeline, so the cached
+    // document delta must be reconciled — `scroll.optimize` alone left
+    // `getContents()` still reporting the deleted table (the module's own
+    // `deleteTable` twin already did this; this one did not).
+    quill.update(EmitterSource.USER);
     final length = quill.scroll.length();
     quill.setSelection(
       Range((offset - 1).clamp(0, length).toInt(), 0),

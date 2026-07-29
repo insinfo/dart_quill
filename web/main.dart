@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:web/web.dart' as web;
 import 'package:dart_quill/dart_quill_docx.dart' as docx;
 import 'package:dart_quill/src/core/initialization.dart';
+import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
 import 'package:dart_quill/src/core/quill.dart';
 import 'package:dart_quill/src/core/theme.dart';
 import 'package:dart_quill/src/platform/html_dom.dart';
@@ -54,6 +55,9 @@ void main() {
     },
     'table': false,
     'table-better': <String, dynamic>{
+      // Upstream defaults to en_US; the plugin's `language` option is what
+      // selects a locale (all 16 are bundled).
+      'language': 'pt_BR',
       'menus': <String>[
         'column',
         'row',
@@ -91,8 +95,17 @@ void _exposeE2eHooks(Quill quill) {
     return range == null ? 'null' : '${range.index}:${range.length}';
   }
 
+  // Test SETUP only (the behaviour under test is always driven by real
+  // input): a blank document, since deleting the text with Ctrl+A+Delete
+  // leaves the last line's block format behind, as Quill intends.
+  void reset() {
+    quill.setContents(Delta()..insert('\n'));
+    quill.history.clear();
+  }
+
   web.window.setProperty('e2eGetContents'.toJS, contents.toJS);
   web.window.setProperty('e2eGetSelection'.toJS, selectionOf.toJS);
+  web.window.setProperty('e2eReset'.toJS, reset.toJS);
 
   // Temporary diagnostics for the E2E stabilization; harmless to keep.
   String diag() {

@@ -88,9 +88,12 @@ class OperateLine {
   /// TS `this.direction` — `'level'` (column) or `'vertical'` (row).
   String? direction;
 
-  DomDocument get _document => quill.root.ownerDocument;
+  /// Cached: `ownerDocument` mints a new wrapper per call, and the drag
+  /// listeners must be added to and removed from the same one.
+  late final DomDocument _document = quill.root.ownerDocument;
 
   void destroy() {
+    _detachDragListeners();
     quill.root.removeEventListener('mousemove', _mousemoveListener);
     line?.remove();
     dragBlock?.remove();
@@ -130,6 +133,61 @@ class OperateLine {
     updateCell(block);
   }
 
+  /// Whether the drag in flight started on the line (column/row resize) or
+  /// on the corner block (whole-table resize). Set on mousedown, because a
+  /// single pair of document listeners now serves both overlays.
+  bool _dragFromLine = false;
+
+  /// The drag listeners are INSTANCE FIELDS, not closures created per
+  /// mousedown: `addEventListener`/`removeEventListener` must be handed the
+  /// very same object, otherwise the removal silently misses and every drag
+  /// leaves a live pair behind (each later click then replayed every past
+  /// drag — the table resized forever).
+  late final DomEventListener _dragListener = _handleDrag;
+  late final DomEventListener _dragEndListener = _handleDragEnd;
+
+  void _handleDrag(DomEvent e) {
+    e.preventDefault();
+    if (!drag) return;
+    final clientX = e is DomMouseEvent ? e.clientX : 0;
+    final clientY = e is DomMouseEvent ? e.clientY : 0;
+    if (_dragFromLine) {
+      updateDragLine(clientX, clientY);
+      hideDragBlock();
+    } else {
+      updateDragBlock(clientX, clientY);
+      hideLine();
+    }
+  }
+
+  void _handleDragEnd(DomEvent e) {
+    e.preventDefault();
+    // Release the listeners FIRST: a failure below must never leave the
+    // document armed.
+    _detachDragListeners();
+    drag = false;
+    final current = options;
+    if (current == null) return;
+    final clientX = e is DomMouseEvent ? e.clientX : 0;
+    final clientY = e is DomMouseEvent ? e.clientY : 0;
+    if (_dragFromLine) {
+      setCellRect(current.cellNode, clientX, clientY);
+      toggleLineChildClass(false);
+    } else {
+      final tableBounds = utils.elementRectResolver(current.tableNode);
+      setCellsRect(current.cellNode, clientX - tableBounds.right,
+          clientY - tableBounds.bottom);
+      dragBlock?.classes.remove('ql-operate-block-move');
+      hideDragBlock();
+      hideDragTable();
+    }
+  }
+
+  void _detachDragListeners() {
+    _document.removeEventListener('mousemove', _dragListener);
+    _document.removeEventListener('mouseup', _dragEndListener);
+  }
+
   /// TS `updateCell(node)` (operate-line.ts:361-422) — the drag wiring: a
   /// mousedown on the overlay arms document-level drag/mouseup listeners, and
   /// the mouseup persists the resize through [setCellRect] / [setCellsRect].
@@ -137,46 +195,14 @@ class OperateLine {
     if (node == null) return;
     final nodeIsLine = isLine(node);
 
-    void handleDrag(DomEvent e) {
-      e.preventDefault();
-      if (!drag) return;
-      final clientX = e is DomMouseEvent ? e.clientX : 0;
-      final clientY = e is DomMouseEvent ? e.clientY : 0;
-      if (nodeIsLine) {
-        updateDragLine(clientX, clientY);
-        hideDragBlock();
-      } else {
-        updateDragBlock(clientX, clientY);
-        hideLine();
-      }
-    }
-
-    void handleMouseup(DomEvent e) {
-      e.preventDefault();
-      final current = options;
-      if (current == null) return;
-      final clientX = e is DomMouseEvent ? e.clientX : 0;
-      final clientY = e is DomMouseEvent ? e.clientY : 0;
-      if (nodeIsLine) {
-        setCellRect(current.cellNode, clientX, clientY);
-        toggleLineChildClass(false);
-      } else {
-        final tableBounds = utils.elementRectResolver(current.tableNode);
-        setCellsRect(current.cellNode, clientX - tableBounds.right,
-            clientY - tableBounds.bottom);
-        dragBlock?.classes.remove('ql-operate-block-move');
-        hideDragBlock();
-        hideDragTable();
-      }
-      drag = false;
-      _document.removeEventListener('mousemove', handleDrag);
-      _document.removeEventListener('mouseup', handleMouseup);
-    }
-
     void handleMousedown(DomEvent e) {
       e.preventDefault();
       final current = options;
       if (current == null) return;
+      // A previous drag that never saw its mouseup (pointer released
+      // outside the window) must not stack a second pair.
+      _detachDragListeners();
+      _dragFromLine = nodeIsLine;
       if (nodeIsLine) {
         toggleLineChildClass(true);
       } else {
@@ -188,8 +214,8 @@ class OperateLine {
         }
       }
       drag = true;
-      _document.addEventListener('mousemove', handleDrag);
-      _document.addEventListener('mouseup', handleMouseup);
+      _document.addEventListener('mousemove', _dragListener);
+      _document.addEventListener('mouseup', _dragEndListener);
     }
 
     node.addEventListener('mousedown', handleMousedown);
@@ -219,18 +245,24 @@ class OperateLine {
   /// TS `getProperty(options)` — decides the direction from the pointer's
   /// distance to the cell's right/bottom edge.
   _OperateLineProperties getProperty(OperateLineOptions options) {
-    final containerBounds = utils.getCorrectBounds(quill.container);
-    final tableBounds =
-        utils.getCorrectBounds(options.tableNode, quill.container);
-    final cellBounds =
-        utils.getCorrectBounds(options.cellNode, quill.container);
+    // VIEWPORT rects, as upstream (operate-line.ts:123-176): the hit test
+    // compares the cell's right/bottom edge against the pointer's
+    // clientX/clientY, which are viewport coordinates. Using
+    // container-relative bounds here (as this port did) only worked while
+    // the container sat at the viewport origin — the row hit test was off
+    // by the container's top offset, so hovering a row border armed
+    // nothing. Positions are converted back to container space explicitly,
+    // exactly like the `- containerRect.left/top` upstream does.
+    final containerBounds = utils.elementRectResolver(quill.container);
+    final tableBounds = utils.elementRectResolver(options.tableNode);
+    final cellBounds = utils.elementRectResolver(options.cellNode);
     final x = cellBounds.left + cellBounds.width;
     final y = cellBounds.top + cellBounds.height;
     final dragBlockProps = {
       'width': '${utils.formatNum(kDragBlockWidth)}px',
       'height': '${utils.formatNum(kDragBlockHeight)}px',
-      'top': '${utils.formatNum(tableBounds.bottom)}px',
-      'left': '${utils.formatNum(tableBounds.right)}px',
+      'top': '${utils.formatNum(tableBounds.bottom - containerBounds.top)}px',
+      'left': '${utils.formatNum(tableBounds.right - containerBounds.left)}px',
       'display': tableBounds.bottom > containerBounds.bottom ? 'none' : 'block',
     };
 
@@ -242,7 +274,7 @@ class OperateLine {
           'width': '${utils.formatNum(kLineContainerWidth)}px',
           'height': '${utils.formatNum(containerBounds.height)}px',
           'top': '0',
-          'left': '${utils.formatNum(x - kLineContainerWidth / 2)}px',
+          'left': '${utils.formatNum(x - containerBounds.left - kLineContainerWidth / 2)}px',
           'display': 'flex',
           'cursor': 'col-resize',
         },
@@ -256,7 +288,7 @@ class OperateLine {
         containerProps: {
           'width': '${utils.formatNum(containerBounds.width)}px',
           'height': '${utils.formatNum(kLineContainerHeight)}px',
-          'top': '${utils.formatNum(y - kLineContainerHeight / 2)}px',
+          'top': '${utils.formatNum(y - containerBounds.top - kLineContainerHeight / 2)}px',
           'left': '0',
           'display': 'flex',
           'cursor': 'row-resize',
@@ -362,7 +394,9 @@ class OperateLine {
   void updateDragLine(num clientX, num clientY) {
     final element = line;
     if (element == null) return;
-    final bounds = utils.getCorrectBounds(quill.container);
+    // Viewport rect: the pointer coordinates are viewport-based, and
+    // upstream subtracts `containerRect.left/top` from them.
+    final bounds = utils.elementRectResolver(quill.container);
     if (direction == 'level') {
       utils.setElementProperty(element, {
         'left':
@@ -380,7 +414,7 @@ class OperateLine {
   void updateDragBlock(num clientX, num clientY) {
     final block = dragBlock;
     if (block == null) return;
-    final bounds = utils.getCorrectBounds(quill.container);
+    final bounds = utils.elementRectResolver(quill.container);
     block.classes.add('ql-operate-block-move');
     utils.setElementProperty(block, {
       'top':
@@ -395,7 +429,9 @@ class OperateLine {
   void updateDragTable(num clientX, num clientY) {
     final element = dragTable;
     if (element == null) return;
-    final bounds = utils.getCorrectBounds(element, quill.container);
+    // Upstream reads the ghost's own viewport rect and sizes it to the
+    // pointer (`clientX - left`).
+    final bounds = utils.elementRectResolver(element);
     utils.setElementProperty(element, {
       'width': '${utils.formatNum(clientX - bounds.left)}px',
       'height': '${utils.formatNum(clientY - bounds.top)}px',
@@ -459,7 +495,8 @@ class OperateLine {
     final blot = _cellBlot(cell);
     final tableBlot = blot?.table();
     if (tableBlot == null) return;
-    final bounds = utils.getCorrectBounds(cell, quill.container);
+    // Viewport right edge vs the pointer's clientX (operate-line.ts:300).
+    final bounds = utils.elementRectResolver(cell);
     final change = (clientX - bounds.right).truncateToDouble();
     final colSum = getLevelColSum(cell);
     final isPercent = tableBlot.isPercent();
@@ -534,7 +571,8 @@ class OperateLine {
         ? getVerticalCells(cell, rowspan)
         : _childElements(_parentElement(cell));
     for (final current in cells) {
-      final top = utils.getCorrectBounds(current, quill.container).top;
+      // Viewport top edge vs the pointer's clientY (operate-line.ts:345).
+      final top = utils.elementRectResolver(current).top;
       final height = (clientY - top).truncate();
       utils.setElementAttribute(current, {'height': '$height'});
       utils.setElementProperty(current, {'height': '${height}px'});

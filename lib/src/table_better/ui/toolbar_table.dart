@@ -122,10 +122,16 @@ class TableSelect {
 
   /// TS `getComputeChildren(children, e)` — every cell whose top-left corner is
   /// above and left of the pointer.
+  ///
+  /// The rects are VIEWPORT rects (`getBoundingClientRect`), matching the
+  /// `clientX`/`clientY` they are compared against. Using
+  /// `utils.getCorrectBounds(child)` here was wrong: with a single argument
+  /// it resolves the element relative to ITSELF, so every cell reported
+  /// left/top 0 and the whole 10x10 grid highlighted at once ("10 x 10").
   List<DomElement> getComputeChildren(num clientX, num clientY) {
     final result = <DomElement>[];
     for (final child in _cells) {
-      final bounds = utils.getCorrectBounds(child);
+      final bounds = utils.elementRectResolver(child);
       if (clientX >= bounds.left && clientY >= bounds.top) {
         result.add(child);
       }
@@ -135,17 +141,8 @@ class TableSelect {
 
   /// TS `handleMouseMove(e, container)`.
   void handleMouseMove(DomEvent event) {
-    final raw = event.rawEvent as dynamic;
-    num? clientX;
-    num? clientY;
-    try {
-      clientX = raw?.clientX as num?;
-      clientY = raw?.clientY as num?;
-    } catch (_) {
-      // Pointer coordinates are unavailable off-browser.
-    }
-    if (clientX == null || clientY == null) return;
-    highlightAll(getComputeChildren(clientX, clientY));
+    if (event is! DomMouseEvent) return;
+    highlightAll(getComputeChildren(event.clientX, event.clientY));
   }
 
   /// Highlights the rectangle ending at (row, column).

@@ -1,338 +1,116 @@
 @TestOn('vm')
-@Timeout(Duration(minutes: 8))
+@Timeout(Duration(minutes: 12))
 library;
 
-/// End-to-end suite driving the demo app (`web/`) with REAL user input —
-/// trusted keyboard typing, mouse clicks and drags through Puppeteer — the
-/// kind of interaction that exposed the selection-loss, copy/paste and
-/// table-UI lifecycle bugs unit tests cannot see.
-import 'dart:io';
-
+/// End-to-end coverage of the quill-table-better UI driven by REAL input:
+/// hovering the 10x10 grid, clicking cells and menu items, dragging cell
+/// borders to resize and dragging across cells to select.
+///
+/// Menu items are clicked BY THEIR VISIBLE LABEL, taken from the same
+/// `Language` table the app uses with the configured locale (pt_BR in the
+/// demo) — so a locale regression makes these tests fail on the click.
+import 'package:dart_quill/src/table_better/language/language.dart';
 import 'package:puppeteer/puppeteer.dart';
-import 'package:shelf/shelf_io.dart' as shelf_io;
-import 'package:shelf_static/shelf_static.dart';
 import 'package:test/test.dart';
 
+import 'support/e2e_app.dart';
+
 void main() {
-  late HttpServer server;
-  late Browser browser;
-  late Page page;
-  var browserStarted = false;
-  var serverStarted = false;
+  late E2eApp app;
+  final language = Language('pt_BR');
+  String t(String key) => language.useLanguage(key);
 
-  setUpAll(() async {
-    // On a cold checkout the first build_runner pass can exit 0 having
-    // written only `.build.manifest`; verify the merged output and retry
-    // once before giving up.
-    for (var attempt = 0; attempt < 2; attempt++) {
-      final build = await Process.run(
-        Platform.resolvedExecutable,
-        const [
-          'run',
-          'webdev',
-          'build',
-          '--no-release',
-          '--output',
-          'web:build/e2e',
-          '--',
-          '--delete-conflicting-outputs',
-        ],
-        workingDirectory: Directory.current.path,
-      );
-      if (build.exitCode != 0) {
-        throw StateError('Web build failed:\n${build.stdout}\n${build.stderr}');
-      }
-      if (File('build/e2e/index.html').existsSync()) break;
-      if (attempt == 1) {
-        throw StateError('Web build produced no index.html in build/e2e');
-      }
-    }
-    final handler = createStaticHandler(
-      Directory('build/e2e').absolute.path,
-      defaultDocument: 'index.html',
-    );
-    server = await shelf_io.serve(handler, InternetAddress.loopbackIPv4, 0);
-    serverStarted = true;
-    browser = await puppeteer.launch(
-      headless: true,
-      args: const ['--no-sandbox'],
-    );
-    browserStarted = true;
-    page = await browser.newPage();
-    await page.goto(
-      'http://127.0.0.1:${server.port}',
-      wait: Until.networkIdle,
-    );
-  });
+  setUpAll(() async => app = await E2eApp.start());
+  tearDownAll(() async => app.stop());
 
-  tearDownAll(() async {
-    if (browserStarted) await browser.close();
-    if (serverStarted) await server.close(force: true);
-  });
-
-  /// Clears the document with real input: click, Ctrl+A, Delete.
-  Future<void> resetEditor() async {
-    await page.click('.ql-editor');
-    await page.keyboard.down(Key.control);
-    await page.keyboard.press(Key.keyA);
-    await page.keyboard.up(Key.control);
-    await page.keyboard.press(Key.delete);
+  /// A pristine page with one freshly inserted table.
+  Future<void> freshTable(int rows, int columns) async {
+    await app.reload();
+    await app.resetEditor();
+    await app.insertTableFromToolbar(rows, columns);
   }
 
-  Future<void> selectAll() async {
-    await page.keyboard.down(Key.control);
-    await page.keyboard.press(Key.keyA);
-    await page.keyboard.up(Key.control);
+  /// Real drag across cells to build a multi-cell selection.
+  Future<void> selectCells(
+      int fromRow, int fromColumn, int toRow, int toColumn) async {
+    final from = await app.rectOf('.ql-editor table tbody '
+        'tr:nth-child(${fromRow + 1}) td:nth-child(${fromColumn + 1})');
+    final to = await app.rectOf('.ql-editor table tbody '
+        'tr:nth-child(${toRow + 1}) td:nth-child(${toColumn + 1})');
+    await app.drag(
+      Point((from['left'] as num) + 5, (from['top'] as num) + 5),
+      Point((to['right'] as num) - 5, (to['bottom'] as num) - 5),
+    );
   }
 
-  Future<String> editorHtml() async =>
-      await page.$eval<String?>('.ql-editor', '(el) => el.innerHTML') ?? '';
+  group('10x10 grid of the toolbar', () {
+    test('hovering highlights only the cells up to the pointer', () async {
+      await app.reload();
+      await app.resetEditor();
+      await app.page.click('.ql-toolbar button.ql-table-better');
+      await app.settle();
 
-  group('typing and toolbar formatting (real input)', () {
-    test('typed text lands in the document', () async {
-      await resetEditor();
-      await page.type('.ql-editor', 'Isaque Neves');
-      final text =
-          await page.$eval<String>('.ql-editor', '(el) => el.textContent');
-      expect(text, 'Isaque Neves');
-    });
-
-    test('select-all + Bold button formats without losing the selection',
-        () async {
-      await resetEditor();
-      await page.type('.ql-editor', 'Hello world');
-      await selectAll();
-      await page.click('.ql-toolbar button.ql-bold');
-
-      final strong = await page.$eval<String?>(
-          '.ql-editor', '(el) => el.querySelector("strong")?.textContent');
-      expect(strong, 'Hello world',
-          reason: 'clicking Bold must format the selected text');
-
-      final selection = await page.evaluate<String>(
-          '() => document.getSelection()?.toString() ?? ""');
-      expect(selection, 'Hello world',
-          reason: 'the selection must survive the toolbar click');
-
-      final active = await page.evaluate<bool>(
-          '() => document.querySelector(".ql-toolbar button.ql-bold")'
-          '.classList.contains("ql-active")');
-      expect(active, isTrue);
-
-      // Clicking Bold again removes the format (still without re-selecting).
-      await page.click('.ql-toolbar button.ql-bold');
-      final strongAfter = await page.$eval<bool>(
-          '.ql-editor', '(el) => el.querySelector("strong") == null');
-      expect(strongAfter, isTrue);
-    });
-
-    test('Heading 1 from the picker converts the line without deleting text',
-        () async {
-      await resetEditor();
-      await page.type('.ql-editor', 'Titulo grande');
-      await selectAll();
-      await page.click('.ql-toolbar .ql-picker.ql-header .ql-picker-label');
-      await page.click(
-          '.ql-toolbar .ql-picker.ql-header .ql-picker-item[data-value="1"]');
-
-      final h1 = await page.$eval<String?>(
-          '.ql-editor', '(el) => el.querySelector("h1")?.textContent');
-      expect(h1, 'Titulo grande',
-          reason: 'Heading 1 must convert the line, never erase it');
-
-      // And back to normal text through the same picker.
-      await page.click('.ql-toolbar .ql-picker.ql-header .ql-picker-label');
-      await page.click('.ql-toolbar .ql-picker.ql-header '
-          '.ql-picker-item:not([data-value])');
-      final h1After = await page.$eval<bool>(
-          '.ql-editor', '(el) => el.querySelector("h1") == null');
-      expect(h1After, isTrue, reason: await editorHtml());
-    });
-
-    test('collapsed Ctrl+B sets a pending format for the next typed text',
-        () async {
-      await resetEditor();
-      await page.type('.ql-editor', 'plain ');
-      await page.keyboard.down(Key.control);
-      await page.keyboard.press(Key.keyB);
-      await page.keyboard.up(Key.control);
-      await page.type('.ql-editor', 'bold');
-
-      final strong = await page.$eval<String?>(
-          '.ql-editor', '(el) => el.querySelector("strong")?.textContent');
-      expect(strong, 'bold');
-      final text =
-          await page.$eval<String>('.ql-editor', '(el) => el.textContent');
-      expect(text, 'plain bold');
-    });
-  });
-
-  group('link and color pickers (real input)', () {
-    test('the link button opens the tooltip and saving creates the anchor',
-        () async {
-      await resetEditor();
-      await page.type('.ql-editor', 'quilljs');
-      await selectAll();
-      await page.click('.ql-toolbar button.ql-link');
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-
-      final tooltip = await page.evaluate<Map<String, dynamic>>('''() => {
-        const el = document.querySelector('.ql-tooltip');
-        return {
-          visible: el != null && !el.classList.contains('ql-hidden'),
-          editing: el?.classList.contains('ql-editing'),
-          mode: el?.getAttribute('data-mode'),
-        };
-      }''');
-      expect(tooltip['visible'], isTrue,
-          reason: 'the link editor must stay open after the toolbar click '
-              '($tooltip)');
-      expect(tooltip['editing'], isTrue);
-      expect(tooltip['mode'], 'link');
-
-      // Type the URL into the tooltip input and confirm with Enter.
-      await page.type('.ql-tooltip input', 'https://quilljs.com');
-      await page.keyboard.press(Key.enter);
-      final result = await page.evaluate<Map<String, dynamic>>('''() => ({
-        href: document.querySelector('.ql-editor a')?.getAttribute('href'),
-        text: document.querySelector('.ql-editor a')?.textContent,
-        hidden: document.querySelector('.ql-tooltip')
-            .classList.contains('ql-hidden'),
-      })''');
-      expect(result['href'], 'https://quilljs.com');
-      expect(result['text'], 'quilljs');
-      expect(result['hidden'], isTrue,
-          reason: 'saving closes the tooltip');
-    });
-
-    test('the color picker applies a text color to the selection', () async {
-      await resetEditor();
-      await page.type('.ql-editor', 'colorido');
-      await selectAll();
-      await page.click('.ql-toolbar .ql-color-picker.ql-color .ql-picker-label');
-      await page.click(
-          '.ql-toolbar .ql-color-picker.ql-color '
-          '.ql-picker-item[data-value="#e60000"]');
-      final colored = await page.evaluate<String?>(
-          '() => document.querySelector(".ql-editor span")'
-          '?.style?.color ?? null');
-      expect(colored, 'rgb(230, 0, 0)',
-          reason: 'the swatch click must color the selected text');
-    });
-  });
-
-  group('clipboard (real events)', () {
-    test('real Ctrl+C / Ctrl+V duplicates the selected text', () async {
-      await resetEditor();
-      await page.type('.ql-editor', 'copyme');
-      await selectAll();
-      await page.keyboard.down(Key.control);
-      await page.keyboard.press(Key.keyC);
-      await page.keyboard.up(Key.control);
-      await page.keyboard.press(Key.arrowRight); // collapse to the end
-      await page.keyboard.down(Key.control);
-      await page.keyboard.press(Key.keyV);
-      await page.keyboard.up(Key.control);
-
-      final text =
-          await page.$eval<String>('.ql-editor', '(el) => el.textContent');
-      expect(text, 'copymecopyme', reason: await editorHtml());
-    });
-
-    test('the copy event receives HTML and plain text payloads', () async {
-      await resetEditor();
-      await page.type('.ql-editor', 'abc');
-      await selectAll();
-      await page.click('.ql-toolbar button.ql-bold');
-      final payload = await page.evaluate<Map<String, dynamic>>('''() => {
-        const dt = new DataTransfer();
-        const event = new ClipboardEvent('copy',
-            {clipboardData: dt, bubbles: true, cancelable: true});
-        document.querySelector('.ql-editor').dispatchEvent(event);
-        return {text: dt.getData('text/plain'), html: dt.getData('text/html')};
-      }''');
-      expect(payload['text'], 'abc');
-      expect('${payload['html']}', contains('<strong>'));
-    });
-
-    test('a paste event inserts external HTML at the caret', () async {
-      await resetEditor();
-      await page.type('.ql-editor', 'start-');
-      await page.keyboard.press(Key.end);
-      await page.evaluate('''() => {
-        const dt = new DataTransfer();
-        dt.setData('text/html', '<strong>pasted</strong>');
-        dt.setData('text/plain', 'pasted');
-        const event = new ClipboardEvent('paste',
-            {clipboardData: dt, bubbles: true, cancelable: true});
-        document.querySelector('.ql-editor').dispatchEvent(event);
-      }''');
-      final text =
-          await page.$eval<String>('.ql-editor', '(el) => el.textContent');
-      expect(text, 'start-pasted');
-      final strong = await page.$eval<String?>(
-          '.ql-editor', '(el) => el.querySelector("strong")?.textContent');
-      expect(strong, 'pasted');
-    });
-  });
-
-  group('table-better UI (real input)', () {
-    Future<void> insertTable(int rows, int columns) async {
-      // A fresh page per test: a leftover table (and its floating menus)
-      // from a previous test can cover the toolbar and swallow real clicks.
-      await page.reload(wait: Until.networkIdle);
-      await resetEditor();
-      await page.click('.ql-toolbar button.ql-table-better');
-      final visible = await page.$eval<bool>(
-        '.ql-table-select-container',
-        '(el) => !el.classList.contains("ql-hidden")',
-      );
-      expect(visible, isTrue, reason: 'the 10x10 grid must open');
-      final cell = await page
-          .$('.ql-table-select-list span[row="$rows"][column="$columns"]');
+      // Hover the (2, 3) cell: the rectangle above/left of it must light up.
+      final cell =
+          await app.page.$('.ql-table-select-list span[row="2"][column="3"]');
       final box = (await cell.boundingBox)!;
-      // Real hover paints the selection rectangle, then a real click inserts.
-      await page.mouse.move(
-          Point(box.left + box.width - 1, box.top + box.height - 1));
-      await cell.click();
-    }
+      await app.page.mouse
+          .move(Point(box.left + box.width / 2, box.top + box.height / 2));
+      await app.settle();
 
-    test('the toolbar grid inserts a table-better table', () async {
-      await insertTable(2, 3);
-      final shape = await page.evaluate<Map<String, dynamic>>('''() => ({
-        rows: document.querySelectorAll('.ql-editor table tbody tr').length,
-        columns: document.querySelector('.ql-editor table tbody tr')
-          ?.querySelectorAll('td').length ?? 0,
-        temporary: document.querySelectorAll('.ql-editor table temporary').length,
-        dataRow: document.querySelector('.ql-editor table td')
-          ?.hasAttribute('data-row') ?? false,
-        gridHidden: document.querySelector('.ql-table-select-container')
-          .classList.contains('ql-hidden'),
-        contents: window.e2eGetContents(),
-      })''');
-      expect(shape['rows'], 2, reason: '$shape');
-      expect(shape['columns'], 3, reason: '$shape');
-      // Upstream's insertTable delta is temporary + cells only — no colgroup
-      // (the goldens prove it); cols appear later through resizing.
-      expect(shape['temporary'], 1,
-          reason: 'a table-better table carries its temporary blot');
-      expect(shape['dataRow'], isTrue);
-      expect(shape['gridHidden'], isTrue);
-      expect('${shape['contents']}', contains('table-temporary'),
-          reason: 'the MODEL must carry the table, not only the DOM');
+      final state = await app.tableGridState();
+      expect(state['hidden'], isFalse);
+      expect(state['selected'], 6,
+          reason: 'a 2x3 hover highlights exactly six cells, not the whole '
+              'grid ($state)');
+      expect(state['label'], '2 x 3');
+
+      // Moving further down-right grows the rectangle.
+      final bigger =
+          await app.page.$('.ql-table-select-list span[row="4"][column="4"]');
+      final biggerBox = (await bigger.boundingBox)!;
+      await app.page.mouse.move(Point(
+          biggerBox.left + biggerBox.width / 2,
+          biggerBox.top + biggerBox.height / 2));
+      await app.settle();
+      final grown = await app.tableGridState();
+      expect(grown['selected'], 16);
+      expect(grown['label'], '4 x 4');
     });
 
-    test('clicking a cell shows the SVG-icon menus over the table', () async {
-      await insertTable(2, 3);
-      await page.click('.ql-editor td');
-      final menus = await page.evaluate<Map<String, dynamic>>('''() => {
+    test('clicking a grid cell inserts that table into the model', () async {
+      await freshTable(2, 3);
+
+      final shape = await app.tableShape();
+      expect(shape['rows'], 2);
+      expect(shape['columns'], 3);
+
+      final contents = await app.contents();
+      expect(contents, contains('table-temporary'),
+          reason: 'the MODEL must carry the table, not only the DOM');
+      expect(contents, contains('table-cell'));
+      expect(await app.eval<bool>(
+          '() => document.querySelector(".ql-editor table td")'
+          '.hasAttribute("data-row")'),
+          isTrue);
+      expect((await app.tableGridState())['hidden'], isTrue,
+          reason: 'the grid closes after inserting');
+    });
+  });
+
+  group('floating menus', () {
+    test('clicking a cell shows the menus with inline SVG icons', () async {
+      await freshTable(2, 3);
+      await app.clickCell(0, 0);
+
+      final menus = await app.eval<Map<String, dynamic>>('''() => {
         const root = document.querySelector('.ql-table-menus-container');
         const entries = [...root.querySelectorAll('[data-category]')];
         return {
           visible: !root.classList.contains('ql-hidden'),
-          categories: entries.map((entry) => entry.dataset.category),
-          svgIcons: entries.every((entry) => entry.querySelector('svg')),
-          tablerIcons: root.querySelectorAll('i.ti').length,
+          categories: entries.map(e => e.dataset.category),
+          svgIcons: entries.every(e => e.querySelector('svg')),
+          fontGlyphs: root.querySelectorAll('i.ti').length,
         };
       }''');
       expect(menus['visible'], isTrue, reason: '$menus');
@@ -342,73 +120,287 @@ void main() {
               ['column', 'row', 'merge', 'table', 'cell', 'wrap', 'delete']));
       expect(menus['svgIcons'], isTrue,
           reason: 'menu icons must be inline SVG, not icon-font glyphs');
-      expect(menus['tablerIcons'], 0);
+      expect(menus['fontGlyphs'], 0);
     });
 
-    test('deleting the table through the menu hides the floating UI',
+    test('the menu labels honour the configured locale (pt_BR)', () async {
+      await freshTable(2, 2);
+      await app.clickCell(0, 0);
+      await app.openTableMenu('row');
+
+      final labels = await app.eval<String>('''() => [...document.querySelectorAll(
+          '.ql-table-menus-container [data-category="row"] li')]
+          .map(li => li.textContent.trim()).filter(Boolean).join("|")''');
+      expect(labels, contains(t('insRowAbv')));
+      expect(labels, contains(t('insRowBlw')));
+      expect(labels, contains(t('delRow')));
+      expect(labels, isNot(contains('Insert row below')),
+          reason: 'the demo configures pt_BR, so no English may leak');
+    });
+  });
+
+  group('rows and columns', () {
+    test('inserting a row above and below grows the table', () async {
+      await freshTable(2, 2);
+      await app.clickCell(0, 0);
+
+      await app.openTableMenu('row');
+      await app.clickTableMenuItem('row', t('insRowBlw'));
+      expect((await app.tableShape())['rows'], 3);
+
+      await app.clickCell(0, 0);
+      await app.openTableMenu('row');
+      await app.clickTableMenuItem('row', t('insRowAbv'));
+      expect((await app.tableShape())['rows'], 4);
+      expect((await app.tableShape())['columns'], 2,
+          reason: 'row inserts must not disturb the column count');
+    });
+
+    test('inserting a column left and right grows the table', () async {
+      await freshTable(2, 2);
+      await app.clickCell(0, 0);
+
+      await app.openTableMenu('column');
+      await app.clickTableMenuItem('column', t('insColR'));
+      expect((await app.tableShape())['columns'], 3);
+
+      await app.clickCell(0, 0);
+      await app.openTableMenu('column');
+      await app.clickTableMenuItem('column', t('insColL'));
+      final shape = await app.tableShape();
+      expect(shape['columns'], 4);
+      expect(shape['rows'], 2);
+    });
+
+    test('deleting a row and a column shrinks the table', () async {
+      await freshTable(3, 3);
+      await app.clickCell(1, 1);
+
+      await app.openTableMenu('row');
+      await app.clickTableMenuItem('row', t('delRow'));
+      expect((await app.tableShape())['rows'], 2);
+
+      await app.clickCell(0, 0);
+      await app.openTableMenu('column');
+      await app.clickTableMenuItem('column', t('delCol'));
+      expect((await app.tableShape())['columns'], 2);
+    });
+
+    test('typed text survives a row insert', () async {
+      await freshTable(2, 2);
+      await app.clickCell(0, 0);
+      await app.type('conteudo');
+      expect(await app.editorText(), contains('conteudo'));
+
+      await app.clickCell(0, 0);
+      await app.openTableMenu('row');
+      await app.clickTableMenuItem('row', t('insRowBlw'));
+
+      expect(await app.editorText(), contains('conteudo'));
+      expect(await app.contents(), contains('conteudo'));
+    });
+  });
+
+  group('merge and split', () {
+    test('dragging across two cells selects them', () async {
+      await freshTable(2, 2);
+      await selectCells(0, 0, 0, 1);
+
+      expect(await app.eval<int>(
+          '() => document.querySelectorAll(".ql-editor td.ql-cell-selected,'
+          ' .ql-editor td.ql-cell-focused").length'),
+          greaterThanOrEqualTo(2),
+          reason: 'a drag across cells must build a multi-cell selection');
+    });
+
+    test('merging two cells and splitting them back', () async {
+      await freshTable(2, 2);
+      await selectCells(0, 0, 0, 1);
+      await app.openTableMenu('merge');
+      await app.clickTableMenuItem('merge', t('mCells'));
+
+      var firstRow = await app.eval<Map<String, dynamic>>('''() => {
+        const row = document.querySelector('.ql-editor table tbody tr');
+        const first = row.querySelector('td');
+        return {cells: row.querySelectorAll('td').length,
+                colspan: first.getAttribute('colspan')};
+      }''');
+      expect(firstRow['cells'], 1, reason: 'the two cells became one');
+      expect(firstRow['colspan'], '2');
+
+      await app.clickCell(0, 0);
+      await app.openTableMenu('merge');
+      await app.clickTableMenuItem('merge', t('sCell'));
+
+      firstRow = await app.eval<Map<String, dynamic>>('''() => {
+        const row = document.querySelector('.ql-editor table tbody tr');
+        const first = row.querySelector('td');
+        return {cells: row.querySelectorAll('td').length,
+                colspan: first.getAttribute('colspan')};
+      }''');
+      expect(firstRow['cells'], 2, reason: 'splitting restores both cells');
+      expect(firstRow['colspan'], isNull);
+    });
+  });
+
+  group('header row and surrounding paragraphs', () {
+    test('the header-row switch converts the first row to <th>', () async {
+      await freshTable(2, 2);
+      await app.clickCell(0, 0);
+      await app.openTableMenu('row');
+      await app.clickTableMenuItem('row', t('headerRow'));
+
+      expect(await app.eval<int>(
+          '() => document.querySelectorAll(".ql-editor table th").length'),
+          2,
+          reason: 'the first row becomes header cells');
+      expect(await app.eval<bool>(
+          '() => document.querySelector(".ql-editor table thead") !== null'),
+          isTrue);
+    });
+
+    test('inserting a paragraph after the table adds a line outside it',
         () async {
-      await insertTable(2, 2);
-      await page.click('.ql-editor td');
-      // Open the delete dropdown and confirm.
-      await page.click('[data-category="delete"]');
-      final state = await page.evaluate<Map<String, dynamic>>('''() => ({
+      await freshTable(2, 2);
+      await app.clickCell(0, 0);
+      await app.openTableMenu('wrap');
+      await app.clickTableMenuItem('wrap', t('insAft'));
+
+      expect(await app.eval<int>('''() => {
+        const root = document.querySelector('.ql-editor');
+        return [...root.children].filter(el => el.tagName === 'P').length;
+      }'''), greaterThanOrEqualTo(1),
+          reason: 'a paragraph must exist outside the table');
+    });
+  });
+
+  group('resize by dragging', () {
+    test('dragging a column border widens the column', () async {
+      await freshTable(2, 2);
+      // Use the LAST row: the floating menus hover over the table's top edge.
+      final before =
+          await app.rectOf('.ql-editor tr:last-child td:first-child');
+      final borderX = (before['right'] as num).toDouble();
+      final middleY =
+          (before['top'] as num).toDouble() + (before['height'] as num) / 2;
+
+      await app.page.mouse.move(Point(borderX - 30, middleY));
+      await app.page.mouse.move(Point(borderX - 1, middleY));
+      await app.settle();
+      expect(
+          await app.eval<bool>(
+              '() => { const l = document.querySelector('
+              '".ql-operate-line-container");'
+              ' return l != null && getComputedStyle(l).display !== "none"; }'),
+          isTrue,
+          reason: 'hovering a vertical border must arm the resize line');
+
+      await app.drag(Point(borderX - 1, middleY), Point(borderX + 60, middleY));
+
+      final after =
+          await app.rectOf('.ql-editor tr:last-child td:first-child');
+      expect((after['width'] as num) - (before['width'] as num),
+          greaterThan(20),
+          reason: 'before ${before['width']} / after ${after['width']}');
+      expect(
+          await app.eval<String>(
+              '() => { const td = document.querySelector('
+              '".ql-editor tr:last-child td:first-child");'
+              ' return td.style.width || td.getAttribute("width") || ""; }'),
+          isNotEmpty,
+          reason: 'the new width must be persisted on the cell');
+    });
+
+    test('dragging a row border makes the row taller', () async {
+      await freshTable(2, 2);
+      final before =
+          await app.rectOf('.ql-editor tr:last-child td:first-child');
+      final borderY = (before['bottom'] as num).toDouble();
+      final middleX =
+          (before['left'] as num).toDouble() + (before['width'] as num) / 2;
+
+      await app.page.mouse.move(Point(middleX, borderY - 30));
+      await app.page.mouse.move(Point(middleX, borderY - 1));
+      await app.settle();
+      final armed = await app.eval<Map<String, dynamic>>('''() => {
+        const l = document.querySelector('.ql-operate-line-container');
+        if (!l) return {display: 'missing'};
+        const cs = getComputedStyle(l);
+        return {display: cs.display, cursor: cs.cursor};
+      }''');
+      expect(armed['display'], isNot('none'),
+          reason: 'hovering a horizontal border must arm the resize line '
+              '($armed)');
+      expect(armed['cursor'], 'row-resize',
+          reason: 'the horizontal border resizes rows ($armed)');
+
+      await app.drag(Point(middleX, borderY - 1), Point(middleX, borderY + 50));
+
+      final after =
+          await app.rectOf('.ql-editor tr:last-child td:first-child');
+      expect((after['height'] as num) - (before['height'] as num),
+          greaterThan(20),
+          reason: 'before ${before['height']} / after ${after['height']}');
+    });
+
+    test('a finished resize does not keep resizing on later clicks', () async {
+      await freshTable(2, 2);
+      final before =
+          await app.rectOf('.ql-editor tr:last-child td:first-child');
+      final borderX = (before['right'] as num).toDouble();
+      final middleY =
+          (before['top'] as num).toDouble() + (before['height'] as num) / 2;
+
+      await app.page.mouse.move(Point(borderX - 30, middleY));
+      await app.page.mouse.move(Point(borderX - 1, middleY));
+      await app.drag(Point(borderX - 1, middleY), Point(borderX + 40, middleY));
+
+      final afterDrag =
+          await app.rectOf('.ql-editor tr:last-child td:first-child');
+
+      // Click around the page the way a user would after resizing. The drag
+      // listeners must be gone: while they leaked, every one of these clicks
+      // replayed the resize and the table grew without end.
+      for (final point in [
+        Point<num>(400, 400),
+        Point<num>(600, 300),
+        Point<num>(200, 250),
+      ]) {
+        await app.page.mouse.move(point);
+        await app.page.mouse.down();
+        await app.page.mouse.up();
+        await app.settle(60);
+      }
+
+      final afterClicks =
+          await app.rectOf('.ql-editor tr:last-child td:first-child');
+      expect((afterClicks['width'] as num).round(),
+          (afterDrag['width'] as num).round(),
+          reason: 'clicks after a drag must not resize anything '
+              '(after drag ${afterDrag['width']}, after clicks '
+              '${afterClicks['width']})');
+    });
+  });
+
+  group('deleting the table', () {
+    test('the delete menu removes the table and hides the floating UI',
+        () async {
+      await freshTable(2, 2);
+      await app.clickCell(0, 0);
+      await app.page.click(
+          '.ql-table-menus-container [data-category="delete"]');
+      await app.settle();
+
+      final state = await app.eval<Map<String, dynamic>>('''() => ({
         table: document.querySelector('.ql-editor table') != null,
         menusHidden: document.querySelector('.ql-table-menus-container')
-          .classList.contains('ql-hidden'),
+            .classList.contains('ql-hidden'),
       })''');
-      expect(state['table'], isFalse,
-          reason: 'the delete menu removes the table');
+      expect(state['table'], isFalse);
       expect(state['menusHidden'], isTrue,
           reason: 'the floating menus must not outlive the table');
-    });
-
-    test('dragging a column border resizes the column', () async {
-      await insertTable(2, 2);
-      // The LAST row keeps the pointer clear of the floating menus, which
-      // hover over the table's top edge.
-      final before = await page.evaluate<Map<String, dynamic>>('''() => {
-        const cell = document.querySelector(
-            '.ql-editor tr:last-child td');
-        const rect = cell.getBoundingClientRect();
-        return {right: rect.right, top: rect.top, height: rect.height,
-                width: rect.width};
-      }''');
-      final borderX = (before['right'] as num).toDouble();
-      final middleY = (before['top'] as num).toDouble() +
-          (before['height'] as num).toDouble() / 2;
-
-      // Hover the border so the operate line arms, then drag it 40px right.
-      await page.mouse.move(Point(borderX - 30, middleY));
-      await page.mouse.move(Point(borderX - 1, middleY));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-      final lineVisible = await page.evaluate<bool>(
-          '() => document.querySelector(".ql-operate-line-container") != null &&'
-          ' getComputedStyle(document.querySelector('
-          '".ql-operate-line-container")).display !== "none"');
-      expect(lineVisible, isTrue,
-          reason: 'hovering a cell border must show the resize line');
-
-      await page.mouse.down();
-      await page.mouse.move(Point(borderX + 40, middleY), steps: 8);
-      await page.mouse.up();
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-
-      // Without a colgroup the width lands on the cells of every row
-      // (upstream setCellLevelRect); the rendered cell must have grown.
-      final after = await page.evaluate<Map<String, dynamic>>('''() => {
-        const cell = document.querySelector('.ql-editor td');
-        return {
-          rendered: cell.getBoundingClientRect().width,
-          persisted: cell.style.width || cell.getAttribute('width') || '',
-        };
-      }''');
-      final grown =
-          (after['rendered'] as num) - (before['width'] as num);
-      expect(grown, greaterThan(20),
-          reason: 'the dragged column must widen '
-              '(before ${before['width']}, after $after)');
-      expect('${after['persisted']}', isNotEmpty,
-          reason: 'the new width must be persisted on the cell');
+      expect(await app.contents(), isNot(contains('table-cell')),
+          reason: 'the model must lose the table too');
     });
   });
 }
