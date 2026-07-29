@@ -362,7 +362,7 @@ class SyntaxCodeBlockContainer extends code_format.CodeBlockContainer {
   }
 
   @override
-  String html(int index, int length) {
+  String html([int index = 0, int length = 0]) {
     final language = _language;
     return '<pre data-language="$language">\n${code_format.escapeText(code(index, length))}\n</pre>';
   }

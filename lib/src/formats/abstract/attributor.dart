@@ -222,12 +222,34 @@ abstract class StyleAttributor extends Attributor {
       domNode.removeAttribute('style');
       return;
     }
+    // Parchment writes through the CSSOM (`node.style[prop] = value`,
+    // style.ts:8-11), and the browser re-serializes the attribute as cssText:
+    // hex colors become `rgb(r, g, b)` and every declaration is terminated
+    // with `;`. This port writes the attribute directly, so it reproduces
+    // that serialization here — the semantic HTML goldens recorded from real
+    // Chrome depend on it, and it keeps both platforms byte-identical.
     final buffer = StringBuffer();
     styles.forEach((key, value) {
-      if (buffer.isNotEmpty) buffer.write('; ');
-      buffer.write('$key: $value');
+      if (buffer.isNotEmpty) buffer.write(' ');
+      buffer.write('$key: ${_normalizeCssValue(value)};');
     });
     domNode.setAttribute('style', buffer.toString());
+  }
+
+  static String _normalizeCssValue(String value) {
+    return value.replaceAllMapped(
+      RegExp(r'#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b'),
+      (match) {
+        var hex = match[1]!;
+        if (hex.length == 3) {
+          hex = hex.split('').map((c) => '$c$c').join();
+        }
+        final r = int.parse(hex.substring(0, 2), radix: 16);
+        final g = int.parse(hex.substring(2, 4), radix: 16);
+        final b = int.parse(hex.substring(4, 6), radix: 16);
+        return 'rgb($r, $g, $b)';
+      },
+    );
   }
 }
 

@@ -37,13 +37,20 @@ class CodeBlockContainer extends ContainerBlot {
   dynamic value() => children.map((child) => child.value()).toList();
 
   String code(int index, int length) {
-    return children
-        .map((child) => child.length() <= 1 ? '' : child.value())
-        .join('\n')
-        .substring(index, index + length);
+    // Parity code.ts `code()` — the line's rendered text (`domNode.innerText`),
+    // not `value()`, which for a Block is a list of child values. JS `.slice`
+    // tolerates an end past the string; substring must be clamped to match.
+    final joined = children
+        .map((child) =>
+            child.length() <= 1 ? '' : (child.domNode.textContent ?? ''))
+        .join('\n');
+    final start = index.clamp(0, joined.length);
+    final end = (index + length).clamp(start, joined.length);
+    return joined.substring(start, end);
   }
 
-  String html(int index, int length) {
+  @override
+  String html([int index = 0, int length = 0]) {
     return '<pre>\n${escapeText(code(index, length))}\n</pre>';
   }
 

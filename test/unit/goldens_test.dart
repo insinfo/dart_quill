@@ -68,6 +68,13 @@ void main() {
         reason: 'the Delta differs from what quill 2.0.3 produces',
       );
       expect(quill.getText(), equals(expected['text']));
+      if (expected['semantic'] != null) {
+        expect(
+          quill.getSemanticHTML(),
+          equals(expected['semantic']),
+          reason: 'getSemanticHTML differs from what quill 2.0.3 produces',
+        );
+      }
     }, skip: divergence);
   }
 }

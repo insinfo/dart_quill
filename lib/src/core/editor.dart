@@ -3,6 +3,7 @@ import '../blots/abstract/blot.dart';
 import '../blots/break.dart';
 import '../blots/scroll.dart';
 import '../blots/text.dart';
+import '../platform/dom.dart';
 
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
 
@@ -388,4 +389,134 @@ class Editor {
     return Delta();
   }
 
+  /// Parity editor.ts `getHTML(index, length)` (198-209): a range that stays
+  /// inside one line serializes just that slice of the line; anything else
+  /// serializes from the scroll.
+  String getHTML(int index, int length) {
+    final entry = scroll.line(index);
+    final line = entry.key;
+    final lineOffset = entry.value;
+    if (line != null) {
+      final lineLength = line.length();
+      final isWithinLine = lineLength >= lineOffset + length;
+      if (isWithinLine && !(lineOffset == 0 && length == lineLength)) {
+        return convertHTML(line, lineOffset, length, isRoot: true);
+      }
+      return convertHTML(scroll, index, length, isRoot: true);
+    }
+    return '';
+  }
+}
+
+class _ListHtmlItem {
+  _ListHtmlItem(this.child, this.offset, this.length, this.indent, this.type);
+  final Blot child;
+  final int offset;
+  final int length;
+  final int indent;
+  final dynamic type;
+}
+
+/// Parity editor.ts `getListType(type)` (439-449).
+List<String> _getListType(dynamic type) {
+  final tag = type == 'ordered' ? 'ol' : 'ul';
+  switch (type) {
+    case 'checked':
+      return [tag, ' data-list="checked"'];
+    case 'unchecked':
+      return [tag, ' data-list="unchecked"'];
+    default:
+      return [tag, ''];
+  }
+}
+
+/// Parity editor.ts `convertListHTML(items, lastIndent, types)` (326-361):
+/// consecutive list items become nested `<ol>`/`<ul>` trees, indent driving
+/// the depth and the list kind driving the tag.
+String _convertListHTML(
+    List<_ListHtmlItem> items, int lastIndent, List<dynamic> types) {
+  if (items.isEmpty) {
+    final endTag = _getListType(types.removeLast())[0];
+    if (lastIndent <= 0) {
+      return '</li></$endTag>';
+    }
+    return '</li></$endTag>${_convertListHTML([], lastIndent - 1, types)}';
+  }
+  final item = items.first;
+  final rest = items.sublist(1);
+  final listType = _getListType(item.type);
+  final tag = listType[0];
+  final attribute = listType[1];
+  if (item.indent > lastIndent) {
+    types.add(item.type);
+    if (item.indent == lastIndent + 1) {
+      return '<$tag><li$attribute>'
+          '${convertHTML(item.child, item.offset, item.length)}'
+          '${_convertListHTML(rest, item.indent, types)}';
+    }
+    return '<$tag><li>${_convertListHTML(items, lastIndent + 1, types)}';
+  }
+  final previousType = types.isNotEmpty ? types.last : null;
+  if (item.indent == lastIndent && item.type == previousType) {
+    return '</li><li$attribute>'
+        '${convertHTML(item.child, item.offset, item.length)}'
+        '${_convertListHTML(rest, item.indent, types)}';
+  }
+  final endTag = _getListType(types.removeLast())[0];
+  return '</li></$endTag>${_convertListHTML(items, lastIndent - 1, types)}';
+}
+
+/// Parity editor.ts `convertHTML(blot, index, length, isRoot)` (363-410).
+String convertHTML(Blot blot, int index, int length, {bool isRoot = false}) {
+  // Parity `'html' in blot` — a blot that owns its serialization wins.
+  final own = blot.html(index, length);
+  if (own != null) {
+    return own;
+  }
+  if (blot is TextBlot) {
+    final value = blot.value().toString();
+    final end =
+        (index + length) > value.length ? value.length : (index + length);
+    final start = index > value.length ? value.length : index;
+    final escaped = escapeText(value.substring(start, end));
+    return escaped.replaceAll(' ', '&nbsp;');
+  }
+  if (blot is ParentBlot) {
+    if (blot.blotName == 'list-container') {
+      final items = <_ListHtmlItem>[];
+      blot.forEachAt(index, length, (child, offset, childLength) {
+        final formats =
+            child is Block ? child.formats() : const <String, dynamic>{};
+        items.add(_ListHtmlItem(
+          child,
+          offset,
+          childLength,
+          (formats['indent'] as num?)?.toInt() ?? 0,
+          formats['list'],
+        ));
+      });
+      return _convertListHTML(items, -1, []);
+    }
+    final parts = <String>[];
+    blot.forEachAt(index, length, (child, offset, childLength) {
+      parts.add(convertHTML(child, offset, childLength));
+    });
+    if (isRoot || blot.blotName == 'list') {
+      return parts.join();
+    }
+    // Parity `outerHTML.split('>${innerHTML}<')` — recover the open/close
+    // tags around the children, replicating the split's quirks exactly.
+    final el = blot.domNode as DomElement;
+    final outer = el.outerHTML;
+    final inner = el.innerHTML ?? '';
+    final pieces = outer.split('>$inner<');
+    final start = pieces[0];
+    final end = pieces.length > 1 ? pieces[1] : '';
+    if (start == '<table') {
+      return '<table style="border: 1px solid #000;">${parts.join()}<$end';
+    }
+    return '$start>${parts.join()}<$end';
+  }
+  final node = blot.domNode;
+  return node is DomElement ? node.outerHTML : '';
 }

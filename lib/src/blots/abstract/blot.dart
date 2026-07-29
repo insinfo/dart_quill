@@ -232,6 +232,12 @@ abstract class Blot {
 
   void format(String name, dynamic value) {}
 
+  /// Parity `'html' in blot` (editor.ts convertHTML): a blot that owns its
+  /// semantic HTML serialization returns it here; null falls through to the
+  /// generic converter. Args are optional as in JS, where callers may omit
+  /// them (formula/video ignore the range).
+  String? html([int index = 0, int length = 0]) => null;
+
   void formatAt(int index, int length, String name, dynamic value) {
     shadowFormatAt(index, length, name, value);
   }

@@ -531,6 +531,10 @@ class FakeDomElement extends FakeDomNode implements DomElement {
 
   @override
   void setAttribute(String name, String value) {
+    // NB: `style` is stored verbatim, as a real browser does for setAttribute.
+    // The rgb()/semicolon normalization of CSSOM writes lives in
+    // StyleAttributor._writeInlineStyles, the path that emulates
+    // `node.style[prop] = value`.
     _attributes[name] = value;
     if (name.startsWith('data-')) {
       _dataset[name.substring(5)] = value;
@@ -716,6 +720,13 @@ class FakeDomElement extends FakeDomNode implements DomElement {
   }
 
   @override
+  String get outerHTML {
+    final buffer = StringBuffer();
+    _serializeHtmlNode(this, buffer);
+    return buffer.toString();
+  }
+
+  @override
   set innerHTML(String? value) {
     while (firstChild != null) {
       firstChild!.remove();
@@ -856,6 +867,15 @@ void _serializeHtmlNode(FakeDomNode node, StringBuffer buffer) {
     buffer.write('>');
     if (_voidHtmlElements.contains(tag)) {
       return;
+    }
+    if (node.internalChildren.isEmpty) {
+      // The `_text` shortcut is what innerHTML reports for a childless
+      // element; outerHTML must serialize the same content or the
+      // outer/inner split in the semantic HTML converter breaks.
+      final text = node._text;
+      if (text != null) {
+        buffer.write(text);
+      }
     }
     for (final child in node.internalChildren) {
       _serializeHtmlNode(child, buffer);

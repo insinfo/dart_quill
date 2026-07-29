@@ -71,7 +71,8 @@ class Video extends BlockEmbed {
     }
   }
 
-  String html() {
+  @override
+  String html([int index = 0, int length = 0]) {
     final video = value();
     return '<a href="$video">$video</a>';
   }

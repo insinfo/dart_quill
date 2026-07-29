@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import '../platform/dom.dart';
 import '../platform/platform.dart';
 import 'abstract/blot.dart';
@@ -268,6 +266,21 @@ class TextBlot extends LeafBlot {
   }
 }
 
+/// Parity text.ts:8-16 — the exact upstream entity map. Dart's `HtmlEscape`
+/// escapes a different set (notably `/`), which changes the serialized HTML.
 String escapeText(String text) {
-  return const HtmlEscape().convert(text);
+  return text.replaceAllMapped(RegExp(r'''[&<>"']'''), (match) {
+    switch (match[0]) {
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '"':
+        return '&quot;';
+      default:
+        return '&#39;';
+    }
+  });
 }

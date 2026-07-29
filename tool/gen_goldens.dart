@@ -158,6 +158,7 @@ Future<Map<String, dynamic>> _record(
           'contents': raw['contents'],
           'text': raw['text'],
           'html': raw['html'],
+          if (raw['semantic'] != null) 'semantic': raw['semantic'],
           if (raw['converted'] != null) 'converted': raw['converted'],
         },
       });
@@ -217,6 +218,9 @@ function runCase(testCase) {
       contents: quill.getContents().ops,
       text: quill.getText(),
       html: quill.root.innerHTML,
+      // The public HTML serialization (editor.getHTML/convertHTML), so the
+      // port's getSemanticHTML is proven against upstream on every case.
+      semantic: quill.getSemanticHTML(),
       ...(converted ? { converted } : {}),
     };
   } catch (error) {

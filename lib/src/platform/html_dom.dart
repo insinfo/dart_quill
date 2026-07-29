@@ -1316,6 +1316,9 @@ class HtmlDomElement extends _HtmlDomNode implements DomElement {
   }
 
   @override
+  String get outerHTML => _element.outerHTML.dartify()?.toString() ?? '';
+
+  @override
   set innerHTML(String? value) {
     final markup = value ?? '';
     final doc = web.DOMParser().parseFromString(markup.toJS, 'text/html');

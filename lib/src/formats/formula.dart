@@ -25,9 +25,12 @@ class Formula extends Embed {
     return node.getAttribute('data-value');
   }
 
-  String html() {
+  // Parity formula.ts html() — a plain span; the `$$…$$` wrapper was an
+  // invention of this port.
+  @override
+  String html([int index = 0, int length = 0]) {
     final formula = getValue(element);
-    return '<span>\$\$${formula ?? ''}\$\$</span>';
+    return '<span>${formula ?? ''}</span>';
   }
 
   @override

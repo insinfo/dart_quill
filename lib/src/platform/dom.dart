@@ -103,6 +103,11 @@ abstract class DomElement extends DomNode {
   String? get innerHTML;
   set innerHTML(String? value);
 
+  /// The element's own serialization, tags included (DOM `outerHTML`).
+  /// Used by the semantic HTML converter (editor.ts convertHTML), which
+  /// splits it around the innerHTML to recover the open/close tags.
+  String get outerHTML;
+
   /// Get or set the value of an input or textarea element.
   String get value;
   set value(String? val);

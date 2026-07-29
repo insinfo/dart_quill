@@ -494,7 +494,8 @@ class TableCell extends TableBetterContainer {
   }
 
   /// TS `html()` (rewrites bullet `<ol>` lists back to `<ul>`).
-  String html() {
+  @override
+  String html([int index = 0, int length = 0]) {
     final reg = RegExp(
       r'<(ol)[^>]*><li[^>]* data-list="bullet">(?:.*?)</li></(ol)>',
       caseSensitive: false,
@@ -864,7 +865,8 @@ class TableCol extends Block {
   }
 
   /// TS `html()`.
-  String html() => outerHtml(element);
+  @override
+  String html([int index = 0, int length = 0]) => outerHtml(element);
 
   @override
   void optimize([

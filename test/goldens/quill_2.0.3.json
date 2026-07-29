@@ -1,5 +1,6 @@
 {
   "quill": "2.0.3",
+  "suite": "core",
   "generator": "tool/gen_goldens.dart",
   "note": "Generated — do not edit. See the README block in cases.json.",
   "results": [
@@ -12,7 +13,8 @@
         }
       ],
       "text": "hello\n",
-      "html": "<p>hello</p>"
+      "html": "<p>hello</p>",
+      "semantic": "<p>hello</p>"
     },
     {
       "group": "setContents normalisation",
@@ -23,7 +25,8 @@
         }
       ],
       "text": "a\n\n\n",
-      "html": "<p>a</p><p><br></p><p><br></p>"
+      "html": "<p>a</p><p><br></p><p><br></p>",
+      "semantic": "<p>a</p><p></p><p></p>"
     },
     {
       "group": "setContents normalisation",
@@ -34,7 +37,8 @@
         }
       ],
       "text": "\n",
-      "html": "<p><br></p>"
+      "html": "<p><br></p>",
+      "semantic": "<p></p>"
     },
     {
       "group": "setContents normalisation",
@@ -54,7 +58,8 @@
         }
       ],
       "text": "Title\nbody\n",
-      "html": "<h1>Title</h1><p>body</p>"
+      "html": "<h1>Title</h1><p>body</p>",
+      "semantic": "<h1>Title</h1><p>body</p>"
     },
     {
       "group": "setContents normalisation",
@@ -71,7 +76,8 @@
         }
       ],
       "text": "one\ntwo\nthree\n",
-      "html": "<p>one</p><p>two</p><h2>three</h2>"
+      "html": "<p>one</p><p>two</p><h2>three</h2>",
+      "semantic": "<p>one</p><p>two</p><h2>three</h2>"
     },
     {
       "group": "setContents normalisation",
@@ -87,7 +93,8 @@
         }
       ],
       "text": "text\n",
-      "html": "<p>text</p><iframe class=\"ql-video\" frameborder=\"0\" allowfullscreen=\"true\" src=\"https://example.com/v\"></iframe>"
+      "html": "<p>text</p><iframe class=\"ql-video\" frameborder=\"0\" allowfullscreen=\"true\" src=\"https://example.com/v\"></iframe>",
+      "semantic": "<p>text</p><a href=\"https://example.com/v\">https://example.com/v</a>"
     },
     {
       "group": "setContents normalisation",
@@ -103,7 +110,8 @@
         }
       ],
       "text": "after\n",
-      "html": "<iframe class=\"ql-video\" frameborder=\"0\" allowfullscreen=\"true\" src=\"https://example.com/v\"></iframe><p>after</p>"
+      "html": "<iframe class=\"ql-video\" frameborder=\"0\" allowfullscreen=\"true\" src=\"https://example.com/v\"></iframe><p>after</p>",
+      "semantic": "<a href=\"https://example.com/v\">https://example.com/v</a><p>after</p>"
     },
     {
       "group": "setContents normalisation",
@@ -122,7 +130,8 @@
         }
       ],
       "text": "after\n",
-      "html": "<iframe class=\"ql-video ql-align-center\" frameborder=\"0\" allowfullscreen=\"true\" src=\"https://example.com/v\"></iframe><p>after</p>"
+      "html": "<iframe class=\"ql-video ql-align-center\" frameborder=\"0\" allowfullscreen=\"true\" src=\"https://example.com/v\"></iframe><p>after</p>",
+      "semantic": "<a href=\"https://example.com/v\">https://example.com/v</a><p>after</p>"
     },
     {
       "group": "setContents normalisation",
@@ -141,7 +150,8 @@
         }
       ],
       "text": "ab\n",
-      "html": "<p>a<img src=\"https://example.com/i.png\">b</p>"
+      "html": "<p>a<img src=\"https://example.com/i.png\">b</p>",
+      "semantic": "<p>a<img src=\"https://example.com/i.png\">b</p>"
     },
     {
       "group": "inline formats",
@@ -176,7 +186,8 @@
         }
       ],
       "text": "bius\n",
-      "html": "<p><strong>b</strong><em>i</em><u>u</u><s>s</s></p>"
+      "html": "<p><strong>b</strong><em>i</em><u>u</u><s>s</s></p>",
+      "semantic": "<p><strong>b</strong><em>i</em><u>u</u><s>s</s></p>"
     },
     {
       "group": "inline formats",
@@ -194,7 +205,8 @@
         }
       ],
       "text": "xy\n",
-      "html": "<p><strong><em>xy</em></strong></p>"
+      "html": "<p><strong><em>xy</em></strong></p>",
+      "semantic": "<p><strong><em>xy</em></strong></p>"
     },
     {
       "group": "inline formats",
@@ -235,7 +247,8 @@
         }
       ],
       "text": "lcgfz\n",
-      "html": "<p><a href=\"https://example.com\" rel=\"noopener noreferrer\" target=\"_blank\">l</a><span style=\"color: rgb(255, 0, 0);\">c</span><span style=\"background-color: rgb(0, 255, 0);\">g</span><span class=\"ql-font-monospace\">f</span><span class=\"ql-size-large\">z</span></p>"
+      "html": "<p><a href=\"https://example.com\" rel=\"noopener noreferrer\" target=\"_blank\">l</a><span style=\"color: rgb(255, 0, 0);\">c</span><span style=\"background-color: rgb(0, 255, 0);\">g</span><span class=\"ql-font-monospace\">f</span><span class=\"ql-size-large\">z</span></p>",
+      "semantic": "<p><a href=\"https://example.com\" rel=\"noopener noreferrer\" target=\"_blank\">l</a><span style=\"color: rgb(255, 0, 0);\">c</span><span style=\"background-color: rgb(0, 255, 0);\">g</span><span class=\"ql-font-monospace\">f</span><span class=\"ql-size-large\">z</span></p>"
     },
     {
       "group": "inline formats",
@@ -264,7 +277,8 @@
         }
       ],
       "text": "supsubcode\n",
-      "html": "<p><sup>sup</sup><sub>sub</sub><code>code</code></p>"
+      "html": "<p><sup>sup</sup><sub>sub</sub><code>code</code></p>",
+      "semantic": "<p><sup>sup</sup><sub>sub</sub><code>code</code></p>"
     },
     {
       "group": "block formats",
@@ -326,7 +340,8 @@
         }
       ],
       "text": "h1\nh2\nh3\nh4\nh5\nh6\n",
-      "html": "<h1>h1</h1><h2>h2</h2><h3>h3</h3><h4>h4</h4><h5>h5</h5><h6>h6</h6>"
+      "html": "<h1>h1</h1><h2>h2</h2><h3>h3</h3><h4>h4</h4><h5>h5</h5><h6>h6</h6>",
+      "semantic": "<h1>h1</h1><h2>h2</h2><h3>h3</h3><h4>h4</h4><h5>h5</h5><h6>h6</h6>"
     },
     {
       "group": "block formats",
@@ -361,7 +376,8 @@
         }
       ],
       "text": "quoted\nline1\nline2\n",
-      "html": "<blockquote>quoted</blockquote><div class=\"ql-code-block-container\" spellcheck=\"false\"><div class=\"ql-code-block\" data-language=\"plain\">line1</div><div class=\"ql-code-block\" data-language=\"plain\">line2</div></div>"
+      "html": "<blockquote>quoted</blockquote><div class=\"ql-code-block-container\" spellcheck=\"false\"><div class=\"ql-code-block\" data-language=\"plain\">line1</div><div class=\"ql-code-block\" data-language=\"plain\">line2</div></div>",
+      "semantic": "<blockquote>quoted</blockquote><pre data-language=\"plain\">\nline1\nline2\n</pre>"
     },
     {
       "group": "block formats",
@@ -405,7 +421,8 @@
         }
       ],
       "text": "c\nr\ni\nd\n",
-      "html": "<p class=\"ql-align-center\">c</p><p class=\"ql-align-right\">r</p><p class=\"ql-indent-2\">i</p><p class=\"ql-direction-rtl\">d</p>"
+      "html": "<p class=\"ql-align-center\">c</p><p class=\"ql-align-right\">r</p><p class=\"ql-indent-2\">i</p><p class=\"ql-direction-rtl\">d</p>",
+      "semantic": "<p class=\"ql-align-center\">c</p><p class=\"ql-align-right\">r</p><p class=\"ql-indent-2\">i</p><p class=\"ql-direction-rtl\">d</p>"
     },
     {
       "group": "block formats",
@@ -440,7 +457,8 @@
         }
       ],
       "text": "one\ntwo\nthree\n",
-      "html": "<ol><li data-list=\"ordered\"><span class=\"ql-ui\" contenteditable=\"false\"></span>one</li><li data-list=\"ordered\"><span class=\"ql-ui\" contenteditable=\"false\"></span>two</li><li data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>three</li></ol>"
+      "html": "<ol><li data-list=\"ordered\"><span class=\"ql-ui\" contenteditable=\"false\"></span>one</li><li data-list=\"ordered\"><span class=\"ql-ui\" contenteditable=\"false\"></span>two</li><li data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>three</li></ol>",
+      "semantic": "<ol><li>one</li><li>two</li></ol><ul><li>three</li></ul>"
     },
     {
       "group": "block formats",
@@ -466,7 +484,8 @@
         }
       ],
       "text": "done\ntodo\n",
-      "html": "<ol><li data-list=\"checked\"><span class=\"ql-ui\" contenteditable=\"false\"></span>done</li><li data-list=\"unchecked\"><span class=\"ql-ui\" contenteditable=\"false\"></span>todo</li></ol>"
+      "html": "<ol><li data-list=\"checked\"><span class=\"ql-ui\" contenteditable=\"false\"></span>done</li><li data-list=\"unchecked\"><span class=\"ql-ui\" contenteditable=\"false\"></span>todo</li></ol>",
+      "semantic": "<ul><li data-list=\"checked\">done</li></ul><ul><li data-list=\"unchecked\">todo</li></ul>"
     },
     {
       "group": "block formats",
@@ -503,7 +522,8 @@
         }
       ],
       "text": "a\nb\nc\n",
-      "html": "<ol><li data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>a</li><li data-list=\"bullet\" class=\"ql-indent-1\"><span class=\"ql-ui\" contenteditable=\"false\"></span>b</li><li data-list=\"bullet\" class=\"ql-indent-2\"><span class=\"ql-ui\" contenteditable=\"false\"></span>c</li></ol>"
+      "html": "<ol><li data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>a</li><li data-list=\"bullet\" class=\"ql-indent-1\"><span class=\"ql-ui\" contenteditable=\"false\"></span>b</li><li data-list=\"bullet\" class=\"ql-indent-2\"><span class=\"ql-ui\" contenteditable=\"false\"></span>c</li></ol>",
+      "semantic": "<ul><li>a<ul><li>b<ul><li>c</li></ul></li></ul></li></ul>"
     },
     {
       "group": "html to delta",
@@ -514,7 +534,8 @@
         }
       ],
       "text": "one\ntwo\n",
-      "html": "<p>one</p><p>two</p>"
+      "html": "<p>one</p><p>two</p>",
+      "semantic": "<p>one</p><p>two</p>"
     },
     {
       "group": "html to delta",
@@ -540,7 +561,8 @@
         }
       ],
       "text": "Title\nquoted\n",
-      "html": "<h2>Title</h2><blockquote>quoted</blockquote>"
+      "html": "<h2>Title</h2><blockquote>quoted</blockquote>",
+      "semantic": "<h2>Title</h2><blockquote>quoted</blockquote>"
     },
     {
       "group": "html to delta",
@@ -564,7 +586,8 @@
         }
       ],
       "text": "bold and italic plain\n",
-      "html": "<p><strong>bold <em>and italic</em></strong> plain</p>"
+      "html": "<p><strong>bold <em>and italic</em></strong> plain</p>",
+      "semantic": "<p><strong>bold&nbsp;<em>and&nbsp;italic</em></strong>&nbsp;plain</p>"
     },
     {
       "group": "html to delta",
@@ -584,7 +607,8 @@
         }
       ],
       "text": "see this\n",
-      "html": "<p>see <a href=\"https://example.com\" rel=\"noopener noreferrer\" target=\"_blank\">this</a></p>"
+      "html": "<p>see <a href=\"https://example.com\" rel=\"noopener noreferrer\" target=\"_blank\">this</a></p>",
+      "semantic": "<p>see&nbsp;<a href=\"https://example.com\" rel=\"noopener noreferrer\" target=\"_blank\">this</a></p>"
     },
     {
       "group": "html to delta",
@@ -601,7 +625,8 @@
         }
       ],
       "text": "red\n",
-      "html": "<p><span style=\"color: rgb(255, 0, 0);\">red</span></p>"
+      "html": "<p><span style=\"color: rgb(255, 0, 0);\">red</span></p>",
+      "semantic": "<p><span style=\"color: rgb(255, 0, 0);\">red</span></p>"
     },
     {
       "group": "html to delta",
@@ -627,7 +652,8 @@
         }
       ],
       "text": "centred\nindented\n",
-      "html": "<p class=\"ql-align-center\">centred</p><p class=\"ql-indent-2\">indented</p>"
+      "html": "<p class=\"ql-align-center\">centred</p><p class=\"ql-indent-2\">indented</p>",
+      "semantic": "<p class=\"ql-align-center\">centred</p><p class=\"ql-indent-2\">indented</p>"
     },
     {
       "group": "html to delta",
@@ -653,7 +679,8 @@
         }
       ],
       "text": "a\nb\n",
-      "html": "<ol><li data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>a</li><li data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>b</li></ol>"
+      "html": "<ol><li data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>a</li><li data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>b</li></ol>",
+      "semantic": "<ul><li>a</li><li>b</li></ul>"
     },
     {
       "group": "html to delta",
@@ -679,7 +706,8 @@
         }
       ],
       "text": "a\nb\n",
-      "html": "<ol><li data-list=\"ordered\"><span class=\"ql-ui\" contenteditable=\"false\"></span>a</li><li data-list=\"ordered\"><span class=\"ql-ui\" contenteditable=\"false\"></span>b</li></ol>"
+      "html": "<ol><li data-list=\"ordered\"><span class=\"ql-ui\" contenteditable=\"false\"></span>a</li><li data-list=\"ordered\"><span class=\"ql-ui\" contenteditable=\"false\"></span>b</li></ol>",
+      "semantic": "<ol><li>a</li><li>b</li></ol>"
     },
     {
       "group": "html to delta",
@@ -696,7 +724,8 @@
         }
       ],
       "text": "code line\n",
-      "html": "<div class=\"ql-code-block-container\" spellcheck=\"false\"><div class=\"ql-code-block\" data-language=\"plain\">code line</div></div>"
+      "html": "<div class=\"ql-code-block-container\" spellcheck=\"false\"><div class=\"ql-code-block\" data-language=\"plain\">code line</div></div>",
+      "semantic": "<pre data-language=\"plain\">\ncode line\n</pre>"
     },
     {
       "group": "html to delta",
@@ -715,7 +744,8 @@
         }
       ],
       "text": "before\nafter\n\n",
-      "html": "<p>before</p><p>after</p><p><img src=\"https://example.com/i.png\"></p>"
+      "html": "<p>before</p><p>after</p><p><img src=\"https://example.com/i.png\"></p>",
+      "semantic": "<p>before</p><p>after</p><p><img src=\"https://example.com/i.png\"></p>"
     },
     {
       "group": "html to delta",
@@ -726,7 +756,8 @@
         }
       ],
       "text": "spaced out\n",
-      "html": "<p>spaced out</p>"
+      "html": "<p>spaced out</p>",
+      "semantic": "<p>spaced&nbsp;out</p>"
     },
     {
       "group": "html to delta",
@@ -752,7 +783,8 @@
         }
       ],
       "text": "a\nb\n",
-      "html": "<table><tbody><tr><td data-row=\"1\">a</td><td data-row=\"1\">b</td></tr></tbody></table>"
+      "html": "<table><tbody><tr><td data-row=\"1\">a</td><td data-row=\"1\">b</td></tr></tbody></table>",
+      "semantic": "<table style=\"border: 1px solid #000;\"><tbody><tr><td data-row=\"1\">a</td><td data-row=\"1\">b</td></tr></tbody></table>"
     },
     {
       "group": "editing",
@@ -763,7 +795,8 @@
         }
       ],
       "text": "hello world\n",
-      "html": "<p>hello world</p>"
+      "html": "<p>hello world</p>",
+      "semantic": "<p>hello&nbsp;world</p>"
     },
     {
       "group": "editing",
@@ -783,7 +816,8 @@
         }
       ],
       "text": "hello!\n",
-      "html": "<p>hello<strong>!</strong></p>"
+      "html": "<p>hello<strong>!</strong></p>",
+      "semantic": "<p>hello<strong>!</strong></p>"
     },
     {
       "group": "editing",
@@ -809,7 +843,8 @@
         }
       ],
       "text": "Ti\ntle\n",
-      "html": "<h1>Ti</h1><h1>tle</h1>"
+      "html": "<h1>Ti</h1><h1>tle</h1>",
+      "semantic": "<h1>Ti</h1><h1>tle</h1>"
     },
     {
       "group": "editing",
@@ -820,7 +855,8 @@
         }
       ],
       "text": "hello\n",
-      "html": "<p>hello</p>"
+      "html": "<p>hello</p>",
+      "semantic": "<p>hello</p>"
     },
     {
       "group": "editing",
@@ -831,7 +867,8 @@
         }
       ],
       "text": "Titdy\n",
-      "html": "<p>Titdy</p>"
+      "html": "<p>Titdy</p>",
+      "semantic": "<p>Titdy</p>"
     },
     {
       "group": "editing",
@@ -842,7 +879,8 @@
         }
       ],
       "text": "onetwo\n",
-      "html": "<p>onetwo</p>"
+      "html": "<p>onetwo</p>",
+      "semantic": "<p>onetwo</p>"
     },
     {
       "group": "editing",
@@ -853,7 +891,8 @@
         }
       ],
       "text": "\n",
-      "html": "<p><br></p>"
+      "html": "<p><br></p>",
+      "semantic": "<p></p>"
     },
     {
       "group": "editing",
@@ -870,7 +909,8 @@
         }
       ],
       "text": "hello world\n",
-      "html": "<p><strong>hello</strong> world</p>"
+      "html": "<p><strong>hello</strong> world</p>",
+      "semantic": "<p><strong>hello</strong>&nbsp;world</p>"
     },
     {
       "group": "editing",
@@ -881,7 +921,8 @@
         }
       ],
       "text": "hello world\n",
-      "html": "<p>hello world</p>"
+      "html": "<p>hello world</p>",
+      "semantic": "<p>hello&nbsp;world</p>"
     },
     {
       "group": "editing",
@@ -901,7 +942,8 @@
         }
       ],
       "text": "one\ntwo\n",
-      "html": "<h2>one</h2><p>two</p>"
+      "html": "<h2>one</h2><p>two</p>",
+      "semantic": "<h2>one</h2><p>two</p>"
     },
     {
       "group": "editing",
@@ -927,7 +969,8 @@
         }
       ],
       "text": "one\ntwo\n",
-      "html": "<p class=\"ql-align-center\">one</p><p class=\"ql-align-center\">two</p>"
+      "html": "<p class=\"ql-align-center\">one</p><p class=\"ql-align-center\">two</p>",
+      "semantic": "<p class=\"ql-align-center\">one</p><p class=\"ql-align-center\">two</p>"
     },
     {
       "group": "editing",
@@ -938,7 +981,8 @@
         }
       ],
       "text": "hello\n",
-      "html": "<p>hello</p>"
+      "html": "<p>hello</p>",
+      "semantic": "<p>hello</p>"
     },
     {
       "group": "editing",
@@ -964,7 +1008,8 @@
         }
       ],
       "text": "abcdef\n",
-      "html": "<p><em>ab</em>cd<em>ef</em></p>"
+      "html": "<p><em>ab</em>cd<em>ef</em></p>",
+      "semantic": "<p><em>ab</em>cd<em>ef</em></p>"
     },
     {
       "group": "editing",
@@ -981,7 +1026,8 @@
         }
       ],
       "text": "hello world\n",
-      "html": "<p><strong>hello</strong> world</p>"
+      "html": "<p><strong>hello</strong> world</p>",
+      "semantic": "<p><strong>hello</strong>&nbsp;world</p>"
     },
     {
       "group": "editing",
@@ -992,7 +1038,8 @@
         }
       ],
       "text": "hello there\n",
-      "html": "<p>hello there</p>"
+      "html": "<p>hello there</p>",
+      "semantic": "<p>hello&nbsp;there</p>"
     },
     {
       "group": "editing",
@@ -1008,7 +1055,8 @@
         }
       ],
       "text": "before\n",
-      "html": "<p>before</p><iframe class=\"ql-video\" frameborder=\"0\" allowfullscreen=\"true\" src=\"https://example.com/v\"></iframe>"
+      "html": "<p>before</p><iframe class=\"ql-video\" frameborder=\"0\" allowfullscreen=\"true\" src=\"https://example.com/v\"></iframe>",
+      "semantic": "<p>before</p><a href=\"https://example.com/v\">https://example.com/v</a>"
     },
     {
       "group": "editing",
@@ -1027,7 +1075,8 @@
         }
       ],
       "text": "ab\n",
-      "html": "<p>a<img src=\"https://example.com/i.png\">b</p>"
+      "html": "<p>a<img src=\"https://example.com/i.png\">b</p>",
+      "semantic": "<p>a<img src=\"https://example.com/i.png\">b</p>"
     },
     {
       "group": "editing",
@@ -1050,7 +1099,8 @@
         }
       ],
       "text": "one and  three\n",
-      "html": "<h3><strong>one</strong> and  three</h3>"
+      "html": "<h3><strong>one</strong> and  three</h3>",
+      "semantic": "<h3><strong>one</strong>&nbsp;and&nbsp;&nbsp;three</h3>"
     }
   ]
 }
