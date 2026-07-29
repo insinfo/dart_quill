@@ -107,7 +107,13 @@ class CellSelection {
   TableCell? setSelected(DomElement target) {
     final cell = _cellForElement(target);
     _reselect(cell);
-    if (cell != null) cell.element.classes.add('ql-cell-focused');
+    if (cell != null) {
+      // TS setSelected (cell-selection.ts:709-721): the selection list holds
+      // the anchor, but only ql-cell-focused is painted on it — never
+      // ql-cell-selected, which the grid's select() applies for ranges.
+      cell.element.classes.remove('ql-cell-selected');
+      cell.element.classes.add('ql-cell-focused');
+    }
     return cell;
   }
 

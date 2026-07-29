@@ -297,6 +297,9 @@ function runCase(testCase) {
       contents: quill.getContents().ops,
       text: quill.getText(),
       html: quill.root.innerHTML,
+      // The public HTML serialization; exercises the plugin's own blot html()
+      // overrides (TableCell's ol->ul rewrite, temporary, col).
+      semantic: quill.getSemanticHTML(),
       ...(converted ? { converted } : {}),
     };
   } catch (error) {

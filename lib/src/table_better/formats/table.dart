@@ -1430,12 +1430,24 @@ class TableContainer extends TableBetterContainer {
 
     void setClass(TableTemporary temporary, String? className) {
       final current = temporary.element.getAttribute('data-class');
+      var changed = false;
       if (className != current && className != null) {
         temporary.element.setAttribute('data-class', getClassName(className));
+        changed = true;
       }
       if ((className == null || className.isEmpty) &&
           (current == null || current.isEmpty)) {
         temporary.element.setAttribute('data-class', defaultClassName);
+        changed = true;
+      }
+      // In a browser the MutationObserver records this attribute write and
+      // drives another optimize pass, in which TableTemporary.optimize syncs
+      // data-class back onto the <table> as `class`. Off-browser the
+      // convergence loop only watches structural changes (treeVersion), so
+      // the extra pass must be requested explicitly or the table never gets
+      // its ql-table-better class in VM tests.
+      if (changed) {
+        scroll.treeVersion++;
       }
     }
 

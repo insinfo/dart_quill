@@ -100,8 +100,48 @@ void main() {
         equals(_canonicalise(expected['contents'])),
         reason: 'the Delta differs from what quill-table-better 1.2.3 produces',
       );
+      if (expected['semantic'] != null) {
+        expect(
+          _canonicaliseHtml(quill.getSemanticHTML()),
+          equals(_canonicaliseHtml(expected['semantic'] as String)),
+          reason:
+              'getSemanticHTML differs from what quill-table-better produces',
+        );
+      }
     }, skip: _knownDivergences['$group / $name']);
   }
+}
+
+/// The HTML-string counterpart of [_canonicalise]: random cell/row ids inside
+/// `data-cell="…"`/`data-row="…"` attributes are replaced by `cell#N`/`row#N`
+/// in order of first appearance (namespaced per kind), and attributes within
+/// each start tag are sorted — a browser serializes them in insertion order,
+/// the fake DOM in its own order, and the order carries no meaning.
+String _canonicaliseHtml(String html) {
+  final ids = <String, String>{};
+  final counts = <String, int>{};
+  String canonical(String kind, String raw) => ids.putIfAbsent(
+      '$kind:$raw', () => '$kind#${counts[kind] = (counts[kind] ?? 0) + 1}');
+
+  final withIds = html.replaceAllMapped(
+    RegExp(r'data-(cell|row)="([^"]*)"'),
+    (match) {
+      final kind = match[1] == 'cell' ? 'cell' : 'row';
+      return 'data-${match[1]}="${canonical(kind, match[2]!)}"';
+    },
+  );
+
+  return withIds.replaceAllMapped(
+    RegExp(r'<(\w+)((?:\s+[^\s=>]+(?:="[^"]*")?)+)\s*>'),
+    (match) {
+      final attributes =
+          RegExp(r'[^\s=>]+(?:="[^"]*")?').allMatches(match[2]!)
+              .map((m) => m[0]!)
+              .toList()
+            ..sort();
+      return '<${match[1]} ${attributes.join(' ')}>';
+    },
+  );
 }
 
 /// Cases the port answers differently, with the root cause. Every entry is a

@@ -1,6 +1,7 @@
 import '../../blots/abstract/blot.dart';
 import '../../formats/list.dart';
 import '../../platform/dom.dart';
+import '../../platform/platform.dart';
 import '../config/config.dart';
 import '../utils/utils.dart' as utils;
 import 'header.dart';
@@ -77,8 +78,12 @@ class TableList extends ListItem {
   static TableList create([dynamic value]) {
     if (value is DomElement) return TableList(value);
     final type = '$value'.isEmpty ? 'bullet' : '$value';
-    final node = ListItem.create(type).element;
-    node.classes.add(kClassName);
+    // Build the bare <li> here instead of via ListItem.create: constructing a
+    // ListItem attaches its checklist ui span to the node, and the TableList
+    // constructor (through ListItem's) attaches another — every list item in
+    // a cell came out with two .ql-ui spans.
+    final node = domBindings.adapter.document.createElement(kTagName);
+    node.setAttribute('data-list', type);
     node.setAttribute('class', kClassName);
     return TableList(node);
   }

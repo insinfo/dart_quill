@@ -19,36 +19,36 @@
         },
         {
           "attributes": {
-            "table-cell-block": "cell-1nd0",
+            "table-cell-block": "cell-3sr1",
             "table-cell": {
-              "data-row": "row-cyu0"
+              "data-row": "row-is10"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-0g26",
+            "table-cell-block": "cell-6gax",
             "table-cell": {
-              "data-row": "row-cyu0"
+              "data-row": "row-is10"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-bqih",
+            "table-cell-block": "cell-o02x",
             "table-cell": {
-              "data-row": "row-tgz4"
+              "data-row": "row-xpry"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-sbjw",
+            "table-cell-block": "cell-72ob",
             "table-cell": {
-              "data-row": "row-tgz4"
+              "data-row": "row-xpry"
             }
           },
           "insert": "\n"
@@ -58,7 +58,8 @@
         }
       ],
       "text": "\n\n\n\n\n\n",
-      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-cyu0\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-1nd0\"><br></p></td><td data-row=\"row-cyu0\"><p class=\"ql-table-block\" data-cell=\"cell-0g26\"><br></p></td></tr><tr><td data-row=\"row-tgz4\"><p class=\"ql-table-block\" data-cell=\"cell-bqih\"><br></p></td><td data-row=\"row-tgz4\"><p class=\"ql-table-block\" data-cell=\"cell-sbjw\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-is10\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-3sr1\"><br></p></td><td data-row=\"row-is10\"><p class=\"ql-table-block\" data-cell=\"cell-6gax\"><br></p></td></tr><tr><td data-row=\"row-xpry\"><p class=\"ql-table-block\" data-cell=\"cell-o02x\"><br></p></td><td data-row=\"row-xpry\"><p class=\"ql-table-block\" data-cell=\"cell-72ob\"><br></p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"></temporary><tbody><tr><td data-row=\"row-is10\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-3sr1\"><br></p></td><td data-row=\"row-is10\"><p class=\"ql-table-block\" data-cell=\"cell-6gax\"><br></p></td></tr><tr><td data-row=\"row-xpry\"><p class=\"ql-table-block\" data-cell=\"cell-o02x\"><br></p></td><td data-row=\"row-xpry\"><p class=\"ql-table-block\" data-cell=\"cell-72ob\"><br></p></td></tr></tbody></table><p></p>"
     },
     {
       "group": "insertTable",
@@ -75,27 +76,27 @@
         },
         {
           "attributes": {
-            "table-cell-block": "cell-8x8a",
+            "table-cell-block": "cell-q1zn",
             "table-cell": {
-              "data-row": "row-p8st"
+              "data-row": "row-mg5a"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-iv99",
+            "table-cell-block": "cell-n907",
             "table-cell": {
-              "data-row": "row-p8st"
+              "data-row": "row-mg5a"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-pgvn",
+            "table-cell-block": "cell-b6k6",
             "table-cell": {
-              "data-row": "row-p8st"
+              "data-row": "row-mg5a"
             }
           },
           "insert": "\n"
@@ -105,7 +106,8 @@
         }
       ],
       "text": "\n\n\n\n\n",
-      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-p8st\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-8x8a\"><br></p></td><td data-row=\"row-p8st\"><p class=\"ql-table-block\" data-cell=\"cell-iv99\"><br></p></td><td data-row=\"row-p8st\"><p class=\"ql-table-block\" data-cell=\"cell-pgvn\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-mg5a\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-q1zn\"><br></p></td><td data-row=\"row-mg5a\"><p class=\"ql-table-block\" data-cell=\"cell-n907\"><br></p></td><td data-row=\"row-mg5a\"><p class=\"ql-table-block\" data-cell=\"cell-b6k6\"><br></p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"></temporary><tbody><tr><td data-row=\"row-mg5a\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-q1zn\"><br></p></td><td data-row=\"row-mg5a\"><p class=\"ql-table-block\" data-cell=\"cell-n907\"><br></p></td><td data-row=\"row-mg5a\"><p class=\"ql-table-block\" data-cell=\"cell-b6k6\"><br></p></td></tr></tbody></table><p></p>"
     },
     {
       "group": "insertTable",
@@ -122,27 +124,27 @@
         },
         {
           "attributes": {
-            "table-cell-block": "cell-pn3w",
+            "table-cell-block": "cell-fnq1",
             "table-cell": {
-              "data-row": "row-870v"
+              "data-row": "row-ehbd"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-b3y9",
+            "table-cell-block": "cell-udau",
             "table-cell": {
-              "data-row": "row-k84x"
+              "data-row": "row-is7i"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-wdwe",
+            "table-cell-block": "cell-sve2",
             "table-cell": {
-              "data-row": "row-liy8"
+              "data-row": "row-ubjr"
             }
           },
           "insert": "\n"
@@ -152,7 +154,8 @@
         }
       ],
       "text": "\n\n\n\n\n",
-      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-870v\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-pn3w\"><br></p></td></tr><tr><td data-row=\"row-k84x\"><p class=\"ql-table-block\" data-cell=\"cell-b3y9\"><br></p></td></tr><tr><td data-row=\"row-liy8\"><p class=\"ql-table-block\" data-cell=\"cell-wdwe\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-ehbd\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-fnq1\"><br></p></td></tr><tr><td data-row=\"row-is7i\"><p class=\"ql-table-block\" data-cell=\"cell-udau\"><br></p></td></tr><tr><td data-row=\"row-ubjr\"><p class=\"ql-table-block\" data-cell=\"cell-sve2\"><br></p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"></temporary><tbody><tr><td data-row=\"row-ehbd\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-fnq1\"><br></p></td></tr><tr><td data-row=\"row-is7i\"><p class=\"ql-table-block\" data-cell=\"cell-udau\"><br></p></td></tr><tr><td data-row=\"row-ubjr\"><p class=\"ql-table-block\" data-cell=\"cell-sve2\"><br></p></td></tr></tbody></table><p></p>"
     },
     {
       "group": "insertTable",
@@ -172,36 +175,36 @@
         },
         {
           "attributes": {
-            "table-cell-block": "cell-5r5j",
+            "table-cell-block": "cell-ftrm",
             "table-cell": {
-              "data-row": "row-uzxi"
+              "data-row": "row-fwjw"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-dea8",
+            "table-cell-block": "cell-gvm0",
             "table-cell": {
-              "data-row": "row-uzxi"
+              "data-row": "row-fwjw"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-jdf8",
+            "table-cell-block": "cell-gadp",
             "table-cell": {
-              "data-row": "row-ufya"
+              "data-row": "row-t7yg"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-ya86",
+            "table-cell-block": "cell-7xpv",
             "table-cell": {
-              "data-row": "row-ufya"
+              "data-row": "row-t7yg"
             }
           },
           "insert": "\n"
@@ -211,7 +214,8 @@
         }
       ],
       "text": "before\n\n\n\n\n\n\n",
-      "html": "<p>before</p><table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-uzxi\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-5r5j\"><br></p></td><td data-row=\"row-uzxi\"><p class=\"ql-table-block\" data-cell=\"cell-dea8\"><br></p></td></tr><tr><td data-row=\"row-ufya\"><p class=\"ql-table-block\" data-cell=\"cell-jdf8\"><br></p></td><td data-row=\"row-ufya\"><p class=\"ql-table-block\" data-cell=\"cell-ya86\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<p>before</p><table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-fwjw\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-ftrm\"><br></p></td><td data-row=\"row-fwjw\"><p class=\"ql-table-block\" data-cell=\"cell-gvm0\"><br></p></td></tr><tr><td data-row=\"row-t7yg\"><p class=\"ql-table-block\" data-cell=\"cell-gadp\"><br></p></td><td data-row=\"row-t7yg\"><p class=\"ql-table-block\" data-cell=\"cell-7xpv\"><br></p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<p>before</p><table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"></temporary><tbody><tr><td data-row=\"row-fwjw\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-ftrm\"><br></p></td><td data-row=\"row-fwjw\"><p class=\"ql-table-block\" data-cell=\"cell-gvm0\"><br></p></td></tr><tr><td data-row=\"row-t7yg\"><p class=\"ql-table-block\" data-cell=\"cell-gadp\"><br></p></td><td data-row=\"row-t7yg\"><p class=\"ql-table-block\" data-cell=\"cell-7xpv\"><br></p></td></tr></tbody></table><p></p>"
     },
     {
       "group": "insertTable",
@@ -231,36 +235,36 @@
         },
         {
           "attributes": {
-            "table-cell-block": "cell-0edr",
+            "table-cell-block": "cell-v0ts",
             "table-cell": {
-              "data-row": "row-7k2s"
+              "data-row": "row-buat"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-79s7",
+            "table-cell-block": "cell-pxaz",
             "table-cell": {
-              "data-row": "row-7k2s"
+              "data-row": "row-buat"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-k0tk",
+            "table-cell-block": "cell-arh3",
             "table-cell": {
-              "data-row": "row-9ev8"
+              "data-row": "row-uyrd"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-gip2",
+            "table-cell-block": "cell-7i5k",
             "table-cell": {
-              "data-row": "row-9ev8"
+              "data-row": "row-uyrd"
             }
           },
           "insert": "\n"
@@ -270,7 +274,8 @@
         }
       ],
       "text": "\nhi\n\n\n\n\n",
-      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-7k2s\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-0edr\">hi</p></td><td data-row=\"row-7k2s\"><p class=\"ql-table-block\" data-cell=\"cell-79s7\"><br></p></td></tr><tr><td data-row=\"row-9ev8\"><p class=\"ql-table-block\" data-cell=\"cell-k0tk\"><br></p></td><td data-row=\"row-9ev8\"><p class=\"ql-table-block\" data-cell=\"cell-gip2\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-buat\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-v0ts\">hi</p></td><td data-row=\"row-buat\"><p class=\"ql-table-block\" data-cell=\"cell-pxaz\"><br></p></td></tr><tr><td data-row=\"row-uyrd\"><p class=\"ql-table-block\" data-cell=\"cell-arh3\"><br></p></td><td data-row=\"row-uyrd\"><p class=\"ql-table-block\" data-cell=\"cell-7i5k\"><br></p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"></temporary><tbody><tr><td data-row=\"row-buat\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-v0ts\">hi</p></td><td data-row=\"row-buat\"><p class=\"ql-table-block\" data-cell=\"cell-pxaz\"><br></p></td></tr><tr><td data-row=\"row-uyrd\"><p class=\"ql-table-block\" data-cell=\"cell-arh3\"><br></p></td><td data-row=\"row-uyrd\"><p class=\"ql-table-block\" data-cell=\"cell-7i5k\"><br></p></td></tr></tbody></table><p></p>"
     },
     {
       "group": "table html to delta",
@@ -338,6 +343,7 @@
       ],
       "text": "\na\nb\nc\nd\n\n",
       "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"2\">b</p></td></tr><tr><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"1\">c</p></td><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"2\">d</p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"2\">b</p></td></tr><tr><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"1\">c</p></td><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"2\">d</p></td></tr></tbody></table><p></p>",
       "converted": [
         {
           "insert": "\n",
@@ -445,6 +451,7 @@
       ],
       "text": "\n\n\na\nb\n\n",
       "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><colgroup><col width=\"100\"><col width=\"200\"></colgroup><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"2\">b</p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"></temporary><colgroup><col width=\"100\"><col width=\"200\"></colgroup><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"2\">b</p></td></tr></tbody></table><p></p>",
       "converted": [
         {
           "insert": "\n",
@@ -556,6 +563,7 @@
       ],
       "text": "\nh1\nh2\na\nb\n\n",
       "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><thead><tr><th data-row=\"1\"><p class=\"table-th-block\" data-cell=\"1\">h1</p></th><th data-row=\"1\"><p class=\"table-th-block\" data-cell=\"2\">h2</p></th></tr></thead><tbody><tr><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"2\">b</p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"></temporary><thead><tr><th data-row=\"1\"><p class=\"table-th-block\" data-cell=\"1\">h1</p></th><th data-row=\"1\"><p class=\"table-th-block\" data-cell=\"2\">h2</p></th></tr></thead><tbody><tr><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"2\">b</p></td></tr></tbody></table><p></p>",
       "converted": [
         {
           "insert": "\n",
@@ -673,6 +681,7 @@
       ],
       "text": "\nwide\ntall\nx\ny\n\n",
       "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td colspan=\"2\" data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">wide</p></td></tr><tr><td rowspan=\"2\" data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"1\">tall</p></td><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"2\">x</p></td></tr><tr><td data-row=\"3\"><p class=\"ql-table-block\" data-cell=\"1\">y</p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"></temporary><tbody><tr><td colspan=\"2\" data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">wide</p></td></tr><tr><td rowspan=\"2\" data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"1\">tall</p></td><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"2\">x</p></td></tr><tr><td data-row=\"3\"><p class=\"ql-table-block\" data-cell=\"1\">y</p></td></tr></tbody></table><p></p>",
       "converted": [
         {
           "insert": "\n",
@@ -759,6 +768,7 @@
       ],
       "text": "\na\n\n",
       "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td style=\"background-color: rgb(255, 0, 0); text-align: center;\" data-row=\"1\"><p class=\"ql-table-block ql-align-center\" data-cell=\"1\"><span style=\"background-color: rgb(255, 0, 0);\">a</span></p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"></temporary><tbody><tr><td style=\"background-color: rgb(255, 0, 0); text-align: center;\" data-row=\"1\"><p class=\"ql-table-block ql-align-center\" data-cell=\"1\"><span style=\"background-color: rgb(255, 0, 0);\">a</span></p></td></tr></tbody></table><p></p>",
       "converted": [
         {
           "insert": "\n",
@@ -812,6 +822,7 @@
       ],
       "text": "\na\n\n",
       "html": "<table style=\"width: 100%;\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%;\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table style=\"width: 100%;\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%;\" data-class=\"ql-table-better\"></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td></tr></tbody></table><p></p>",
       "converted": [
         {
           "insert": "\n",
@@ -878,6 +889,7 @@
       ],
       "text": "\ntitle\nbody\n\n",
       "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><h2 class=\"ql-table-header\" data-cell=\"1\">title</h2><p class=\"ql-table-block\" data-cell=\"1\">body</p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"></temporary><tbody><tr><td data-row=\"1\"><h2 class=\"ql-table-header\" data-cell=\"1\">title</h2><p class=\"ql-table-block\" data-cell=\"1\">body</p></td></tr></tbody></table><p></p>",
       "converted": [
         {
           "insert": "\n",
@@ -962,6 +974,7 @@
       ],
       "text": "\none\ntwo\n\n",
       "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><ol class=\"table-list-container\" data-row=\"1\" data-cell=\"1\"><li class=\"table-list\" data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>one</li><li class=\"table-list\" data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>two</li></ol></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"></temporary><tbody><tr><td data-row=\"1\"><ul class=\"table-list-container\" data-row=\"1\" data-cell=\"1\"><li class=\"table-list\" data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>one</li><li class=\"table-list\" data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>two</li></ul></td></tr></tbody></table><p></p>",
       "converted": [
         {
           "insert": "\n",
@@ -1024,6 +1037,7 @@
       ],
       "text": "\nbold and italic\n\n",
       "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\"><strong>bold</strong> and <em>italic</em></p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\"><strong>bold</strong> and <em>italic</em></p></td></tr></tbody></table><p></p>",
       "converted": [
         {
           "insert": "\n",
@@ -1108,6 +1122,7 @@
       ],
       "text": "before\n\na\nafter\n",
       "html": "<p>before</p><table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td></tr></tbody></table><p>after</p>",
+      "semantic": "<p>before</p><table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td></tr></tbody></table><p>after</p>",
       "converted": [
         {
           "insert": "before\n"
@@ -1149,38 +1164,38 @@
         {
           "attributes": {
             "table-header": {
-              "cellId": "cell-nmqc",
+              "cellId": "cell-404p",
               "value": 2
             },
             "table-cell": {
-              "data-row": "row-iebz"
+              "data-row": "row-ng1a"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-uqtb",
+            "table-cell-block": "cell-qj0o",
             "table-cell": {
-              "data-row": "row-iebz"
+              "data-row": "row-ng1a"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-z8x7",
+            "table-cell-block": "cell-ypcr",
             "table-cell": {
-              "data-row": "row-fd2n"
+              "data-row": "row-gx1c"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-l5sl",
+            "table-cell-block": "cell-rk56",
             "table-cell": {
-              "data-row": "row-fd2n"
+              "data-row": "row-gx1c"
             }
           },
           "insert": "\n"
@@ -1190,7 +1205,8 @@
         }
       ],
       "text": "\n\n\n\n\n\n",
-      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-iebz\" class=\"ql-cell-focused\"><h2 class=\"ql-table-header\" data-cell=\"cell-nmqc\"><br></h2></td><td data-row=\"row-iebz\"><p class=\"ql-table-block\" data-cell=\"cell-uqtb\"><br></p></td></tr><tr><td data-row=\"row-fd2n\"><p class=\"ql-table-block\" data-cell=\"cell-z8x7\"><br></p></td><td data-row=\"row-fd2n\"><p class=\"ql-table-block\" data-cell=\"cell-l5sl\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-ng1a\" class=\"ql-cell-focused\"><h2 class=\"ql-table-header\" data-cell=\"cell-404p\"><br></h2></td><td data-row=\"row-ng1a\"><p class=\"ql-table-block\" data-cell=\"cell-qj0o\"><br></p></td></tr><tr><td data-row=\"row-gx1c\"><p class=\"ql-table-block\" data-cell=\"cell-ypcr\"><br></p></td><td data-row=\"row-gx1c\"><p class=\"ql-table-block\" data-cell=\"cell-rk56\"><br></p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"></temporary><tbody><tr><td data-row=\"row-ng1a\" class=\"ql-cell-focused\"><h2 class=\"ql-table-header\" data-cell=\"cell-404p\"><br></h2></td><td data-row=\"row-ng1a\"><p class=\"ql-table-block\" data-cell=\"cell-qj0o\"><br></p></td></tr><tr><td data-row=\"row-gx1c\"><p class=\"ql-table-block\" data-cell=\"cell-ypcr\"><br></p></td><td data-row=\"row-gx1c\"><p class=\"ql-table-block\" data-cell=\"cell-rk56\"><br></p></td></tr></tbody></table><p></p>"
     },
     {
       "group": "table editing",
@@ -1213,36 +1229,36 @@
         },
         {
           "attributes": {
-            "table-cell-block": "cell-j76v",
+            "table-cell-block": "cell-0ael",
             "table-cell": {
-              "data-row": "row-er3q"
+              "data-row": "row-0y6k"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-iw97",
+            "table-cell-block": "cell-4f96",
             "table-cell": {
-              "data-row": "row-er3q"
+              "data-row": "row-0y6k"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-5ggx",
+            "table-cell-block": "cell-ekcq",
             "table-cell": {
-              "data-row": "row-cvvj"
+              "data-row": "row-8hvq"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-5ubn",
+            "table-cell-block": "cell-nod9",
             "table-cell": {
-              "data-row": "row-cvvj"
+              "data-row": "row-8hvq"
             }
           },
           "insert": "\n"
@@ -1252,7 +1268,8 @@
         }
       ],
       "text": "\nhi\n\n\n\n\n",
-      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-er3q\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-j76v\"><strong>hi</strong></p></td><td data-row=\"row-er3q\"><p class=\"ql-table-block\" data-cell=\"cell-iw97\"><br></p></td></tr><tr><td data-row=\"row-cvvj\"><p class=\"ql-table-block\" data-cell=\"cell-5ggx\"><br></p></td><td data-row=\"row-cvvj\"><p class=\"ql-table-block\" data-cell=\"cell-5ubn\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-0y6k\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-0ael\"><strong>hi</strong></p></td><td data-row=\"row-0y6k\"><p class=\"ql-table-block\" data-cell=\"cell-4f96\"><br></p></td></tr><tr><td data-row=\"row-8hvq\"><p class=\"ql-table-block\" data-cell=\"cell-ekcq\"><br></p></td><td data-row=\"row-8hvq\"><p class=\"ql-table-block\" data-cell=\"cell-nod9\"><br></p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"></temporary><tbody><tr><td data-row=\"row-0y6k\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-0ael\"><strong>hi</strong></p></td><td data-row=\"row-0y6k\"><p class=\"ql-table-block\" data-cell=\"cell-4f96\"><br></p></td></tr><tr><td data-row=\"row-8hvq\"><p class=\"ql-table-block\" data-cell=\"cell-ekcq\"><br></p></td><td data-row=\"row-8hvq\"><p class=\"ql-table-block\" data-cell=\"cell-nod9\"><br></p></td></tr></tbody></table><p></p>"
     },
     {
       "group": "table editing",
@@ -1260,36 +1277,36 @@
       "contents": [
         {
           "attributes": {
-            "table-cell-block": "cell-2hw3",
+            "table-cell-block": "cell-f79q",
             "table-cell": {
-              "data-row": "row-l2mb"
+              "data-row": "row-w3fa"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-s7ci",
+            "table-cell-block": "cell-xs4a",
             "table-cell": {
-              "data-row": "row-l2mb"
+              "data-row": "row-w3fa"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-mkxm",
+            "table-cell-block": "cell-0etf",
             "table-cell": {
-              "data-row": "row-eiw5"
+              "data-row": "row-9uhj"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-1bax",
+            "table-cell-block": "cell-9n9m",
             "table-cell": {
-              "data-row": "row-eiw5"
+              "data-row": "row-9uhj"
             }
           },
           "insert": "\n"
@@ -1299,7 +1316,8 @@
         }
       ],
       "text": "\n\n\n\n\n",
-      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><tbody><tr><td data-row=\"row-l2mb\" class=\"\"><p class=\"ql-table-block\" data-cell=\"cell-2hw3\"><br></p></td><td data-row=\"row-l2mb\"><p class=\"ql-table-block\" data-cell=\"cell-s7ci\"><br></p></td></tr><tr><td data-row=\"row-eiw5\"><p class=\"ql-table-block\" data-cell=\"cell-mkxm\"><br></p></td><td data-row=\"row-eiw5\"><p class=\"ql-table-block\" data-cell=\"cell-1bax\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><tbody><tr><td data-row=\"row-w3fa\" class=\"\"><p class=\"ql-table-block\" data-cell=\"cell-f79q\"><br></p></td><td data-row=\"row-w3fa\"><p class=\"ql-table-block\" data-cell=\"cell-xs4a\"><br></p></td></tr><tr><td data-row=\"row-9uhj\"><p class=\"ql-table-block\" data-cell=\"cell-0etf\"><br></p></td><td data-row=\"row-9uhj\"><p class=\"ql-table-block\" data-cell=\"cell-9n9m\"><br></p></td></tr></tbody></table><p><br></p>",
+      "semantic": "<table style=\"width: 100%\" class=\"ql-table-better\"><tbody><tr><td data-row=\"row-w3fa\" class=\"\"><p class=\"ql-table-block\" data-cell=\"cell-f79q\"><br></p></td><td data-row=\"row-w3fa\"><p class=\"ql-table-block\" data-cell=\"cell-xs4a\"><br></p></td></tr><tr><td data-row=\"row-9uhj\"><p class=\"ql-table-block\" data-cell=\"cell-0etf\"><br></p></td><td data-row=\"row-9uhj\"><p class=\"ql-table-block\" data-cell=\"cell-9n9m\"><br></p></td></tr></tbody></table><p></p>"
     },
     {
       "group": "table editing",
@@ -1310,7 +1328,8 @@
         }
       ],
       "text": "\n",
-      "html": "<p><br></p>"
+      "html": "<p><br></p>",
+      "semantic": "<p></p>"
     }
   ]
 }

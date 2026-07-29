@@ -475,7 +475,14 @@ class FakeDomElement extends FakeDomNode implements DomElement {
       : _ownerDocument = document ?? FakeDomDocument(),
         _tagName = tagName.toUpperCase(),
         _classes = FakeDomClassList(),
-        super(tagName.toUpperCase());
+        super(tagName.toUpperCase()) {
+    // A real browser materializes the `class` attribute on ANY classList
+    // mutation — even remove() on an element without one leaves class="".
+    // The serialized outerHTML depends on that presence.
+    _classes.onMutate = () => _classAttributePresent = true;
+  }
+
+  bool _classAttributePresent = false;
 
   final FakeDomDocument _ownerDocument;
   final String _tagName;
@@ -535,6 +542,19 @@ class FakeDomElement extends FakeDomNode implements DomElement {
     // The rgb()/semicolon normalization of CSSOM writes lives in
     // StyleAttributor._writeInlineStyles, the path that emulates
     // `node.style[prop] = value`.
+    //
+    // `class` is one state with `classes`/`className`, as in a real DOM:
+    // setAttribute('class', …) rewrites the token list. Keeping them apart
+    // made an element report a class through getAttribute that its
+    // serialized outerHTML did not carry.
+    if (name == 'class') {
+      _classes._values.clear();
+      for (final token in value.split(RegExp(r'\s+'))) {
+        if (token.isNotEmpty) _classes._values.add(token);
+      }
+      _classAttributePresent = true;
+      return;
+    }
     _attributes[name] = value;
     if (name.startsWith('data-')) {
       _dataset[name.substring(5)] = value;
@@ -542,18 +562,33 @@ class FakeDomElement extends FakeDomNode implements DomElement {
   }
 
   @override
-  String? getAttribute(String name) => _attributes[name];
+  String? getAttribute(String name) {
+    if (name == 'class') {
+      return hasAttribute('class') ? (className ?? '') : null;
+    }
+    return _attributes[name];
+  }
 
   @override
-  bool hasAttribute(String name) => _attributes.containsKey(name);
+  bool hasAttribute(String name) => name == 'class'
+      ? (_classAttributePresent || _classes.values.isNotEmpty)
+      : _attributes.containsKey(name);
 
   Map<String, String> get attributes => Map.unmodifiable(_attributes);
 
   @override
-  List<String> get attributeNames => _attributes.keys.toList();
+  List<String> get attributeNames => [
+        if (hasAttribute('class')) 'class',
+        ..._attributes.keys.where((name) => name != 'class'),
+      ];
 
   @override
   void removeAttribute(String name) {
+    if (name == 'class') {
+      _classes._values.clear();
+      _classAttributePresent = false;
+      return;
+    }
     _attributes.remove(name);
     if (name.startsWith('data-')) {
       _dataset.remove(name.substring(5));
@@ -589,6 +624,7 @@ class FakeDomElement extends FakeDomNode implements DomElement {
     for (final token in _classes.values) {
       clone._classes.add(token);
     }
+    clone._classAttributePresent = _classAttributePresent;
     if (deep) {
       for (final child in internalChildren) {
         if (child is FakeDomElement) {
@@ -835,9 +871,10 @@ void _serializeHtmlNode(FakeDomNode node, StringBuffer buffer) {
     ];
     void writeAttribute(String name) {
       if (name == 'class') {
-        final className = node.className;
-        if (className != null && className.isNotEmpty) {
-          buffer.write(' class="$className"');
+        // Present-but-empty serializes as class="" — a browser keeps the
+        // attribute after classList mutations empty it.
+        if (node.hasAttribute('class')) {
+          buffer.write(' class="${node.className ?? ''}"');
         }
         return;
       }
@@ -884,13 +921,22 @@ void _serializeHtmlNode(FakeDomNode node, StringBuffer buffer) {
   }
 }
 
+// The full HTML void-element set — a fake serializer that closes a void
+// element (`<col></col>`) diverges from every real browser's outerHTML.
 const Set<String> _voidHtmlElements = {
+  'area',
+  'base',
   'br',
+  'col',
+  'embed',
   'hr',
   'img',
   'input',
-  'meta',
   'link',
+  'meta',
+  'source',
+  'track',
+  'wbr',
 };
 
 class FakeDomText extends FakeDomNode implements DomText {
@@ -921,9 +967,19 @@ class FakeDomText extends FakeDomNode implements DomText {
 class FakeDomClassList implements DomClassList {
   final Set<String> _values = <String>{};
 
+  /// Called on every mutation — the owning element uses it to materialize the
+  /// `class` attribute, as a real browser's classList does.
+  void Function()? onMutate;
+
+  void clear() {
+    _values.clear();
+    onMutate?.call();
+  }
+
   @override
   void add(String token) {
     _values.add(token);
+    onMutate?.call();
   }
 
   @override
@@ -932,6 +988,7 @@ class FakeDomClassList implements DomClassList {
   @override
   void remove(String token) {
     _values.remove(token);
+    onMutate?.call();
   }
 
   @override
@@ -942,6 +999,7 @@ class FakeDomClassList implements DomClassList {
     } else {
       _values.remove(token);
     }
+    onMutate?.call();
   }
 
   @override
