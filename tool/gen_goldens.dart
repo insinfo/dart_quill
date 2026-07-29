@@ -158,6 +158,7 @@ Future<Map<String, dynamic>> _record(
           'contents': raw['contents'],
           'text': raw['text'],
           'html': raw['html'],
+          if (raw['converted'] != null) 'converted': raw['converted'],
         },
       });
       final status = raw['error'] == null ? 'ok' : 'ERROR ${raw['error']}';
@@ -195,6 +196,7 @@ function runCase(testCase) {
   host.appendChild(container);
   try {
     const quill = new Quill(container, { theme: null });
+    let converted = null;
     const setup = testCase.setup || {};
     if (typeof setup.pasteHtml === 'string') {
       quill.setContents(new Delta());
@@ -215,6 +217,7 @@ function runCase(testCase) {
       contents: quill.getContents().ops,
       text: quill.getText(),
       html: quill.root.innerHTML,
+      ...(converted ? { converted } : {}),
     };
   } catch (error) {
     return { error: String(error && error.stack || error) };
@@ -260,6 +263,7 @@ function runCase(testCase) {
         keyboard: { bindings: QuillTableBetter.keyboardBindings },
       },
     });
+    let converted = null;
     const setup = testCase.setup || {};
     if (typeof setup.pasteHtml === 'string') {
       quill.setContents(new Delta());
@@ -277,6 +281,9 @@ function runCase(testCase) {
       if (action.module) {
         quill.getModule('table-better')[action.module](...args);
       } else if (action.method === 'pasteHtml') {
+        // Diagnostic: the intermediate delta, so a mismatch can be pinned on
+        // the matchers or on the blots rather than guessed at.
+        converted = quill.clipboard.convert({ html: args[1] }).ops;
         quill.clipboard.dangerouslyPasteHTML(args[0], args[1]);
       } else {
         quill[action.method](...args);
@@ -286,6 +293,7 @@ function runCase(testCase) {
       contents: quill.getContents().ops,
       text: quill.getText(),
       html: quill.root.innerHTML,
+      ...(converted ? { converted } : {}),
     };
   } catch (error) {
     return { error: String(error && error.stack || error) };

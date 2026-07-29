@@ -108,27 +108,31 @@ void main() {
 /// compatibility debt, not an accepted difference — a table written by the JS
 /// plugin does not survive a round trip through the port in any of them.
 const Map<String, String> _knownDivergences = {
+  'table html to delta / text around a table': _pasteBroken,
+  'table html to delta / inline formatting inside a cell': _pasteBroken,
+  'table html to delta / a list inside a cell': _pasteBroken,
+  'table html to delta / block content inside a cell': _pasteBroken,
+  'table html to delta / a table carrying its own style': _pasteBroken,
+  'table html to delta / cell styles survive the paste': _pasteBroken,
+  'table html to delta / colspan and rowspan': _pasteBroken,
+  'table html to delta / a table with a header row': _pasteBroken,
+  'table html to delta / a table with a colgroup': _pasteBroken,
+  'table html to delta / a plain 2x2 table': _pasteBroken,
   // ---- pasting a table is broken (10 cases) ------------------------------
-  // Probed directly: pasting `<table><tr><td>a</td><td>b</td></tr></table>`
-  // yields
+  // Narrowed down with the `converted` field the generator now records — the
+  // plugin's own `clipboard.convert` output for the same HTML.
+  //
+  // The matchers are now right: the port's convert delta matches the plugin's,
+  // `table-cell` carrying `{data-row: N}`. What is still wrong is downstream,
+  // where that format is applied to build the `<td>`: pasting
+  // `<table><tr><td>a</td><td>b</td></tr></table>` yields
   //   <td>a</td><td><p class="ql-table-block"><br></p></td><td>b</td>…
   // against the plugin's
   //   <td data-row="1"><p class="ql-table-block">a</p></td>…
-  // Three defects at once: `data-row` is never written, so rows have no
-  // identity and cannot be grouped; the cell text is left bare instead of being
-  // wrapped in a `table-cell-block`; and a phantom empty cell is emitted after
-  // each real one. Fix in `matchTableBetterCell` / the clipboard module, not in
-  // the fixtures.
-  'table html to delta / a plain 2x2 table': _pasteBroken,
-  'table html to delta / a table with a colgroup': _pasteBroken,
-  'table html to delta / a table with a header row': _pasteBroken,
-  'table html to delta / colspan and rowspan': _pasteBroken,
-  'table html to delta / cell styles survive the paste': _pasteBroken,
-  'table html to delta / a table carrying its own style': _pasteBroken,
-  'table html to delta / block content inside a cell': _pasteBroken,
-  'table html to delta / a list inside a cell': _pasteBroken,
-  'table html to delta / inline formatting inside a cell': _pasteBroken,
-  'table html to delta / text around a table': _pasteBroken,
+  // so `data-row` never reaches the element, the cell text is left bare
+  // instead of being wrapped in a `table-cell-block`, and a phantom empty cell
+  // follows each real one. The fix belongs in the `TableCellBlock.format` /
+  // `wrap` chain, not in the matchers and not in the fixtures.
 
   // ---- insertTable after existing content --------------------------------
   'insertTable / a table after existing text':
@@ -143,8 +147,9 @@ const Map<String, String> _knownDivergences = {
 };
 
 const String _pasteBroken =
-    'pasting a table loses `data-row`, leaves cell text unwrapped and emits a '
-    'phantom empty cell (see the comment above)';
+    'the convert delta is correct now; applying it still loses `data-row`, '
+    'leaves cell text unwrapped and emits a phantom cell (see the comment '
+    'above the map)';
 
 void _applyAction(
     Quill quill, TableBetter module, Map<String, dynamic> action) {

@@ -62,7 +62,13 @@ Delta matchTableBetterRow(DomNode node, Delta delta, Scroll scroll) {
   final blotName = node.querySelectorAll('th').isNotEmpty
       ? TableTh.kBlotName
       : TableCell.kBlotName;
-  return applyTableFormat(delta, blotName, row);
+  // The cell format's value is the attribute map the `<td>` is built from, so
+  // the row number goes in as `data-row` rather than as a bare number.
+  // `TableCell.create` reads keys off this map; a scalar leaves the cell with
+  // no `data-row` at all, which is what made pasted tables lose their row
+  // grouping. Verified against the plugin's own `clipboard.convert` output,
+  // recorded in the golden as `converted`.
+  return applyTableFormat(delta, blotName, {'data-row': row});
 }
 
 Delta matchTableBetterCell(DomNode node, Delta delta, Scroll scroll) {

@@ -19,36 +19,36 @@
         },
         {
           "attributes": {
-            "table-cell-block": "cell-82y6",
+            "table-cell-block": "cell-1nd0",
             "table-cell": {
-              "data-row": "row-9dpf"
+              "data-row": "row-cyu0"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-ofdc",
+            "table-cell-block": "cell-0g26",
             "table-cell": {
-              "data-row": "row-9dpf"
+              "data-row": "row-cyu0"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-t033",
+            "table-cell-block": "cell-bqih",
             "table-cell": {
-              "data-row": "row-ufuq"
+              "data-row": "row-tgz4"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-i9lc",
+            "table-cell-block": "cell-sbjw",
             "table-cell": {
-              "data-row": "row-ufuq"
+              "data-row": "row-tgz4"
             }
           },
           "insert": "\n"
@@ -58,7 +58,7 @@
         }
       ],
       "text": "\n\n\n\n\n\n",
-      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-9dpf\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-82y6\"><br></p></td><td data-row=\"row-9dpf\"><p class=\"ql-table-block\" data-cell=\"cell-ofdc\"><br></p></td></tr><tr><td data-row=\"row-ufuq\"><p class=\"ql-table-block\" data-cell=\"cell-t033\"><br></p></td><td data-row=\"row-ufuq\"><p class=\"ql-table-block\" data-cell=\"cell-i9lc\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-cyu0\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-1nd0\"><br></p></td><td data-row=\"row-cyu0\"><p class=\"ql-table-block\" data-cell=\"cell-0g26\"><br></p></td></tr><tr><td data-row=\"row-tgz4\"><p class=\"ql-table-block\" data-cell=\"cell-bqih\"><br></p></td><td data-row=\"row-tgz4\"><p class=\"ql-table-block\" data-cell=\"cell-sbjw\"><br></p></td></tr></tbody></table><p><br></p>"
     },
     {
       "group": "insertTable",
@@ -75,27 +75,27 @@
         },
         {
           "attributes": {
-            "table-cell-block": "cell-2cb6",
+            "table-cell-block": "cell-8x8a",
             "table-cell": {
-              "data-row": "row-sx4k"
+              "data-row": "row-p8st"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-5qqa",
+            "table-cell-block": "cell-iv99",
             "table-cell": {
-              "data-row": "row-sx4k"
+              "data-row": "row-p8st"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-d1ny",
+            "table-cell-block": "cell-pgvn",
             "table-cell": {
-              "data-row": "row-sx4k"
+              "data-row": "row-p8st"
             }
           },
           "insert": "\n"
@@ -105,7 +105,7 @@
         }
       ],
       "text": "\n\n\n\n\n",
-      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-sx4k\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-2cb6\"><br></p></td><td data-row=\"row-sx4k\"><p class=\"ql-table-block\" data-cell=\"cell-5qqa\"><br></p></td><td data-row=\"row-sx4k\"><p class=\"ql-table-block\" data-cell=\"cell-d1ny\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-p8st\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-8x8a\"><br></p></td><td data-row=\"row-p8st\"><p class=\"ql-table-block\" data-cell=\"cell-iv99\"><br></p></td><td data-row=\"row-p8st\"><p class=\"ql-table-block\" data-cell=\"cell-pgvn\"><br></p></td></tr></tbody></table><p><br></p>"
     },
     {
       "group": "insertTable",
@@ -122,27 +122,27 @@
         },
         {
           "attributes": {
-            "table-cell-block": "cell-3g8c",
+            "table-cell-block": "cell-pn3w",
             "table-cell": {
-              "data-row": "row-yzp9"
+              "data-row": "row-870v"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-goiu",
+            "table-cell-block": "cell-b3y9",
             "table-cell": {
-              "data-row": "row-zvob"
+              "data-row": "row-k84x"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-uwl3",
+            "table-cell-block": "cell-wdwe",
             "table-cell": {
-              "data-row": "row-f9o5"
+              "data-row": "row-liy8"
             }
           },
           "insert": "\n"
@@ -152,7 +152,7 @@
         }
       ],
       "text": "\n\n\n\n\n",
-      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-yzp9\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-3g8c\"><br></p></td></tr><tr><td data-row=\"row-zvob\"><p class=\"ql-table-block\" data-cell=\"cell-goiu\"><br></p></td></tr><tr><td data-row=\"row-f9o5\"><p class=\"ql-table-block\" data-cell=\"cell-uwl3\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-870v\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-pn3w\"><br></p></td></tr><tr><td data-row=\"row-k84x\"><p class=\"ql-table-block\" data-cell=\"cell-b3y9\"><br></p></td></tr><tr><td data-row=\"row-liy8\"><p class=\"ql-table-block\" data-cell=\"cell-wdwe\"><br></p></td></tr></tbody></table><p><br></p>"
     },
     {
       "group": "insertTable",
@@ -172,36 +172,36 @@
         },
         {
           "attributes": {
-            "table-cell-block": "cell-pah3",
+            "table-cell-block": "cell-5r5j",
             "table-cell": {
-              "data-row": "row-vhhx"
+              "data-row": "row-uzxi"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-3r70",
+            "table-cell-block": "cell-dea8",
             "table-cell": {
-              "data-row": "row-vhhx"
+              "data-row": "row-uzxi"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-c1ir",
+            "table-cell-block": "cell-jdf8",
             "table-cell": {
-              "data-row": "row-x29a"
+              "data-row": "row-ufya"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-1ia1",
+            "table-cell-block": "cell-ya86",
             "table-cell": {
-              "data-row": "row-x29a"
+              "data-row": "row-ufya"
             }
           },
           "insert": "\n"
@@ -211,7 +211,7 @@
         }
       ],
       "text": "before\n\n\n\n\n\n\n",
-      "html": "<p>before</p><table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-vhhx\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-pah3\"><br></p></td><td data-row=\"row-vhhx\"><p class=\"ql-table-block\" data-cell=\"cell-3r70\"><br></p></td></tr><tr><td data-row=\"row-x29a\"><p class=\"ql-table-block\" data-cell=\"cell-c1ir\"><br></p></td><td data-row=\"row-x29a\"><p class=\"ql-table-block\" data-cell=\"cell-1ia1\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<p>before</p><table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-uzxi\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-5r5j\"><br></p></td><td data-row=\"row-uzxi\"><p class=\"ql-table-block\" data-cell=\"cell-dea8\"><br></p></td></tr><tr><td data-row=\"row-ufya\"><p class=\"ql-table-block\" data-cell=\"cell-jdf8\"><br></p></td><td data-row=\"row-ufya\"><p class=\"ql-table-block\" data-cell=\"cell-ya86\"><br></p></td></tr></tbody></table><p><br></p>"
     },
     {
       "group": "insertTable",
@@ -231,36 +231,36 @@
         },
         {
           "attributes": {
-            "table-cell-block": "cell-j142",
+            "table-cell-block": "cell-0edr",
             "table-cell": {
-              "data-row": "row-75td"
+              "data-row": "row-7k2s"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-3sqr",
+            "table-cell-block": "cell-79s7",
             "table-cell": {
-              "data-row": "row-75td"
+              "data-row": "row-7k2s"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-gyus",
+            "table-cell-block": "cell-k0tk",
             "table-cell": {
-              "data-row": "row-6e4a"
+              "data-row": "row-9ev8"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-awiv",
+            "table-cell-block": "cell-gip2",
             "table-cell": {
-              "data-row": "row-6e4a"
+              "data-row": "row-9ev8"
             }
           },
           "insert": "\n"
@@ -270,7 +270,7 @@
         }
       ],
       "text": "\nhi\n\n\n\n\n",
-      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-75td\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-j142\">hi</p></td><td data-row=\"row-75td\"><p class=\"ql-table-block\" data-cell=\"cell-3sqr\"><br></p></td></tr><tr><td data-row=\"row-6e4a\"><p class=\"ql-table-block\" data-cell=\"cell-gyus\"><br></p></td><td data-row=\"row-6e4a\"><p class=\"ql-table-block\" data-cell=\"cell-awiv\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-7k2s\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-0edr\">hi</p></td><td data-row=\"row-7k2s\"><p class=\"ql-table-block\" data-cell=\"cell-79s7\"><br></p></td></tr><tr><td data-row=\"row-9ev8\"><p class=\"ql-table-block\" data-cell=\"cell-k0tk\"><br></p></td><td data-row=\"row-9ev8\"><p class=\"ql-table-block\" data-cell=\"cell-gip2\"><br></p></td></tr></tbody></table><p><br></p>"
     },
     {
       "group": "table html to delta",
@@ -337,7 +337,55 @@
         }
       ],
       "text": "\na\nb\nc\nd\n\n",
-      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"2\">b</p></td></tr><tr><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"1\">c</p></td><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"2\">d</p></td></tr></tbody></table><p><br></p>"
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"2\">b</p></td></tr><tr><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"1\">c</p></td><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"2\">d</p></td></tr></tbody></table><p><br></p>",
+      "converted": [
+        {
+          "insert": "\n",
+          "attributes": {
+            "table-temporary": {}
+          }
+        },
+        {
+          "insert": "a\n",
+          "attributes": {
+            "table": 1,
+            "table-cell-block": 1,
+            "table-cell": {
+              "data-row": 1
+            }
+          }
+        },
+        {
+          "insert": "b\n",
+          "attributes": {
+            "table": 1,
+            "table-cell-block": 2,
+            "table-cell": {
+              "data-row": 1
+            }
+          }
+        },
+        {
+          "insert": "c\n",
+          "attributes": {
+            "table": 2,
+            "table-cell-block": 1,
+            "table-cell": {
+              "data-row": 2
+            }
+          }
+        },
+        {
+          "insert": "d\n",
+          "attributes": {
+            "table": 2,
+            "table-cell-block": 2,
+            "table-cell": {
+              "data-row": 2
+            }
+          }
+        }
+      ]
     },
     {
       "group": "table html to delta",
@@ -396,7 +444,51 @@
         }
       ],
       "text": "\n\n\na\nb\n\n",
-      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><colgroup><col width=\"100\"><col width=\"200\"></colgroup><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"2\">b</p></td></tr></tbody></table><p><br></p>"
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><colgroup><col width=\"100\"><col width=\"200\"></colgroup><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"2\">b</p></td></tr></tbody></table><p><br></p>",
+      "converted": [
+        {
+          "insert": "\n",
+          "attributes": {
+            "table-temporary": {}
+          }
+        },
+        {
+          "insert": "\n",
+          "attributes": {
+            "table-col": {
+              "width": "100"
+            }
+          }
+        },
+        {
+          "insert": "\n",
+          "attributes": {
+            "table-col": {
+              "width": "200"
+            }
+          }
+        },
+        {
+          "insert": "a\n",
+          "attributes": {
+            "table": 1,
+            "table-cell-block": 1,
+            "table-cell": {
+              "data-row": 1
+            }
+          }
+        },
+        {
+          "insert": "b\n",
+          "attributes": {
+            "table": 1,
+            "table-cell-block": 2,
+            "table-cell": {
+              "data-row": 1
+            }
+          }
+        }
+      ]
     },
     {
       "group": "table html to delta",
@@ -463,7 +555,55 @@
         }
       ],
       "text": "\nh1\nh2\na\nb\n\n",
-      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><thead><tr><th data-row=\"1\"><p class=\"table-th-block\" data-cell=\"1\">h1</p></th><th data-row=\"1\"><p class=\"table-th-block\" data-cell=\"2\">h2</p></th></tr></thead><tbody><tr><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"2\">b</p></td></tr></tbody></table><p><br></p>"
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><thead><tr><th data-row=\"1\"><p class=\"table-th-block\" data-cell=\"1\">h1</p></th><th data-row=\"1\"><p class=\"table-th-block\" data-cell=\"2\">h2</p></th></tr></thead><tbody><tr><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"2\">b</p></td></tr></tbody></table><p><br></p>",
+      "converted": [
+        {
+          "insert": "\n",
+          "attributes": {
+            "table-temporary": {}
+          }
+        },
+        {
+          "insert": "h1\n",
+          "attributes": {
+            "table": 1,
+            "table-th-block": 1,
+            "table-th": {
+              "data-row": 1
+            }
+          }
+        },
+        {
+          "insert": "h2\n",
+          "attributes": {
+            "table": 1,
+            "table-th-block": 2,
+            "table-th": {
+              "data-row": 1
+            }
+          }
+        },
+        {
+          "insert": "a\n",
+          "attributes": {
+            "table": 2,
+            "table-cell-block": 1,
+            "table-cell": {
+              "data-row": 2
+            }
+          }
+        },
+        {
+          "insert": "b\n",
+          "attributes": {
+            "table": 2,
+            "table-cell-block": 2,
+            "table-cell": {
+              "data-row": 2
+            }
+          }
+        }
+      ]
     },
     {
       "group": "table html to delta",
@@ -532,7 +672,57 @@
         }
       ],
       "text": "\nwide\ntall\nx\ny\n\n",
-      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td colspan=\"2\" data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">wide</p></td></tr><tr><td rowspan=\"2\" data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"1\">tall</p></td><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"2\">x</p></td></tr><tr><td data-row=\"3\"><p class=\"ql-table-block\" data-cell=\"1\">y</p></td></tr></tbody></table><p><br></p>"
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td colspan=\"2\" data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">wide</p></td></tr><tr><td rowspan=\"2\" data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"1\">tall</p></td><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"2\">x</p></td></tr><tr><td data-row=\"3\"><p class=\"ql-table-block\" data-cell=\"1\">y</p></td></tr></tbody></table><p><br></p>",
+      "converted": [
+        {
+          "insert": "\n",
+          "attributes": {
+            "table-temporary": {}
+          }
+        },
+        {
+          "insert": "wide\n",
+          "attributes": {
+            "table": 1,
+            "table-cell-block": 1,
+            "table-cell": {
+              "colspan": "2",
+              "data-row": 1
+            }
+          }
+        },
+        {
+          "insert": "tall\n",
+          "attributes": {
+            "table": 2,
+            "table-cell-block": 1,
+            "table-cell": {
+              "rowspan": "2",
+              "data-row": 2
+            }
+          }
+        },
+        {
+          "insert": "x\n",
+          "attributes": {
+            "table": 2,
+            "table-cell-block": 2,
+            "table-cell": {
+              "data-row": 2
+            }
+          }
+        },
+        {
+          "insert": "y\n",
+          "attributes": {
+            "table": 3,
+            "table-cell-block": 1,
+            "table-cell": {
+              "data-row": 3
+            }
+          }
+        }
+      ]
     },
     {
       "group": "table html to delta",
@@ -568,7 +758,28 @@
         }
       ],
       "text": "\na\n\n",
-      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td style=\"background-color: rgb(255, 0, 0); text-align: center;\" data-row=\"1\"><p class=\"ql-table-block ql-align-center\" data-cell=\"1\"><span style=\"background-color: rgb(255, 0, 0);\">a</span></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td style=\"background-color: rgb(255, 0, 0); text-align: center;\" data-row=\"1\"><p class=\"ql-table-block ql-align-center\" data-cell=\"1\"><span style=\"background-color: rgb(255, 0, 0);\">a</span></p></td></tr></tbody></table><p><br></p>",
+      "converted": [
+        {
+          "insert": "\n",
+          "attributes": {
+            "table-temporary": {}
+          }
+        },
+        {
+          "insert": "a\n",
+          "attributes": {
+            "table": 1,
+            "table-cell-block": 1,
+            "align": "center",
+            "background": "#ff0000",
+            "table-cell": {
+              "style": "background-color: rgb(255, 0, 0); text-align: center;",
+              "data-row": 1
+            }
+          }
+        }
+      ]
     },
     {
       "group": "table html to delta",
@@ -600,7 +811,27 @@
         }
       ],
       "text": "\na\n\n",
-      "html": "<table style=\"width: 100%;\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%;\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td></tr></tbody></table><p><br></p>"
+      "html": "<table style=\"width: 100%;\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%;\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td></tr></tbody></table><p><br></p>",
+      "converted": [
+        {
+          "insert": "\n",
+          "attributes": {
+            "table-temporary": {
+              "style": "width: 100%;"
+            }
+          }
+        },
+        {
+          "insert": "a\n",
+          "attributes": {
+            "table": 1,
+            "table-cell-block": 1,
+            "table-cell": {
+              "data-row": 1
+            }
+          }
+        }
+      ]
     },
     {
       "group": "table html to delta",
@@ -646,7 +877,36 @@
         }
       ],
       "text": "\ntitle\nbody\n\n",
-      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><h2 class=\"ql-table-header\" data-cell=\"1\">title</h2><p class=\"ql-table-block\" data-cell=\"1\">body</p></td></tr></tbody></table><p><br></p>"
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><h2 class=\"ql-table-header\" data-cell=\"1\">title</h2><p class=\"ql-table-block\" data-cell=\"1\">body</p></td></tr></tbody></table><p><br></p>",
+      "converted": [
+        {
+          "insert": "\n",
+          "attributes": {
+            "table-temporary": {}
+          }
+        },
+        {
+          "insert": "title\n",
+          "attributes": {
+            "table": 1,
+            "table-cell-block": 1,
+            "table-cell": {
+              "data-row": 1
+            },
+            "header": 2
+          }
+        },
+        {
+          "insert": "body\n",
+          "attributes": {
+            "table": 1,
+            "table-cell-block": 1,
+            "table-cell": {
+              "data-row": 1
+            }
+          }
+        }
+      ]
     },
     {
       "group": "table html to delta",
@@ -701,7 +961,26 @@
         }
       ],
       "text": "\none\ntwo\n\n",
-      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><ol class=\"table-list-container\" data-row=\"1\" data-cell=\"1\"><li class=\"table-list\" data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>one</li><li class=\"table-list\" data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>two</li></ol></td></tr></tbody></table><p><br></p>"
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><ol class=\"table-list-container\" data-row=\"1\" data-cell=\"1\"><li class=\"table-list\" data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>one</li><li class=\"table-list\" data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>two</li></ol></td></tr></tbody></table><p><br></p>",
+      "converted": [
+        {
+          "insert": "\n",
+          "attributes": {
+            "table-temporary": {}
+          }
+        },
+        {
+          "insert": "one\ntwo\n",
+          "attributes": {
+            "table": 1,
+            "table-cell-block": 1,
+            "table-cell": {
+              "data-row": 1
+            },
+            "list": "bullet"
+          }
+        }
+      ]
     },
     {
       "group": "table html to delta",
@@ -744,7 +1023,57 @@
         }
       ],
       "text": "\nbold and italic\n\n",
-      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\"><strong>bold</strong> and <em>italic</em></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\"><strong>bold</strong> and <em>italic</em></p></td></tr></tbody></table><p><br></p>",
+      "converted": [
+        {
+          "insert": "\n",
+          "attributes": {
+            "table-temporary": {}
+          }
+        },
+        {
+          "insert": "bold",
+          "attributes": {
+            "table": 1,
+            "table-cell-block": 1,
+            "table-cell": {
+              "data-row": 1
+            },
+            "bold": true
+          }
+        },
+        {
+          "insert": " and ",
+          "attributes": {
+            "table": 1,
+            "table-cell-block": 1,
+            "table-cell": {
+              "data-row": 1
+            }
+          }
+        },
+        {
+          "insert": "italic",
+          "attributes": {
+            "table": 1,
+            "table-cell-block": 1,
+            "table-cell": {
+              "data-row": 1
+            },
+            "italic": true
+          }
+        },
+        {
+          "insert": "\n",
+          "attributes": {
+            "table": 1,
+            "table-cell-block": 1,
+            "table-cell": {
+              "data-row": 1
+            }
+          }
+        }
+      ]
     },
     {
       "group": "table html to delta",
@@ -778,7 +1107,31 @@
         }
       ],
       "text": "before\n\na\nafter\n",
-      "html": "<p>before</p><table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td></tr></tbody></table><p>after</p>"
+      "html": "<p>before</p><table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td></tr></tbody></table><p>after</p>",
+      "converted": [
+        {
+          "insert": "before\n"
+        },
+        {
+          "attributes": {
+            "table-temporary": {}
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table": 1,
+            "table-cell-block": 1,
+            "table-cell": {
+              "data-row": 1
+            }
+          },
+          "insert": "a\n"
+        },
+        {
+          "insert": "after"
+        }
+      ]
     },
     {
       "group": "table editing",
@@ -796,38 +1149,38 @@
         {
           "attributes": {
             "table-header": {
-              "cellId": "cell-3wjm",
+              "cellId": "cell-nmqc",
               "value": 2
             },
             "table-cell": {
-              "data-row": "row-bkkd"
+              "data-row": "row-iebz"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-dy35",
+            "table-cell-block": "cell-uqtb",
             "table-cell": {
-              "data-row": "row-bkkd"
+              "data-row": "row-iebz"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-hf33",
+            "table-cell-block": "cell-z8x7",
             "table-cell": {
-              "data-row": "row-latg"
+              "data-row": "row-fd2n"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-hrjl",
+            "table-cell-block": "cell-l5sl",
             "table-cell": {
-              "data-row": "row-latg"
+              "data-row": "row-fd2n"
             }
           },
           "insert": "\n"
@@ -837,7 +1190,7 @@
         }
       ],
       "text": "\n\n\n\n\n\n",
-      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-bkkd\" class=\"ql-cell-focused\"><h2 class=\"ql-table-header\" data-cell=\"cell-3wjm\"><br></h2></td><td data-row=\"row-bkkd\"><p class=\"ql-table-block\" data-cell=\"cell-dy35\"><br></p></td></tr><tr><td data-row=\"row-latg\"><p class=\"ql-table-block\" data-cell=\"cell-hf33\"><br></p></td><td data-row=\"row-latg\"><p class=\"ql-table-block\" data-cell=\"cell-hrjl\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-iebz\" class=\"ql-cell-focused\"><h2 class=\"ql-table-header\" data-cell=\"cell-nmqc\"><br></h2></td><td data-row=\"row-iebz\"><p class=\"ql-table-block\" data-cell=\"cell-uqtb\"><br></p></td></tr><tr><td data-row=\"row-fd2n\"><p class=\"ql-table-block\" data-cell=\"cell-z8x7\"><br></p></td><td data-row=\"row-fd2n\"><p class=\"ql-table-block\" data-cell=\"cell-l5sl\"><br></p></td></tr></tbody></table><p><br></p>"
     },
     {
       "group": "table editing",
@@ -860,36 +1213,36 @@
         },
         {
           "attributes": {
-            "table-cell-block": "cell-9805",
+            "table-cell-block": "cell-j76v",
             "table-cell": {
-              "data-row": "row-bklf"
+              "data-row": "row-er3q"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-fjln",
+            "table-cell-block": "cell-iw97",
             "table-cell": {
-              "data-row": "row-bklf"
+              "data-row": "row-er3q"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-l5m4",
+            "table-cell-block": "cell-5ggx",
             "table-cell": {
-              "data-row": "row-pfh4"
+              "data-row": "row-cvvj"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-xk69",
+            "table-cell-block": "cell-5ubn",
             "table-cell": {
-              "data-row": "row-pfh4"
+              "data-row": "row-cvvj"
             }
           },
           "insert": "\n"
@@ -899,7 +1252,7 @@
         }
       ],
       "text": "\nhi\n\n\n\n\n",
-      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-bklf\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-9805\"><strong>hi</strong></p></td><td data-row=\"row-bklf\"><p class=\"ql-table-block\" data-cell=\"cell-fjln\"><br></p></td></tr><tr><td data-row=\"row-pfh4\"><p class=\"ql-table-block\" data-cell=\"cell-l5m4\"><br></p></td><td data-row=\"row-pfh4\"><p class=\"ql-table-block\" data-cell=\"cell-xk69\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-er3q\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-j76v\"><strong>hi</strong></p></td><td data-row=\"row-er3q\"><p class=\"ql-table-block\" data-cell=\"cell-iw97\"><br></p></td></tr><tr><td data-row=\"row-cvvj\"><p class=\"ql-table-block\" data-cell=\"cell-5ggx\"><br></p></td><td data-row=\"row-cvvj\"><p class=\"ql-table-block\" data-cell=\"cell-5ubn\"><br></p></td></tr></tbody></table><p><br></p>"
     },
     {
       "group": "table editing",
@@ -907,36 +1260,36 @@
       "contents": [
         {
           "attributes": {
-            "table-cell-block": "cell-nygx",
+            "table-cell-block": "cell-2hw3",
             "table-cell": {
-              "data-row": "row-mjxp"
+              "data-row": "row-l2mb"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-13q1",
+            "table-cell-block": "cell-s7ci",
             "table-cell": {
-              "data-row": "row-mjxp"
+              "data-row": "row-l2mb"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-kbh9",
+            "table-cell-block": "cell-mkxm",
             "table-cell": {
-              "data-row": "row-i4d4"
+              "data-row": "row-eiw5"
             }
           },
           "insert": "\n"
         },
         {
           "attributes": {
-            "table-cell-block": "cell-13go",
+            "table-cell-block": "cell-1bax",
             "table-cell": {
-              "data-row": "row-i4d4"
+              "data-row": "row-eiw5"
             }
           },
           "insert": "\n"
@@ -946,7 +1299,7 @@
         }
       ],
       "text": "\n\n\n\n\n",
-      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><tbody><tr><td data-row=\"row-mjxp\" class=\"\"><p class=\"ql-table-block\" data-cell=\"cell-nygx\"><br></p></td><td data-row=\"row-mjxp\"><p class=\"ql-table-block\" data-cell=\"cell-13q1\"><br></p></td></tr><tr><td data-row=\"row-i4d4\"><p class=\"ql-table-block\" data-cell=\"cell-kbh9\"><br></p></td><td data-row=\"row-i4d4\"><p class=\"ql-table-block\" data-cell=\"cell-13go\"><br></p></td></tr></tbody></table><p><br></p>"
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><tbody><tr><td data-row=\"row-l2mb\" class=\"\"><p class=\"ql-table-block\" data-cell=\"cell-2hw3\"><br></p></td><td data-row=\"row-l2mb\"><p class=\"ql-table-block\" data-cell=\"cell-s7ci\"><br></p></td></tr><tr><td data-row=\"row-eiw5\"><p class=\"ql-table-block\" data-cell=\"cell-mkxm\"><br></p></td><td data-row=\"row-eiw5\"><p class=\"ql-table-block\" data-cell=\"cell-1bax\"><br></p></td></tr></tbody></table><p><br></p>"
     },
     {
       "group": "table editing",

@@ -40,12 +40,16 @@ void main() {
         ..insert('\n', {
           'table-col': {'width': '120'}
         })
+        // `table-th`'s value is the attribute map the `<th>` is built from.
+        // This used to expect the bare row number; the plugin's own
+        // `clipboard.convert`, recorded in the table-better golden as
+        // `converted`, shows `{data-row: N}`.
         ..insert('Name\n', {
-          'table-th': 1,
+          'table-th': {'data-row': 1},
           'table-th-block': 'name',
         })
         ..insert('Value\n', {
-          'table-th': 1,
+          'table-th': {'data-row': 1},
           'table-th-block': '2',
         }),
     );
