@@ -2,7 +2,7 @@
 
 **Data:** 2026-07-28
 **Método:** comparação arquivo-a-arquivo e método-a-método entre `referencias/quilljs/src`, `referencias/quill_table_better/1.2.3/src/src` (+ parchment em `referencias/quill_table_better/1.2.3/src/node_modules/parchment/src`) e `lib/`.
-**Baseline de testes:** 559 unitários (5 marcados como divergência conhecida, todos do core, rastreados no G10.3) VM + 14 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo. *(atualizado em 2026-07-29, após G10.7/G10.8 — os goldens do table-better estão em 19/19)*
+**Baseline de testes:** 563 unitários (1 divergência conhecida: o modelo de lista, G5.2) VM + 14 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo. *(atualizado em 2026-07-29, após G10.7–G10.9 — goldens: table-better 19/19, core 47/48)*
 **Complementa:** `doc/PLANO_PORT_COMPLETO.md` (fases F0–F10; F0–F2 concluídas, F7/F8 núcleo entregue). Este documento substitui o detalhamento de lacunas daquele plano.
 
 ---
@@ -292,6 +292,11 @@ Ordem interna (dependências primeiro):
 - [x] **G10.8 As 3 divergências restantes do table-better resolvidas — goldens 19/19 (2026-07-29).**
   1. **`deleteTable`/`deleteTableTemporary` "deixavam" o `table-temporary`** — só no delta: os dois removiam os blots e chamavam `scroll.optimize`, mas o TS chama **`quill.update(source)`**, que reconcilia o delta do documento com a árvore (G2.6). Sem isso o `getContents()` seguia reportando o que já não existia. `deleteTableTemporary` também ganhou o parâmetro `source` do TS (default API).
   2. **`insertTable` após texto existente inseria a linha extra no lugar errado** — a causa não era o ramo `isExtra`, era a **seleção**: upstream `rangeToNative` faz `Math.min(index, scroll.length() - 1)` — o caret nunca senta depois da newline final, e o valor **clampado** é o que fica armazenado (setNativeRange → update relê a seleção nativa). Num doc `before\n` (length 7), `setSelection(7)` upstream vira 6 → `getLine(6).offset = 6` → `isExtra` dispara e o `\n` extra entra **antes** da newline original da linha, que desce para o fim do documento (o op `\n` final do golden). O port guardava 7 sem clamp, o retain caía depois da newline e o extra virava linha vazia entre o texto e a tabela. `Quill.setSelection` agora clampa os dois extremos como o `rangeToNative` (preservando a instância quando o clamp é no-op — `Range` não tem `==` e testes comparam por identidade).
+
+- [x] **G10.9 Mais 4 divergências do core resolvidas — goldens core 47/48 (2026-07-29).**
+  1. **`code-block` reporta a linguagem (`"plain"`), não `true` (2 casos).** Mesmo mecanismo do core `table` descoberto no G10.7: o quill.ts registra `'modules/syntax'` no load, e `Quill.register` invoca o `static register()` do módulo (quill.ts:175), que **sobrescreve `code-block` com `SyntaxCodeBlock` no registry global** — com o módulo syntax ligado ou não. `initializeQuill` agora chama `Syntax.register()` depois dos defaults.
+  2. **Block embed no início do documento (2 casos).** O sintoma anotado ("parágrafo vazio antes do embed") subestimava: `setContents([{video}, 'after\n'])` punha o vídeo **no fim**. Causa: o ramo `def != null` do `Block.insertAt` era uma invenção de ~45 linhas cuja cadeia preferia `isLineEnd` a `isStart` — verdadeiro para **todo bloco vazio** —, fazendo `split(0, force: true)` **clonar** o parágrafo e largar o embed entre original e clone. O parchment (block.ts:87-99) é `split(index)` **sem** force — `split(0)` retorna `this` e o embed entra antes do bloco. O ramo foi substituído pelo fiel (split sem force + `insertBefore`, com o desvio inline preservado).
+  **Único aberto no G10:** checked/unchecked colapsando para `ordered` — é o modelo de lista do G5.2 (tipo no container + tag OL/UL vs `data-list` no `<li>`), um refactor rastreado à parte de que o G7.1 também depende.
 
 ### G7 — Assets e API pública (2-3 dias)
 - [ ] G7.1 `.styl` do Quill → CSS definitivo em **`lib/assets/quill.core.css`, `quill.snow.css` e `quill.bubble.css`** (arquivos, não `const String` — ver §6); `QuillAssets` emite `<link rel="stylesheet">` para `packages/dart_quill/assets/…`.

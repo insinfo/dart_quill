@@ -79,17 +79,6 @@ void main() {
 /// These are not "acceptable differences". A document written by upstream Quill
 /// and loaded here — or the reverse — loses information in every one of them.
 const Map<String, String> _knownDivergences = {
-  // ---- empty-block normalisation around the end of the document ----------
-  // The port drops one trailing empty line where upstream keeps it, and adds a
-  // paragraph around a block embed where upstream has none. Same underlying
-  // question: how the scroll represents the last block. Fix in Editor/Scroll
-  // normalisation, then delete these four entries.
-      'setContents normalisation / block embed at the start':
-      'the port prepends an empty paragraph before a leading block embed',
-  'setContents normalisation / block embed with an attribute':
-      'same leading-paragraph defect, with the embed attribute along for the '
-          'ride',
-  
   // ---- list model (tracked as G5.2) --------------------------------------
   'block formats / checked and unchecked list items':
       'checked/unchecked collapse to `ordered`: the port keeps the list type on '

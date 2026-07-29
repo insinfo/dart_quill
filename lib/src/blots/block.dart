@@ -182,44 +182,30 @@ class Block extends BlockBlot {
   @override
   void insertAt(int index, String value, [dynamic def]) {
     if (def != null) {
-      final definition = scroll.query(value, Scope.ANY);
-      if (definition != null) {
-        if (definition.scope == Scope.BLOCK_BLOT) {
-          final parentBlot = parent;
-          if (parentBlot is ParentBlot) {
-            final blockLength = length();
-            final clampedIndex = math.max(0, math.min(index, blockLength));
-            final isAfterBlock = index >= blockLength;
-            final isLineEnd = !isAfterBlock &&
-                clampedIndex >= math.max(0, blockLength - _newlineLength);
-            final isStart = clampedIndex <= 0;
-
-            Blot? ref;
-            if (!isStart && !isAfterBlock && !isLineEnd) {
-              ref = split(clampedIndex, force: true);
-            } else if (isLineEnd) {
-              ref = split(clampedIndex, force: true);
-            } else if (isAfterBlock) {
-              ref = next;
-            } else {
-              ref = this;
-            }
-
-            final embed = scroll.create(value, def);
-            parentBlot.insertBefore(embed, ref);
-            _cache.clear();
-            return;
-          }
+      // Parity parchment block.ts:87-99. A block-scope embed splits the line
+      // WITHOUT force: split(0) returns `this` (the embed lands before the
+      // block) and split(length) returns `next`. The previous bespoke branch
+      // preferred a forced split when index was also the line end — true for
+      // every empty block — cloning the paragraph and dropping the embed
+      // between original and clone, so a leading block embed came out as
+      // <p><br></p><iframe/><p><br></p>.
+      final isInline = scroll.query(value, Scope.INLINE) != null;
+      if (!isInline) {
+        final after = split(index);
+        if (after == null) {
+          throw StateError('Attempt to insertAt after block boundaries');
         }
+        final blot = scroll.create(value, def);
+        after.parent?.insertBefore(blot, after);
+        _cache.clear();
+        return;
+      }
 
-        if (definition.scope == Scope.INLINE_BLOT) {
-          if (children.length == 1 && firstChild is Break) {
-            final embed = scroll.create(value, def);
-            insertBefore(embed, firstChild);
-            _cache.clear();
-            return;
-          }
-        }
+      if (children.length == 1 && firstChild is Break) {
+        final embed = scroll.create(value, def);
+        insertBefore(embed, firstChild);
+        _cache.clear();
+        return;
       }
 
       super.insertAt(index, value, def);
