@@ -2,7 +2,7 @@
 
 **Data:** 2026-07-28
 **Método:** comparação arquivo-a-arquivo e método-a-método entre `referencias/quilljs/src`, `referencias/quill_table_better/1.2.3/src/src` (+ parchment em `referencias/quill_table_better/1.2.3/src/node_modules/parchment/src`) e `lib/`.
-**Baseline de testes:** 536 unitários (8 marcados como divergência conhecida) VM + 14 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo. *(atualizado em 2026-07-28)*
+**Baseline de testes:** 546 unitários (18 marcados como divergência conhecida, todos rastreados no G10) VM + 14 browser/Chrome + 3 E2E (Puppeteer) verdes; `dart analyze` limpo. *(atualizado em 2026-07-28)*
 **Complementa:** `doc/PLANO_PORT_COMPLETO.md` (fases F0–F10; F0–F2 concluídas, F7/F8 núcleo entregue). Este documento substitui o detalhamento de lacunas daquele plano.
 
 ---
@@ -261,6 +261,20 @@ Ordem interna (dependências primeiro):
 ` vira duas linhas em vez de três) e **acrescenta** um parágrafo em volta de block embed onde o upstream não tem nenhum. Mesma raiz: como o scroll representa o último bloco.
   2. **`code-block` carrega a linguagem no upstream, um booleano aqui (2 casos).** O `quill.js` registra `modules/syntax`, cujo `SyntaxCodeBlock.formats()` lê `data-language` com default `"plain"`; o port só instala isso com o módulo syntax ligado, então o default reporta `true`. Todo bloco de código escrito por um Quill padrão perde a linguagem aqui.
   3. **Lista checked/unchecked colapsa para `ordered` (1 caso).** É o G5.2 — tipo no container + tag OL/UL em vez de `data-list` no `<li>`. Agora com prova em vez de suspeita.
+
+- [x] **G10.4 Três defeitos corrigidos na segunda rodada (2026-07-28).**
+  - **`Editor._update` descartava o último bloco vazio.** Um `_isTrivialSentinelBlock` inventado pulava o bloco final quando era um parágrafo vazio, na teoria de que fosse um sentinela de renderização. Não é: um documento que termina em linha vazia *tem* uma linha vazia, e o upstream a reporta. Isso tornava o `setContents` **lossy** — `a
+
+
+` voltava como `a
+
+` — e mascarava o parágrafo extra que o caminho de block embed deixava para trás. *Um teste meu (`delete_at_test.dart`) codificava o comportamento errado como se fosse paridade; foi corrigido junto.*
+  - **`BlockEmbed` emitia um `
+` extra no delta.** O `_buildDelta` devolvia o embed **mais** uma newline, então o delta media 2 unidades para um blot de comprimento 1: todo índice depois de um block embed ficava deslocado e o documento reportava um parágrafo inexistente. Paridade `BlockEmbed.delta()` (block.ts:26-31): o embed *é* a linha.
+  - **Goldens agora gravam também o `innerHTML` do upstream**, o que transforma o diagnóstico em comparação direta em vez de dedução.
+- [x] **G10.5 Goldens do quill-table-better 1.2.3 (2026-07-28).** `test/goldens/table_better_cases.json` (19 casos) → `dart run tool/gen_goldens.dart --suite table-better` roda contra o **bundle real do plugin** sobre o quill 2.0.3 → `test/unit/table_better/goldens_test.dart` repete no port. O harness monta o editor como o README do plugin manda (módulo registrado com overwrite, `table: false`, toolbar — o `initWhiteList` lê `toolbar.container` — e as `keyboardBindings` do plugin). **Ids canonizados:** `cellId()`/`tableId()` são aleatórios nas duas implementações, então o comparador mapeia o primeiro id visto para `cell#1`/`row#1` e assim por diante, **com namespace por tipo** (um paste cunha `"1"` tanto para célula quanto para linha; um mapa único fundiria os dois e esconderia diferença estrutural). O que carrega significado sobrevive: duas células que dividem uma linha continuam dividindo.
+  - **6 casos passam** — a forma do Delta de `insertTable` (temporary + `table-cell-block` com cellId + `table-cell` com `data-row`), tabelas 1×3/3×1, digitação e formatação inline dentro da célula.
+  - ⚠️ **13 registrados como divergência, com a causa raiz sondada diretamente.** A maior: **colar uma tabela está quebrado**. Para `<table><tr><td>a</td><td>b</td></tr></table>` o port produz `<td>a</td><td><p class="ql-table-block"><br></p></td><td>b</td>…` contra o `<td data-row="1"><p class="ql-table-block">a</p></td>…` do plugin — três defeitos de uma vez: **`data-row` nunca é escrito** (linhas ficam sem identidade e não podem ser agrupadas), o texto da célula fica **sem o wrapper `table-cell-block`**, e sai uma **célula vazia fantasma** depois de cada real. Somam-se `insertTable` deixando uma linha vazia a mais depois de texto existente, e `deleteTable`/`deleteTableTemporary` deixando a linha `table-temporary` para trás.
 
 ### G7 — Assets e API pública (2-3 dias)
 - [ ] G7.1 `.styl` do Quill → CSS definitivo em **`lib/assets/quill.core.css`, `quill.snow.css` e `quill.bubble.css`** (arquivos, não `const String` — ver §6); `QuillAssets` emite `<link rel="stylesheet">` para `packages/dart_quill/assets/…`.

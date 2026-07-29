@@ -84,19 +84,12 @@ const Map<String, String> _knownDivergences = {
   // paragraph around a block embed where upstream has none. Same underlying
   // question: how the scroll represents the last block. Fix in Editor/Scroll
   // normalisation, then delete these four entries.
-  'setContents normalisation / trailing newlines are kept except the last':
-      'the port renders `a\\n\\n\\n` as two lines, upstream as three — a '
-          'trailing empty paragraph is dropped',
-  'setContents normalisation / block embed at the end without a preceding newline':
-      'the port appends an empty paragraph after a trailing block embed',
-  'setContents normalisation / block embed at the start':
+      'setContents normalisation / block embed at the start':
       'the port prepends an empty paragraph before a leading block embed',
   'setContents normalisation / block embed with an attribute':
       'same leading-paragraph defect, with the embed attribute along for the '
           'ride',
-  'editing / insertEmbed of a block embed':
-      'same trailing-paragraph defect, reached through insertEmbed',
-
+  
   // ---- code-block carries a language upstream, a boolean here ------------
   // quill.js registers modules/syntax, whose SyntaxCodeBlock.formats() reads
   // `data-language` defaulting to "plain"; the port only installs that when the

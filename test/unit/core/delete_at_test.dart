@@ -18,16 +18,18 @@ void main() {
   group('deleting a newline between empty blocks', () {
     test('removes exactly one line', () {
       final quill = createTestQuill();
-      // `setContents` drops the trailing newline, as upstream does, so this is
-      // a three-line document: 'code', '' and ''.
+      // Four lines: 'code', '', '' and ''. This expectation used to read
+      // 'code\n\n\n', encoding a defect of the port — `Editor._update` skipped a
+      // trailing empty paragraph, so `setContents` was lossy. The Delta goldens
+      // recorded from quill 2.0.3 showed the document keeps every line.
       quill.setContents(Delta()..insert('code\n\n\n\n'));
-      expect(quill.getText(), equals('code\n\n\n'));
+      expect(quill.getText(), equals('code\n\n\n\n'));
 
       quill.updateContents(Delta()
         ..retain(6)
         ..delete(1));
 
-      expect(quill.getText(), equals('code\n\n'));
+      expect(quill.getText(), equals('code\n\n\n'));
     });
 
     test('the same holds for plain paragraphs', () {

@@ -1,0 +1,510 @@
+{
+  "_readme": [
+    "Delta compatibility fixtures for quill-table-better 1.2.3.",
+    "",
+    "Recorded by `dart run tool/gen_goldens.dart --suite table-better` against the",
+    "real plugin bundle running on quill 2.0.3, and replayed against the port by",
+    "test/unit/table_better/goldens_test.dart.",
+    "",
+    "Cell and row ids are random by construction in BOTH implementations",
+    "(`cellId()` / `tableId()`), so the comparison canonicalises them: the first",
+    "id seen becomes id#1, the second id#2, and so on, on each side. Structure",
+    "and the association between cells and rows are preserved by that mapping —",
+    "two cells sharing a row still share one afterwards — so nothing meaningful",
+    "is smoothed over.",
+    "",
+    "setup: {\"delta\": ops} or {\"html\": \"...\"}. actions: entries of the form",
+    "{\"module\": \"method\", \"args\": [...]} call the table-better module, and",
+    "{\"method\": ..., \"args\": [...]} call the Quill API."
+  ],
+  "cases": [
+    {
+      "group": "insertTable",
+      "name": "a 2x2 table from an empty document",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "module": "insertTable",
+          "args": [
+            2,
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "group": "insertTable",
+      "name": "a 1x3 table",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "module": "insertTable",
+          "args": [
+            1,
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "group": "insertTable",
+      "name": "a 3x1 table",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "module": "insertTable",
+          "args": [
+            3,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "group": "insertTable",
+      "name": "a table after existing text",
+      "setup": {
+        "delta": [
+          {
+            "insert": "before\n"
+          }
+        ]
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            7,
+            0
+          ]
+        },
+        {
+          "module": "insertTable",
+          "args": [
+            2,
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "group": "insertTable",
+      "name": "typing into the first cell",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "module": "insertTable",
+          "args": [
+            2,
+            2
+          ]
+        },
+        {
+          "method": "insertText",
+          "args": [
+            1,
+            "hi"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "table html to delta",
+      "name": "a plain 2x2 table",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "method": "pasteHtml",
+          "args": [
+            0,
+            "<table><tbody><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></tbody></table>"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "table html to delta",
+      "name": "a table with a colgroup",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "method": "pasteHtml",
+          "args": [
+            0,
+            "<table><colgroup><col width=\"100\"><col width=\"200\"></colgroup><tbody><tr><td>a</td><td>b</td></tr></tbody></table>"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "table html to delta",
+      "name": "a table with a header row",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "method": "pasteHtml",
+          "args": [
+            0,
+            "<table><thead><tr><th>h1</th><th>h2</th></tr></thead><tbody><tr><td>a</td><td>b</td></tr></tbody></table>"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "table html to delta",
+      "name": "colspan and rowspan",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "method": "pasteHtml",
+          "args": [
+            0,
+            "<table><tbody><tr><td colspan=\"2\">wide</td></tr><tr><td rowspan=\"2\">tall</td><td>x</td></tr><tr><td>y</td></tr></tbody></table>"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "table html to delta",
+      "name": "cell styles survive the paste",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "method": "pasteHtml",
+          "args": [
+            0,
+            "<table><tbody><tr><td style=\"background-color: rgb(255, 0, 0); text-align: center;\">a</td></tr></tbody></table>"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "table html to delta",
+      "name": "a table carrying its own style",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "method": "pasteHtml",
+          "args": [
+            0,
+            "<table style=\"width: 100%;\"><tbody><tr><td>a</td></tr></tbody></table>"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "table html to delta",
+      "name": "block content inside a cell",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "method": "pasteHtml",
+          "args": [
+            0,
+            "<table><tbody><tr><td><h2>title</h2><p>body</p></td></tr></tbody></table>"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "table html to delta",
+      "name": "a list inside a cell",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "method": "pasteHtml",
+          "args": [
+            0,
+            "<table><tbody><tr><td><ul><li>one</li><li>two</li></ul></td></tr></tbody></table>"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "table html to delta",
+      "name": "inline formatting inside a cell",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "method": "pasteHtml",
+          "args": [
+            0,
+            "<table><tbody><tr><td><strong>bold</strong> and <em>italic</em></td></tr></tbody></table>"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "table html to delta",
+      "name": "text around a table",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "method": "pasteHtml",
+          "args": [
+            0,
+            "<p>before</p><table><tbody><tr><td>a</td></tr></tbody></table><p>after</p>"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "table editing",
+      "name": "formatting a cell line as a header",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "module": "insertTable",
+          "args": [
+            2,
+            2
+          ]
+        },
+        {
+          "method": "formatLine",
+          "args": [
+            1,
+            1,
+            "header",
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "group": "table editing",
+      "name": "bolding text in a cell",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "module": "insertTable",
+          "args": [
+            2,
+            2
+          ]
+        },
+        {
+          "method": "insertText",
+          "args": [
+            1,
+            "hi"
+          ]
+        },
+        {
+          "method": "formatText",
+          "args": [
+            1,
+            2,
+            "bold",
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "group": "table editing",
+      "name": "deleting the temporary blot",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "module": "insertTable",
+          "args": [
+            2,
+            2
+          ]
+        },
+        {
+          "module": "deleteTableTemporary",
+          "args": []
+        }
+      ]
+    },
+    {
+      "group": "table editing",
+      "name": "deleting the whole table",
+      "setup": {
+        "delta": []
+      },
+      "actions": [
+        {
+          "method": "setSelection",
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "module": "insertTable",
+          "args": [
+            2,
+            2
+          ]
+        },
+        {
+          "method": "setSelection",
+          "args": [
+            1,
+            0
+          ]
+        },
+        {
+          "module": "deleteTable",
+          "args": []
+        }
+      ]
+    }
+  ]
+}

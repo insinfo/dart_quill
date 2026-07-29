@@ -25,12 +25,32 @@ import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_static/shelf_static.dart';
 
-const String casesPath = 'test/goldens/cases.json';
-const String goldenPath = 'test/goldens/quill_2.0.3.json';
+/// The two suites this tool can record.
+class Suite {
+  const Suite(this.name, this.casesPath, this.goldenPath, this.page);
+
+  final String name;
+  final String casesPath;
+  final String goldenPath;
+  final String page;
+
+  static const core = Suite('core', 'test/goldens/cases.json',
+      'test/goldens/quill_2.0.3.json', _corePage);
+  static const tableBetter = Suite(
+      'table-better',
+      'test/goldens/table_better_cases.json',
+      'test/goldens/quill_table_better_1.2.3.json',
+      _tableBetterPage);
+
+  static Suite byName(String name) =>
+      name == 'table-better' ? tableBetter : core;
+}
+
 const String expectedVersion = '2.0.3';
 
 Future<void> main(List<String> args) async {
   final check = args.contains('--check');
+  final suite = Suite.byName(_argValue(args, '--suite') ?? 'core');
   final quillDir = _argValue(args, '--quill') ?? _guessQuillDir();
   if (quillDir == null) {
     stderr.writeln(
@@ -45,24 +65,30 @@ Future<void> main(List<String> args) async {
     exit(2);
   }
 
-  final cases = (jsonDecode(File(casesPath).readAsStringSync())
-      as Map<String, dynamic>)['cases'] as List<dynamic>;
-  stdout.writeln('Running ${cases.length} cases against $bundle');
+  if (suite.name == 'table-better' && !File(_pluginBundle).existsSync()) {
+    stderr.writeln('No plugin bundle at $_pluginBundle');
+    exit(2);
+  }
 
-  final recorded = await _record(bundle, cases);
+  final cases = (jsonDecode(File(suite.casesPath).readAsStringSync())
+      as Map<String, dynamic>)['cases'] as List<dynamic>;
+  stdout.writeln(
+      'Running ${cases.length} ${suite.name} cases against $bundle');
+
+  final recorded = await _record(suite, bundle, cases);
   final encoded = '${const JsonEncoder.withIndent('  ').convert(recorded)}\n';
 
-  final golden = File(goldenPath);
+  final golden = File(suite.goldenPath);
   if (check) {
     if (!golden.existsSync() || golden.readAsStringSync() != encoded) {
-      stderr.writeln('$goldenPath is stale — run `dart run tool/gen_goldens.dart`');
+      stderr.writeln('${suite.goldenPath} is stale — re-run the generator');
       exit(1);
     }
-    stdout.writeln('$goldenPath is up to date');
+    stdout.writeln('${suite.goldenPath} is up to date');
     return;
   }
   golden.writeAsStringSync(encoded);
-  stdout.writeln('Wrote $goldenPath');
+  stdout.writeln('Wrote ${suite.goldenPath}');
 }
 
 String? _argValue(List<String> args, String name) {
@@ -83,10 +109,16 @@ String? _guessQuillDir() {
   return null;
 }
 
-Future<Map<String, dynamic>> _record(File bundle, List<dynamic> cases) async {
+/// The plugin bundle, vendored in `referencias/` alongside its source.
+const String _pluginBundle =
+    'referencias/quill_table_better/1.2.3/src/dist/quill-table-better.js';
+
+Future<Map<String, dynamic>> _record(
+    Suite suite, File bundle, List<dynamic> cases) async {
   final handler = shelf.Cascade()
       .add(createStaticHandler(bundle.parent.absolute.path))
-      .add((request) => shelf.Response.ok(_page, headers: const {
+      .add(createStaticHandler(File(_pluginBundle).parent.absolute.path))
+      .add((request) => shelf.Response.ok(suite.page, headers: const {
             'content-type': 'text/html; charset=utf-8',
           }))
       .handler;
@@ -125,6 +157,7 @@ Future<Map<String, dynamic>> _record(File bundle, List<dynamic> cases) async {
         if (raw['error'] == null) ...{
           'contents': raw['contents'],
           'text': raw['text'],
+          'html': raw['html'],
         },
       });
       final status = raw['error'] == null ? 'ok' : 'ERROR ${raw['error']}';
@@ -132,6 +165,7 @@ Future<Map<String, dynamic>> _record(File bundle, List<dynamic> cases) async {
     }
     return {
       'quill': version,
+      'suite': suite.name,
       'generator': 'tool/gen_goldens.dart',
       'note': 'Generated — do not edit. See the README block in cases.json.',
       'results': results,
@@ -144,7 +178,7 @@ Future<Map<String, dynamic>> _record(File bundle, List<dynamic> cases) async {
 
 /// The harness page: a bare Quill with no theme, so nothing but the core
 /// registry decides the Delta.
-const String _page = '''
+const String _corePage = '''
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><link rel="stylesheet" href="quill.core.css"></head>
@@ -162,7 +196,10 @@ function runCase(testCase) {
   try {
     const quill = new Quill(container, { theme: null });
     const setup = testCase.setup || {};
-    if (typeof setup.html === 'string') {
+    if (typeof setup.pasteHtml === 'string') {
+      quill.setContents(new Delta());
+      quill.clipboard.dangerouslyPasteHTML(setup.pasteHtml);
+    } else if (typeof setup.html === 'string') {
       quill.setContents(quill.clipboard.convert({ html: setup.html }));
     } else {
       quill.setContents(new Delta(setup.delta || []));
@@ -174,7 +211,82 @@ function runCase(testCase) {
           : arg);
       quill[action.method](...args);
     }
-    return { contents: quill.getContents().ops, text: quill.getText() };
+    return {
+      contents: quill.getContents().ops,
+      text: quill.getText(),
+      html: quill.root.innerHTML,
+    };
+  } catch (error) {
+    return { error: String(error && error.stack || error) };
+  }
+}
+</script>
+</body>
+</html>
+''';
+
+/// The table-better harness: quill plus the plugin bundle, wired exactly as the
+/// plugin README prescribes (module registered with `overwrite`, the built-in
+/// `table` module off, and the plugin's keyboard bindings installed).
+const String _tableBetterPage = '''
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="quill.snow.css">
+  <link rel="stylesheet" href="quill-table-better.css">
+</head>
+<body>
+<div id="editor"></div>
+<script src="quill.js"></script>
+<script src="quill-table-better.js"></script>
+<script>
+const Delta = Quill.import('delta');
+Quill.register({ 'modules/table-better': QuillTableBetter }, true);
+
+function runCase(testCase) {
+  const host = document.getElementById('editor');
+  host.innerHTML = '';
+  const container = document.createElement('div');
+  host.appendChild(container);
+  try {
+    const quill = new Quill(container, {
+      theme: 'snow',
+      modules: {
+        table: false,
+        // initWhiteList reads toolbar.container, so the plugin needs one.
+        toolbar: [['bold', 'italic'], ['table-better']],
+        'table-better': { language: 'en_US' },
+        keyboard: { bindings: QuillTableBetter.keyboardBindings },
+      },
+    });
+    const setup = testCase.setup || {};
+    if (typeof setup.pasteHtml === 'string') {
+      quill.setContents(new Delta());
+      quill.clipboard.dangerouslyPasteHTML(setup.pasteHtml);
+    } else if (typeof setup.html === 'string') {
+      quill.setContents(quill.clipboard.convert({ html: setup.html }));
+    } else {
+      quill.setContents(new Delta(setup.delta || []));
+    }
+    for (const action of testCase.actions || []) {
+      const args = (action.args || []).map(arg =>
+        action.method === 'updateContents' && Array.isArray(arg)
+          ? new Delta(arg)
+          : arg);
+      if (action.module) {
+        quill.getModule('table-better')[action.module](...args);
+      } else if (action.method === 'pasteHtml') {
+        quill.clipboard.dangerouslyPasteHTML(args[0], args[1]);
+      } else {
+        quill[action.method](...args);
+      }
+    }
+    return {
+      contents: quill.getContents().ops,
+      text: quill.getText(),
+      html: quill.root.innerHTML,
+    };
   } catch (error) {
     return { error: String(error && error.stack || error) };
   }

@@ -1,0 +1,963 @@
+{
+  "quill": "2.0.3",
+  "suite": "table-better",
+  "generator": "tool/gen_goldens.dart",
+  "note": "Generated — do not edit. See the README block in cases.json.",
+  "results": [
+    {
+      "group": "insertTable",
+      "name": "a 2x2 table from an empty document",
+      "contents": [
+        {
+          "attributes": {
+            "table-temporary": {
+              "style": "width: 100%",
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-82y6",
+            "table-cell": {
+              "data-row": "row-9dpf"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-ofdc",
+            "table-cell": {
+              "data-row": "row-9dpf"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-t033",
+            "table-cell": {
+              "data-row": "row-ufuq"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-i9lc",
+            "table-cell": {
+              "data-row": "row-ufuq"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\n\n\n\n\n\n",
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-9dpf\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-82y6\"><br></p></td><td data-row=\"row-9dpf\"><p class=\"ql-table-block\" data-cell=\"cell-ofdc\"><br></p></td></tr><tr><td data-row=\"row-ufuq\"><p class=\"ql-table-block\" data-cell=\"cell-t033\"><br></p></td><td data-row=\"row-ufuq\"><p class=\"ql-table-block\" data-cell=\"cell-i9lc\"><br></p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "insertTable",
+      "name": "a 1x3 table",
+      "contents": [
+        {
+          "attributes": {
+            "table-temporary": {
+              "style": "width: 100%",
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-2cb6",
+            "table-cell": {
+              "data-row": "row-sx4k"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-5qqa",
+            "table-cell": {
+              "data-row": "row-sx4k"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-d1ny",
+            "table-cell": {
+              "data-row": "row-sx4k"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\n\n\n\n\n",
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-sx4k\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-2cb6\"><br></p></td><td data-row=\"row-sx4k\"><p class=\"ql-table-block\" data-cell=\"cell-5qqa\"><br></p></td><td data-row=\"row-sx4k\"><p class=\"ql-table-block\" data-cell=\"cell-d1ny\"><br></p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "insertTable",
+      "name": "a 3x1 table",
+      "contents": [
+        {
+          "attributes": {
+            "table-temporary": {
+              "style": "width: 100%",
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-3g8c",
+            "table-cell": {
+              "data-row": "row-yzp9"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-goiu",
+            "table-cell": {
+              "data-row": "row-zvob"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-uwl3",
+            "table-cell": {
+              "data-row": "row-f9o5"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\n\n\n\n\n",
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-yzp9\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-3g8c\"><br></p></td></tr><tr><td data-row=\"row-zvob\"><p class=\"ql-table-block\" data-cell=\"cell-goiu\"><br></p></td></tr><tr><td data-row=\"row-f9o5\"><p class=\"ql-table-block\" data-cell=\"cell-uwl3\"><br></p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "insertTable",
+      "name": "a table after existing text",
+      "contents": [
+        {
+          "insert": "before\n"
+        },
+        {
+          "attributes": {
+            "table-temporary": {
+              "style": "width: 100%",
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-pah3",
+            "table-cell": {
+              "data-row": "row-vhhx"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-3r70",
+            "table-cell": {
+              "data-row": "row-vhhx"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-c1ir",
+            "table-cell": {
+              "data-row": "row-x29a"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-1ia1",
+            "table-cell": {
+              "data-row": "row-x29a"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "before\n\n\n\n\n\n\n",
+      "html": "<p>before</p><table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-vhhx\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-pah3\"><br></p></td><td data-row=\"row-vhhx\"><p class=\"ql-table-block\" data-cell=\"cell-3r70\"><br></p></td></tr><tr><td data-row=\"row-x29a\"><p class=\"ql-table-block\" data-cell=\"cell-c1ir\"><br></p></td><td data-row=\"row-x29a\"><p class=\"ql-table-block\" data-cell=\"cell-1ia1\"><br></p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "insertTable",
+      "name": "typing into the first cell",
+      "contents": [
+        {
+          "attributes": {
+            "table-temporary": {
+              "style": "width: 100%",
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "hi"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-j142",
+            "table-cell": {
+              "data-row": "row-75td"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-3sqr",
+            "table-cell": {
+              "data-row": "row-75td"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-gyus",
+            "table-cell": {
+              "data-row": "row-6e4a"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-awiv",
+            "table-cell": {
+              "data-row": "row-6e4a"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\nhi\n\n\n\n\n",
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-75td\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-j142\">hi</p></td><td data-row=\"row-75td\"><p class=\"ql-table-block\" data-cell=\"cell-3sqr\"><br></p></td></tr><tr><td data-row=\"row-6e4a\"><p class=\"ql-table-block\" data-cell=\"cell-gyus\"><br></p></td><td data-row=\"row-6e4a\"><p class=\"ql-table-block\" data-cell=\"cell-awiv\"><br></p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "table html to delta",
+      "name": "a plain 2x2 table",
+      "contents": [
+        {
+          "attributes": {
+            "table-temporary": {
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "a"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "1",
+            "table-cell": {
+              "data-row": "1"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "b"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "2",
+            "table-cell": {
+              "data-row": "1"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "c"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "1",
+            "table-cell": {
+              "data-row": "2"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "d"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "2",
+            "table-cell": {
+              "data-row": "2"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\na\nb\nc\nd\n\n",
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"2\">b</p></td></tr><tr><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"1\">c</p></td><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"2\">d</p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "table html to delta",
+      "name": "a table with a colgroup",
+      "contents": [
+        {
+          "attributes": {
+            "table-temporary": {
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-col": {
+              "width": "100"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-col": {
+              "width": "200"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "a"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "1",
+            "table-cell": {
+              "data-row": "1"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "b"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "2",
+            "table-cell": {
+              "data-row": "1"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\n\n\na\nb\n\n",
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><colgroup><col width=\"100\"><col width=\"200\"></colgroup><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"2\">b</p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "table html to delta",
+      "name": "a table with a header row",
+      "contents": [
+        {
+          "attributes": {
+            "table-temporary": {
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "h1"
+        },
+        {
+          "attributes": {
+            "table-th-block": "1",
+            "table-th": {
+              "data-row": "1"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "h2"
+        },
+        {
+          "attributes": {
+            "table-th-block": "2",
+            "table-th": {
+              "data-row": "1"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "a"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "1",
+            "table-cell": {
+              "data-row": "2"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "b"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "2",
+            "table-cell": {
+              "data-row": "2"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\nh1\nh2\na\nb\n\n",
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><thead><tr><th data-row=\"1\"><p class=\"table-th-block\" data-cell=\"1\">h1</p></th><th data-row=\"1\"><p class=\"table-th-block\" data-cell=\"2\">h2</p></th></tr></thead><tbody><tr><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"2\">b</p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "table html to delta",
+      "name": "colspan and rowspan",
+      "contents": [
+        {
+          "attributes": {
+            "table-temporary": {
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "wide"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "1",
+            "table-cell": {
+              "data-row": "1",
+              "colspan": "2"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "tall"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "1",
+            "table-cell": {
+              "data-row": "2",
+              "rowspan": "2"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "x"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "2",
+            "table-cell": {
+              "data-row": "2"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "y"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "1",
+            "table-cell": {
+              "data-row": "3"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\nwide\ntall\nx\ny\n\n",
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td colspan=\"2\" data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">wide</p></td></tr><tr><td rowspan=\"2\" data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"1\">tall</p></td><td data-row=\"2\"><p class=\"ql-table-block\" data-cell=\"2\">x</p></td></tr><tr><td data-row=\"3\"><p class=\"ql-table-block\" data-cell=\"1\">y</p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "table html to delta",
+      "name": "cell styles survive the paste",
+      "contents": [
+        {
+          "attributes": {
+            "table-temporary": {
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "background": "#ff0000"
+          },
+          "insert": "a"
+        },
+        {
+          "attributes": {
+            "align": "center",
+            "table-cell-block": "1",
+            "table-cell": {
+              "data-row": "1",
+              "style": "background-color: rgb(255, 0, 0); text-align: center;"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\na\n\n",
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td style=\"background-color: rgb(255, 0, 0); text-align: center;\" data-row=\"1\"><p class=\"ql-table-block ql-align-center\" data-cell=\"1\"><span style=\"background-color: rgb(255, 0, 0);\">a</span></p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "table html to delta",
+      "name": "a table carrying its own style",
+      "contents": [
+        {
+          "attributes": {
+            "table-temporary": {
+              "style": "width: 100%;",
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "a"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "1",
+            "table-cell": {
+              "data-row": "1"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\na\n\n",
+      "html": "<table style=\"width: 100%;\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%;\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "table html to delta",
+      "name": "block content inside a cell",
+      "contents": [
+        {
+          "attributes": {
+            "table-temporary": {
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "title"
+        },
+        {
+          "attributes": {
+            "table-header": {
+              "cellId": "1",
+              "value": 2
+            },
+            "table-cell": {
+              "data-row": "1"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "body"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "1",
+            "table-cell": {
+              "data-row": "1"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\ntitle\nbody\n\n",
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><h2 class=\"ql-table-header\" data-cell=\"1\">title</h2><p class=\"ql-table-block\" data-cell=\"1\">body</p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "table html to delta",
+      "name": "a list inside a cell",
+      "contents": [
+        {
+          "attributes": {
+            "table-temporary": {
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "one"
+        },
+        {
+          "attributes": {
+            "table-list": "bullet",
+            "table-list-container": {
+              "data-row": "1",
+              "cellId": "1",
+              "colspan": "1",
+              "rowspan": "1"
+            },
+            "table-cell": {
+              "data-row": "1"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "two"
+        },
+        {
+          "attributes": {
+            "table-list": "bullet",
+            "table-list-container": {
+              "data-row": "1",
+              "cellId": "1",
+              "colspan": "1",
+              "rowspan": "1"
+            },
+            "table-cell": {
+              "data-row": "1"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\none\ntwo\n\n",
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><ol class=\"table-list-container\" data-row=\"1\" data-cell=\"1\"><li class=\"table-list\" data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>one</li><li class=\"table-list\" data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>two</li></ol></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "table html to delta",
+      "name": "inline formatting inside a cell",
+      "contents": [
+        {
+          "attributes": {
+            "table-temporary": {
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "bold": true
+          },
+          "insert": "bold"
+        },
+        {
+          "insert": " and "
+        },
+        {
+          "attributes": {
+            "italic": true
+          },
+          "insert": "italic"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "1",
+            "table-cell": {
+              "data-row": "1"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\nbold and italic\n\n",
+      "html": "<table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\"><strong>bold</strong> and <em>italic</em></p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "table html to delta",
+      "name": "text around a table",
+      "contents": [
+        {
+          "insert": "before\n"
+        },
+        {
+          "attributes": {
+            "table-temporary": {
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "a"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "1",
+            "table-cell": {
+              "data-row": "1"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "after\n"
+        }
+      ],
+      "text": "before\n\na\nafter\n",
+      "html": "<p>before</p><table class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"1\"><p class=\"ql-table-block\" data-cell=\"1\">a</p></td></tr></tbody></table><p>after</p>"
+    },
+    {
+      "group": "table editing",
+      "name": "formatting a cell line as a header",
+      "contents": [
+        {
+          "attributes": {
+            "table-temporary": {
+              "style": "width: 100%",
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-header": {
+              "cellId": "cell-3wjm",
+              "value": 2
+            },
+            "table-cell": {
+              "data-row": "row-bkkd"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-dy35",
+            "table-cell": {
+              "data-row": "row-bkkd"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-hf33",
+            "table-cell": {
+              "data-row": "row-latg"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-hrjl",
+            "table-cell": {
+              "data-row": "row-latg"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\n\n\n\n\n\n",
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-bkkd\" class=\"ql-cell-focused\"><h2 class=\"ql-table-header\" data-cell=\"cell-3wjm\"><br></h2></td><td data-row=\"row-bkkd\"><p class=\"ql-table-block\" data-cell=\"cell-dy35\"><br></p></td></tr><tr><td data-row=\"row-latg\"><p class=\"ql-table-block\" data-cell=\"cell-hf33\"><br></p></td><td data-row=\"row-latg\"><p class=\"ql-table-block\" data-cell=\"cell-hrjl\"><br></p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "table editing",
+      "name": "bolding text in a cell",
+      "contents": [
+        {
+          "attributes": {
+            "table-temporary": {
+              "style": "width: 100%",
+              "data-class": "ql-table-better"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "bold": true
+          },
+          "insert": "hi"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-9805",
+            "table-cell": {
+              "data-row": "row-bklf"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-fjln",
+            "table-cell": {
+              "data-row": "row-bklf"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-l5m4",
+            "table-cell": {
+              "data-row": "row-pfh4"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-xk69",
+            "table-cell": {
+              "data-row": "row-pfh4"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\nhi\n\n\n\n\n",
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><temporary class=\"ql-table-temporary\" style=\"width: 100%\" data-class=\"ql-table-better\"><br></temporary><tbody><tr><td data-row=\"row-bklf\" class=\"ql-cell-focused\"><p class=\"ql-table-block\" data-cell=\"cell-9805\"><strong>hi</strong></p></td><td data-row=\"row-bklf\"><p class=\"ql-table-block\" data-cell=\"cell-fjln\"><br></p></td></tr><tr><td data-row=\"row-pfh4\"><p class=\"ql-table-block\" data-cell=\"cell-l5m4\"><br></p></td><td data-row=\"row-pfh4\"><p class=\"ql-table-block\" data-cell=\"cell-xk69\"><br></p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "table editing",
+      "name": "deleting the temporary blot",
+      "contents": [
+        {
+          "attributes": {
+            "table-cell-block": "cell-nygx",
+            "table-cell": {
+              "data-row": "row-mjxp"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-13q1",
+            "table-cell": {
+              "data-row": "row-mjxp"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-kbh9",
+            "table-cell": {
+              "data-row": "row-i4d4"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "attributes": {
+            "table-cell-block": "cell-13go",
+            "table-cell": {
+              "data-row": "row-i4d4"
+            }
+          },
+          "insert": "\n"
+        },
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\n\n\n\n\n",
+      "html": "<table style=\"width: 100%\" class=\"ql-table-better\"><tbody><tr><td data-row=\"row-mjxp\" class=\"\"><p class=\"ql-table-block\" data-cell=\"cell-nygx\"><br></p></td><td data-row=\"row-mjxp\"><p class=\"ql-table-block\" data-cell=\"cell-13q1\"><br></p></td></tr><tr><td data-row=\"row-i4d4\"><p class=\"ql-table-block\" data-cell=\"cell-kbh9\"><br></p></td><td data-row=\"row-i4d4\"><p class=\"ql-table-block\" data-cell=\"cell-13go\"><br></p></td></tr></tbody></table><p><br></p>"
+    },
+    {
+      "group": "table editing",
+      "name": "deleting the whole table",
+      "contents": [
+        {
+          "insert": "\n"
+        }
+      ],
+      "text": "\n",
+      "html": "<p><br></p>"
+    }
+  ]
+}

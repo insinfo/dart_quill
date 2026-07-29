@@ -11,7 +11,8 @@
           "insert": "hello\n"
         }
       ],
-      "text": "hello\n"
+      "text": "hello\n",
+      "html": "<p>hello</p>"
     },
     {
       "group": "setContents normalisation",
@@ -21,7 +22,8 @@
           "insert": "a\n\n\n"
         }
       ],
-      "text": "a\n\n\n"
+      "text": "a\n\n\n",
+      "html": "<p>a</p><p><br></p><p><br></p>"
     },
     {
       "group": "setContents normalisation",
@@ -31,7 +33,8 @@
           "insert": "\n"
         }
       ],
-      "text": "\n"
+      "text": "\n",
+      "html": "<p><br></p>"
     },
     {
       "group": "setContents normalisation",
@@ -50,7 +53,8 @@
           "insert": "body\n"
         }
       ],
-      "text": "Title\nbody\n"
+      "text": "Title\nbody\n",
+      "html": "<h1>Title</h1><p>body</p>"
     },
     {
       "group": "setContents normalisation",
@@ -66,7 +70,8 @@
           "insert": "\n"
         }
       ],
-      "text": "one\ntwo\nthree\n"
+      "text": "one\ntwo\nthree\n",
+      "html": "<p>one</p><p>two</p><h2>three</h2>"
     },
     {
       "group": "setContents normalisation",
@@ -81,7 +86,8 @@
           }
         }
       ],
-      "text": "text\n"
+      "text": "text\n",
+      "html": "<p>text</p><iframe class=\"ql-video\" frameborder=\"0\" allowfullscreen=\"true\" src=\"https://example.com/v\"></iframe>"
     },
     {
       "group": "setContents normalisation",
@@ -96,7 +102,8 @@
           "insert": "after\n"
         }
       ],
-      "text": "after\n"
+      "text": "after\n",
+      "html": "<iframe class=\"ql-video\" frameborder=\"0\" allowfullscreen=\"true\" src=\"https://example.com/v\"></iframe><p>after</p>"
     },
     {
       "group": "setContents normalisation",
@@ -114,7 +121,8 @@
           "insert": "after\n"
         }
       ],
-      "text": "after\n"
+      "text": "after\n",
+      "html": "<iframe class=\"ql-video ql-align-center\" frameborder=\"0\" allowfullscreen=\"true\" src=\"https://example.com/v\"></iframe><p>after</p>"
     },
     {
       "group": "setContents normalisation",
@@ -132,7 +140,8 @@
           "insert": "b\n"
         }
       ],
-      "text": "ab\n"
+      "text": "ab\n",
+      "html": "<p>a<img src=\"https://example.com/i.png\">b</p>"
     },
     {
       "group": "inline formats",
@@ -166,7 +175,8 @@
           "insert": "\n"
         }
       ],
-      "text": "bius\n"
+      "text": "bius\n",
+      "html": "<p><strong>b</strong><em>i</em><u>u</u><s>s</s></p>"
     },
     {
       "group": "inline formats",
@@ -183,7 +193,8 @@
           "insert": "\n"
         }
       ],
-      "text": "xy\n"
+      "text": "xy\n",
+      "html": "<p><strong><em>xy</em></strong></p>"
     },
     {
       "group": "inline formats",
@@ -223,7 +234,8 @@
           "insert": "\n"
         }
       ],
-      "text": "lcgfz\n"
+      "text": "lcgfz\n",
+      "html": "<p><a href=\"https://example.com\" rel=\"noopener noreferrer\" target=\"_blank\">l</a><span style=\"color: rgb(255, 0, 0);\">c</span><span style=\"background-color: rgb(0, 255, 0);\">g</span><span class=\"ql-font-monospace\">f</span><span class=\"ql-size-large\">z</span></p>"
     },
     {
       "group": "inline formats",
@@ -251,7 +263,8 @@
           "insert": "\n"
         }
       ],
-      "text": "supsubcode\n"
+      "text": "supsubcode\n",
+      "html": "<p><sup>sup</sup><sub>sub</sub><code>code</code></p>"
     },
     {
       "group": "block formats",
@@ -312,7 +325,8 @@
           "insert": "\n"
         }
       ],
-      "text": "h1\nh2\nh3\nh4\nh5\nh6\n"
+      "text": "h1\nh2\nh3\nh4\nh5\nh6\n",
+      "html": "<h1>h1</h1><h2>h2</h2><h3>h3</h3><h4>h4</h4><h5>h5</h5><h6>h6</h6>"
     },
     {
       "group": "block formats",
@@ -346,7 +360,8 @@
           "insert": "\n"
         }
       ],
-      "text": "quoted\nline1\nline2\n"
+      "text": "quoted\nline1\nline2\n",
+      "html": "<blockquote>quoted</blockquote><div class=\"ql-code-block-container\" spellcheck=\"false\"><div class=\"ql-code-block\" data-language=\"plain\">line1</div><div class=\"ql-code-block\" data-language=\"plain\">line2</div></div>"
     },
     {
       "group": "block formats",
@@ -389,7 +404,8 @@
           "insert": "\n"
         }
       ],
-      "text": "c\nr\ni\nd\n"
+      "text": "c\nr\ni\nd\n",
+      "html": "<p class=\"ql-align-center\">c</p><p class=\"ql-align-right\">r</p><p class=\"ql-indent-2\">i</p><p class=\"ql-direction-rtl\">d</p>"
     },
     {
       "group": "block formats",
@@ -423,7 +439,8 @@
           "insert": "\n"
         }
       ],
-      "text": "one\ntwo\nthree\n"
+      "text": "one\ntwo\nthree\n",
+      "html": "<ol><li data-list=\"ordered\"><span class=\"ql-ui\" contenteditable=\"false\"></span>one</li><li data-list=\"ordered\"><span class=\"ql-ui\" contenteditable=\"false\"></span>two</li><li data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>three</li></ol>"
     },
     {
       "group": "block formats",
@@ -448,7 +465,8 @@
           "insert": "\n"
         }
       ],
-      "text": "done\ntodo\n"
+      "text": "done\ntodo\n",
+      "html": "<ol><li data-list=\"checked\"><span class=\"ql-ui\" contenteditable=\"false\"></span>done</li><li data-list=\"unchecked\"><span class=\"ql-ui\" contenteditable=\"false\"></span>todo</li></ol>"
     },
     {
       "group": "block formats",
@@ -484,7 +502,8 @@
           "insert": "\n"
         }
       ],
-      "text": "a\nb\nc\n"
+      "text": "a\nb\nc\n",
+      "html": "<ol><li data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>a</li><li data-list=\"bullet\" class=\"ql-indent-1\"><span class=\"ql-ui\" contenteditable=\"false\"></span>b</li><li data-list=\"bullet\" class=\"ql-indent-2\"><span class=\"ql-ui\" contenteditable=\"false\"></span>c</li></ol>"
     },
     {
       "group": "html to delta",
@@ -494,7 +513,8 @@
           "insert": "one\ntwo\n"
         }
       ],
-      "text": "one\ntwo\n"
+      "text": "one\ntwo\n",
+      "html": "<p>one</p><p>two</p>"
     },
     {
       "group": "html to delta",
@@ -519,7 +539,8 @@
           "insert": "\n"
         }
       ],
-      "text": "Title\nquoted\n"
+      "text": "Title\nquoted\n",
+      "html": "<h2>Title</h2><blockquote>quoted</blockquote>"
     },
     {
       "group": "html to delta",
@@ -542,7 +563,8 @@
           "insert": " plain\n"
         }
       ],
-      "text": "bold and italic plain\n"
+      "text": "bold and italic plain\n",
+      "html": "<p><strong>bold <em>and italic</em></strong> plain</p>"
     },
     {
       "group": "html to delta",
@@ -561,7 +583,8 @@
           "insert": "\n"
         }
       ],
-      "text": "see this\n"
+      "text": "see this\n",
+      "html": "<p>see <a href=\"https://example.com\" rel=\"noopener noreferrer\" target=\"_blank\">this</a></p>"
     },
     {
       "group": "html to delta",
@@ -577,7 +600,8 @@
           "insert": "\n"
         }
       ],
-      "text": "red\n"
+      "text": "red\n",
+      "html": "<p><span style=\"color: rgb(255, 0, 0);\">red</span></p>"
     },
     {
       "group": "html to delta",
@@ -602,7 +626,8 @@
           "insert": "\n"
         }
       ],
-      "text": "centred\nindented\n"
+      "text": "centred\nindented\n",
+      "html": "<p class=\"ql-align-center\">centred</p><p class=\"ql-indent-2\">indented</p>"
     },
     {
       "group": "html to delta",
@@ -627,7 +652,8 @@
           "insert": "\n"
         }
       ],
-      "text": "a\nb\n"
+      "text": "a\nb\n",
+      "html": "<ol><li data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>a</li><li data-list=\"bullet\"><span class=\"ql-ui\" contenteditable=\"false\"></span>b</li></ol>"
     },
     {
       "group": "html to delta",
@@ -652,7 +678,8 @@
           "insert": "\n"
         }
       ],
-      "text": "a\nb\n"
+      "text": "a\nb\n",
+      "html": "<ol><li data-list=\"ordered\"><span class=\"ql-ui\" contenteditable=\"false\"></span>a</li><li data-list=\"ordered\"><span class=\"ql-ui\" contenteditable=\"false\"></span>b</li></ol>"
     },
     {
       "group": "html to delta",
@@ -668,7 +695,8 @@
           "insert": "\n"
         }
       ],
-      "text": "code line\n"
+      "text": "code line\n",
+      "html": "<div class=\"ql-code-block-container\" spellcheck=\"false\"><div class=\"ql-code-block\" data-language=\"plain\">code line</div></div>"
     },
     {
       "group": "html to delta",
@@ -686,7 +714,8 @@
           "insert": "\n"
         }
       ],
-      "text": "before\nafter\n\n"
+      "text": "before\nafter\n\n",
+      "html": "<p>before</p><p>after</p><p><img src=\"https://example.com/i.png\"></p>"
     },
     {
       "group": "html to delta",
@@ -696,7 +725,8 @@
           "insert": "spaced out\n"
         }
       ],
-      "text": "spaced out\n"
+      "text": "spaced out\n",
+      "html": "<p>spaced out</p>"
     },
     {
       "group": "html to delta",
@@ -721,7 +751,8 @@
           "insert": "\n"
         }
       ],
-      "text": "a\nb\n"
+      "text": "a\nb\n",
+      "html": "<table><tbody><tr><td data-row=\"1\">a</td><td data-row=\"1\">b</td></tr></tbody></table>"
     },
     {
       "group": "editing",
@@ -731,7 +762,8 @@
           "insert": "hello world\n"
         }
       ],
-      "text": "hello world\n"
+      "text": "hello world\n",
+      "html": "<p>hello world</p>"
     },
     {
       "group": "editing",
@@ -750,7 +782,8 @@
           "insert": "\n"
         }
       ],
-      "text": "hello!\n"
+      "text": "hello!\n",
+      "html": "<p>hello<strong>!</strong></p>"
     },
     {
       "group": "editing",
@@ -775,7 +808,8 @@
           "insert": "\n"
         }
       ],
-      "text": "Ti\ntle\n"
+      "text": "Ti\ntle\n",
+      "html": "<h1>Ti</h1><h1>tle</h1>"
     },
     {
       "group": "editing",
@@ -785,7 +819,8 @@
           "insert": "hello\n"
         }
       ],
-      "text": "hello\n"
+      "text": "hello\n",
+      "html": "<p>hello</p>"
     },
     {
       "group": "editing",
@@ -795,7 +830,8 @@
           "insert": "Titdy\n"
         }
       ],
-      "text": "Titdy\n"
+      "text": "Titdy\n",
+      "html": "<p>Titdy</p>"
     },
     {
       "group": "editing",
@@ -805,7 +841,8 @@
           "insert": "onetwo\n"
         }
       ],
-      "text": "onetwo\n"
+      "text": "onetwo\n",
+      "html": "<p>onetwo</p>"
     },
     {
       "group": "editing",
@@ -815,7 +852,8 @@
           "insert": "\n"
         }
       ],
-      "text": "\n"
+      "text": "\n",
+      "html": "<p><br></p>"
     },
     {
       "group": "editing",
@@ -831,7 +869,8 @@
           "insert": " world\n"
         }
       ],
-      "text": "hello world\n"
+      "text": "hello world\n",
+      "html": "<p><strong>hello</strong> world</p>"
     },
     {
       "group": "editing",
@@ -841,7 +880,8 @@
           "insert": "hello world\n"
         }
       ],
-      "text": "hello world\n"
+      "text": "hello world\n",
+      "html": "<p>hello world</p>"
     },
     {
       "group": "editing",
@@ -860,7 +900,8 @@
           "insert": "two\n"
         }
       ],
-      "text": "one\ntwo\n"
+      "text": "one\ntwo\n",
+      "html": "<h2>one</h2><p>two</p>"
     },
     {
       "group": "editing",
@@ -885,7 +926,8 @@
           "insert": "\n"
         }
       ],
-      "text": "one\ntwo\n"
+      "text": "one\ntwo\n",
+      "html": "<p class=\"ql-align-center\">one</p><p class=\"ql-align-center\">two</p>"
     },
     {
       "group": "editing",
@@ -895,7 +937,8 @@
           "insert": "hello\n"
         }
       ],
-      "text": "hello\n"
+      "text": "hello\n",
+      "html": "<p>hello</p>"
     },
     {
       "group": "editing",
@@ -920,7 +963,8 @@
           "insert": "\n"
         }
       ],
-      "text": "abcdef\n"
+      "text": "abcdef\n",
+      "html": "<p><em>ab</em>cd<em>ef</em></p>"
     },
     {
       "group": "editing",
@@ -936,7 +980,8 @@
           "insert": " world\n"
         }
       ],
-      "text": "hello world\n"
+      "text": "hello world\n",
+      "html": "<p><strong>hello</strong> world</p>"
     },
     {
       "group": "editing",
@@ -946,7 +991,8 @@
           "insert": "hello there\n"
         }
       ],
-      "text": "hello there\n"
+      "text": "hello there\n",
+      "html": "<p>hello there</p>"
     },
     {
       "group": "editing",
@@ -961,7 +1007,8 @@
           }
         }
       ],
-      "text": "before\n"
+      "text": "before\n",
+      "html": "<p>before</p><iframe class=\"ql-video\" frameborder=\"0\" allowfullscreen=\"true\" src=\"https://example.com/v\"></iframe>"
     },
     {
       "group": "editing",
@@ -979,7 +1026,8 @@
           "insert": "b\n"
         }
       ],
-      "text": "ab\n"
+      "text": "ab\n",
+      "html": "<p>a<img src=\"https://example.com/i.png\">b</p>"
     },
     {
       "group": "editing",
@@ -1001,7 +1049,8 @@
           "insert": "\n"
         }
       ],
-      "text": "one and  three\n"
+      "text": "one and  three\n",
+      "html": "<h3><strong>one</strong> and  three</h3>"
     }
   ]
 }

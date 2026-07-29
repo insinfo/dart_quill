@@ -251,35 +251,25 @@ class Editor {
       ..insert(text, formats);
   }
 
+  /// Parity `Editor.getDelta` (editor.ts:162-166) — the document delta is the
+  /// concatenation of every line's delta, nothing else.
+  ///
+  /// The port used to skip the last block when it was an empty paragraph, on
+  /// the theory that it was a rendering sentinel. It is not: a document ending
+  /// in an empty line *has* an empty last line, and upstream reports it.
+  /// Dropping it made `setContents` lossy — `a\n\n\n` came back as `a\n\n` — and
+  /// masked the stray paragraph the block-embed path leaves behind.
   void _update() {
-    // Build new delta from current document state
-    final childrenList = <Blot>[];
-    for (final child in scroll.children) {
-      childrenList.add(child);
-    }
-
     var tempDelta = Delta();
-    for (var i = 0; i < childrenList.length; i++) {
-      final child = childrenList[i];
-      final isLast = i == childrenList.length - 1;
-      final shouldSkipSentinel = isLast &&
-          tempDelta.isNotEmpty &&
-          child is Block &&
-          _isTrivialSentinelBlock(child);
-      if (shouldSkipSentinel) {
-        continue;
-      }
-
+    for (final child in scroll.children) {
       final childDelta = _buildDelta(child);
       if (childDelta.isNotEmpty) {
         tempDelta = tempDelta.concat(childDelta);
       }
     }
-
     if (tempDelta.isEmpty) {
       tempDelta.insert('\n');
     }
-
     delta = tempDelta;
   }
 
@@ -373,9 +363,12 @@ class Editor {
         ...blot.attributeValues(),
       };
       final value = {blot.blotName: blot.value()};
-      return Delta()
-        ..insert(value, attributes.isEmpty ? null : attributes)
-        ..insert('\n', attributes.isEmpty ? null : attributes);
+      // Parity `BlockEmbed.delta()` (block.ts:26-31): the embed *is* the line —
+      // one op, length 1, no newline of its own. Emitting a trailing `\n` here
+      // made the delta two units long for a one-unit blot, so every index after
+      // a block embed was off by one, and the document reported a paragraph
+      // that does not exist.
+      return Delta()..insert(value, attributes.isEmpty ? null : attributes);
     }
 
     if (blot is ParentBlot) {
@@ -395,23 +388,4 @@ class Editor {
     return Delta();
   }
 
-  bool _isTrivialSentinelBlock(Block block) {
-    final blockDelta = block.delta();
-    if (blockDelta.operations.length != 1) {
-      return false;
-    }
-    final op = blockDelta.operations.first;
-    if (!op.isInsert) {
-      return false;
-    }
-    final data = op.data;
-    if (data is! String) {
-      return false;
-    }
-    if (data != '\n') {
-      return false;
-    }
-    final attrs = op.attributes;
-    return attrs == null || attrs.isEmpty;
-  }
 }
