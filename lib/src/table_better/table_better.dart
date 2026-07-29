@@ -7,12 +7,11 @@
 /// constructor builds: [TableMenus], [OperateLine], [TableSelect] and the
 /// keyboard bindings.
 ///
-/// **Deviation:** upstream keeps a single `CellSelection` for the editor; this
-/// port keeps one [CellSelectionController] per table, resolved lazily and
-/// disposed when its table goes away. So the delegation calls in TS's
-/// `handleKeyup`/`handleMousedown` are absent here — each controller listens on
-/// the same root and ignores events outside its own table — while the
-/// surrounding lifecycle below stays faithful.
+/// Like upstream, there is exactly one [CellSelectionController] per editor,
+/// so only one selection is ever live and the editor-wide toolbar state has a
+/// single owner. Its logical grid is re-aimed at whatever table the user
+/// touches (`CellSelection.rebind`), which is where the TS instead reads
+/// geometry off `selectedTds` with `getBoundingClientRect`.
 import 'dart:math' as math;
 
 import '../blots/block.dart';
@@ -141,11 +140,26 @@ class TableBetter extends Module<TableBetterOptions> {
       resolveTable: _tableForElement,
       onResized: (tableNode) => tableMenus.updateMenus(tableNode),
     );
+    cellSelection = CellSelectionController(
+      quill: quill,
+      root: quill.root,
+      host: CellSelectionHost(
+        hideTools: hideTools,
+        showTools: showTools,
+        toggleHeaderRowSwitch: tableMenus.toggleHeaderRowSwitch,
+        disableMenu: tableMenus.disableMenu,
+        updateMenus: tableMenus.updateMenus,
+        deleteColumn: tableMenus.deleteColumn,
+        deleteRow: tableMenus.deleteRow,
+        toolbarContainer: _toolbarContainer,
+        toolbarButtons: options.toolbarButtons,
+      ),
+    );
     registerToolbarTable(options.toolbarTable);
     listenDeleteTable();
     // TS quill-table-better.ts:96-98 — the module owns the root-level
-    // lifecycle; each table's CellSelectionController keeps its own click /
-    // mousedown / keyup listeners for the grid itself.
+    // lifecycle; the CellSelectionController keeps its own click / mousedown /
+    // keyup listeners for the grid itself, as the TS CellSelection does.
     quill.root.addEventListener('keyup', (event) {
       if (event is DomKeyboardEvent) handleKeyup(event);
     });
@@ -173,12 +187,15 @@ class TableBetter extends Module<TableBetterOptions> {
   /// TS `this.operateLine` — the resize overlay (`ui/operate-line.ts`).
   late final OperateLine operateLine;
 
-  final Map<TableContainer, CellSelectionController> _cellSelections = {};
+  /// TS `this.cellSelection` — one per editor, as upstream has.
+  late final CellSelectionController cellSelection;
 
-  /// Resolves the [CellSelection] owning a `<table>` element, for [tableMenus].
+  /// Resolves the [CellSelection] for a `<table>` element, for [tableMenus].
   CellSelection? _selectionForElement(DomElement element) {
     final table = _tableForElement(element);
-    return table == null ? null : controllerFor(table).selection;
+    if (table == null) return null;
+    cellSelection.selection.rebind(table);
+    return cellSelection.selection;
   }
 
   /// Resolves the [TableContainer] blot behind a `<table>` element.
@@ -321,31 +338,14 @@ class TableBetter extends Module<TableBetterOptions> {
   CellSelection? get activeCellSelection {
     final table = getTable().table;
     if (table == null) return null;
-    return controllerFor(table).selection;
+    cellSelection.selection.rebind(table);
+    return cellSelection.selection;
   }
 
-  /// Lazily wires a [CellSelectionController] (drag/click/keyboard layer) for
-  /// [table]. Controllers of removed tables are disposed on text-change.
+  /// The live controller, with its grid pointed at [table].
   CellSelectionController controllerFor(TableContainer table) {
-    return _cellSelections.putIfAbsent(
-      table,
-      () => CellSelectionController(
-        quill: quill,
-        root: quill.root,
-        table: table,
-        host: CellSelectionHost(
-          hideTools: hideTools,
-          showTools: showTools,
-          toggleHeaderRowSwitch: tableMenus.toggleHeaderRowSwitch,
-          disableMenu: tableMenus.disableMenu,
-          updateMenus: tableMenus.updateMenus,
-          deleteColumn: tableMenus.deleteColumn,
-          deleteRow: tableMenus.deleteRow,
-          toolbarContainer: _toolbarContainer,
-          toolbarButtons: options.toolbarButtons,
-        ),
-      ),
-    );
+    cellSelection.selection.rebind(table);
+    return cellSelection;
   }
 
   DomElement? get _toolbarContainer {
@@ -629,25 +629,20 @@ class TableBetter extends Module<TableBetterOptions> {
     return null;
   }
 
-  /// Routes a paste to the active cell selection (TS `onCapturePaste`).
+  /// Routes a paste to the live cell selection (TS `onCapturePaste`).
   ///
-  /// Returns false when no table has cells selected, so the clipboard module
-  /// falls back to its normal paste.
+  /// Returns false when no cells are selected, so the clipboard module falls
+  /// back to its normal paste.
   bool pasteGridIntoSelection(String html) {
-    for (final controller in _cellSelections.values) {
-      if (controller.selectedTds.isEmpty) continue;
-      if (controller.pasteGrid(html)) return true;
-    }
-    return false;
+    if (cellSelection.selectedTds.isEmpty) return false;
+    return cellSelection.pasteGrid(html);
   }
 
   /// TS `hideTools()` (quill-table-better.ts:214) — clears the cell selections
   /// and hides the floating menus. The operate-line overlay joins in G6.5.
   void hideTools() {
-    for (final controller in _cellSelections.values) {
-      controller.clear();
-      controller.setDisabled(false);
-    }
+    cellSelection.clear();
+    cellSelection.setDisabled(false);
     operateLine.hideDragBlock();
     operateLine.hideDragTable();
     operateLine.hideLine();
@@ -685,16 +680,11 @@ class TableBetter extends Module<TableBetterOptions> {
     return formats.containsKey(TableCellBlock.kBlotName);
   }
 
+  /// Drops the selection when the table it lived in is gone (deleted table,
+  /// undo). Upstream reaches the same state through `hideTools()`.
   void _syncCellSelections() {
+    if (!cellSelection.selection.isBound) return;
     final live = quill.scroll.descendants<TableContainer>().toSet();
-    final removed = _cellSelections.keys
-        .where((table) => !live.contains(table))
-        .toList(growable: false);
-    for (final table in removed) {
-      _cellSelections.remove(table)?.dispose();
-    }
-    for (final table in live) {
-      controllerFor(table);
-    }
+    if (!live.contains(cellSelection.selection.table)) cellSelection.clear();
   }
 }

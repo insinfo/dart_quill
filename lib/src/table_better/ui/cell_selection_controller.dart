@@ -76,11 +76,10 @@ class CellSelectionController {
   CellSelectionController({
     required this.quill,
     required this.root,
-    required this.table,
     CellSelectionHost? host,
   })  : host = host ??
             const CellSelectionHost(hideTools: _noop, showTools: _noopForce),
-        selection = CellSelection(table) {
+        selection = CellSelection() {
     _clickListener = handleClick;
     _mousedownListener = handleMousedown;
     _keyupListener = _onKeyup;
@@ -95,8 +94,14 @@ class CellSelectionController {
 
   final Quill quill;
   final DomElement root;
-  final TableContainer table;
+
+  /// The editor's single live selection, as upstream has (`this.cellSelection`
+  /// on the module). Its grid is re-aimed at whatever table the user touches.
   final CellSelection selection;
+
+  /// The table the live selection is bound to. Only valid while a selection
+  /// exists — every caller below is reached through one.
+  TableContainer get table => selection.table;
   final CellSelectionHost host;
 
   late final DomEventListener _clickListener;
@@ -686,16 +691,31 @@ class CellSelectionController {
     return null;
   }
 
+  /// Resolves the blot behind a `<td>`/`<th>` anywhere in the editor and points
+  /// the live selection at its table.
+  ///
+  /// Upstream needs no equivalent: its `CellSelection` never knows a table, so
+  /// a cell from any table is simply the new selection. Re-aiming the grid here
+  /// is what keeps that single-selection invariant.
+  TableCell? _bind(DomElement element) {
+    for (final container in quill.scroll.descendants<TableContainer>()) {
+      for (final cell in container.descendants<TableCell>()) {
+        if (identical(cell.element, element)) {
+          selection.rebind(container);
+          return cell;
+        }
+      }
+    }
+    return null;
+  }
+
   TableCell? _cellFromTarget(DomNode? target) {
     DomNode? node = target;
     while (node != null && !identical(node, root)) {
       if (node is DomElement) {
         final tag = node.tagName.toUpperCase();
         if (tag == 'TD' || tag == 'TH') {
-          for (final cell in table.descendants<TableCell>()) {
-            if (identical(cell.element, node)) return cell;
-          }
-          return null;
+          return _bind(node);
         }
       }
       node = node.parentNode;

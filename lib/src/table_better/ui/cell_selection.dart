@@ -50,9 +50,33 @@ class _CellPlacement {
 /// the start/end cell coordinates after hit testing, while rowspan/colspan are
 /// expanded consistently for merge, formatting and copy operations.
 class CellSelection {
-  CellSelection(this.table);
+  CellSelection([TableContainer? table]) : _table = table;
 
-  final TableContainer table;
+  /// The table the selection currently lives in.
+  ///
+  /// Upstream's `CellSelection` has no such field: it serves the whole editor
+  /// and reads geometry off `selectedTds` with `getBoundingClientRect`. This
+  /// port resolves the same information from a logical grid, which needs to
+  /// know the table — so a single instance per editor re-aims this pointer
+  /// through [rebind] as the user moves between tables. The invariant upstream
+  /// gets by construction (only one selection is ever live) is preserved.
+  TableContainer? _table;
+
+  TableContainer get table => _table!;
+
+  bool get isBound => _table != null;
+
+  /// Points the grid at [next], dropping whatever was selected in the table
+  /// being left behind.
+  void rebind(TableContainer next) {
+    if (identical(_table, next)) return;
+    for (final cell in _selected) {
+      cell.element.classes.remove('ql-cell-focused');
+    }
+    clear();
+    _table = next;
+  }
+
   CellSelectionRange? range;
   List<TableCell> _selected = const [];
 
