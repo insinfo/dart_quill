@@ -1,44 +1,37 @@
-import 'package:dart_quill/src/blots/abstract/blot.dart';
-import 'package:dart_quill/src/formats/bold.dart';
 import 'package:dart_quill/src/platform/dom.dart';
 import 'package:test/test.dart';
 
 import '../../support/quill_test_helpers.dart';
 import '../../support/test_helpers.dart';
 
+/// Port of `referencias/quilljs/test/unit/formats/bold.spec.ts`.
 void main() {
-  group('Bold format', () {
-    test('optimize merges adjacent bold segments', () {
-      ensureQuillTestInitialized();
+  setUpAll(ensureQuillTestInitialized);
 
-      final boldEntry = RegistryEntry(
-        blotName: Bold.kBlotName,
-        scope: Bold.kScope,
-        tagNames: Bold.kTagNames,
-        create: Bold.create,
-      );
+  setUp(() {
+    final body = testAdapter.document.body;
+    while (body.firstChild != null) {
+      body.firstChild!.remove();
+    }
+  });
 
-      final registry = createRegistry([boldEntry]);
-      final container = testAdapter.document.createElement('div');
-      testAdapter.document.body.append(container);
-      addTearDown(container.remove);
-
-      final scroll = createScroll(
+  group('Bold', () {
+    test('optimize and merge', () {
+      final scroll = createScrollWithFormats(
         '<p><strong>a</strong>b<strong>c</strong></p>',
-        registry: registry,
-        container: container,
+        ['formats/bold'],
       );
 
-      final paragraph = container.childNodes.first as DomElement;
-      final middleNode = paragraph.childNodes[1];
-
-      final boldWrapper = testAdapter.document.createElement('b');
-      boldWrapper.append(middleNode);
-      paragraph.insertBefore(boldWrapper, paragraph.lastChild);
+      // The `<b>` a browser (or a paste) can drop in the middle: it must be
+      // normalized to `<strong>` and then merged with both neighbours.
+      final paragraph = scroll.element.firstChild as DomElement;
+      final bold = testAdapter.document.createElement('b');
+      bold.append(paragraph.childNodes[1]);
+      paragraph.insertBefore(bold, paragraph.lastChild);
 
       scroll.update();
 
-      expectHTML(container, '<p><strong>abc</strong></p>');
+      expect(scroll.element, EqualHTML('<p><strong>abc</strong></p>'));
     });
   });
 }

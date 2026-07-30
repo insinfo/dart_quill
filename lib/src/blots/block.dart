@@ -59,12 +59,14 @@ class Block extends BlockBlot {
   static const String kBlotName = 'block';
   static const String tagName = 'P';
   static const int kScope = Scope.BLOCK_BLOT;
-  static const List<Type> allowedChildren = [
-    Break,
-    InlineBlot,
-    EmbedBlot,
-    TextBlot,
-  ];
+  // Parity parchment block.ts — `BlockBlot.allowedChildren = [Break, Inline,
+  // EmbedBlot, Text]`. Was a dead `static const List<Type>` that nothing read.
+  @override
+  bool Function(Blot child)? get allowedChildren => (child) =>
+      child is Break ||
+      child is InlineBlot ||
+      child is EmbedBlot ||
+      child is TextBlot;
 
   final Map<String, dynamic> _cache = <String, dynamic>{};
 

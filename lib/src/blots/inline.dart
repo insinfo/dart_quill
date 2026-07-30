@@ -2,6 +2,8 @@ import '../platform/dom.dart';
 import '../platform/platform.dart';
 import '../formats/abstract/attributor.dart';
 import 'abstract/blot.dart';
+import 'break.dart';
+import 'text.dart';
 
 class Inline extends InlineBlot {
   Inline(DomElement domNode) : super(domNode);
@@ -24,7 +26,15 @@ class Inline extends InlineBlot {
 }
 
 abstract class InlineBlot extends ParentBlot {
-  static const List<Type> allowedChildren = [];
+  // Parity quill inline.ts:7 — `Inline.allowedChildren = [Inline, Break,
+  // EmbedBlot, Text]`. Was a dead empty `static const List<Type>`.
+  @override
+  bool Function(Blot child)? get allowedChildren => (child) =>
+      child is InlineBlot ||
+      child is Break ||
+      child is EmbedBlot ||
+      child is TextBlot;
+
   static const List<String> order = [
     'cursor',
     'inline',

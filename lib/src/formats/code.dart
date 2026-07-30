@@ -23,6 +23,13 @@ class CodeBlockContainer extends ContainerBlot {
   static const int kScope = Scope.BLOCK_BLOT;
   static CodeBlockContainer create([dynamic value]) {
     final node = domBindings.adapter.document.createElement(kTagName);
+    // Parity parchment shadow.ts `create`: the base adds `this.className`
+    // before the subclass touches the node. Skipping it produced a bare
+    // `<div spellcheck="false">` — no `ql-code-block-container`, so the
+    // stylesheet did not apply and re-loading the HTML no longer recognised
+    // the block as code. Only the syntax variant (the default registry) was
+    // adding it, which is why the goldens never caught this.
+    node.classes.add(kClassName);
     node.setAttribute('spellcheck', 'false');
     return CodeBlockContainer(node);
   }
@@ -32,6 +39,12 @@ class CodeBlockContainer extends ContainerBlot {
 
   @override
   int get scope => kScope;
+
+  // Parity code.ts:48 — `CodeBlockContainer.allowedChildren = [CodeBlock]`.
+  // Without it, a line whose code format was removed stayed INSIDE the
+  // container: `<div class="ql-code-block-container"><h1>0123</h1></div>`.
+  @override
+  bool Function(Blot child)? get allowedChildren => (child) => child is CodeBlock;
 
   @override
   dynamic value() => children.map((child) => child.value()).toList();
@@ -70,7 +83,12 @@ class CodeBlock extends Block {
   static const String kTagName = 'DIV';
   static const int kScope = Scope.BLOCK_BLOT;
   static const Type requiredContainer = CodeBlockContainer;
-  static final List<Type> allowedChildren = [TextBlot, Break, Cursor];
+
+  // Parity code.ts:50 — `CodeBlock.allowedChildren = [TextBlot, Break, Cursor]`
+  // is what makes a line lose its inline formats when it becomes code.
+  @override
+  bool Function(Blot child)? get allowedChildren =>
+      (child) => child is TextBlot || child is Break || child is Cursor;
 
   static void register() {
     Quill.register(CodeBlockContainer);
@@ -78,6 +96,10 @@ class CodeBlock extends Block {
 
   static CodeBlock create([dynamic value]) {
     final node = domBindings.adapter.document.createElement(kTagName);
+    // See CodeBlockContainer.create — the className comes from the parchment
+    // base `create`, and a code line without `ql-code-block` is invisible to
+    // both the stylesheet and the next hydration.
+    node.classes.add(kClassName);
     return CodeBlock(node);
   }
 

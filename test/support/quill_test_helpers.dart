@@ -1,4 +1,5 @@
 import 'package:dart_quill/src/blots/abstract/blot.dart';
+import 'package:dart_quill/src/blots/scroll.dart';
 import 'package:dart_quill/src/core/editor.dart';
 import 'package:dart_quill/src/core/initialization.dart';
 import 'package:dart_quill/src/core/quill.dart';
@@ -43,6 +44,12 @@ Registry registryWithFormats(List<String> paths) {
   }
   return registry;
 }
+
+/// The upstream `createScroll(html, createRegistry([Format, ...]))`: a scroll
+/// whose registry carries the base blots plus the named formats, taken from
+/// the library's own registration.
+Scroll createScrollWithFormats(String html, List<String> paths) =>
+    createScroll(html, registry: registryWithFormats(paths));
 
 /// Port of the upstream spec helper `createEditor`
 /// (`referencias/quilljs/test/unit/core/editor.spec.ts:32-64`): the HTML is the

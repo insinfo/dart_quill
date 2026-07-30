@@ -209,12 +209,14 @@ class SyntaxCodeBlock extends code_format.CodeBlock {
   static const String kTagName = code_format.CodeBlock.kTagName;
   static const int kScope = code_format.CodeBlock.kScope;
   static const Type requiredContainer = SyntaxCodeBlockContainer;
-  static final List<Type> allowedChildren = [
-    CodeToken,
-    Cursor,
-    TextBlot,
-    Break,
-  ];
+  // Parity syntax.ts — `SyntaxCodeBlock.allowedChildren = [CodeToken, Cursor,
+  // TextBlot, Break]`, now a real predicate instead of a dead static list.
+  @override
+  bool Function(Blot child)? get allowedChildren => (child) =>
+      child is CodeToken ||
+      child is Cursor ||
+      child is TextBlot ||
+      child is Break;
 
   static SyntaxCodeBlock create([dynamic value]) {
     if (value is DomElement) {

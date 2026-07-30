@@ -117,17 +117,20 @@ Registry createRegistry([List<RegistryEntry>? formats]) {
   return registry;
 }
 
-/// Create a Scroll with initial HTML content using FakeDom
+/// Create a Scroll with initial HTML content using FakeDom.
+///
+/// Port of the upstream factory (`test/unit/__helpers__/factory.ts`): the
+/// scroll root is a FRESH `<div>` appended to [container] (the body by
+/// default), never the container itself — so two scrolls in one test are
+/// independent, exactly as upstream.
 Scroll createScroll(String html, {Registry? registry, DomElement? container}) {
   final emitter = Emitter();
   // Always use testAdapter which is FakeDomAdapter
   final doc = testAdapter.document;
-  final root = container ?? doc.body;
-
-  // Set innerHTML
-  if (root is FakeDomElement) {
-    root.innerHTML = normalizeHTML(html);
-  }
+  final parent = container ?? doc.body;
+  final root = doc.createElement('div');
+  parent.append(root);
+  root.innerHTML = normalizeHTML(html);
   final resolvedRegistry = registry ?? createRegistry();
   final scroll = Scroll(
     resolvedRegistry,

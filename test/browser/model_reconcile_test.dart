@@ -8,6 +8,7 @@ library model_reconcile_test;
 /// the browser silently dropped every native edit. These tests pin the
 /// browser behaviour: records must carry properly typed wrappers, and the
 /// text the browser inserts must reach the document model.
+import 'package:dart_quill/src/core/emitter.dart';
 import 'package:dart_quill/src/core/initialization.dart';
 import 'package:dart_quill/src/core/quill.dart';
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
@@ -123,6 +124,30 @@ void main() {
               op['insert'] == 'forte' && op['attributes']?['bold'] == true),
           isTrue,
           reason: 'the inserted <strong> must hydrate as a bold run: $ops');
+    });
+
+    /// Port of `scroll.spec.ts` "api change": an API edit must reach
+    /// SCROLL_OPTIMIZE carrying the MutationRecords it produced. Browser-only
+    /// by nature — the event fires under `mutations.length > 0`, and the
+    /// records come from a real observer.
+    test('an api edit emits SCROLL_OPTIMIZE with its mutations', () {
+      final quill = _createQuill();
+      quill.setContents(Delta()..insert('Hello World!\n'));
+
+      var optimized = 0;
+      List<dynamic>? seen;
+      quill.scroll.emitter.on(EmitterEvents.SCROLL_OPTIMIZE,
+          (dynamic mutations, [dynamic context]) {
+        optimized += 1;
+        if (mutations is List) seen = mutations;
+      });
+
+      quill.scroll.insertAt(5, '!');
+      quill.scroll.optimize([], {});
+
+      expect(optimized, greaterThan(0));
+      expect(seen, isNotNull);
+      expect(seen, isNotEmpty);
     });
 
     test('removing a node in the DOM removes it from the model', () async {

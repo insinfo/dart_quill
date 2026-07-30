@@ -469,9 +469,51 @@ abstract class ParentBlot extends Blot {
     for (final child in snapshot) {
       child.optimize(mutations, context);
     }
+    // Parity parent.ts:252-254 — the enforcement lives on EVERY ParentBlot,
+    // not only on containers. `CodeBlock.allowedChildren = [Text, Break,
+    // Cursor]` is what strips inline formats when a line becomes code; with
+    // the call sitting on ContainerBlot only, formatting `<p><em>0123</em></p>`
+    // as code-block kept the `<em>` and the delta kept `italic: true`.
+    enforceAllowedChildren();
 
     for (final child in List<Blot>.from(children)) {
       _ensureChildDomParent(child, mutations, context);
+    }
+  }
+
+  /// Parity `statics.allowedChildren` consumed by parent.ts:168-195. Parchment
+  /// matches by `instanceof`; the Dart counterpart is a predicate. Null (the
+  /// default) means the blot declares nothing and no enforcement runs.
+  bool Function(Blot child)? get allowedChildren => null;
+
+  /// Parity `ParentBlot.enforceAllowedChildren()` (parent.ts:168-195): a child
+  /// that does not belong is expelled — a block-scope child is isolated by
+  /// splitting the parent around it and unwrapping (this is how clearing a
+  /// list format pops the new paragraph out of the `<ol>`), a foreign parent
+  /// is dissolved in place, and a stray leaf is removed.
+  void enforceAllowedChildren() {
+    final allows = allowedChildren;
+    if (allows == null) return;
+    for (final child in List<Blot>.from(children)) {
+      if (allows(child)) continue;
+      if (Scope.matches(child.scope, Scope.BLOCK_BLOT)) {
+        if (child.next != null) {
+          splitAfter(child);
+        }
+        if (child.prev != null) {
+          splitAfter(child.prev!);
+        }
+        final holder = child.parent;
+        if (holder is ParentBlot) {
+          holder.unwrap();
+        }
+        // Parity `done = true` — one expulsion per pass; optimize converges.
+        return;
+      } else if (child is ParentBlot) {
+        child.unwrap();
+      } else {
+        child.remove();
+      }
     }
   }
 
@@ -1052,42 +1094,6 @@ abstract class ContainerBlot extends ParentBlot {
   /// later in the same optimize pass) opt out of the base empty-removal and
   /// sibling merge, which would otherwise delete those wrappers mid-flight.
   bool get managesOwnContainerOptimize => false;
-
-  /// Parity `statics.allowedChildren` consumed by parent.ts:168-195. Parchment
-  /// matches by `instanceof`; the Dart counterpart is a predicate. Null (the
-  /// default) means the container declares nothing and no enforcement runs.
-  bool Function(Blot child)? get allowedChildren => null;
-
-  /// Parity `ParentBlot.enforceAllowedChildren()` (parent.ts:168-195): a child
-  /// that does not belong is expelled — a block-scope child is isolated by
-  /// splitting the container around it and unwrapping (this is how clearing a
-  /// list format pops the new paragraph out of the `<ol>`), a foreign parent
-  /// is dissolved in place, and a stray leaf is removed.
-  void enforceAllowedChildren() {
-    final allows = allowedChildren;
-    if (allows == null) return;
-    for (final child in List<Blot>.from(children)) {
-      if (allows(child)) continue;
-      if (Scope.matches(child.scope, Scope.BLOCK_BLOT)) {
-        if (child.next != null) {
-          splitAfter(child);
-        }
-        if (child.prev != null) {
-          splitAfter(child.prev!);
-        }
-        final holder = child.parent;
-        if (holder is ParentBlot) {
-          holder.unwrap();
-        }
-        // Parity `done = true` — one expulsion per pass; optimize converges.
-        return;
-      } else if (child is ParentBlot) {
-        child.unwrap();
-      } else {
-        child.remove();
-      }
-    }
-  }
 
   // Parity container.ts:19-37 — the structural APIs re-enforce afterwards.
   @override
