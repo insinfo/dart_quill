@@ -11,6 +11,13 @@ class FakeDomAdapter implements DomAdapter {
   DomSelectionRange? selectionRange;
   DomNativeRange? nativeSelectionRange;
 
+  /// What [caretRangeFromPoint] answers; the fake DOM has no layout, so a test
+  /// that exercises a drop sets this explicitly.
+  DomNativeRange? caretRangeAtPoint;
+
+  @override
+  DomNativeRange? caretRangeFromPoint(num x, num y) => caretRangeAtPoint;
+
   // The fake DOM has no live native selection: Selection stays in its
   // logical mode, which is what the VM suite exercises.
   @override
@@ -1115,6 +1122,7 @@ class FakeDomMouseEvent extends FakeDomEvent implements DomMouseEvent {
   FakeDomMouseEvent({
     required String type,
     DomNode? target,
+    this.dataTransfer,
     this.clientX = 0,
     this.clientY = 0,
     this.detail = 1,
@@ -1124,6 +1132,8 @@ class FakeDomMouseEvent extends FakeDomEvent implements DomMouseEvent {
     this.shiftKey = false,
   }) : super(type, target);
 
+  @override
+  final DomDataTransfer? dataTransfer;
   @override
   final num clientX;
   @override

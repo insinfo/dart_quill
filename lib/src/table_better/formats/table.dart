@@ -1141,8 +1141,6 @@ class TableContainer extends TableBetterContainer {
     }
     for (final prevCell in keys) {
       final (formats, _) = utils.getCellFormats(prevCell);
-      // TODO(table-better): layout-dependent — requires a real
-      // elementRectResolver (getBoundingClientRect) in the UI phase.
       final rect = utils.elementRectResolver(prevCell.element);
       final entry = weakMap[prevCell]!;
       _setColumnCells(
@@ -1314,8 +1312,6 @@ class TableContainer extends TableBetterContainer {
             : null;
         while (colBlot != null) {
           final col = colBlot as TableCol;
-          // TODO(table-better): layout-dependent — requires a real
-          // elementRectResolver (getBoundingClientRect) in the UI phase.
           final rect = utils.elementRectResolver(col.element);
           correctLeft = correctLeft != 0 ? correctLeft : rect.left;
           correctRight = correctLeft + rect.width;
@@ -1573,8 +1569,6 @@ class TableContainer extends TableBetterContainer {
         refBlot = refBlot.next;
         continue;
       }
-      // TODO(table-better): layout-dependent — requires a real
-      // elementRectResolver (getBoundingClientRect) in the UI phase.
       final rect = utils.elementRectResolver(ref.element);
       final left = rect.left;
       final right = rect.right;

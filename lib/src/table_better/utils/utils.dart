@@ -2,9 +2,9 @@
 ///
 /// Pure helpers are ported fully. Helpers that depend on browser layout
 /// (getBoundingClientRect / getComputedStyle) route through
-/// [elementRectResolver], which throws [UnimplementedError] until the UI
-/// phase installs a real implementation (the platform DOM abstraction in
-/// `lib/src/platform/dom.dart` has no layout API yet).
+/// [elementRectResolver], which reads the real rect from the platform adapter.
+/// Adapters with no layout (the fake DOM used by the VM suite) return null and
+/// the resolver throws, so those tests install a fake resolver instead.
 import 'dart:async';
 
 import '../../blots/abstract/blot.dart';

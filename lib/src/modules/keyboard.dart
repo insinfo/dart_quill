@@ -9,6 +9,7 @@ import '../blots/block.dart';
 import '../blots/text.dart';
 import '../blots/abstract/blot.dart';
 import '../formats/code.dart';
+import 'table.dart';
 import '../platform/dom.dart';
 import '../platform/platform.dart';
 
@@ -795,8 +796,11 @@ int? tableSide(dynamic table, Blot row, Blot cell, int offset) {
 
 bool _isTruthy(dynamic value) => value != null && value != false && value != '';
 
-/// Walks up from [blot] to the enclosing `table-container` blot (the port has
-/// no public `module.getTable`, cf. TODO in `_handleTableEnter`).
+/// Walks up from [blot] to the enclosing `table-container` blot.
+///
+/// The table bindings normally ask the `table` module for the trio through its
+/// public `getTable(range)`; this is the fallback for quill-table-better,
+/// which replaces that module, so there is none to ask.
 Blot? _closestTableContainer(Blot? blot) {
   Blot? current = blot;
   while (current != null) {
@@ -849,31 +853,20 @@ dynamic _handleCodeBlockTab(
       : quill.scroll.lines(range.index, range.length);
   var index = range.index;
   var length = range.length;
-  // keyboard.ts mutates the line blots and then calls `quill.update(USER)`.
-  // The port has no `Quill.update`, so the same edit is expressed as a delta
-  // (which also keeps history/TEXT_CHANGE correct).
-  // TODO(G3): depende de `Quill.update(source)` (fase G2.1) para paridade
-  // literal com keyboard.ts:677.
-  final delta = Delta();
-  var consumed = 0;
+  // Parity keyboard.ts:655-678 — the lines are mutated directly and the model
+  // is reconciled afterwards by `quill.update(USER)`, which is what turns the
+  // whole batch into ONE change delta.
   for (var i = 0; i < lines.length; i++) {
-    final lineIndex = quill.scroll.offset(lines[i]);
-    if (lineIndex < 0) continue;
+    final line = lines[i];
     if (indent) {
-      delta
-        ..retain(lineIndex - consumed)
-        ..insert(tab);
-      consumed = lineIndex;
+      line.insertAt(0, tab);
       if (i == 0) {
         index += tab.length;
       } else {
         length += tab.length;
       }
-    } else if (quill.getText(lineIndex, tab.length) == tab) {
-      delta
-        ..retain(lineIndex - consumed)
-        ..delete(tab.length);
-      consumed = lineIndex + tab.length;
+    } else if ((line.domNode.textContent ?? '').startsWith(tab)) {
+      line.deleteAt(0, tab.length);
       if (i == 0) {
         index -= tab.length;
       } else {
@@ -881,9 +874,7 @@ dynamic _handleCodeBlockTab(
       }
     }
   }
-  if (delta.operations.isNotEmpty) {
-    quill.updateContents(delta, source: EmitterSource.USER);
-  }
+  quill.update(EmitterSource.USER);
   quill.setSelection(Range(math.max(0, index), math.max(0, length)),
       source: EmitterSource.SILENT);
   return null;
@@ -982,7 +973,9 @@ dynamic _handleTableDown(Keyboard keyboard, Range range, Context context) =>
     _handleTableArrow(keyboard, context, false);
 
 dynamic _handleTableArrow(Keyboard keyboard, Context context, bool up) {
-  // TODO move to table module (same note as keyboard.ts:743).
+  // keyboard.ts:743 carries an upstream note wishing this handler lived in the
+  // table module. Recorded here as parity information, not as port debt: the
+  // handler stays exactly where upstream keeps it.
   final quill = keyboard.quill;
   final cell = context.line;
   final row = cell.parent;
@@ -1131,14 +1124,31 @@ dynamic _handleTableNoop(Keyboard keyboard, Range range, Context context) =>
 
 dynamic _handleTableEnter(Keyboard keyboard, Range range, Context context) {
   final quill = keyboard.quill;
-  // TODO(G3): depende de `module.getTable(range)` público no módulo table
-  // (fase G3.4); enquanto isso o trio table/row/cell é derivado da própria
-  // linha do contexto, que é a célula.
-  final cell = context.line;
-  final row = cell.parent;
-  final table = _closestTableContainer(cell);
-  if (row == null || table == null) return null;
-  final shift = tableSide(table, row, cell, context.offset);
+  // Parity keyboard.ts:511-516 — the table/row/cell trio comes from the table
+  // module's public `getTable(range)`.
+  Blot? table;
+  Blot? row;
+  Blot? cell;
+  int offset;
+  final module = quill.getModule('table');
+  if (module is Table) {
+    final tableContext = module.getTable(range);
+    table = tableContext.table;
+    row = tableContext.row;
+    cell = tableContext.cell;
+    offset = tableContext.offset;
+  } else {
+    // Upstream simply does nothing without the module. Here the binding must
+    // still work for quill-table-better, which REPLACES the core `table`
+    // module: the trio is then derived from the context line, which is the
+    // cell, and the enclosing container is walked to.
+    cell = context.line;
+    row = cell.parent;
+    table = _closestTableContainer(cell);
+    offset = context.offset;
+  }
+  if (table == null || row == null || cell == null) return null;
+  final shift = tableSide(table, row, cell, offset);
   if (shift == null) return null;
   var index = quill.scroll.offset(table);
   if (index < 0) return null;

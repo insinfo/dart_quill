@@ -14,6 +14,8 @@ class RegistryEntry {
     this.classNames = const <String>[],
     this.requiredContainerBlotName,
     this.staticFormats,
+    this.staticValue,
+    this.isEmbed = false,
   });
 
   final String blotName;
@@ -32,6 +34,20 @@ class RegistryEntry {
   /// (clipboard.ts `'formats' in match`). Null means the blot declares none
   /// and callers fall back to their own dispatch.
   final dynamic Function(DomElement node)? staticFormats;
+
+  /// Counterpart of the upstream `static value(domNode)` an embed blot
+  /// exposes — the value that goes inside the insert (`{image: src}`). Only
+  /// meaningful together with [isEmbed].
+  final dynamic Function(DomElement node)? staticValue;
+
+  /// Whether a DOM node matching this blot converts to an **embed insert**
+  /// rather than a text format.
+  ///
+  /// Parchment decides this from the blot's scope and `value`/`formats`
+  /// statics; a `RegistryEntry` is data, so it is declared here. Without it
+  /// the clipboard had to keep a hardcoded list of embed names and no
+  /// third-party embed could ever paste.
+  final bool isEmbed;
 }
 
 class Registry {

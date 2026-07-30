@@ -206,6 +206,11 @@ abstract class DomClipboardEvent extends DomEvent {
 abstract class DomMouseEvent extends DomEvent {
   num get clientX;
   num get clientY;
+
+  /// The payload of a drag/drop, when this is a drag event (`DragEvent`
+  /// extends `MouseEvent` in the DOM, so drops arrive here). Null otherwise.
+  DomDataTransfer? get dataTransfer;
+
   int get detail;
   bool get altKey;
   bool get ctrlKey;
@@ -276,6 +281,13 @@ abstract class DomAdapter {
           callback);
   DomSelectionRange? getSelectionRange(DomElement root);
   DomNativeRange? getNativeSelectionRange();
+
+  /// The caret position at viewport coordinates ([x], [y]).
+  ///
+  /// Wraps `document.caretRangeFromPoint` / `caretPositionFromPoint`, which is
+  /// how a drop lands where the pointer is instead of at the old selection.
+  /// Adapters without layout return null.
+  DomNativeRange? caretRangeFromPoint(num x, num y);
   void setSelectionRange(DomElement root, int index, int length);
   void setSelectionByNodes(
       DomNode startNode, int startOffset, DomNode endNode, int endOffset);

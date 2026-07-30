@@ -502,6 +502,16 @@ class HtmlDomMouseEvent extends HtmlDomEvent implements DomMouseEvent {
   num get clientY => _mouseEvent.clientY;
 
   @override
+  DomDataTransfer? get dataTransfer {
+    // A drop is a DragEvent, which extends MouseEvent; anything else has no
+    // payload.
+    final event = nativeEvent;
+    if (!event.isA<web.DragEvent>()) return null;
+    final transfer = (event as web.DragEvent).dataTransfer;
+    return transfer == null ? null : HtmlDomDataTransfer(transfer);
+  }
+
+  @override
   int get detail => _mouseEvent.detail;
 
   @override
@@ -692,6 +702,40 @@ class HtmlDomAdapter implements DomAdapter {
       endContainer: _wrapNode(range.endContainer),
       endOffset: range.endOffset,
     );
+  }
+
+  @override
+  DomNativeRange? caretRangeFromPoint(num x, num y) {
+    // Parity uploader.ts:20-29 — `caretRangeFromPoint` where it exists
+    // (Chromium/WebKit), `caretPositionFromPoint` otherwise (Firefox).
+    final document = web.document as JSObject;
+    if (document.has('caretRangeFromPoint')) {
+      final range = document.callMethod<web.Range?>(
+          'caretRangeFromPoint'.toJS, x.toJS, y.toJS);
+      if (range == null) return null;
+      return DomNativeRange(
+        startContainer: _wrapNode(range.startContainer),
+        startOffset: range.startOffset,
+        endContainer: _wrapNode(range.endContainer),
+        endOffset: range.endOffset,
+      );
+    }
+    if (document.has('caretPositionFromPoint')) {
+      final position = document.callMethod<JSObject?>(
+          'caretPositionFromPoint'.toJS, x.toJS, y.toJS);
+      if (position == null) return null;
+      final offsetNode = position.getProperty<web.Node?>('offsetNode'.toJS);
+      final offset = position.getProperty<JSNumber?>('offset'.toJS);
+      if (offsetNode == null || offset == null) return null;
+      final node = _wrapNode(offsetNode);
+      return DomNativeRange(
+        startContainer: node,
+        startOffset: offset.toDartInt,
+        endContainer: node,
+        endOffset: offset.toDartInt,
+      );
+    }
+    return null;
   }
 
   @override

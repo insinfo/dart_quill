@@ -78,6 +78,10 @@ class _LayoutAdapter implements DomAdapter {
   DomNativeRange? getNativeSelectionRange() => inner.getNativeSelectionRange();
 
   @override
+  DomNativeRange? caretRangeFromPoint(num x, num y) =>
+      inner.caretRangeFromPoint(x, y);
+
+  @override
   void setSelectionRange(DomElement root, int index, int length) =>
       inner.setSelectionRange(root, index, length);
 

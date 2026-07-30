@@ -37,6 +37,9 @@ class _StubDomAdapter implements DomAdapter {
   DomNativeRange? getNativeSelectionRange() => null;
 
   @override
+  DomNativeRange? caretRangeFromPoint(num x, num y) => null;
+
+  @override
   void setSelectionRange(DomElement root, int index, int length) {}
 
   @override

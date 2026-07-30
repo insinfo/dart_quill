@@ -666,10 +666,11 @@ const _structuralBlotNames = <String>{
 };
 
 /// Blots whose DOM node maps to an embed insert instead of a text format.
-// TODO(G4): RegistryEntry carries no `isEmbed`/`static value` information, so
-// embeds still need this explicit list; custom embeds fall back to the block
-// path until the registry exposes blot statics.
-const _embedBlotNames = <String>{
+///
+/// Only a fallback for entries registered before `isEmbed` existed: the
+/// registry is the source of truth, so a third-party embed pastes as an embed
+/// by declaring `isEmbed: true` and `staticValue`.
+const _legacyEmbedBlotNames = <String>{
   Image.kBlotName,
   Video.kBlotName,
   Formula.kBlotName,
@@ -691,9 +692,11 @@ RegistryEntry? _queryEntryForNode(Scroll scroll, DomElement node) {
   return scroll.registry.queryByTagName(tagName);
 }
 
-/// Port of the `static formats(domNode, scroll)` each blot exposes upstream.
-// TODO(G4): move these into the blot classes (as `static formats`) and expose
-// them through RegistryEntry so third-party blots are covered too.
+/// Fallback for blots registered before `RegistryEntry.staticFormats` existed.
+///
+/// The built-ins now declare it on their registry entry (initialization.dart),
+/// which is what makes a third-party blot report its own formats too. Kept so
+/// an entry that declares nothing still behaves as it did.
 dynamic _blotStaticFormats(String blotName, DomElement node, Scroll scroll) {
   switch (blotName) {
     case Header.kBlotName:
@@ -720,34 +723,41 @@ dynamic _blotStaticFormats(String blotName, DomElement node, Scroll scroll) {
   }
 }
 
-Delta? _matchEmbedBlot(String blotName, DomElement node) {
-  String? value;
-  final formats = <String, dynamic>{};
-  switch (blotName) {
-    case Image.kBlotName:
-      value = Image.getValue(node);
-      Image.getAttributes(node).forEach((key, attrValue) {
-        if (attrValue != null && attrValue.isNotEmpty) {
-          formats[key] = attrValue;
-        }
-      });
-      break;
-    case Video.kBlotName:
-      value = Video.valueDom(node);
-      Video.formatsDom(node).forEach((key, attrValue) {
-        if (attrValue != null && attrValue.isNotEmpty) {
-          formats[key] = attrValue;
-        }
-      });
-      break;
-    case Formula.kBlotName:
-      value = Formula.getValue(node);
-      break;
-  }
-  if (value == null || value.isEmpty) {
+/// Parity clipboard.ts matchBlot's embed branch: `{[blotName]: value}` plus
+/// whatever the blot's `static formats` reports for the node.
+///
+/// Both come from the registry entry, so an application's own embed pastes by
+/// registering it — nothing here knows about image, video or formula.
+Delta? _matchEmbedBlot(RegistryEntry entry, DomElement node) {
+  final rawValue = entry.staticValue?.call(node) ??
+      _legacyEmbedValue(entry.blotName, node);
+  if (rawValue == null || (rawValue is String && rawValue.isEmpty)) {
     return null;
   }
-  return Delta()..insert({blotName: value}, formats.isEmpty ? null : formats);
+  final rawFormats = entry.staticFormats?.call(node);
+  final formats = <String, dynamic>{};
+  if (rawFormats is Map) {
+    rawFormats.forEach((key, value) {
+      if (value != null && !(value is String && value.isEmpty)) {
+        formats['$key'] = value;
+      }
+    });
+  }
+  return Delta()
+    ..insert({entry.blotName: rawValue}, formats.isEmpty ? null : formats);
+}
+
+/// Values for embeds registered before `staticValue` existed.
+String? _legacyEmbedValue(String blotName, DomElement node) {
+  switch (blotName) {
+    case Image.kBlotName:
+      return Image.getValue(node);
+    case Video.kBlotName:
+      return Video.valueDom(node);
+    case Formula.kBlotName:
+      return Formula.getValue(node);
+  }
+  return null;
 }
 
 /// Parity clipboard.ts:457-490 — resolve the blot for [node] through the
@@ -763,8 +773,8 @@ Delta matchBlot(DomNode node, Delta delta, Scroll scroll) {
   }
 
   final blotName = entry.blotName;
-  if (_embedBlotNames.contains(blotName)) {
-    return _matchEmbedBlot(blotName, node) ?? delta;
+  if (entry.isEmbed || _legacyEmbedBlotNames.contains(blotName)) {
+    return _matchEmbedBlot(entry, node) ?? delta;
   }
   // Parity clipboard.ts matchBlot: `'formats' in match` — a blot that declares
   // its own static formats reports through it even when it is a container

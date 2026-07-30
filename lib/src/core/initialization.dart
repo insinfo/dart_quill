@@ -196,6 +196,7 @@ void _registerFormats() {
       blotName: Link.kBlotName,
       scope: Link.kScope,
       tagNames: const [Link.kTagName],
+      staticFormats: Link.getFormat,
       create: ([dynamic value]) => value is DomElement
           ? Link(value)
           : Link.create(value?.toString() ?? ''),
@@ -222,6 +223,9 @@ void _registerFormats() {
       tagNames: const [CodeBlock.kTagName],
       classNames: const [CodeBlock.kClassName],
       requiredContainerBlotName: CodeBlockContainer.kBlotName,
+      // Parity syntax.ts — the code block reports its language; `true` when
+      // the syntax module never wrote one.
+      staticFormats: (node) => node.getAttribute('data-language') ?? true,
       create: ([dynamic value]) =>
           value is DomElement ? CodeBlock(value) : CodeBlock.create(),
     ),
@@ -229,6 +233,7 @@ void _registerFormats() {
       blotName: Blockquote.kBlotName,
       scope: Blockquote.kScope,
       tagNames: const [Blockquote.kTagName],
+      staticFormats: (node) => true,
       create: ([dynamic value]) {
         if (value is DomElement) return Blockquote(value);
         final blockquote = Blockquote.create();
@@ -242,6 +247,10 @@ void _registerFormats() {
       blotName: Header.kBlotName,
       scope: Header.kScope,
       tagNames: Header.kTagNames,
+      staticFormats: (node) {
+        final level = Header.getLevel(node);
+        return level > 0 ? level : null;
+      },
       create: ([dynamic value]) {
         if (value is DomElement) return Header(value);
         final node = Header.create(value);
@@ -266,12 +275,15 @@ void _registerFormats() {
       scope: ListItem.kScope,
       tagNames: const [ListItem.kTagName],
       requiredContainerBlotName: ListContainer.kBlotName,
+      // Parity list.ts:18-20 — the `<li>` carries its own list style.
+      staticFormats: (node) => node.getAttribute('data-list'),
       create: ListItem.create,
     ),
     RegistryEntry(
       blotName: Script.kBlotName,
       scope: Script.kScope,
       tagNames: Script.kTagNames,
+      staticFormats: Script.getFormat,
       create: ([dynamic value]) =>
           value is DomElement ? Script(value) : Script.create(value),
     ),
@@ -279,6 +291,10 @@ void _registerFormats() {
       blotName: Image.kBlotName,
       scope: Image.kScope,
       tagNames: const [Image.kTagName],
+      isEmbed: true,
+      staticValue: Image.getValue,
+      staticFormats: (node) => Image.getAttributes(node)
+        ..removeWhere((_, value) => value == null || value.isEmpty),
       create: ([dynamic value]) {
         if (value is DomElement) return Image(value);
         final node = Image.create(value);
@@ -290,6 +306,8 @@ void _registerFormats() {
       scope: Formula.kScope,
       tagNames: const [Formula.kTagName],
       classNames: const [Formula.kClassName],
+      isEmbed: true,
+      staticValue: Formula.getValue,
       create: ([dynamic value]) => value is DomElement
           ? Formula(value)
           : Formula(Formula.create(value?.toString() ?? '')),
@@ -300,6 +318,10 @@ void _registerFormats() {
       scope: Scope.BLOCK_BLOT,
       tagNames: const [Video.kTagName],
       classNames: const [Video.kClassName],
+      isEmbed: true,
+      staticValue: Video.valueDom,
+      staticFormats: (node) => Video.formatsDom(node)
+        ..removeWhere((_, value) => value == null || value.isEmpty),
       create: ([dynamic value]) {
         if (value is DomElement) return Video(value);
         final source = value?.toString() ?? '';

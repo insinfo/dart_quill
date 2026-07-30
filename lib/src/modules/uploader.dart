@@ -110,13 +110,25 @@ class Uploader extends Module<UploaderOptions> {
     if (files.isEmpty) {
       return;
     }
-    // TODO(G4): upstream places the caret at the drop point through
-    // `document.caretRangeFromPoint`/`caretPositionFromPoint`. The DOM adapter
-    // exposes neither, so the files land at the current selection instead.
-    final range = quill.getSelection(focus: true) ??
+    // Parity uploader.ts:19-38 — the files land where the pointer dropped
+    // them, not at whatever was selected before.
+    final range = _dropRange(event) ??
+        quill.getSelection(focus: true) ??
         quill.selection.savedRange ??
         Range(quill.getLength() - 1, 0);
     upload(range, files);
+  }
+
+  /// The editor range under the drop point, or null when the platform has no
+  /// caret-from-point API or the point falls outside the editor.
+  Range? _dropRange(DomEvent event) {
+    if (event is! DomMouseEvent) return null;
+    final native = domBindings.adapter
+        .caretRangeFromPoint(event.clientX, event.clientY);
+    if (native == null) return null;
+    final normalized = quill.selection.normalizeNative(native);
+    if (normalized == null) return null;
+    return quill.selection.normalizedToRange(normalized);
   }
 
   List<dynamic> _filesFromEvent(DomEvent event) {
@@ -126,8 +138,11 @@ class Uploader extends Module<UploaderOptions> {
     if (event is DomClipboardEvent) {
       return event.clipboardData?.files ?? const <DomFile>[];
     }
-    // TODO(G4): generic events are not wrapped with a `dataTransfer` accessor
-    // by the platform layer yet; probe the raw event defensively.
+    // A drop is a DragEvent, which the platform layer wraps as a mouse event.
+    if (event is DomMouseEvent) {
+      return event.dataTransfer?.files ?? const <DomFile>[];
+    }
+    // Last resort for adapters that hand over an unwrapped event.
     try {
       final transfer = (event.rawEvent as dynamic)?.dataTransfer;
       if (transfer is DomDataTransfer) {

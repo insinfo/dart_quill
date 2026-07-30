@@ -1,3 +1,4 @@
+import 'package:dart_quill/src/platform/dom.dart';
 import 'package:dart_quill/src/core/emitter.dart';
 import 'package:dart_quill/src/core/selection.dart';
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
@@ -221,6 +222,74 @@ void main() {
 
       expect(handled?.index, 1);
       expect(handledFiles, 1);
+    });
+
+    test('a drop lands at the pointer, not at the old selection', () async {
+      Range? handled;
+      final quill = createTestQuill(modules: {
+        'uploader': UploaderOptions(
+          mimetypes: const ['image/png'],
+          handler: (quill, range, files) => handled = range,
+        ),
+      });
+      quill.setContents(Delta()..insert('0123456789\n'));
+      quill.setSelection(const Range(0, 0), source: EmitterSource.API);
+
+      // Parity uploader.ts:19-38 — the caret comes from the drop point through
+      // `caretRangeFromPoint`, which the adapter now exposes.
+      final leaf = quill.scroll.leaf(6).key!;
+      testAdapter.caretRangeAtPoint = DomNativeRange(
+        startContainer: leaf.domNode,
+        startOffset: 6,
+        endContainer: leaf.domNode,
+        endOffset: 6,
+      );
+      addTearDown(() => testAdapter.caretRangeAtPoint = null);
+
+      (quill.root as FakeDomElement).dispatchEvent(
+        'drop',
+        FakeDomMouseEvent(
+          type: 'drop',
+          clientX: 120,
+          clientY: 40,
+          dataTransfer: FakeDomDataTransfer(
+            null,
+            [FakeDomFile(name: 'a.png', type: 'image/png')],
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(handled?.index, 6,
+          reason: 'the files go where the pointer dropped them');
+    });
+
+    test('a drop with no caret-from-point falls back to the selection',
+        () async {
+      Range? handled;
+      final quill = createTestQuill(modules: {
+        'uploader': UploaderOptions(
+          mimetypes: const ['image/png'],
+          handler: (quill, range, files) => handled = range,
+        ),
+      });
+      quill.setContents(Delta()..insert('0123456789\n'));
+      quill.setSelection(const Range(3, 0), source: EmitterSource.API);
+      testAdapter.caretRangeAtPoint = null;
+
+      (quill.root as FakeDomElement).dispatchEvent(
+        'drop',
+        FakeDomMouseEvent(
+          type: 'drop',
+          dataTransfer: FakeDomDataTransfer(
+            null,
+            [FakeDomFile(name: 'a.png', type: 'image/png')],
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(handled?.index, 3);
     });
   });
 }

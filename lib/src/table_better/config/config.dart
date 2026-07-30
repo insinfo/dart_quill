@@ -10,9 +10,9 @@ typedef UseLanguageHandler = String Function(String name);
 /// Signature of the `valid` callbacks attached to property descriptors.
 typedef PropertyValidator = bool Function(String value);
 
-// TODO(table-better): the TS source imports SVG assets for these icons.
-// They are represented as stable identifiers here; the UI phase maps them
-// to real icon markup.
+// The TS source imports each icon as an SVG asset; here they are stable
+// identifiers, and `table_better/assets/icons.dart` maps every one of them to
+// the same SVG markup the plugin bundles (see G6.10).
 const String alignBottomIcon = 'align-bottom';
 const String alignCenterIcon = 'align-center';
 const String alignLeftIcon = 'align-left';
