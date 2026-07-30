@@ -122,7 +122,16 @@ class Block extends BlockBlot {
       final currentFormats = formats();
       final currentValue = currentFormats[name];
 
-      if ((value == null || value == false)) {
+      // Parity parchment block.ts:55-56 — a falsy value reverts the line to a
+      // plain block ONLY when the format named is this blot's own. A falsy
+      // value for a *different* block format is a no-op: `blockquote: null`
+      // applied to a list item leaves it a list item. Reverting on any falsy
+      // block format silently dropped the line's real format, which is data
+      // loss — `{list: 'checked', blockquote: null}` produced a bare paragraph.
+      if (value == null || value == false) {
+        if (name != blotName) {
+          return;
+        }
         if (blotName == Block.kBlotName) {
           return;
         }
@@ -132,6 +141,8 @@ class Block extends BlockBlot {
         return;
       }
 
+      // Parity block.ts:57-62 — replacing is skipped when this blot already
+      // carries exactly that format.
       if (definition.blotName == blotName && currentValue == value) {
         return;
       }
