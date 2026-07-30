@@ -1,4 +1,5 @@
 import 'package:dart_quill/src/blots/abstract/blot.dart';
+import 'package:dart_quill/src/core/editor.dart';
 import 'package:dart_quill/src/core/initialization.dart';
 import 'package:dart_quill/src/core/quill.dart';
 import 'package:dart_quill/src/formats/abstract/attributor.dart';
@@ -41,6 +42,39 @@ Registry registryWithFormats(List<String> paths) {
     }
   }
   return registry;
+}
+
+/// Port of the upstream spec helper `createEditor`
+/// (`referencias/quilljs/test/unit/core/editor.spec.ts:32-64`): the HTML is the
+/// container's OWN markup — exactly how a page bootstraps Quill — and the
+/// constructor converts it into the document.
+///
+/// Deliberately not `createTestQuill(initialHtml:)`, which pastes the HTML in
+/// afterwards: the constructor path is what upstream exercises, and it is the
+/// path that was silently dropping the content before.
+Quill createEditorQuill(String html) {
+  ensureQuillTestInitialized();
+  final doc = testAdapter.document;
+  final container = doc.createElement('div');
+  container.innerHTML = normalizeHTML(html);
+  doc.body.append(container);
+  final quill = Quill(container);
+  addTearDown(() {
+    quill.container.remove();
+  });
+  return quill;
+}
+
+/// The upstream helper returns `quill.editor`; the Quill instance is kept
+/// available through [createEditorQuill] for the cases that need it.
+Editor createEditor(String html) => createEditorQuill(html).editor;
+
+/// The `createEditor(Delta)` half of the upstream helper: an empty container
+/// plus `quill.setContents(...)`.
+Editor createEditorFromDelta(Delta contents) {
+  final quill = createEditorQuill('');
+  quill.setContents(contents);
+  return quill.editor;
 }
 
 /// Creates a fresh Quill instance backed by the fake DOM.

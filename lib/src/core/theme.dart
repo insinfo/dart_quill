@@ -10,10 +10,19 @@ class ThemeOptions {
   final DomElement? bounds;
   final Map<String, dynamic> modules;
 
+  /// Parity quill.ts `options.placeholder` — written to `data-placeholder` on
+  /// the editor root, which the stylesheet shows while `.ql-blank` is set.
+  final String? placeholder;
+
+  /// Parity quill.ts `options.readOnly` — the editor starts disabled.
+  final bool readOnly;
+
   ThemeOptions({
     this.theme,
     this.iconTheme = QuillIconTheme.svg,
     this.bounds,
+    this.placeholder,
+    this.readOnly = false,
     Map<String, dynamic>? modules,
   }) : modules = modules != null
             ? Map<String, dynamic>.from(modules)
@@ -23,12 +32,16 @@ class ThemeOptions {
     String? theme,
     QuillIconTheme? iconTheme,
     DomElement? bounds,
+    String? placeholder,
+    bool? readOnly,
     Map<String, dynamic>? modules,
   }) {
     return ThemeOptions(
       theme: theme ?? this.theme,
       iconTheme: iconTheme ?? this.iconTheme,
       bounds: bounds ?? this.bounds,
+      placeholder: placeholder ?? this.placeholder,
+      readOnly: readOnly ?? this.readOnly,
       modules: modules ?? Map<String, dynamic>.from(this.modules),
     );
   }

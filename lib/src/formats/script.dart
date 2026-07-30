@@ -35,8 +35,9 @@ class Script extends InlineBlot {
   int get scope => kScope;
 
   @override
-  Map<String, dynamic> formats() => {kBlotName: getFormat(element)};
+  Map<String, dynamic> formats() =>
+      {...super.formats(), kBlotName: getFormat(element)};
 
   @override
-  Script clone() => Script(element.cloneNode(deep: true));
+  Script clone() => Script(element.cloneNode(deep: false));
 }

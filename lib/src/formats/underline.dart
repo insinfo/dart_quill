@@ -22,7 +22,7 @@ class Underline extends InlineBlot {
   int get scope => kScope;
 
   @override
-  Map<String, dynamic> formats() => {kBlotName: true};
+  Map<String, dynamic> formats() => {...super.formats(), kBlotName: true};
 
   @override
   void format(String name, dynamic value) {
@@ -34,5 +34,5 @@ class Underline extends InlineBlot {
   }
 
   @override
-  Underline clone() => Underline(element.cloneNode(deep: true));
+  Underline clone() => Underline(element.cloneNode(deep: false));
 }

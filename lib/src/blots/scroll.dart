@@ -189,12 +189,18 @@ class Scroll extends ScrollBlot {
     return blot is LeafBlot ? MapEntry(blot, offset) : const MapEntry(null, -1);
   }
 
+  /// Parity scroll.ts:222-227 — only the index that lands exactly ON the end
+  /// of the document falls back to the previous one; anything past it has no
+  /// line at all.
+  ///
+  /// The port used to CLAMP every out-of-range index to the last line, so
+  /// `removeFormat(0, tooLong)` computed a suffix from a line that does not
+  /// intersect the range and appended a spurious empty paragraph.
   MapEntry<Blot?, int> line(int index) {
-    if (length() == 0) {
-      return const MapEntry(null, -1);
+    if (index == length()) {
+      return line(index - 1);
     }
-    final adjusted = index >= length() ? length() - 1 : index;
-    return descendant(isLine, adjusted);
+    return descendant(isLine, index);
   }
 
   List<Blot> lines([int index = 0, int length = 0x7fffffff]) {
@@ -536,7 +542,15 @@ class Scroll extends ScrollBlot {
       }
     });
 
-    final block = create(blockName ?? Block.kBlotName);
+    // Parity scroll.ts:120-124 — the block blot is created WITH its value
+    // (`create('list', 'bullet')`). Creating it bare produced an `<li>` with
+    // no `data-list`, so a line whose attributes named a block format lost
+    // that format entirely: `insertContents` and `applyDelta` disagreed on
+    // the very same delta.
+    final block = create(
+      blockName ?? Block.kBlotName,
+      blockName != null ? attributes[blockName] : null,
+    );
     insertBefore(block, refBlot);
     final blockLength = block.length();
     formats.forEach((name, value) {

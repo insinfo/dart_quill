@@ -22,41 +22,19 @@ class Italic extends InlineBlot {
   int get scope => kScope;
 
   @override
-  Map<String, dynamic> formats() => {kBlotName: true};
+  Map<String, dynamic> formats() => {...super.formats(), kBlotName: true};
 
   @override
   void optimize([
     List<DomMutationRecord>? mutations,
     Map<String, dynamic>? context,
   ]) {
+    // Parity italic.ts: `Italic extends Bold`, so this is Bold's optimize —
+    // normalize `<i>` to `<em>`, nothing else. See the note in bold.dart on
+    // why the sibling merge does NOT belong here.
     super.optimize(mutations, context);
-    // Parity: TS Italic extends Bold and inherits its optimize — normalize
-    // <i> to <em> moving the children into the replacement (the previous
-    // unwrap+insertBefore dropped the content), then merge equal siblings.
     if (element.tagName != kTagNames.first) {
-      final parentBlot = parent;
-      if (parentBlot is ParentBlot) {
-        final replacement = scroll.create(kBlotName) as ParentBlot;
-        parentBlot.insertBefore(replacement, next);
-        moveChildren(replacement, null);
-        remove();
-        replacement.optimize(mutations, context);
-        return;
-      }
-    }
-
-    final previous = prev;
-    if (previous is Italic && previous.parent == parent) {
-      moveChildren(previous, null);
-      remove();
-      previous.optimize(mutations, context);
-      return;
-    }
-
-    final following = next;
-    if (following is Italic && following.parent == parent) {
-      following.moveChildren(this, null);
-      following.remove();
+      replaceWith(kBlotName);
     }
   }
 
@@ -70,5 +48,5 @@ class Italic extends InlineBlot {
   }
 
   @override
-  Italic clone() => Italic(element.cloneNode(deep: true));
+  Italic clone() => Italic(element.cloneNode(deep: false));
 }

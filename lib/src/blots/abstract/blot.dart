@@ -843,33 +843,46 @@ abstract class ParentBlot extends Blot {
     return result;
   }
 
+  /// Parity parchment parent.ts:109-121 — resolve the child holding [index]
+  /// with [childAtIndex], then match or recurse; no match is `(null, -1)`.
   MapEntry<Blot?, int> descendant(dynamic query, int index) {
-    if (index < 0) {
-      return const MapEntry(null, -1);
+    final found = childAtIndex(index);
+    final child = found.key;
+    final offset = found.value;
+    if (child != null && _matches(child, query)) {
+      return MapEntry(child, offset);
     }
-
-    var offset = 0;
-    for (final child in children) {
-      final childLength = child.length();
-      final end = offset + childLength;
-
-      final isLastChild =
-          identical(child, children.isNotEmpty ? children.last : null);
-      final containsIndex = index < end || (index == end && isLastChild);
-
-      if (containsIndex) {
-        if (_matches(child, query)) {
-          return MapEntry(child, index - offset);
-        }
-        if (child is ParentBlot) {
-          return child.descendant(query, index - offset);
-        }
-        break;
-      }
-
-      offset = end;
+    if (child is ParentBlot) {
+      return child.descendant(query, offset);
     }
     return const MapEntry(null, -1);
+  }
+
+  /// Parity parchment linked-list.ts:127-144 (`LinkedList.find`).
+  ///
+  /// The default is NON-inclusive: an index sitting exactly on the end of the
+  /// last child resolves to nothing, which is how upstream distinguishes "the
+  /// position after the content" from "inside the last leaf". This port used
+  /// to return the last child for that index, so `applyDelta` believed there
+  /// was a text leaf right before a block embed and prepended an implicit
+  /// newline that upstream never adds — every index after it was then off by
+  /// one, and the delete that was meant to replace the embed missed it.
+  MapEntry<Blot?, int> childAtIndex(int index, {bool inclusive = false}) {
+    var remaining = index;
+    final list = children;
+    for (var i = 0; i < list.length; i++) {
+      final child = list[i];
+      final childLength = child.length();
+      final next = i + 1 < list.length ? list[i + 1] : null;
+      if (remaining < childLength ||
+          (inclusive &&
+              remaining == childLength &&
+              (next == null || next.length() != 0))) {
+        return MapEntry(child, remaining);
+      }
+      remaining -= childLength;
+    }
+    return const MapEntry(null, 0);
   }
 
   bool _matches(Blot blot, dynamic query) {
@@ -1142,8 +1155,16 @@ abstract class LeafBlot extends Blot {
 
   @override
   void deleteAt(int index, int length) {
-    // LeafBlots are atomic (except TextBlot which overrides this).
-    // The parent handles removal if the deletion covers the entire blot.
+    // Parity parchment shadow.ts:84-87 — `isolate(index, length).remove()`.
+    //
+    // This used to be a no-op, on the theory that "the parent handles
+    // removal". The parent only removes itself when the range covers the
+    // WHOLE parent (parent.ts:93-95); otherwise it just forwards to each
+    // child. So deleting an inline embed surrounded by text — `0<img>2`,
+    // caret on the image, Delete — did nothing at all, and `removeFormat`
+    // could not strip embeds either.
+    final blot = isolate(index, length);
+    blot.remove();
   }
 
   @override

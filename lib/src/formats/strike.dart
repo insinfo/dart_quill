@@ -22,40 +22,18 @@ class Strike extends InlineBlot {
   int get scope => kScope;
 
   @override
-  Map<String, dynamic> formats() => {kBlotName: true};
+  Map<String, dynamic> formats() => {...super.formats(), kBlotName: true};
 
   @override
   void optimize([
     List<DomMutationRecord>? mutations,
     Map<String, dynamic>? context,
   ]) {
+    // Parity strike.ts: `Strike extends Bold` — normalize `<strike>` to `<s>`
+    // and nothing more. See the note in bold.dart on the sibling merge.
     super.optimize(mutations, context);
-    // Parity: TS Strike extends Bold — normalize <strike> to <s> and merge
-    // adjacent equal siblings.
     if (element.tagName != kTagNames.first) {
-      final parentBlot = parent;
-      if (parentBlot is ParentBlot) {
-        final replacement = scroll.create(kBlotName) as ParentBlot;
-        parentBlot.insertBefore(replacement, next);
-        moveChildren(replacement, null);
-        remove();
-        replacement.optimize(mutations, context);
-        return;
-      }
-    }
-
-    final previous = prev;
-    if (previous is Strike && previous.parent == parent) {
-      moveChildren(previous, null);
-      remove();
-      previous.optimize(mutations, context);
-      return;
-    }
-
-    final following = next;
-    if (following is Strike && following.parent == parent) {
-      following.moveChildren(this, null);
-      following.remove();
+      replaceWith(kBlotName);
     }
   }
 
@@ -69,5 +47,5 @@ class Strike extends InlineBlot {
   }
 
   @override
-  Strike clone() => Strike(element.cloneNode(deep: true));
+  Strike clone() => Strike(element.cloneNode(deep: false));
 }

@@ -89,7 +89,7 @@ class Image extends Embed {
   dynamic value() => getValue(element);
 
   @override
-  Image clone() => Image(element.cloneNode(deep: true));
+  Image clone() => Image(element.cloneNode(deep: false));
 
   @override
   void optimize(

@@ -40,7 +40,7 @@ class Formula extends Embed {
   int get scope => kScope;
 
   @override
-  Formula clone() => Formula(element.cloneNode(deep: true));
+  Formula clone() => Formula(element.cloneNode(deep: false));
 
   @override
   void optimize([

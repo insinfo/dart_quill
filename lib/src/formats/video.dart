@@ -78,5 +78,5 @@ class Video extends BlockEmbed {
   }
 
   @override
-  Video clone() => Video(element.cloneNode(deep: true));
+  Video clone() => Video(element.cloneNode(deep: false));
 }

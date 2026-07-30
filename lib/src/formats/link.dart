@@ -52,7 +52,8 @@ class Link extends InlineBlot {
   int get scope => kScope;
 
   @override
-  Map<String, dynamic> formats() => {kBlotName: element.getAttribute('href')};
+  Map<String, dynamic> formats() =>
+      {...super.formats(), kBlotName: element.getAttribute('href')};
 
   @override
   void format(String name, dynamic value) {
@@ -70,7 +71,7 @@ class Link extends InlineBlot {
   }
 
   @override
-  Link clone() => Link(element.cloneNode(deep: true));
+  Link clone() => Link(element.cloneNode(deep: false));
 
   // No `optimize` override: upstream's link.ts has none. This port used to
   // unwrap the anchor whenever its href was the sanitized `about:blank`,

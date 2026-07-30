@@ -371,5 +371,5 @@ class TableCell extends Block {
   }
 
   @override
-  TableCell clone() => TableCell(element.cloneNode(deep: true));
+  TableCell clone() => TableCell(element.cloneNode(deep: false));
 }

@@ -135,10 +135,19 @@ class Quill {
 
   Quill(this.container, {ThemeOptions? options}) : emitter = Emitter() {
     final doc = container.ownerDocument;
+    // Parity quill.ts:208-213 — the container's own markup is the initial
+    // document: it is captured, the container is EMPTIED, and the HTML is
+    // converted through the clipboard at the end of the constructor. This
+    // port used to append `.ql-editor` next to the existing markup and never
+    // read it, so `Quill(containerWithContent)` silently lost the content and
+    // left orphan nodes inside `.ql-container`.
+    final initialHTML = (container.innerHTML ?? '').trim();
     container.classes.add('ql-container');
+    container.innerHTML = '';
 
     root = doc.createElement('div');
     root.classes.add('ql-editor');
+    root.classes.add('ql-blank');
     container.append(root);
 
     scroll = Scroll(Registry(), root, emitter: emitter);
@@ -186,6 +195,35 @@ class Quill {
     theme.init();
     quillInstances.register<Quill>(container, this);
     ensureGlobalDomEventBridge();
+
+    // Parity quill.ts:236-240 — `.ql-blank` tracks emptiness on every text
+    // change; it is what the stylesheet keys the placeholder off of.
+    emitter.on(EmitterEvents.EDITOR_CHANGE,
+        (dynamic type, [dynamic a, dynamic b, dynamic c]) {
+      if (type == EmitterEvents.TEXT_CHANGE) {
+        root.classes.toggle('ql-blank', editor.isBlank());
+      }
+    });
+
+    // Parity quill.ts:268-274 — the captured markup becomes the document,
+    // through the same clipboard conversion a paste goes through. The
+    // trailing `<p><br></p>` is upstream's guard so a document that does not
+    // end in a newline still gets its final block.
+    if (initialHTML.isNotEmpty) {
+      final contents = clipboard.convert(
+        html: '$initialHTML<p><br></p>',
+        text: '\n',
+      );
+      setContents(contents);
+    }
+    history.clear();
+    final placeholder = mergedOptions.placeholder;
+    if (placeholder != null) {
+      root.setAttribute('data-placeholder', placeholder);
+    }
+    if (mergedOptions.readOnly) {
+      disable();
+    }
   }
 
   DomElement addContainer(String className, [DomElement? refNode]) {
@@ -630,6 +668,8 @@ ThemeOptions _mergeThemeOptions(ThemeOptions? options) {
       theme: options.theme,
       iconTheme: options.iconTheme,
       bounds: options.bounds,
+      placeholder: options.placeholder,
+      readOnly: options.readOnly,
       modules: modules,
     );
   }

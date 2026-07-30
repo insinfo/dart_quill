@@ -632,7 +632,13 @@ class FakeDomElement extends FakeDomNode implements DomElement {
   @override
   DomElement cloneNode({bool deep = false}) {
     final clone = FakeDomElement(_tagName, document: _ownerDocument);
-    clone._text = _text;
+    // A shallow clone carries NO content in a real browser. `_text` is the
+    // childless-element shortcut, so copying it made `cloneNode(false)` hand
+    // back the original's text — the test double would then disagree with the
+    // browser about what a split produced.
+    if (deep) {
+      clone._text = _text;
+    }
     clone._attributes.addAll(_attributes);
     clone._dataset.addAll(_dataset);
     for (final token in _classes.values) {

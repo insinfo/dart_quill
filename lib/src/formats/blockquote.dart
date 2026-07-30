@@ -25,5 +25,5 @@ class Blockquote extends Block {
   Map<String, dynamic> formats() => {...super.formats(), kBlotName: true};
 
   @override
-  Blockquote clone() => Blockquote(element.cloneNode(deep: true));
+  Blockquote clone() => Blockquote(element.cloneNode(deep: false));
 }

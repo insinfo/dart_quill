@@ -244,6 +244,18 @@ class EqualHTML extends Matcher {
   }
 }
 
+/// The string form of the upstream `toEqualHTML`: both sides are parsed with
+/// the same DOM and re-serialized, so indentation and attribute order in the
+/// expectation are irrelevant. Used where the subject is an HTML *string*
+/// (e.g. `Editor.getHTML`) rather than a live element.
+void expectHtmlStringEquals(String actual, String expected) {
+  final holder = testAdapter.document.createElement('div');
+  if (holder is FakeDomElement) {
+    holder.innerHTML = normalizeHTML(actual);
+  }
+  expect(holder, EqualHTML(expected));
+}
+
 /// Extension to add toEqualHTML matcher to test API
 extension HtmlMatchers on DomElement {
   Matcher toEqualHTML(String expected) => EqualHTML(expected);

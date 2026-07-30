@@ -56,7 +56,7 @@ class CodeBlockContainer extends ContainerBlot {
 
   @override
   CodeBlockContainer clone() =>
-      CodeBlockContainer(element.cloneNode(deep: true));
+      CodeBlockContainer(element.cloneNode(deep: false));
 }
 
 class CodeBlock extends Block {
@@ -88,7 +88,7 @@ class CodeBlock extends Block {
   int get scope => kScope;
 
   @override
-  CodeBlock clone() => CodeBlock(element.cloneNode(deep: true));
+  CodeBlock clone() => CodeBlock(element.cloneNode(deep: false));
 
   @override
   Map<String, dynamic> formats() => {...super.formats(), kBlotName: true};
@@ -113,8 +113,8 @@ class Code extends InlineBlot {
   int get scope => kScope;
 
   @override
-  Map<String, dynamic> formats() => {kBlotName: true};
+  Map<String, dynamic> formats() => {...super.formats(), kBlotName: true};
 
   @override
-  Code clone() => Code(element.cloneNode(deep: true));
+  Code clone() => Code(element.cloneNode(deep: false));
 }

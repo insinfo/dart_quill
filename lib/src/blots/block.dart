@@ -425,7 +425,7 @@ class BlockEmbed extends EmbedBlot {
 
   @override
   BlockEmbed clone() =>
-      BlockEmbed((domNode as DomElement).cloneNode(deep: true));
+      BlockEmbed((domNode as DomElement).cloneNode(deep: false));
 
   @override
   dynamic value() => {};

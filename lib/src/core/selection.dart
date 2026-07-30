@@ -14,7 +14,9 @@ class Range {
   final int index;
   final int length;
 
-  const Range(this.index, this.length);
+  /// Parity selection.ts:14 — `new Range(index)` is a collapsed range; the
+  /// length defaults to 0 instead of being required.
+  const Range(this.index, [this.length = 0]);
 }
 
 class NativePosition {
@@ -375,12 +377,20 @@ class Selection {
     if (leaf == null) return;
 
     final cursor = _ensureCursor(scrollBlot);
-    if (cursor.parent != null) {
-      cursor.remove();
+    // Parity selection.ts:265 (`nativeRange.start.node !== this.cursor.textNode`)
+    // — when the caret ALREADY sits in the cursor blot, upstream skips the
+    // move and only applies the new format. This port re-inserted
+    // unconditionally: it removed the cursor, split it (a zero-length leaf
+    // splits to itself, now parentless) and then inserted before a detached
+    // `after`, so the second pending format in a row threw the cursor away
+    // along with every format the first one had staged.
+    if (leaf != cursor) {
+      if (cursor.parent != null) {
+        cursor.remove();
+      }
+      final after = leaf.split(leafEntry.value);
+      leaf.parent?.insertBefore(cursor, after);
     }
-
-    final after = leaf.split(leafEntry.value);
-    leaf.parent?.insertBefore(cursor, after);
     cursor.format(name, value);
     scroll.optimize([], {});
   }

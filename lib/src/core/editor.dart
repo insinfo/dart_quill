@@ -260,7 +260,7 @@ class Editor {
   /// in an empty line *has* an empty last line, and upstream reports it.
   /// Dropping it made `setContents` lossy — `a\n\n\n` came back as `a\n\n` — and
   /// masked the stray paragraph the block-embed path leaves behind.
-  void _update() {
+  Delta getDelta() {
     var tempDelta = Delta();
     for (final child in scroll.children) {
       final childDelta = _buildDelta(child);
@@ -271,7 +271,11 @@ class Editor {
     if (tempDelta.isEmpty) {
       tempDelta.insert('\n');
     }
-    delta = tempDelta;
+    return tempDelta;
+  }
+
+  void _update() {
+    delta = getDelta();
   }
 
   Delta getContents() {
