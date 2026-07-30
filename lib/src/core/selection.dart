@@ -467,6 +467,12 @@ class Selection {
       return;
     }
     if (startNode != null) {
+      // `rangeToNative` reports -1 for a position it cannot resolve, and
+      // `Cursor.restore`'s remap can reach -1 when the caret sits before the
+      // guard character. A negative offset has no meaning, and handing it to
+      // `Range.setStart` throws an IndexSizeError from inside an optimize
+      // pass — which leaves the editor wedged. Leave the selection alone.
+      if ((startOffset ?? 0) < 0 || (endOffset ?? 0) < 0) return;
       if (!hasFocus()) {
         final previousTop = root.scrollTop;
         domBindings.adapter.focus(root);

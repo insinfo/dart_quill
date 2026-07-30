@@ -167,7 +167,14 @@ class Clipboard extends Module<ClipboardOptions> {
         quill.root.ownerDocument.parser.parseFromString(html, 'text/html');
     normalizeHTML(doc);
     final container = doc.body;
-    final nodeMatches = Expando<List<Matcher>>();
+    // A MAP keyed by node equality, not an Expando keyed by identity: the
+    // browser adapter mints a NEW wrapper on every DOM access, so the nodes
+    // collected here by `querySelectorAll` are never the same objects the
+    // traversal walks into. With an Expando every selector-based matcher
+    // (lists, tables, code blocks, the Word/Docs normalizers) silently did
+    // nothing in a real browser — pasting lost those formats — while the
+    // fake DOM, which hands back the same objects, kept the VM suite green.
+    final nodeMatches = <DomNode, List<Matcher>>{};
     final prepared = prepareMatching(container, nodeMatches);
     final elementMatchers = prepared[0] as List<Matcher>;
     final textMatchers = prepared[1] as List<Matcher>;
@@ -284,7 +291,7 @@ class Clipboard extends Module<ClipboardOptions> {
   }
 
   List<dynamic> prepareMatching(
-      DomElement container, Expando<List<Matcher>> nodeMatches) {
+      DomElement container, Map<DomNode, List<Matcher>> nodeMatches) {
     final elementMatchers = <Matcher>[];
     final textMatchers = <Matcher>[];
     matchers.forEach((pair) {
@@ -516,7 +523,7 @@ Delta traverse(
   DomNode node,
   List<Matcher> elementMatchers,
   List<Matcher> textMatchers,
-  Expando<List<Matcher>> nodeMatches,
+  Map<DomNode, List<Matcher>> nodeMatches,
 ) {
   if (node.nodeType == DomNode.TEXT_NODE) {
     return textMatchers.fold<Delta>(

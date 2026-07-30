@@ -144,7 +144,11 @@ abstract class DomClassList {
 /// Represents a mutation observer abstraction.
 abstract class DomMutationObserver {
   void observe(DomNode target,
-      {bool? subtree, bool? childList, bool? characterData});
+      {bool? subtree,
+      bool? childList,
+      bool? characterData,
+      bool? attributes,
+      bool? characterDataOldValue});
   void disconnect();
   List<DomMutationRecord> takeRecords();
 }

@@ -575,7 +575,7 @@ class Syntax extends Module<SyntaxOptions> {
       container,
       elementMatchers,
       textMatchers,
-      Expando<List<Matcher>>(),
+      <DomNode, List<Matcher>>{},
     );
   }
 

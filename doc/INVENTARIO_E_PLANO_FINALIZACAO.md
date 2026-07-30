@@ -2,7 +2,7 @@
 
 **Data:** 2026-07-28
 **Método:** comparação arquivo-a-arquivo e método-a-método entre `referencias/quilljs/src`, `referencias/quill_table_better/1.2.3/src/src` (+ parchment em `referencias/quill_table_better/1.2.3/src/node_modules/parchment/src`) e `lib/`.
-**Baseline de testes:** 568 unitários VM + 16 browser/Chrome + **43 E2E de interação real** (Puppeteer: digitação, cliques, atalhos e drag verdadeiros) verdes, **zero divergências conhecidas** — goldens core 48/48 e table-better 19/19; `dart analyze` limpo. *(atualizado em 2026-07-29, após G11: Selection nativa fiel (C2 fechado), reconciliação DOM→modelo funcionando em browser real, e a suíte E2E reescrita para pegar exatamente os bugs que só aparecem com input real)*
+**Baseline de testes:** 568 unitários VM + 37 browser/Chrome + **43 E2E de interação real** (Puppeteer: digitação, cliques, atalhos e drag verdadeiros) verdes, **zero divergências conhecidas** — goldens core 48/48 e table-better 19/19; `dart analyze` limpo. *(atualizado em 2026-07-29, após G11: Selection nativa fiel (C2 fechado), reconciliação DOM→modelo funcionando em browser real, e a suíte E2E reescrita para pegar exatamente os bugs que só aparecem com input real)*
 **Complementa:** `doc/PLANO_PORT_COMPLETO.md` (fases F0–F10; F0–F2 concluídas, F7/F8 núcleo entregue). Este documento substitui o detalhamento de lacunas daquele plano.
 
 ---
@@ -345,9 +345,25 @@ Ordem interna (dependências primeiro):
   - *Ajuste de teste, não de produto:* dois testes VM guardavam o blot **antigo** da célula; com o `replaceWith` fiel eles precisam recoletar as células depois do save — que é exatamente o que o upstream faz com `newSelectedTds`.
   - Harness: `E2eApp.clickElement` clica por coordenadas reais **depois** de conferir caixa, viewport e quem está no ponto (`elementFromPoint`), então um alvo invisível/coberto falha dizendo o que havia ali em vez de um "not visible" seco. Foi ele que separou os defeitos reais das minhas ambiguidades de seletor (cada campo de cor tem uma `.properties-form-action-row` própria, escondida, antes da action row do formulário).
 
+### G11.12 — Matchers de clipboard mortos no browser + suíte Chrome 16→37 (2026-07-29)
+
+Ao expandir a suíte de browser (pedido do usuário) apareceu **o maior defeito de paste até agora**, da mesma família do G11.2:
+
+- **`prepareMatching` guardava os matchers num `Expando` chaveado pelo wrapper** devolvido por `container.querySelectorAll(seletor)`. No browser cada acesso ao DOM cunha um wrapper **novo**, então na travessia o `nodeMatches[child]` nunca encontrava nada: **todo matcher por seletor era morto** — `ol/ul` (listas), `tr/td` (tabelas), `pre` (code-block), os normalizadores de Word/Google Docs, `matchIndent`, `matchAttributor`… Colar no navegador perdia todos esses formatos, e o fake DOM (que devolve os mesmos objetos) mantinha a VM e os goldens verdes. Trocado por um `Map<DomNode, List<Matcher>>`, que usa a igualdade por nó nativo já corrigida no G11.2. Medido: `<ul><li>um</li><li>dois</li></ul>` passou de `{insert:"um\ndois"}` (sem formato) para um op com `list: bullet`; `<table>` passou a carregar `table`; o normalizador de Word passou a transformar `<span style="mso-list:Ignore">1.</span>item` em item de lista de verdade.
+- **Guard de offset negativo em `setNativeRange`**: `rangeToNative` devolve -1 para posição irresolvível e o remap do `Cursor.restore` pode chegar a -1; entregar isso a `Range.setStart` lança `IndexSizeError` **de dentro de um `optimize`**, deixando o editor travado. Agora um offset negativo simplesmente não mexe na seleção.
+- **Suíte Chrome de 16 para 37 testes**, em três arquivos novos:
+  - `model_reconcile_test.dart` — records de mutação chegam com os wrappers tipados (`DomText`/`DomElement`) e comparáveis por `==` (as duas armadilhas do G11.2), e edições nativas (texto alterado, nó inserido, nó removido) chegam ao `getContents()`.
+  - `selection_native_test.dart` — round-trip de range pela seleção nativa, clamp do caret na newline final, `focus()` restaurando o `savedRange` (a mecânica que faz o clique na toolbar preservar a seleção), formatação após refoco, formato pendente digitado no cursor sem vazar FEFF, e bounds de range vs caret.
+  - `clipboard_convert_test.dart` — conversão HTML→Delta pelo **DOMParser nativo**: inline (bold/itálico/link/cor), bloco (header/lista/tabela), lista colada virando `<li data-list>` de verdade, wrapper do Google Docs não embolando tudo em negrito e lista do Word normalizada. *Nota de fidelidade confirmada aqui: o normalizador de Word só age quando o documento traz `xmlns:w="urn:schemas-microsoft-com:office:word"`, como em msWord.ts:90-97 — não é lacuna.*
+
 ### G12 — Lacuna estrutural registrada, ainda não corrigida (2026-07-29)
 
-Encontrada ao investigar o G11.11, com evidência, mas **deliberadamente não mexida** nesta rodada por ser de risco amplo:
+Encontrada ao investigar o G11.11 e **tentada em 2026-07-29** — a tentativa está registrada porque o resultado é informação útil:
+
+- **Medição:** ligar `attributes: true` no observer do `Scroll` (a config do parchment) **colapsa o documento**: quatro cenários E2E terminam com `[{"insert":"\n"}]` enquanto o DOM ainda mostra a tabela. Acrescentar também o listener de `SCROLL_UPDATE` reconciliando (quill.ts:246-253) não muda isso — o problema está antes, no `update`/`optimize`, que assume records estruturais. **Revertido**; a abstração já aceita o parâmetro (e `characterDataOldValue`, que é paridade e inofensivo) para quando o item for atacado a sério.
+- **Pré-requisito identificado:** portar `Editor.update(change, mutations, selectionInfo)` fiel (editor.ts), que é quem sabe interpretar records de atributo, antes de ligar a observação.
+
+Conteúdo original do item:
 
 - **O `MutationObserver` do `Scroll` não observa atributos.** `observer.observe(domNode, subtree/childList/characterData)` — o `OBSERVER_CONFIG` do parchment tem também `attributes: true` (e `characterDataOldValue`). A abstração `DomMutationObserver.observe` nem expõe o parâmetro.
 - **Ninguém escuta `SCROLL_UPDATE` para reconciliar o delta.** O upstream tem, em quill.ts, `this.scroll.on(SCROLL_UPDATE, (source, mutations) => modify(() => this.editor.update(null, mutations, selectionInfo), source))`. Aqui o evento é emitido e só a `Selection` o consome.

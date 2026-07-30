@@ -1030,7 +1030,11 @@ class FakeDomMutationObserver implements DomMutationObserver {
 
   @override
   void observe(DomNode target,
-      {bool? subtree, bool? childList, bool? characterData}) {}
+      {bool? subtree,
+      bool? childList,
+      bool? characterData,
+      bool? attributes,
+      bool? characterDataOldValue}) {}
 
   @override
   List<DomMutationRecord> takeRecords() => const [];

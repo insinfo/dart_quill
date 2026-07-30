@@ -27,8 +27,21 @@ class Scroll extends ScrollBlot {
         super(registry, domNode) {
     element.classes.add(className);
     observer = domBindings.adapter.createMutationObserver(_handleMutations);
-    observer?.observe(domNode,
-        subtree: true, childList: true, characterData: true);
+    // Parchment's OBSERVER_CONFIG also carries `attributes: true`; see G12 in
+    // doc/INVENTARIO_E_PLANO_FINALIZACAO.md. Turning it on here (measured
+    // 2026-07-29) collapses the document — four E2E scenarios end with
+    // `[{"insert":"\n"}]` while the DOM still shows the table — because the
+    // update/optimize pipeline assumes structural records. It stays off
+    // until `Editor.update(change, mutations, selectionInfo)` is ported and
+    // the pipeline is made attribute-aware; direct attribute writes keep
+    // asking for `quill.update()` explicitly meanwhile.
+    observer?.observe(
+      domNode,
+      subtree: true,
+      childList: true,
+      characterData: true,
+      characterDataOldValue: true,
+    );
     build();
     optimize([], {});
     enable();

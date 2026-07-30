@@ -402,6 +402,8 @@ class HtmlDomMutationObserver implements DomMutationObserver {
     bool? subtree,
     bool? childList,
     bool? characterData,
+    bool? attributes,
+    bool? characterDataOldValue,
   }) {
     final options = web.MutationObserverInit();
     if (subtree != null) {
@@ -412,6 +414,12 @@ class HtmlDomMutationObserver implements DomMutationObserver {
     }
     if (characterData != null) {
       options.characterData = characterData;
+    }
+    if (attributes != null) {
+      options.attributes = attributes;
+    }
+    if (characterDataOldValue != null) {
+      options.characterDataOldValue = characterDataOldValue;
     }
     _native.observe((target as _HtmlDomNode).node, options);
   }
