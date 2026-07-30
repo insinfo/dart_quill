@@ -1,6 +1,7 @@
 import '../blots/abstract/blot.dart';
 import '../blots/block.dart';
 import '../blots/scroll.dart';
+import '../core/emitter.dart';
 import '../platform/dom.dart';
 import '../platform/platform.dart';
 
@@ -53,12 +54,33 @@ class ListItem extends Block {
       } else if (format == 'unchecked') {
         this.format('list', 'checked');
         event.preventDefault();
+      } else {
+        return;
       }
+      // `format` only writes `data-list` on the element. Upstream learns of it
+      // through the MutationObserver, which watches attributes; this port's
+      // observer does not (see the note in scroll.dart / G12), so without this
+      // the checkbox flipped on screen while `getContents()` kept reporting
+      // the old state — the toggle was invisible to the application.
+      _announceChange(root);
     }
 
     ui.addEventListener('mousedown', toggleChecklist);
     ui.addEventListener('touchstart', toggleChecklist);
     attachUI(ui);
+  }
+
+  /// Announces a DOM-only change through the same event a real mutation takes
+  /// (`SCROLL_UPDATE` → `Quill.modify(editor.update)`), so the document delta
+  /// and TEXT_CHANGE match what upstream's attribute-observing MutationObserver
+  /// produces.
+  void _announceChange(Blot? root) {
+    if (root is! Scroll) return;
+    root.emitter.emit(
+      EmitterEvents.SCROLL_UPDATE,
+      EmitterSource.USER,
+      const <DomMutationRecord>[],
+    );
   }
 
   static const String kBlotName = 'list';
@@ -98,6 +120,11 @@ class ListItem extends Block {
     final truthy = value != null && value != false && value != '';
     if (name == kBlotName && truthy) {
       element.setAttribute('data-list', '$value');
+      // The line's delta is cached, and writing an attribute leaves the blot
+      // tree untouched: upstream invalidates through the MutationObserver,
+      // which watches attributes. Without this the `<li>` renders as checked
+      // while `getContents()` keeps reporting the old value.
+      invalidateCache();
     } else {
       super.format(name, value);
     }

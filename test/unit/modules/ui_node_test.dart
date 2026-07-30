@@ -1,3 +1,4 @@
+import 'package:dart_quill/src/core/emitter.dart';
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
 import 'package:dart_quill/src/formats/list.dart';
 import 'package:dart_quill/src/modules/ui_node.dart';
@@ -128,6 +129,48 @@ void main() {
 
       expect(event.defaultPrevented, isTrue);
       expect(line.element.dataset['list'], 'checked');
+      // The DOM alone is not enough: the toggle only writes an attribute, and
+      // this port's MutationObserver does not watch attributes (G12), so the
+      // line's cached delta has to be invalidated and the change announced.
+      // Without that the checkbox flipped on screen while the application
+      // reading `getContents()` still saw `unchecked`.
+      expect(quill.getContents().toJson(), [
+        {'insert': 'task'},
+        {
+          'insert': '\n',
+          'attributes': {'list': 'checked'}
+        }
+      ]);
+    });
+
+    test('the checklist toggle emits a TEXT_CHANGE describing it', () {
+      final quill = createTestQuill();
+      quill.setContents(
+        Delta()
+          ..insert('task')
+          ..insert('\n', {'list': 'checked'}),
+      );
+      final listElement = quill.root.querySelectorAll('li').first;
+      final line = quill.scroll.find(listElement, bubble: true).key as ListItem;
+
+      Delta? change;
+      quill.on(EmitterEvents.TEXT_CHANGE,
+          (dynamic delta, dynamic old, dynamic source) {
+        change = delta as Delta;
+      });
+
+      (line.uiNode! as FakeDomElement)
+          .dispatchEvent('mousedown', FakeDomEvent('mousedown'));
+
+      // The block format lives on the line's newline, so the change retains
+      // the text and formats the single newline after it.
+      expect(change?.toJson(), [
+        {'retain': 4},
+        {
+          'retain': 1,
+          'attributes': {'list': 'unchecked'}
+        }
+      ]);
     });
   });
 }

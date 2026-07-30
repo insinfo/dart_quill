@@ -22,20 +22,6 @@ import 'support/e2e_app.dart';
 /// Upstream's `SHORTKEY`: Control everywhere except macOS.
 const Key shortKey = Key.control;
 
-/// Known gap, kept as a named failing scenario instead of being deleted: the
-/// `.ql-ui` marker a list item carries is a zero-length node inside the line,
-/// and a horizontal arrow key crossing a line boundary spends a step on it, so
-/// the caret lands one index short of where upstream puts it. Registered in
-/// `doc/INVENTARIO_E_PLANO_FINALIZACAO.md` (G13.8) as the next target.
-const String _uiNodeCaretGap =
-    'known gap: .ql-ui consumes one caret step across a list line boundary';
-
-/// Known gap: clicking the checkbox area of a checklist item toggles it in the
-/// unit suite, but the hit box at `li.left + 5` does not reach `.ql-ui` with
-/// the bundled stylesheet. Same G13.8 entry.
-const String _checklistHitGap =
-    'known gap: the checklist hit box does not match upstream at li.left + 5';
-
 void main() {
   late E2eApp app;
 
@@ -401,7 +387,7 @@ void main() {
         ]);
       });
 
-      test('move to previous/next line', skip: _uiNodeCaretGap, () async {
+      test('move to previous/next line', () async {
         const firstLine = 'first line';
         await app.setContents([
           {'insert': firstLine},
@@ -432,7 +418,7 @@ void main() {
         );
       });
 
-      test('RTL support', skip: _uiNodeCaretGap, () async {
+      test('RTL support', () async {
         const firstLine = 'اللغة العربية';
         await app.setContents([
           {'insert': firstLine},
@@ -463,8 +449,7 @@ void main() {
         );
       });
 
-      test('extend selection to previous/next line', skip: _uiNodeCaretGap,
-          () async {
+      test('extend selection to previous/next line', () async {
         await app.setContents([
           {'insert': 'first line'},
           {
@@ -548,7 +533,7 @@ void main() {
   group('checklist', () {
     setUp(() async => app.reload());
 
-    test('checklist is checkable', skip: _checklistHitGap, () async {
+    test('checklist is checkable', () async {
       await app.setContents([
         {'insert': 'item 1'},
         {

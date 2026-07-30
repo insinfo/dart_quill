@@ -213,6 +213,13 @@ class Quill {
         : Input(this, const InputOptions());
     theme.modules['input'] = input;
 
+    // Parity quill.ts:234 — `uiNode` is added unconditionally, not through the
+    // options. It is what keeps the caret from stopping on the zero-length
+    // `.ql-ui` marker a list item carries: without it a horizontal arrow key
+    // crossing a line boundary lands one index short, and Home lands before
+    // the marker instead of on the text.
+    theme.addModule('uiNode');
+
     theme.init();
     quillInstances.register<Quill>(container, this);
     ensureGlobalDomEventBridge();

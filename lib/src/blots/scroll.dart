@@ -28,13 +28,22 @@ class Scroll extends ScrollBlot {
     element.classes.add(className);
     observer = domBindings.adapter.createMutationObserver(_handleMutations);
     // Parchment's OBSERVER_CONFIG also carries `attributes: true`; see G12 in
-    // doc/INVENTARIO_E_PLANO_FINALIZACAO.md. Turning it on here (measured
-    // 2026-07-29) collapses the document — four E2E scenarios end with
-    // `[{"insert":"\n"}]` while the DOM still shows the table — because the
-    // update/optimize pipeline assumes structural records. It stays off
-    // until `Editor.update(change, mutations, selectionInfo)` is ported and
-    // the pipeline is made attribute-aware; direct attribute writes keep
-    // asking for `quill.update()` explicitly meanwhile.
+    // doc/INVENTARIO_E_PLANO_FINALIZACAO.md.
+    //
+    // Measured again 2026-07-30, after the faithful `Editor.update` (G13.6)
+    // and the SCROLL_UPDATE listener (G13.8): the document no longer
+    // collapses, but the *selection source* flips. An attribute record on the
+    // root (`ql-blank` toggling is one) makes selection.ts' `triggeredByTyping`
+    // true, so the scroll-driven `update(SILENT)` wins the race against the
+    // `selectionchange`-driven `update(USER)` — the second finds the range
+    // unchanged and emits nothing. SELECTION_CHANGE then arrives as `silent`,
+    // History ignores it, and undo restores the wrong caret.
+    //
+    // Left off until the characterData/attribute branch of `Editor.update`
+    // (the one that reads MutationRecords) is ported and the pipeline can tell
+    // an attribute write apart from typing. Direct attribute writes keep
+    // asking for `quill.update()` explicitly meanwhile — the checklist toggle
+    // is the one place upstream relies on this and the port cannot yet.
     observer?.observe(
       domNode,
       subtree: true,
