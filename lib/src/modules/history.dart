@@ -22,29 +22,30 @@ class History extends Module<HistoryOptions> {
     ignoreChange = false;
     currentRange = null;
 
+    // Parity history.ts:38-56 — ONE `EDITOR_CHANGE` listener, not a pair on
+    // SELECTION_CHANGE/TEXT_CHANGE. The two are not equivalent: EDITOR_CHANGE
+    // is emitted for SILENT text changes as well (quill.ts `modify`), and it
+    // is that which keeps `currentRange` shifted by edits the user never saw.
+    // It also fixes the order the two kinds of change arrive in, which decides
+    // whether the range recorded with a change is the one that produced it.
     quill.on(
-      EmitterEvents.SELECTION_CHANGE,
-      (dynamic range, dynamic _oldRange, dynamic source) {
-        if (source == EmitterSource.SILENT) {
+      EmitterEvents.EDITOR_CHANGE,
+      (dynamic eventName,
+          [dynamic value, dynamic oldValue, dynamic source]) {
+        if (eventName == EmitterEvents.SELECTION_CHANGE) {
+          if (value is Range && source != EmitterSource.SILENT) {
+            currentRange = value;
+          }
           return;
         }
-        if (range is Range) {
-          currentRange = range;
-        }
-      },
-    );
-
-    quill.on(
-      EmitterEvents.TEXT_CHANGE,
-      (dynamic delta, dynamic oldDelta, dynamic source) {
-        final change = delta as Delta;
-        final previous = oldDelta as Delta;
-        if (!ignoreChange) {
-          if (!options.userOnly || source == EmitterSource.USER) {
-            record(change, previous);
-          } else {
-            transform(change);
-          }
+        if (eventName != EmitterEvents.TEXT_CHANGE) return;
+        // Upstream returns before transforming the range while ignoring.
+        if (ignoreChange) return;
+        final change = value as Delta;
+        if (!options.userOnly || source == EmitterSource.USER) {
+          record(change, oldValue as Delta);
+        } else {
+          transform(change);
         }
         currentRange = transformRange(currentRange, change);
       },

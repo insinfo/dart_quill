@@ -7,7 +7,7 @@ import '../../../../support/fake_dom.dart';
 
 void main() {
   group('NormalizeExternalHTML – Microsoft Word', () {
-    test('converts mso list paragraphs into semantic lists', () {
+    test('keep the list style', () {
       const html = '''
       <html xmlns:w="urn:schemas-microsoft-com:office:word">
         <style>

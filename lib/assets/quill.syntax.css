@@ -1,0 +1,114 @@
+/*
+ * Token colours for the syntax highlighter bundled with dart_quill, plus the
+ * few rules a rendered formula needs.
+ *
+ * Upstream Quill expects the application to load a highlight.js theme from a
+ * CDN. dart_quill highlights code itself and ships this stylesheet instead, so
+ * a code block is coloured with nothing but the package. The class names are
+ * highlight.js', so any hljs theme can replace this file.
+ *
+ * The palette is tuned for the #23241f background the code-block container
+ * already has in quill.core.css / quill.snow.css.
+ */
+
+.ql-code-block-container .hljs-comment,
+.ql-code-block-container .hljs-quote {
+  color: #7a7768;
+  font-style: italic;
+}
+
+.ql-code-block-container .hljs-keyword,
+.ql-code-block-container .hljs-selector-tag,
+.ql-code-block-container .hljs-tag,
+.ql-code-block-container .hljs-name,
+.ql-code-block-container .hljs-bullet,
+.ql-code-block-container .hljs-deletion {
+  color: #f8306f;
+}
+
+.ql-code-block-container .hljs-built_in,
+.ql-code-block-container .hljs-type,
+.ql-code-block-container .hljs-class {
+  color: #62d6ef;
+  font-style: italic;
+}
+
+.ql-code-block-container .hljs-number,
+.ql-code-block-container .hljs-literal,
+.ql-code-block-container .hljs-symbol,
+.ql-code-block-container .hljs-selector-attr {
+  color: #b07dff;
+}
+
+.ql-code-block-container .hljs-string,
+.ql-code-block-container .hljs-meta-string,
+.ql-code-block-container .hljs-code,
+.ql-code-block-container .hljs-regexp {
+  color: #e8dd7a;
+}
+
+.ql-code-block-container .hljs-title,
+.ql-code-block-container .hljs-function,
+.ql-code-block-container .hljs-attr,
+.ql-code-block-container .hljs-attribute,
+.ql-code-block-container .hljs-selector-class,
+.ql-code-block-container .hljs-selector-id,
+.ql-code-block-container .hljs-selector-pseudo,
+.ql-code-block-container .hljs-addition {
+  color: #a9e337;
+}
+
+.ql-code-block-container .hljs-variable,
+.ql-code-block-container .hljs-params,
+.ql-code-block-container .hljs-template-variable {
+  color: #ff9f2e;
+}
+
+.ql-code-block-container .hljs-meta {
+  color: #8d8a79;
+}
+
+.ql-code-block-container .hljs-subst {
+  color: #f8f8f2;
+}
+
+.ql-code-block-container .hljs-section {
+  color: #a9e337;
+  font-weight: 700;
+}
+
+.ql-code-block-container .hljs-link {
+  color: #62d6ef;
+  text-decoration: underline;
+}
+
+.ql-code-block-container .hljs-strong {
+  font-weight: 700;
+}
+
+.ql-code-block-container .hljs-emphasis {
+  font-style: italic;
+}
+
+/*
+ * Formulas. The renderer emits MathML, which the browser lays out on its own —
+ * these rules only keep it aligned with the surrounding text.
+ */
+
+.ql-formula {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.ql-formula math {
+  /* KaTeX renders inline math slightly larger than the surrounding text; the
+     same nudge keeps a nested fraction legible. */
+  font-size: 1.15em;
+}
+
+/* A formula whose LaTeX does not parse shows its own source, like KaTeX's
+   `throwOnError: false` does. */
+.ql-formula .ql-formula-error {
+  font-family: monospace;
+  font-size: 0.9em;
+}

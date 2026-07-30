@@ -282,9 +282,9 @@ void main() {
       // Parity bubble.ts:48-58: the last line starts at index 5 and the
       // selection covers its 4 characters (the trailing newline is excluded).
       expect(adapter.boundsCalls, contains(equals([5, 4])));
-      // setSelection(USER) subsequently asks for the complete selection
-      // bounds so it can scroll that range into view.
-      expect(adapter.boundsCalls.last, [0, 9]);
+      // scrollSelectionIntoView uses Selection's native viewport bounds
+      // directly (quill.ts:696), not Quill.getBounds' platform fallback.
+      expect(adapter.boundsCalls.last, [5, 4]);
     });
 
     test('positions against the selection itself on a single line', () {

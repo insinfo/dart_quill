@@ -6,7 +6,9 @@ import 'dart:typed_data';
 
 import 'package:web/web.dart' as web;
 import 'package:dart_quill/dart_quill_docx.dart' as docx;
+import 'package:dart_quill/src/core/emitter.dart';
 import 'package:dart_quill/src/core/initialization.dart';
+import 'package:dart_quill/src/core/selection.dart' show Range;
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
 import 'package:dart_quill/src/core/quill.dart';
 import 'package:dart_quill/src/core/theme.dart';
@@ -53,6 +55,8 @@ void main() {
     'toolbar': <String, dynamic>{
       'container': defaultToolbar,
     },
+    // The Syntax module is opt-in upstream; the highlighter is bundled here.
+    'syntax': true,
     'table': false,
     'table-better': <String, dynamic>{
       // Upstream defaults to en_US; the plugin's `language` option is what
@@ -79,11 +83,34 @@ void main() {
   );
 
   final quill = Quill(container, options: options);
-  quill.root.setAttribute('data-placeholder', 'placeholder');
+  _loadSampleDocument(quill);
   _exposeE2eHooks(quill);
 
   _addButton(actions, 'Abrir DOCX', () => _openDocx(quill));
   _addButton(actions, 'Exportar DOCX', () => _exportDocx(quill));
+}
+
+/// Content that exercises what needs a browser to be believed: a highlighted
+/// code block and a rendered formula, neither of which loads anything from the
+/// network.
+void _loadSampleDocument(Quill quill) {
+  final delta = Delta()
+    ..insert('dart_quill')
+    ..insert('\n', {'header': '1'})
+    ..insert('Realce de sintaxe e fórmulas ')
+    ..insert('sem dependências externas', {'bold': true})
+    ..insert(': o realçador e o renderizador de LaTeX fazem parte do pacote.\n')
+    ..insert("const quill = Quill('#editor', { theme: 'snow' });")
+    ..insert('\n', {'code-block': 'javascript'})
+    ..insert('// o <select> ao lado troca a linguagem')
+    ..insert('\n', {'code-block': 'javascript'})
+    ..insert('Fórmula: ')
+    ..insert({'formula': r'x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}'})
+    ..insert(' e um somatório ')
+    ..insert({'formula': r'\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}'})
+    ..insert('.\n');
+  quill.setContents(delta);
+  quill.history.clear();
 }
 
 /// Read-only hooks consumed by `test/e2e` to assert the MODEL state after
@@ -103,9 +130,40 @@ void _exposeE2eHooks(Quill quill) {
     quill.history.clear();
   }
 
+  // Test SETUP only: loads a document the way an application would after
+  // fetching it from a database, so rendering-on-load (KaTeX, syntax) is
+  // exercised instead of only the insertion path.
+  void setContents(String json) {
+    final ops = jsonDecode(json) as List;
+    quill.setContents(Delta.fromJson(ops));
+  }
+
+  // The upstream E2E specs drive the editor through `window.quill.*`. A Dart
+  // object cannot be handed to JS, so the same surface is exposed as hooks —
+  // one per API the specs use, with the same arguments.
+  void updateContents(String json, String source) {
+    final ops = jsonDecode(json) as List;
+    quill.updateContents(Delta.fromJson(ops), source: source);
+  }
+
+  void setSelection(int index, int length) {
+    quill.setSelection(Range(index, length), source: EmitterSource.API);
+  }
+
+  void cutoffHistory() => quill.history.cutoff();
+
+  void setHistoryUserOnly(bool value) {
+    quill.history.options.userOnly = value;
+  }
+
   web.window.setProperty('e2eGetContents'.toJS, contents.toJS);
   web.window.setProperty('e2eGetSelection'.toJS, selectionOf.toJS);
   web.window.setProperty('e2eReset'.toJS, reset.toJS);
+  web.window.setProperty('e2eSetContents'.toJS, setContents.toJS);
+  web.window.setProperty('e2eUpdateContents'.toJS, updateContents.toJS);
+  web.window.setProperty('e2eSetSelection'.toJS, setSelection.toJS);
+  web.window.setProperty('e2eCutoffHistory'.toJS, cutoffHistory.toJS);
+  web.window.setProperty('e2eSetHistoryUserOnly'.toJS, setHistoryUserOnly.toJS);
 
   // Temporary diagnostics for the E2E stabilization; harmless to keep.
   String diag() {

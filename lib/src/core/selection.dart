@@ -102,6 +102,11 @@ class Bounds {
 /// public API with a stored range.
 class Selection {
   Selection(this.scroll, this.emitter) {
+    // Parity selection.ts:45-47 — before any native selection exists, Quill
+    // still remembers a collapsed range at the start. Tooltips rely on
+    // focus() restoring this range when inserting the first embed.
+    savedRange = const Range(0);
+    lastRange = savedRange;
     if (_nativeMode) {
       _handleComposition();
       _handleDragging();
@@ -139,9 +144,7 @@ class Selection {
                     (m.type == 'attributes' && m.target == root)));
             update(triggeredByTyping
                 ? EmitterSource.SILENT
-                : (updateSource is String
-                    ? updateSource
-                    : EmitterSource.USER));
+                : (updateSource is String ? updateSource : EmitterSource.USER));
           } catch (_) {
             // Parity: upstream swallows failures here.
           }
@@ -241,7 +244,8 @@ class Selection {
     final previous = _range;
     _range = range;
     savedRange = range;
-    emitter.emit(EmitterEvents.SELECTION_CHANGE, range, previous, source);
+    // Parity update(): EDITOR_CHANGE is always emitted first; a SILENT source
+    // suppresses only the public SELECTION_CHANGE event.
     emitter.emit(
       EmitterEvents.EDITOR_CHANGE,
       EmitterEvents.SELECTION_CHANGE,
@@ -249,6 +253,9 @@ class Selection {
       previous,
       source,
     );
+    if (source != EmitterSource.SILENT) {
+      emitter.emit(EmitterEvents.SELECTION_CHANGE, range, previous, source);
+    }
   }
 
   /// Parity selection.ts `setRange(range, force, source)`.
@@ -303,9 +310,8 @@ class Selection {
     );
   }
 
-  bool hasFocus() => _nativeMode
-      ? domBindings.adapter.hasFocus(root)
-      : _range != null;
+  bool hasFocus() =>
+      _nativeMode ? domBindings.adapter.hasFocus(root) : _range != null;
 
   /// Parity selection.ts:144-148 — refocus the editor root (preventScroll)
   /// and restore the last saved range. This is what makes a toolbar click
@@ -320,6 +326,74 @@ class Selection {
     if (saved != null) {
       setRange(saved);
     }
+  }
+
+  /// Parity selection.ts `getBounds(index, length)`.
+  ///
+  /// In particular, a non-collapsed range that starts exactly at the end of
+  /// a text leaf must start from the next leaf on the same line. Native
+  /// ranges accept the former position, but Blink can then report a box for
+  /// the previous line rather than for the selected character.
+  Map<String, dynamic>? getBounds(int index, [int length = 0]) {
+    final scrollLength = scroll.length();
+    index = math.min(index, scrollLength - 1);
+    length = math.min(index + length, scrollLength - 1) - index;
+
+    final scrollBlot = scroll;
+    if (scrollBlot is! Scroll) return null;
+    var leafEntry = scrollBlot.leaf(index);
+    var leaf = leafEntry.key;
+    var offset = leafEntry.value;
+    if (leaf == null) return null;
+
+    if (length > 0 && offset == leaf.length()) {
+      final next = scrollBlot.leaf(index + 1).key;
+      if (next != null &&
+          scrollBlot.line(index).key == scrollBlot.line(index + 1).key) {
+        leaf = next;
+        offset = 0;
+      }
+    }
+
+    final start = leaf.position(offset, true);
+    if (length > 0) {
+      leafEntry = scrollBlot.leaf(index + length);
+      leaf = leafEntry.key;
+      offset = leafEntry.value;
+      if (leaf == null) return null;
+      final end = leaf.position(offset, true);
+      return domBindings.adapter.getRangeBounds(
+        start.key,
+        start.value,
+        end.key,
+        end.value,
+      );
+    }
+
+    if (start.key is! DomText && leaf.domNode is DomElement) {
+      final rect =
+          domBindings.adapter.getElementBounds(leaf.domNode as DomElement);
+      if (rect == null) return null;
+      final side = start.value > 0 ? 'right' : 'left';
+      final x = (rect[side] as num).toDouble();
+      final top = (rect['top'] as num).toDouble();
+      final height = (rect['height'] as num).toDouble();
+      return {
+        'bottom': top + height,
+        'height': height,
+        'left': x,
+        'right': x,
+        'top': top,
+        'width': 0.0,
+      };
+    }
+
+    return domBindings.adapter.getRangeBounds(
+      start.key,
+      start.value,
+      start.key,
+      start.value,
+    );
   }
 
   /// The pending-format marker blot (parity selection.ts `this.cursor`),

@@ -7,7 +7,7 @@ import '../../../../support/fake_dom.dart';
 
 void main() {
   group('NormalizeExternalHTML – Google Docs', () {
-    test('removes normal-weight <b> wrappers', () {
+    test('remove unnecessary b tags', () {
       const html = '''
       <b
         style="font-weight: normal;"

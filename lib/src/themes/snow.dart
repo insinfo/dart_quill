@@ -161,7 +161,10 @@ class SnowTheme extends BaseTheme {
       buildButtons(toolbar.container!.querySelectorAll('button'), themeIcons);
       buildPickers(
           toolbar, toolbar.container!.querySelectorAll('select'), themeIcons);
-      tooltip = SnowTooltip(quill, options.bounds ?? quill.container);
+      // Upstream passes options.bounds through; Tooltip defaults to body.
+      // Using quill.container here clipped/re-shifted an already
+      // container-relative reference rectangle.
+      tooltip = SnowTooltip(quill, options.bounds);
       registerThemeHandlers(toolbar);
       if (toolbar.container!.querySelector('.ql-link') != null) {
         quill.keyboard.addBinding(

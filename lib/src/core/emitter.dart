@@ -17,8 +17,12 @@ final Expando<bool> _bridgedDocuments = Expando<bool>('quillEmitterDomBridge');
 /// attached to that document, matching upstream emitter.ts.
 void ensureGlobalDomEventBridge() {
   final document = domBindings.adapter.document;
-  if (_bridgedDocuments[document] ?? false) return;
-  _bridgedDocuments[document] = true;
+  // Keyed by identity of the underlying document, not by the wrapper — see
+  // [DomNode.identityKey]. A wrapper key re-installed the bridge on every
+  // editor, stacking duplicate native listeners.
+  final key = document.identityKey;
+  if (_bridgedDocuments[key] ?? false) return;
+  _bridgedDocuments[key] = true;
 
   for (final eventName in _globalDomEvents) {
     document.addEventListener(eventName, (event) {

@@ -274,17 +274,43 @@ grade, e os 16 idiomas do plugin.
 
 ## Realce de sintaxe
 
-O módulo `syntax` aplica o realce de verdade (o Delta do *highlighter* é
-diferenciado contra o documento e reaplicado como formatos).
+O upstream exige que a aplicação carregue o **highlight.js** de um CDN. Aqui o
+realçador é parte do pacote (`lib/src/dependencies/dart_highlight/`), escrito em
+Dart, então basta ligar o módulo:
+
+```dart
+ThemeOptions(modules: {'syntax': true});
+```
+
+As 14 linguagens do seletor do Quill vêm prontas (plain, bash, cpp, cs, css,
+diff, xml/html, java, javascript/ts, markdown, php, python, ruby, sql), e cada
+bloco de código ganha um `<select>` de linguagem como nó de UI. Os nomes de
+classe são os do highlight.js (`hljs-keyword`, `hljs-string`, …), então
+qualquer tema hljs colore o resultado — as cores empacotadas estão em
+`assets/quill.syntax.css`:
+
+```html
+<link rel="stylesheet" href="packages/dart_quill/assets/quill.syntax.css">
+```
+
+Para uma linguagem própria, sem tocar no pacote:
+
+```dart
+import 'package:dart_quill/src/dependencies/dart_highlight/dart_highlight.dart';
+
+registerLanguage(const Language(
+  name: 'dart',
+  root: Mode(keywords: {'keyword': ['final', 'var', 'class']}),
+));
+```
+
+E as opções continuam aceitando um realçador da aplicação, que tem precedência
+sobre o embutido:
 
 ```dart
 ThemeOptions(modules: {
   'syntax': SyntaxOptions(
     interval: const Duration(milliseconds: 500),
-    languages: const [
-      SyntaxLanguage(key: 'plain', label: 'Plain'),
-      SyntaxLanguage(key: 'dart', label: 'Dart'),
-    ],
     // Um highlighter que devolve Delta…
     highlighter: (text, language) => Delta()
       ..insert('final', {'code-token': 'keyword'})
@@ -296,10 +322,43 @@ ThemeOptions(modules: {
 });
 ```
 
-Cada bloco de código ganha um `<select>` de linguagem como nó de UI.
-
 Nota de paridade: `code-token` fica **fora** do Delta do documento — o
 `bubbleFormats` o remove, exatamente como no upstream. O realce é apresentação.
+
+---
+
+## Fórmulas (LaTeX)
+
+O upstream exige o **KaTeX** em `window`. Aqui o renderizador é parte do pacote
+(`lib/src/dependencies/dart_math/`) e produz **MathML**, que o navegador desenha
+nativamente — sem script, sem fonte para baixar e sem folha de estilo de
+terceiros. O botão `formula` da toolbar funciona sem configuração:
+
+```dart
+final quill = Quill(container, options: ThemeOptions(
+  theme: 'snow',
+  modules: {'toolbar': {'container': [['formula', 'code-block']]}},
+));
+quill.insertEmbed(0, 'formula', r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}');
+```
+
+Cobre o que aparece em texto real: frações, raízes, índices e expoentes,
+`\left…\right`, somatórios e integrais com limites, gregas, acentos
+(`\hat`, `\vec`, `\overline`), `\text`, fontes (`\mathbb`, `\mathbf`, …),
+espaçamentos e ambientes (`pmatrix`, `bmatrix`, `cases`, `array`, `aligned`).
+
+Como o renderizador é Dart puro, o mesmo MathML sai na VM — útil para exportar
+ou testar:
+
+```dart
+import 'package:dart_quill/src/dependencies/dart_math/dart_math.dart';
+
+texToMathML(r'e=mc^2');            // <math …><mi>e</mi>…</math>
+isValidTex(r'\frac{1}');           // false
+```
+
+LaTeX inválido não derruba o editor: a fórmula mostra o próprio código-fonte em
+vermelho, como o `throwOnError: false` do KaTeX.
 
 ---
 

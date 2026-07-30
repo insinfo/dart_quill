@@ -60,6 +60,58 @@ void main() {
       expect(corrected.endOffset, 1);
     });
 
+    test('extends deadline when multiple possible shortcuts are pressed',
+        () async {
+      final quill = createTestQuill(modules: {'uiNode': true});
+      quill.setContents(
+        Delta()
+          ..insert('item 1')
+          ..insert('\n', {'list': 'bullet'}),
+      );
+      final lineElement = quill.root.querySelectorAll('li').first;
+      final line = quill.scroll.find(lineElement, bubble: true).key as ListItem;
+
+      for (var i = 0; i < 2; i += 1) {
+        (quill.root as FakeDomElement).dispatchEvent(
+          'keydown',
+          FakeDomKeyboardEvent(
+            type: 'keydown',
+            target: quill.root,
+            key: 'ArrowRight',
+            metaKey: true,
+          ),
+        );
+        await Future<void>.delayed(
+          const Duration(milliseconds: kUiNodeSelectionChangeTtl ~/ 2),
+        );
+      }
+
+      (quill.root as FakeDomElement).dispatchEvent(
+        'keydown',
+        FakeDomKeyboardEvent(
+          type: 'keydown',
+          target: quill.root,
+          key: 'ArrowLeft',
+          metaKey: true,
+        ),
+      );
+      testAdapter.nativeSelectionRange = DomNativeRange(
+        startContainer: line.element,
+        startOffset: 0,
+        endContainer: line.element,
+        endOffset: 0,
+      );
+      testAdapter.document.dispatchEvent(
+        'selectionchange',
+        FakeDomEvent('selectionchange', line.element),
+      );
+
+      await Future<void>.delayed(
+        const Duration(milliseconds: kUiNodeSelectionChangeTtl ~/ 2),
+      );
+      expect(testAdapter.nativeSelectionRange!.startOffset, 1);
+    });
+
     test('checklist UI toggles checked state and prevents native selection',
         () {
       final quill = createTestQuill();

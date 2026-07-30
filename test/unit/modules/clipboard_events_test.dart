@@ -1,6 +1,8 @@
 import 'package:dart_quill/src/core/quill.dart';
+import 'package:dart_quill/src/core/emitter.dart';
 import 'package:dart_quill/src/core/selection.dart';
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/modules/uploader.dart';
 import 'package:test/test.dart';
 
 import '../../support/fake_dom.dart';
@@ -129,6 +131,55 @@ void main() {
         quill.root,
         '<p>01<strong>|</strong><em>7</em>8</p>',
       );
+    });
+
+    test('pastes image file if present with image only html', () {
+      var uploads = 0;
+      final quill = createTestQuill(
+        initialHtml: '<h1>0123</h1><p>5<em>67</em>8</p>',
+        modules: {
+          'uploader': UploaderOptions(
+            handler: (quill, range, files) {
+              uploads += 1;
+            },
+          ),
+        },
+      );
+      quill.setSelection(const Range(2, 5));
+      final event = FakeDomClipboardEvent(
+        type: 'paste',
+        clipboardData: FakeDomDataTransfer(
+          {
+            'text/html':
+                '<meta charset="utf-8"><img src="/assets/favicon.png">',
+            'text/plain': '|',
+          },
+          [FakeDomFile(name: 'file', type: 'image/png')],
+        ),
+      );
+
+      quill.clipboard.onCapturePaste(event);
+
+      expect(uploads, 1);
+    });
+
+    test('does not fire selection-change', () {
+      final quill = createFixture();
+      var changes = 0;
+      quill.emitter.on(EmitterEvents.SELECTION_CHANGE,
+          (dynamic current, dynamic previous, dynamic source) {
+        changes += 1;
+      });
+      final event = FakeDomClipboardEvent(
+        type: 'paste',
+        clipboardData: FakeDomDataTransfer({
+          'text/html': '<strong>|</strong>',
+        }),
+      );
+
+      quill.clipboard.onCapturePaste(event);
+
+      expect(changes, 0);
     });
 
     test('cut keeps formats of first line', () {

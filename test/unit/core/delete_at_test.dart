@@ -105,5 +105,72 @@ void main() {
 
       expect(quill.getText(), equals('a\nc\n'));
     });
+
+    test('deleting through inline embeds removes the whole range', () {
+      final quill = createTestQuill();
+      quill.setContents(
+        Delta()
+          ..insert('onthis is a')
+          ..insert({'image': 'https://example.com'})
+          ..insert({'image': 'https://example.com'})
+          ..insert('\nnext\n'),
+      );
+
+      final before = quill.getContents();
+      final requested = Delta()
+        ..retain(2)
+        ..delete(12);
+      final change = quill.updateContents(requested);
+
+      expectDelta(quill.getContents(), Delta()..insert('onnext\n'));
+      expectDelta(change, requested);
+      expectDelta(before.compose(change), quill.getContents());
+    });
+
+    test('insert newline then delete the complete remainder line', () {
+      final quill = createTestQuill();
+      quill.setContents(
+        Delta()
+          ..insert('onthis is a')
+          ..insert({'image': 'https://example.com'})
+          ..insert({'image': 'https://example.com'})
+          ..insert('\nnext\n'),
+      );
+
+      final requested = Delta()
+        ..retain(2)
+        ..insert('\n')
+        ..delete(12);
+      final change = quill.updateContents(requested);
+
+      expectDelta(quill.getContents(), Delta()..insert('on\nnext\n'));
+      expectDelta(change, requested);
+    });
+
+    test('inserting a newline before inline embeds splits the line', () {
+      final quill = createTestQuill();
+      quill.setContents(
+        Delta()
+          ..insert('onthis is a')
+          ..insert({'image': 'https://example.com'})
+          ..insert({'image': 'https://example.com'})
+          ..insert('\nnext\n'),
+      );
+
+      quill.updateContents(
+        Delta()
+          ..retain(2)
+          ..insert('\n'),
+      );
+
+      expectDelta(
+        quill.getContents(),
+        Delta()
+          ..insert('on\nthis is a')
+          ..insert({'image': 'https://example.com'})
+          ..insert({'image': 'https://example.com'})
+          ..insert('\nnext\n'),
+      );
+    });
   });
 }

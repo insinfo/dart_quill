@@ -152,6 +152,32 @@ abstract class InlineBlot extends ParentBlot {
     return attributes.values();
   }
 
+  /// Parity parchment inline.ts:130-134 — attributors belong to the
+  /// replacement inline, not to the element that is about to be removed.
+  @override
+  Blot replaceWithBlot(Blot replacement) {
+    _ensureAttributesBuilt();
+    final result = super.replaceWithBlot(replacement);
+    if (result is InlineBlot) {
+      attributes.copy(result.format);
+    }
+    return result;
+  }
+
+  /// Parity parchment inline.ts:145-151 — when one inline wraps another,
+  /// attributors move to the outer wrapper. This is why applying color and
+  /// then italic yields one `<em style=...>`, rather than a nested generic
+  /// span whose Delta/DOM shape differs from Quill.
+  @override
+  ParentBlot wrapWith(ParentBlot wrapper) {
+    final result = super.wrapWith(wrapper);
+    if (result is InlineBlot) {
+      _ensureAttributesBuilt();
+      attributes.move(result.format);
+    }
+    return result;
+  }
+
   void unwrap() {
     final parentBlot = parent;
     if (parentBlot is ParentBlot) {
@@ -177,6 +203,12 @@ abstract class InlineBlot extends ParentBlot {
     Map<String, dynamic>? context,
   ]) {
     super.optimize(mutations, context);
+    // In parchment this comes from ParentBlot.optimize: an inline has no
+    // default child, so an emptied wrapper removes itself.
+    if (children.isEmpty) {
+      remove();
+      return;
+    }
     final parentInline = parent;
     if (parentInline is InlineBlot &&
         InlineBlot.compare(blotName, parentInline.blotName) > 0) {

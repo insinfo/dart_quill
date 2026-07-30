@@ -432,6 +432,21 @@ class Delta {
         final nLastOp = (index > 0) ? operations.elementAt(index - 1) : null;
         if (nLastOp == null) {
           operations.insert(0, operation);
+          modificationCount++;
+          return;
+        }
+        // Parity quill-delta Delta.push: after moving an insert in front of a
+        // trailing delete, `lastOp` becomes the operation before that delete.
+        // It must still participate in the normal adjacent-insert merge.
+        if (nLastOp.isInsert &&
+            nLastOp.hasSameAttributes(operation) &&
+            nLastOp.data is String &&
+            operation.data is String) {
+          operations[index - 1] = Operation.insert(
+            (nLastOp.data! as String) + (operation.data! as String),
+            operation.attributes,
+          );
+          modificationCount++;
           return;
         }
       }
@@ -735,7 +750,6 @@ class Delta {
   /// [base]. This is an equivalent of "undo" operation on deltas.
   Delta invert(Delta base) {
     final inverted = Delta();
-    if (base.isEmpty) return inverted;
 
     var baseIndex = 0;
     for (final op in operations) {

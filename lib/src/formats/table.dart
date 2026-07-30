@@ -66,6 +66,10 @@ class TableContainer extends Container {
   @override
   int get scope => kScope;
 
+  @override
+  bool Function(Blot child)? get allowedChildren =>
+      (child) => child is TableBody;
+
   TableBody? _tableBody() {
     for (final child in children) {
       if (child is TableBody) {
@@ -180,12 +184,6 @@ class TableBody extends Container {
   static const int kScope = Scope.BLOCK_BLOT;
   static const Type requiredContainer = TableContainer;
 
-  // The list/table hierarchies build their own containers (the container's
-  // tag and value matter), so they opt out of the generic
-  // `requiredContainer` wrapping in `Blot.optimize`.
-  @override
-  bool get managesOwnRequiredContainer => true;
-
   static TableBody create([dynamic value]) {
     if (value is DomElement) {
       return TableBody(value);
@@ -201,6 +199,10 @@ class TableBody extends Container {
   int get scope => kScope;
 
   @override
+  bool Function(Blot child)? get allowedChildren =>
+      (child) => child is TableRow;
+
+  @override
   TableBody clone() => TableBody(element.cloneNode(deep: false));
 }
 
@@ -211,12 +213,6 @@ class TableRow extends Container {
   static const String kTagName = 'TR';
   static const int kScope = Scope.BLOCK_BLOT;
   static const Type requiredContainer = TableBody;
-
-  // The list/table hierarchies build their own containers (the container's
-  // tag and value matter), so they opt out of the generic
-  // `requiredContainer` wrapping in `Blot.optimize`.
-  @override
-  bool get managesOwnRequiredContainer => true;
 
   static TableRow create([dynamic value]) {
     if (value is DomElement) {
@@ -231,6 +227,10 @@ class TableRow extends Container {
 
   @override
   int get scope => kScope;
+
+  @override
+  bool Function(Blot child)? get allowedChildren =>
+      (child) => child is TableCell;
 
   String? _rowIdOf(Blot blot) => blot is TableCell ? blot.rowId : null;
 
@@ -255,12 +255,26 @@ class TableRow extends Container {
         thisHead == nextTail;
   }
 
-  // NOTE(G1.10): table.ts:79-97 also splits a row whose cells carry
-  // different data-row ids (splitAfter + re-optimize). That depends on the
-  // TS applyDelta insertion semantics; with the current Dart Editor.update
-  // path it fights the table module's boundary normalization (an empty
-  // split-off cell must be pulled OUT of the table as a paragraph, not kept
-  // in its own row). Port it together with Scroll.insertContents.
+  /// Parity table.ts:79-97 — cells with different `data-row` values cannot
+  /// remain in the same physical `<tr>`. Split at the first boundary, then
+  /// optimize both sides so the new row can merge with an adjacent row of
+  /// the same logical id.
+  @override
+  void optimize([
+    List<DomMutationRecord>? mutations,
+    Map<String, dynamic>? context,
+  ]) {
+    super.optimize(mutations, context);
+    for (final child in List<Blot>.from(children)) {
+      final following = child.next;
+      if (child is! TableCell || following is! TableCell) continue;
+      if (child.rowId == following.rowId) continue;
+      final split = splitAfter(child);
+      split.optimize(mutations, context);
+      prev?.optimize(mutations, context);
+      return;
+    }
+  }
 
   int rowOffset() {
     final parentBlot = parent;
@@ -286,12 +300,6 @@ class TableCell extends Block {
   static const String kTagName = 'TD';
   static const int kScope = Scope.BLOCK_BLOT;
   static const Type requiredContainer = TableRow;
-
-  // The list/table hierarchies build their own containers (the container's
-  // tag and value matter), so they opt out of the generic
-  // `requiredContainer` wrapping in `Blot.optimize`.
-  @override
-  bool get managesOwnRequiredContainer => true;
 
   static TableCell create([dynamic value]) {
     if (value is DomElement) {
@@ -359,12 +367,11 @@ class TableCell extends Block {
 
   @override
   void format(String name, dynamic value) {
-    if (name == kBlotName) {
-      if (value == null || value == false) {
-        element.removeAttribute('data-row');
-      } else {
-        element.setAttribute('data-row', value.toString());
-      }
+    // Parity table.ts:30-36 — only the truthy table-value branch is local.
+    // Clearing the format must reach Block.format so the TD is replaced by a
+    // normal paragraph; merely deleting data-row leaves an invalid table.
+    if (name == kBlotName && value != null && value != false && value != '') {
+      element.setAttribute('data-row', value.toString());
       return;
     }
     super.format(name, value);

@@ -102,6 +102,16 @@ class AttributorStore {
     }
   }
 
+  /// Parity parchment `AttributorStore.move(target)`: transfer every
+  /// attributor to a replacement/wrapper and clear it from this element.
+  void move(void Function(String name, dynamic value) format) {
+    copy(format);
+    for (final attribute in _attributes.values) {
+      attribute.remove(domNode);
+    }
+    _attributes.clear();
+  }
+
   Map<String, dynamic> values() {
     final result = <String, dynamic>{};
     _attributes.forEach((name, attribute) {

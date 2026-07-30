@@ -15,6 +15,7 @@ import '../formats/abstract/attributor.dart';
 import '../formats/code.dart' as code_format;
 import '../platform/dom.dart';
 import '../platform/platform.dart';
+import '../dependencies/dart_highlight/dart_highlight.dart' as dart_highlight;
 import '../ui/dom_interop.dart' as dom_interop;
 import 'clipboard.dart' show Matcher, traverse;
 
@@ -100,10 +101,11 @@ class SyntaxOptions {
   final Duration interval;
   final List<SyntaxLanguage> languages;
 
-  /// Dart-native highlighter returning a ready Delta.
+  /// Overrides the built-in highlighter with one returning a ready Delta.
   final SyntaxHighlighter? highlighter;
 
-  /// highlight.js-style highlighter returning HTML with `hljs-*` classes.
+  /// Overrides the built-in highlighter with an HTML-producing one (the shape
+  /// of `hljs.highlight(...).value`, i.e. upstream's `hljs` option).
   final SyntaxHtmlHighlighter? htmlHighlighter;
 
   static List<SyntaxLanguage>? _resolveLanguages(dynamic value) {
@@ -209,6 +211,11 @@ class SyntaxCodeBlock extends code_format.CodeBlock {
   static const String kTagName = code_format.CodeBlock.kTagName;
   static const int kScope = code_format.CodeBlock.kScope;
   static const Type requiredContainer = SyntaxCodeBlockContainer;
+
+  /// Dart counterpart of upstream's mutable `CodeBlock.allowedChildren`
+  /// array. Extensions may append predicates for inline formats that should
+  /// survive inside syntax blocks.
+  static final List<bool Function(Blot child)> extraAllowedChildren = [];
   // Parity syntax.ts — `SyntaxCodeBlock.allowedChildren = [CodeToken, Cursor,
   // TextBlot, Break]`, now a real predicate instead of a dead static list.
   @override
@@ -216,7 +223,8 @@ class SyntaxCodeBlock extends code_format.CodeBlock {
       child is CodeToken ||
       child is Cursor ||
       child is TextBlot ||
-      child is Break;
+      child is Break ||
+      extraAllowedChildren.any((allows) => allows(child));
 
   static SyntaxCodeBlock create([dynamic value]) {
     if (value is DomElement) {
@@ -248,6 +256,12 @@ class SyntaxCodeBlock extends code_format.CodeBlock {
     if (name == kBlotName && value != null && value != false) {
       element.setAttribute('data-language', '$value');
       return;
+    }
+    if (name == kBlotName && (value == null || value == false || value == '')) {
+      // Block.format replaces the line through its internal block morphing
+      // path, which bypasses replaceWith(). Strip presentation-only tokens
+      // before that morph so they cannot escape into normal paragraphs.
+      formatAt(0, length(), CodeToken.kBlotName, false);
     }
     super.format(name, value);
   }
@@ -511,6 +525,9 @@ class Syntax extends Module<SyntaxOptions> {
     }
   }
 
+  /// Resolution order: an application-supplied highlighter (Delta or HTML)
+  /// wins, otherwise the highlighter bundled with the package runs. There is
+  /// no `window.hljs` fallback: `dart_quill` carries its own.
   Delta highlightBlot(String text, [String language = 'plain']) {
     final normalizedLanguage =
         _languages[language] == true ? language : 'plain';
@@ -526,8 +543,31 @@ class Syntax extends Module<SyntaxOptions> {
           normalizedLanguage,
         );
       }
+      return _builtInDelta(text, normalizedLanguage);
     }
     return _plainDelta(text, normalizedLanguage);
+  }
+
+  /// Turns the bundled highlighter's tokens into the Delta the code-block
+  /// container diffs against the document — no DOM round-trip, so it works
+  /// identically on the web and on the VM.
+  Delta _builtInDelta(String text, String language) {
+    final delta = Delta();
+    for (final token in dart_highlight.highlight(text, language)) {
+      final attributes = token.scope == null
+          ? null
+          : <String, dynamic>{CodeToken.kBlotName: token.scope};
+      final lines = token.text.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        if (i != 0) {
+          delta.insert('\n', {SyntaxCodeBlock.kBlotName: language});
+        }
+        if (lines[i].isNotEmpty) {
+          delta.insert(lines[i], attributes);
+        }
+      }
+    }
+    return delta;
   }
 
   /// Parity syntax.ts:302-332 — walk the highlighter's HTML output, turning

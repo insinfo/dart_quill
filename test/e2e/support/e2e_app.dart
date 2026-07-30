@@ -10,6 +10,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:puppeteer/puppeteer.dart';
@@ -103,6 +104,150 @@ class E2eApp {
 
   Future<void> settle([int ms = 120]) =>
       Future<void>.delayed(Duration(milliseconds: ms));
+
+  // --- upstream EditorPage surface ------------------------------------------
+  //
+  // Port of `referencias/quilljs/test/e2e/pageobjects/EditorPage.ts`, so the
+  // upstream E2E specs can be transcribed instead of reinvented. The setup
+  // calls go through the demo's hooks (a Dart object cannot be published on
+  // `window` the way `window.quill` is upstream); everything under test is
+  // still driven by real keyboard, mouse and IME input.
+
+  /// `editorPage.setContents(delta)`.
+  Future<void> setContents(List<Map<String, dynamic>> delta) =>
+      eval<void>('() => window.e2eSetContents(${_js(jsonEncode(delta))})');
+
+  /// `editorPage.updateContents(delta, source)`.
+  Future<void> updateContents(
+    List<Map<String, dynamic>> delta, {
+    String source = 'api',
+  }) =>
+      eval<void>('() => window.e2eUpdateContents('
+          '${_js(jsonEncode(delta))}, ${_js(source)})');
+
+  /// `editorPage.getContents()`, decoded.
+  Future<List<dynamic>> getContents() async =>
+      jsonDecode(await contents()) as List<dynamic>;
+
+  /// `editorPage.setSelection(index, length)`.
+  Future<void> setSelection(int index, [int length = 0]) =>
+      eval<void>('() => window.e2eSetSelection($index, $length)');
+
+  /// `editorPage.getSelection()` as `{index, length}`, or null.
+  Future<Map<String, int>?> getSelection() async {
+    final raw = await selection();
+    if (raw == 'null') return null;
+    final parts = raw.split(':');
+    return {'index': int.parse(parts[0]), 'length': int.parse(parts[1])};
+  }
+
+  /// `editorPage.cutoffHistory()`.
+  Future<void> cutoffHistory() => eval<void>('() => window.e2eCutoffHistory()');
+
+  /// `window.quill.history.options.userOnly = value`.
+  Future<void> setHistoryUserOnly(bool value) =>
+      eval<void>('() => window.e2eSetHistoryUserOnly($value)');
+
+  /// The JS of upstream's `getTextNodeDef` + `updateSelectionDef` helpers.
+  ///
+  /// Setting the selection resolves only after `selectionchange` has fired and
+  /// Quill has read it back — upstream waits for the same thing, because a
+  /// real user never acts before the browser has moved the caret.
+  static const String _selectionHelpers = '''
+    const getTextNode = (el, match) => {
+      const walk = el.ownerDocument.createTreeWalker(
+          el, NodeFilter.SHOW_TEXT, null, false);
+      if (!match) return walk.nextNode();
+      let node;
+      while ((node = walk.nextNode())) {
+        if (node.wholeText.includes(match)) return node;
+      }
+      return null;
+    };
+    const updateSelection = (range) => new Promise((resolve) => {
+      document.addEventListener('selectionchange', () => {
+        setTimeout(resolve, 1);
+      }, {once: true});
+      const selection = document.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    });
+  ''';
+
+  /// `editorPage.moveCursorTo('s_econd')` — `_` marks the caret.
+  Future<void> moveCursorTo(String query) async {
+    final text = query.replaceFirst('_', '');
+    await eval<void>('''async () => {
+      $_selectionHelpers
+      const editor = document.querySelector('.ql-editor');
+      const node = getTextNode(editor, ${_js(text)});
+      if (!node) throw new Error('text not found: ' + ${_js(text)});
+      const offset = node.wholeText.indexOf(${_js(text)}) + ${query.indexOf('_')};
+      const range = node.ownerDocument.createRange();
+      range.setStart(node, offset);
+      range.setEnd(node, offset);
+      await updateSelection(range);
+    }''');
+  }
+
+  Future<void> moveCursorAfterText(String text) => moveCursorTo('${text}_');
+
+  Future<void> moveCursorBeforeText(String text) => moveCursorTo('_$text');
+
+  /// `editorPage.selectText(start, [end])` — selects from the start of [start]
+  /// to the end of [end] (or of [start] when [end] is omitted).
+  Future<void> selectText(String start, [String? end]) async {
+    await eval<void>('''async () => {
+      $_selectionHelpers
+      const editor = document.querySelector('.ql-editor');
+      const anchorNode = getTextNode(editor, ${_js(start)});
+      if (!anchorNode) throw new Error('text not found: ' + ${_js(start)});
+      const focusNode = ${end == null ? 'anchorNode' : 'getTextNode(editor, ${_js(end)})'};
+      if (!focusNode) throw new Error('text not found');
+      const anchorOffset = anchorNode.wholeText.indexOf(${_js(start)});
+      const focusOffset = ${end == null ? 'anchorOffset + ${start.length}' : 'focusNode.wholeText.indexOf(${_js(end)}) + ${end.length}'};
+      const range = anchorNode.ownerDocument.createRange();
+      range.setStart(anchorNode, anchorOffset);
+      range.setEnd(focusNode, focusOffset);
+      await updateSelection(range);
+    }''');
+  }
+
+  /// `editorPage.typeWordWithIME(composition, word)` — a real composition
+  /// session over CDP, exactly like upstream's Chromium fixture: two candidate
+  /// updates and then a commit, each wrapped in keydown/keyup.
+  Future<void> typeWordWithIME(String composedWord) async {
+    final input = page.devTools.input;
+    var composing = '';
+    for (final key in const ['w', 'o']) {
+      await _withKeyboardEvents(key, () async {
+        composing += key;
+        await input.imeSetComposition(
+            composing, composing.length, composing.length);
+      });
+    }
+    await _withKeyboardEvents('Space', () async {
+      await input.insertText(composedWord);
+    });
+    await settle(60);
+  }
+
+  Future<void> _withKeyboardEvents(String key, Future<void> Function() body) async {
+    await eval<void>('''() => {
+      const target = document.activeElement;
+      target?.dispatchEvent(new KeyboardEvent('keydown',
+          {key: ${_js(key)}, bubbles: true, cancelable: true}));
+    }''');
+    await body();
+    await eval<void>('''() => {
+      const target = document.activeElement;
+      target?.dispatchEvent(new KeyboardEvent('keyup',
+          {key: ${_js(key)}, bubbles: true, cancelable: true}));
+    }''');
+  }
+
+  /// The editor root's `innerHTML`, which several upstream specs assert on.
+  Future<String> rootHtml() => editorHtml();
 
   // --- editor helpers -------------------------------------------------------
 
@@ -336,5 +481,10 @@ class E2eApp {
     await settle();
   }
 
-  static String _js(String value) => '"${value.replaceAll('"', r'\"')}"';
+  /// A JS string literal for [value].
+  ///
+  /// `jsonEncode` (not a hand-rolled quote-escape): a delta carries `\n`, and
+  /// escaping only the quotes turns that into a real newline inside the
+  /// literal, which JS then hands back to Dart as an unparseable JSON string.
+  static String _js(String value) => jsonEncode(value);
 }

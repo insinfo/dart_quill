@@ -22,7 +22,6 @@ import 'utils/scroll_rect_into_view.dart' as scrolling;
 typedef ThemeBuilder = Theme Function(Quill quill, ThemeOptions options);
 typedef ModuleFactory = dynamic Function(Quill quill, dynamic options);
 
-
 class Quill {
   final DomElement container;
   late final DomElement root;
@@ -64,7 +63,29 @@ class Quill {
 
   static Quill? find(DomNode node) => quillInstances.get<Quill>(node);
 
-  static void register(dynamic definition, [bool overwrite = false]) {
+  /// Dart counterpart of all three upstream `Quill.register` forms:
+  /// a definition, an exact import path plus target, or a map of targets.
+  static void register(dynamic definition,
+      [dynamic targetOrOverwrite = false]) {
+    if (definition is String) {
+      registerPath(
+        definition,
+        targetOrOverwrite,
+        overwrite: false,
+      );
+      return;
+    }
+    if (definition is Map) {
+      for (final entry in definition.entries) {
+        registerPath(
+          entry.key.toString(),
+          entry.value,
+          overwrite: targetOrOverwrite == true,
+        );
+      }
+      return;
+    }
+    final overwrite = targetOrOverwrite == true;
     if (definition is RegistryEntry) {
       final name = definition.blotName;
       registerPath('formats/$name', definition, overwrite: overwrite);
@@ -198,11 +219,30 @@ class Quill {
 
     // Parity quill.ts:236-240 — `.ql-blank` tracks emptiness on every text
     // change; it is what the stylesheet keys the placeholder off of.
-    emitter.on(EmitterEvents.EDITOR_CHANGE,
-        (dynamic type, [dynamic a, dynamic b, dynamic c]) {
+    emitter.on(EmitterEvents.EDITOR_CHANGE, (dynamic type,
+        [dynamic a, dynamic b, dynamic c]) {
       if (type == EmitterEvents.TEXT_CHANGE) {
         root.classes.toggle('ql-blank', editor.isBlank());
       }
+    });
+
+    // Parity quill.ts:241-251 — the DOM is also an input device: typing, IME
+    // and drops mutate it directly, and it is this listener that turns those
+    // mutations into a TEXT_CHANGE. Without it the model still catches up (the
+    // observer reconciles the blot tree), but the change is only *announced*
+    // the next time something calls `update()`, so anything listening — the
+    // History stack above all — sees the edit late or not at all.
+    //
+    // The `selectionInfo`/`mutations` arguments of the upstream call are the
+    // characterData optimization, which needs MutationRecord payloads the
+    // abstraction does not carry yet; `editor.update(null)` recomputes the
+    // delta from the tree, which reaches the same change delta.
+    emitter.on(EmitterEvents.SCROLL_UPDATE,
+        (dynamic source, [dynamic mutations]) {
+      modify(
+        () => editor.update(null),
+        source: source is String ? source : EmitterSource.USER,
+      );
     });
 
     // Parity quill.ts:268-274 — the captured markup becomes the document,
@@ -383,14 +423,10 @@ class Quill {
       // contents through `insertContents` (NOT applyDelta), then drop the
       // trailing newline the empty-editor initialization leaves behind.
       final length = getLength();
-      final delete1 = Delta()..delete(length);
-      editor.deleteText(0, length);
+      final delete1 = editor.deleteText(0, length);
       final applied = editor.insertContents(0, delta);
       final tailIndex = getLength() - 1;
-      final delete2 = Delta()
-        ..retain(tailIndex)
-        ..delete(1);
-      editor.deleteText(tailIndex, 1);
+      final delete2 = editor.deleteText(tailIndex, 1);
       return delete1.compose(applied).compose(delete2);
     }, source: source);
   }
@@ -561,7 +597,10 @@ class Quill {
   ]) {
     final range = selection.getRange() ?? selection.savedRange;
     if (range == null) return;
-    final bounds = getBounds(range.index, range.length);
+    // Parity quill.ts:696 — scrolling consumes viewport coordinates directly
+    // from Selection. Public getBounds() converts them to container-relative
+    // coordinates for tooltip/UI positioning.
+    final bounds = selection.getBounds(range.index, range.length);
     if (bounds != null) {
       scrollRectIntoView(scrolling.Rect.fromMap(bounds), options);
     }
@@ -580,6 +619,22 @@ class Quill {
       {String source = EmitterSource.API}) {
     return modify(() => editor.formatText(index, length, name, value),
         source: source, index: index, shift: 0);
+  }
+
+  /// Strongly typed Dart counterpart of Quill's JavaScript format-object
+  /// overload.
+  Delta formatTextFormats(
+    int index,
+    int length,
+    Map<String, dynamic> formats, {
+    String source = EmitterSource.API,
+  }) {
+    return modify(
+      () => editor.formatTextFormats(index, length, formats),
+      source: source,
+      index: index,
+      shift: 0,
+    );
   }
 
   Delta insertEmbed(int index, String embed, dynamic value,
@@ -604,16 +659,22 @@ class Quill {
   }
 
   Map<String, dynamic>? getBounds(int index, [int length = 0]) {
-    final start = _domPosition(index);
-    final end = _domPosition(index + length, inclusive: true);
-    if (start != null && end != null) {
-      final nativeBounds = domBindings.adapter.getRangeBounds(
-        start.key,
-        start.value,
-        end.key,
-        end.value,
-      );
-      if (nativeBounds != null) return nativeBounds;
+    final nativeBounds = selection.getBounds(index, length);
+    if (nativeBounds != null) {
+      // Parity quill.ts:465-482 — Selection bounds are viewport-relative,
+      // while Quill's public API is relative to the outer container.
+      final containerBounds = domBindings.adapter.getElementBounds(container);
+      if (containerBounds == null) return nativeBounds;
+      final containerTop = (containerBounds['top'] as num).toDouble();
+      final containerLeft = (containerBounds['left'] as num).toDouble();
+      return {
+        'bottom': (nativeBounds['bottom'] as num).toDouble() - containerTop,
+        'height': (nativeBounds['height'] as num).toDouble(),
+        'left': (nativeBounds['left'] as num).toDouble() - containerLeft,
+        'right': (nativeBounds['right'] as num).toDouble() - containerLeft,
+        'top': (nativeBounds['top'] as num).toDouble() - containerTop,
+        'width': (nativeBounds['width'] as num).toDouble(),
+      };
     }
 
     // Offset-based fallback for non-browser adapters.
@@ -681,4 +742,3 @@ int _deltaLength(Delta delta) {
     (length, op) => length + (op.length ?? 0),
   );
 }
-

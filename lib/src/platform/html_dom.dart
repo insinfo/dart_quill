@@ -121,6 +121,9 @@ class _HtmlDomNode implements DomNode {
   final web.Node node;
 
   @override
+  Object get identityKey => node;
+
+  @override
   bool operator ==(Object other) {
     if (identical(this, other)) {
       return true;
@@ -1044,6 +1047,9 @@ class HtmlDomDocument implements DomDocument {
 
   /// The native document these listeners attach to.
   web.Document get nativeDocument => web.document;
+
+  @override
+  Object get identityKey => nativeDocument;
 
   @override
   void addEventListener(String type, DomEventListener listener) {

@@ -3,6 +3,7 @@ library tooltip_position_test;
 
 import 'package:dart_quill/src/core/initialization.dart';
 import 'package:dart_quill/src/core/quill.dart';
+import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
 import 'package:dart_quill/src/platform/html_dom.dart';
 import 'package:dart_quill/src/ui/dom_interop.dart';
 import 'package:dart_quill/src/ui/tooltip.dart';
@@ -144,5 +145,30 @@ void main() {
       fixture.tooltip.position(_reference(left: 60, top: 0, bottom: 20));
       expect(fixture.root.classList.contains('ql-flip'), isFalse);
     });
+  });
+
+  test('Quill.getBounds is relative to its container', () {
+    final wrapper = web.document.createElement('div') as web.HTMLElement;
+    wrapper.style.cssText =
+        'position:relative;margin-left:240px;margin-top:80px;width:400px;';
+    final host = web.document.createElement('div') as web.HTMLElement;
+    wrapper.appendChild(host);
+    web.document.body!.appendChild(wrapper);
+    addTearDown(() => wrapper.remove());
+
+    final quill = Quill(HtmlDomElement(host));
+    quill.setContents(Delta()..insert('positioned text\n'));
+    final native = quill.selection.getBounds(2, 4)!;
+    final public = quill.getBounds(2, 4)!;
+    final container = host.getBoundingClientRect();
+
+    expect(
+      public['left'],
+      closeTo((native['left'] as num) - container.left, 0.5),
+    );
+    expect(
+      public['top'],
+      closeTo((native['top'] as num) - container.top, 0.5),
+    );
   });
 }

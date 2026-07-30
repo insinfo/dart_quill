@@ -118,7 +118,7 @@ void main() {
       '.ql-picker-item[data-value="serif"]',
     )!;
     _dispatchMouse(label, 'mousedown');
-    _dispatchMouse(serif, 'mousedown');
+    (serif as web.HTMLElement).click();
 
     expect(label.getAttribute('data-value'), equals('serif'));
     expect(serif.classList.contains('ql-selected'), isTrue);

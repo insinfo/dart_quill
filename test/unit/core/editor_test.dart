@@ -1,6 +1,11 @@
+import 'package:dart_quill/src/blots/abstract/blot.dart';
+import 'package:dart_quill/src/blots/block.dart';
+import 'package:dart_quill/src/blots/scroll.dart';
 import 'package:dart_quill/src/core/editor.dart';
+import 'package:dart_quill/src/core/emitter.dart';
 import 'package:dart_quill/src/core/selection.dart';
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/platform/dom.dart';
 import 'package:test/test.dart';
 
 import '../../support/quill_test_helpers.dart';
@@ -16,6 +21,30 @@ import '../../support/test_helpers.dart';
 const String _video = '<iframe src="#" class="ql-video" frameborder="0" '
     'allowfullscreen="true"></iframe>';
 
+class _MyBlot extends Block {
+  _MyBlot(super.domNode);
+
+  @override
+  String get blotName => 'my-blot';
+
+  @override
+  Map<String, dynamic> formats() => {
+        ...super.formats(),
+        'my-blot': true,
+      };
+
+  @override
+  _MyBlot clone() => _MyBlot(element.cloneNode(deep: false));
+
+  @override
+  void formatAt(int index, int length, String name, dynamic value) {
+    super.formatAt(index, length, name, value);
+    if (name == 'test-style' && prev != null) {
+      element.setAttribute('test-style', '$value');
+    }
+  }
+}
+
 void main() {
   group('Editor', () {
     group('insert', () {
@@ -28,7 +57,8 @@ void main() {
             ..insert('01!!23', {'bold': true})
             ..insert('\n'),
         );
-        expect(editor.scroll.element, EqualHTML('<p><strong>01!!23</strong></p>'));
+        expect(
+            editor.scroll.element, EqualHTML('<p><strong>01!!23</strong></p>'));
       });
 
       test('embed', () {
@@ -53,24 +83,21 @@ void main() {
         final editor = createEditor('<p>0</p><p><br></p><p>3</p>');
         editor.insertText(2, '!');
         expectDelta(editor.getDelta(), Delta()..insert('0\n!\n3\n'));
-        expect(editor.scroll.element,
-            EqualHTML('<p>0</p><p>!</p><p>3</p>'));
+        expect(editor.scroll.element, EqualHTML('<p>0</p><p>!</p><p>3</p>'));
       });
 
       test('end of document', () {
         final editor = createEditor('<p>Hello</p>');
         editor.insertText(6, 'World!');
         expectDelta(editor.getDelta(), Delta()..insert('Hello\nWorld!\n'));
-        expect(editor.scroll.element,
-            EqualHTML('<p>Hello</p><p>World!</p>'));
+        expect(editor.scroll.element, EqualHTML('<p>Hello</p><p>World!</p>'));
       });
 
       test('end of document with newline', () {
         final editor = createEditor('<p>Hello</p>');
         editor.insertText(6, 'World!\n');
         expectDelta(editor.getDelta(), Delta()..insert('Hello\nWorld!\n'));
-        expect(editor.scroll.element,
-            EqualHTML('<p>Hello</p><p>World!</p>'));
+        expect(editor.scroll.element, EqualHTML('<p>Hello</p><p>World!</p>'));
       });
 
       test('embed at end of document with newline', () {
@@ -350,8 +377,8 @@ void main() {
         editor.applyDelta(Delta()
           ..retain(2)
           ..insert('|', {'bold': true}));
-        expect(editor.scroll.element,
-            EqualHTML('<p>01<strong>|</strong>23</p>'));
+        expect(
+            editor.scroll.element, EqualHTML('<p>01<strong>|</strong>23</p>'));
       });
 
       test('format', () {
@@ -378,8 +405,8 @@ void main() {
         editor.applyDelta(Delta()
           ..retain(1)
           ..insert('|'));
-        expect(editor.scroll.element,
-            EqualHTML('<p><em>0</em>|<em>1</em></p>'));
+        expect(
+            editor.scroll.element, EqualHTML('<p><em>0</em>|<em>1</em></p>'));
       });
 
       test('insert at format boundary', () {
@@ -414,8 +441,8 @@ void main() {
         editor.applyDelta(Delta()
           ..retain(5)
           ..insert('5678'));
-        expect(editor.scroll.element,
-            EqualHTML('<p>0123</p><p>5678</p>$_video'));
+        expect(
+            editor.scroll.element, EqualHTML('<p>0123</p><p>5678</p>$_video'));
       });
 
       test('insert attributed text before block embed', () {
@@ -434,8 +461,8 @@ void main() {
         editor.applyDelta(Delta()
           ..retain(5)
           ..insert('5678\n'));
-        expect(editor.scroll.element,
-            EqualHTML('<p>0123</p><p>5678</p>$_video'));
+        expect(
+            editor.scroll.element, EqualHTML('<p>0123</p><p>5678</p>$_video'));
       });
 
       test('insert formatted lines before block embed', () {
@@ -522,7 +549,8 @@ void main() {
         );
       });
 
-      test('insert inline embed with delete before block embed using delete op first',
+      test(
+          'insert inline embed with delete before block embed using delete op first',
           () {
         final editor = createEditor('<p>0123</p>$_video');
         editor.applyDelta(Delta()
@@ -646,8 +674,7 @@ void main() {
         expectDelta(editor.getDelta(), old.compose(delta));
         expect(
           editor.scroll.element,
-          EqualHTML(
-              '<p><br></p><p>1a</p><p>2bb</p><p>3ccc</p><p>4dddd</p>'),
+          EqualHTML('<p><br></p><p>1a</p><p>2bb</p><p>3ccc</p><p>4dddd</p>'),
         );
       });
 
@@ -657,8 +684,7 @@ void main() {
           editor.applyDelta(Delta()
             ..retain(2)
             ..insert({'video': '#'}));
-          expect(editor.scroll.element,
-              EqualHTML('<p>01</p>$_video<p>23</p>'));
+          expect(editor.scroll.element, EqualHTML('<p>01</p>$_video<p>23</p>'));
         });
 
         group('insert and delete', () {
@@ -676,8 +702,8 @@ void main() {
               ..retain(1)
               ..insert({'video': '#'})
               ..delete(2));
-            expect(editor.scroll.element,
-                EqualHTML('<p>a</p>$_video<p><br></p>'));
+            expect(
+                editor.scroll.element, EqualHTML('<p>a</p>$_video<p><br></p>'));
           });
 
           test('insert after \\n', () {
@@ -686,8 +712,7 @@ void main() {
               ..retain(2)
               ..insert({'video': '#'})
               ..delete(2));
-            expect(
-                editor.scroll.element, EqualHTML('<p>a</p>$_video<p>a</p>'));
+            expect(editor.scroll.element, EqualHTML('<p>a</p>$_video<p>a</p>'));
           });
 
           test('insert after an inline embed', () {
@@ -710,8 +735,7 @@ void main() {
               ..retain(1)
               ..insert({'video': '#'})
               ..delete(2));
-            expect(editor.scroll.element,
-                EqualHTML('$_video$_video<p>c</p>'));
+            expect(editor.scroll.element, EqualHTML('$_video$_video<p>c</p>'));
           });
         });
 
@@ -783,8 +807,7 @@ void main() {
           ..insert('\n', {'header': 2}));
         expect(
           editor.scroll.element,
-          EqualHTML(
-              '<p>0123</p><h2>5678<img src="/assets/favicon.png"></h2>'),
+          EqualHTML('<p>0123</p><h2>5678<img src="/assets/favicon.png"></h2>'),
         );
       });
 
@@ -881,6 +904,39 @@ void main() {
             ..insert('12')
             ..insert('\n', {'list': 'bullet'}),
         );
+      });
+
+      test('insert before formatting', () {
+        final registry = registryWithFormats([]);
+        registry.register(RegistryEntry(
+          blotName: 'my-blot',
+          scope: Scope.BLOCK_BLOT,
+          tagNames: const ['DIV'],
+          classNames: const ['my-blot'],
+          create: ([dynamic value]) {
+            if (value is DomElement) return _MyBlot(value);
+            final node = testAdapter.document.createElement('div');
+            node.classes.add('my-blot');
+            return _MyBlot(node);
+          },
+        ));
+        final root = testAdapter.document.createElement('div');
+        testAdapter.document.body.append(root);
+        final editor = Editor(Scroll(registry, root, emitter: Emitter()));
+
+        editor.insertContents(
+          0,
+          Delta()
+            ..insert('\n')
+            ..insert('hi')
+            ..insert('\n', {
+              'my-blot': true,
+              'test-style': 'random',
+            }),
+        );
+
+        expect(
+            editor.scroll.element.innerHTML, contains('test-style="random"'));
       });
 
       group('prepend to block embed', () {
@@ -1153,8 +1209,8 @@ void main() {
         final editor = createEditor(
           '<h1><strong><em>0123</em></strong></h1><h2><u>5678</u></h2>',
         );
-        expect(editor.getFormat(2),
-            {'bold': true, 'italic': true, 'header': 1});
+        expect(
+            editor.getFormat(2), {'bold': true, 'italic': true, 'header': 1});
       });
 
       test('cursor with preformat', () {
@@ -1232,8 +1288,8 @@ void main() {
 
     group('getHTML', () {
       test('inline', () {
-        expect(createEditor('<blockquote>Test</blockquote>').getHTML(1, 2),
-            'es');
+        expect(
+            createEditor('<blockquote>Test</blockquote>').getHTML(1, 2), 'es');
         expect(createEditor('<blockquote>Test</blockquote>').getHTML(0, 4),
             'Test');
       });

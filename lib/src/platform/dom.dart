@@ -10,6 +10,17 @@ abstract class DomNode {
   static const int ELEMENT_NODE = 1;
   static const int TEXT_NODE = 3;
 
+  /// A stable object identifying the underlying node, usable as an [Expando]
+  /// key.
+  ///
+  /// An adapter that wraps a platform node hands out a NEW wrapper on every
+  /// DOM access — `element.parentNode` twice gives two objects for one node.
+  /// The wrappers compare equal, but `Expando` is keyed by *identity*, so
+  /// storing anything against a wrapper silently loses it on the next lookup.
+  /// Adapters return the wrapped node here; the fake DOM, whose wrappers are
+  /// the nodes, returns itself.
+  Object get identityKey;
+
   String get nodeName;
   int get nodeType;
   String? get textContent;
@@ -121,6 +132,9 @@ abstract class DomText extends DomNode {
 
 /// Abstraction for documents so code can remain agnostic to the concrete DOM.
 abstract class DomDocument {
+  /// See [DomNode.identityKey] — the document is wrapped per access too.
+  Object get identityKey;
+
   DomElement createElement(String tag);
   DomText createTextNode(String value);
   void addEventListener(String type, DomEventListener listener);

@@ -231,6 +231,21 @@ class Editor {
       ..retain(length, {name: value}));
   }
 
+  /// Strongly typed Dart counterpart of Quill's object overload for
+  /// `formatText(index, length, formats)`.
+  Delta formatTextFormats(
+    int index,
+    int length,
+    Map<String, dynamic> formats,
+  ) {
+    formats.forEach((name, value) {
+      scroll.formatAt(index, length, name, value);
+    });
+    return update(Delta()
+      ..retain(index)
+      ..retain(length, Map<String, dynamic>.from(formats)));
+  }
+
   Delta insertEmbed(int index, String type, dynamic data) {
     scroll.insertAt(index, type, data);
     return update(Delta()
@@ -297,7 +312,6 @@ class Editor {
     }
     return tempDelta;
   }
-
 
   Delta getContents() {
     return delta;

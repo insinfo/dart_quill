@@ -115,7 +115,7 @@ void main() {
           'Limpar formatação');
     });
 
-    test('single group', () {
+    test('single level', () {
       final container = _createContainer();
       addControls(
           container,
@@ -123,18 +123,15 @@ void main() {
             ['bold', 'italic'],
           ]));
 
-      expectHTML(
-        container,
-        '''
+      expectHTML(container, '''
         <span class="ql-formats">
           <button class="ql-bold" type="button" aria-label="bold" aria-pressed="false"></button>
           <button class="ql-italic" type="button" aria-label="italic" aria-pressed="false"></button>
         </span>
-        ''',
-      ignoreAttrs: const ['title']);
+        ''', ignoreAttrs: const ['title']);
     });
 
-    test('multiple groups', () {
+    test('nested group', () {
       final container = _createContainer();
       addControls(
           container,
@@ -143,9 +140,7 @@ void main() {
             ['underline', 'strike'],
           ]));
 
-      expectHTML(
-        container,
-        '''
+      expectHTML(container, '''
         <span class="ql-formats">
           <button class="ql-bold" type="button" aria-label="bold" aria-pressed="false"></button>
           <button class="ql-italic" type="button" aria-label="italic" aria-pressed="false"></button>
@@ -154,11 +149,10 @@ void main() {
           <button class="ql-underline" type="button" aria-label="underline" aria-pressed="false"></button>
           <button class="ql-strike" type="button" aria-label="strike" aria-pressed="false"></button>
         </span>
-        ''',
-      ignoreAttrs: const ['title']);
+        ''', ignoreAttrs: const ['title']);
     });
 
-    test('button with value', () {
+    test('button value', () {
       final container = _createContainer();
       addControls(
           container,
@@ -169,15 +163,12 @@ void main() {
             ],
           ]));
 
-      expectHTML(
-        container,
-        '''
+      expectHTML(container, '''
         <span class="ql-formats">
           <button class="ql-bold" type="button" aria-label="bold" aria-pressed="false"></button>
           <button class="ql-header" type="button" value="2" aria-label="header: 2" aria-pressed="false"></button>
         </span>
-        ''',
-      ignoreAttrs: const ['title']);
+        ''', ignoreAttrs: const ['title']);
     });
 
     test('select control', () {
@@ -192,9 +183,7 @@ void main() {
             ],
           ]));
 
-      expectHTML(
-        container,
-        '''
+      expectHTML(container, '''
         <span class="ql-formats">
           <select class="ql-size" aria-label="size">
             <option value="10px"></option>
@@ -203,8 +192,7 @@ void main() {
             <option value="32px"></option>
           </select>
         </span>
-        ''',
-      ignoreAttrs: const ['title']);
+        ''', ignoreAttrs: const ['title']);
     });
 
     test('complex layout', () {
@@ -231,9 +219,7 @@ void main() {
             ['link', 'image'],
           ]));
 
-      expectHTML(
-        container,
-        '''
+      expectHTML(container, '''
         <span class="ql-formats">
           <select class="ql-font" aria-label="font">
             <option selected="selected"></option>
@@ -267,8 +253,7 @@ void main() {
           <button class="ql-link" type="button" aria-label="link" aria-pressed="false"></button>
           <button class="ql-image" type="button" aria-label="image" aria-pressed="false"></button>
         </span>
-        ''',
-      ignoreAttrs: const ['title']);
+        ''', ignoreAttrs: const ['title']);
     });
   });
 
@@ -428,7 +413,7 @@ void main() {
       expect(defaultButton.getAttribute('aria-pressed'), equals('false'));
     });
 
-    test('toolbar updates after formatting', () {
+    test('update on format', () {
       final fixture = _createToolbarFixture();
       final boldButton = _requireElement(
         _getButtonByClass(fixture.container, 'ql-bold'),

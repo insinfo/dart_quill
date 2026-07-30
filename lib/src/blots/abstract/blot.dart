@@ -1167,13 +1167,10 @@ abstract class LeafBlot extends Blot {
 
   @override
   Blot? split(int index, {bool force = false}) {
-    if (!force) {
-      if (index <= 0) return this;
-      if (index >= length()) return next;
-    }
-    final clone = this.clone();
-    parent?.insertBefore(clone, next);
-    return clone;
+    // Parity parchment ShadowBlot.split: non-text leaves are indivisible.
+    // `force` is deliberately ignored. Cloning an embed for split(0, true)
+    // duplicated every trailing image when a newline split its parent block.
+    return index <= 0 ? this : next;
   }
 
   @override

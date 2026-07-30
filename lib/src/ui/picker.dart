@@ -168,8 +168,10 @@ class Picker {
         item.setAttribute('data-label', labelText);
       }
 
-      item.addEventListener('mousedown', (event) {
-        event.preventDefault();
+      // Parity picker.ts:63-65 — selection is a click interaction. Using
+      // mousedown made keyboard-/assistive-generated clicks and `.click()`
+      // consumers unable to select an item.
+      item.addEventListener('click', (event) {
         selectItem(item);
       });
       item.addEventListener('keydown', (event) {

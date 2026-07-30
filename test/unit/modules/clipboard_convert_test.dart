@@ -454,7 +454,7 @@ void main() {
       );
     });
 
-    test('pre with newline node', () {
+    test(r'pre with \n node', () {
       const html = '<pre><span> 01 </span>\n<span> 23 </span></pre>';
       final delta = _clipboard().convert(html: html);
       expectDelta(delta, Delta()..insert(' 01 \n 23 \n', {'code-block': true}));

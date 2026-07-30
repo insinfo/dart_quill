@@ -83,6 +83,11 @@ class Cursor extends EmbedBlot {
     if (target != null) {
       _savedLength = kContents.length;
       target.optimize();
+      // ParentBlot.optimize in this port walks descendants recursively,
+      // unlike parchment's marked-blot traversal. Cursor.optimize may have
+      // temporarily changed savedLength while escaping a Link; restore the
+      // one-character view required by the formatAt pass below.
+      _savedLength = kContents.length;
       target.formatAt(index, kContents.length, name, value);
       _savedLength = 0;
     }
@@ -115,8 +120,7 @@ class Cursor extends EmbedBlot {
     // cursor span (cursor.ts:80-89).
     final parentNode = element.parentNode;
     if (parentNode is DomElement) {
-      while (element.lastChild != null &&
-          element.lastChild != _textNode) {
+      while (element.lastChild != null && element.lastChild != _textNode) {
         parentNode.insertBefore(element.lastChild!, element);
       }
     }
@@ -190,8 +194,7 @@ class Cursor extends EmbedBlot {
   /// Parity cursor.ts:153-164.
   void update(List<DomMutationRecord> mutations, Map<String, dynamic> context) {
     final touched = mutations.any((mutation) =>
-        mutation.type == 'characterData' &&
-        mutation.target == _textNode);
+        mutation.type == 'characterData' && mutation.target == _textNode);
     if (touched) {
       final range = restore();
       if (range != null) {

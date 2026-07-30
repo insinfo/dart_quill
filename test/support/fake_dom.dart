@@ -144,6 +144,9 @@ class FakeDomAdapter implements DomAdapter {
 }
 
 class FakeDomDocument implements DomDocument {
+  @override
+  Object get identityKey => this;
+
   FakeDomDocument() {
     _documentElement = FakeDomElement('HTML', document: this);
     _body = FakeDomElement('BODY', document: this);
@@ -322,7 +325,8 @@ class _SelectorMatcher {
             (rawValue.startsWith("'") && rawValue.endsWith("'")))) {
       rawValue = rawValue.substring(1, rawValue.length - 1);
     }
-    value = rawValue;
+    // CSS string escapes are syntax, not part of the attribute value.
+    value = rawValue.replaceAll(r'\"', '"').replaceAll(r"\'", "'");
   }
 
   bool matches(FakeDomElement element) {
@@ -358,6 +362,10 @@ class _SelectorMatcher {
 }
 
 class FakeDomNode implements DomNode {
+  /// The fake DOM hands out the same object for a node, so it is its own key.
+  @override
+  Object get identityKey => this;
+
   FakeDomNode([String? tagName])
       : _tagName = tagName,
         parentNode = null;
@@ -677,21 +685,22 @@ class FakeDomElement extends FakeDomNode implements DomElement {
 
   @override
   DomElement? querySelector(String selector) {
-    // Simple implementation for testing
-    if (selector.startsWith('.')) {
-      final className = selector.substring(1);
-      for (final child in internalChildren) {
-        if (child is FakeDomElement && child.classes.contains(className)) {
-          return child;
+    final matcher = _SelectorMatcher(selector);
+
+    DomElement? find(FakeDomNode node) {
+      if (node is FakeDomElement) {
+        if (matcher.matches(node)) return node;
+        for (final child in node.internalChildren) {
+          final result = find(child);
+          if (result != null) return result;
         }
       }
-    } else {
-      final tag = selector.toUpperCase();
-      for (final child in internalChildren) {
-        if (child is FakeDomElement && child.tagName == tag) {
-          return child;
-        }
-      }
+      return null;
+    }
+
+    for (final child in internalChildren) {
+      final result = find(child);
+      if (result != null) return result;
     }
     return null;
   }

@@ -106,7 +106,7 @@ void main() {
         expect(getLastChangeIndex(quill.scroll, delta), equals(5));
       });
 
-      test('multiple newline inserts', () {
+      test('mutliple newline inserts', () {
         final delta = Delta()
           ..retain(4)
           ..insert('ab\n\n');

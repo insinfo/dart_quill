@@ -1,3 +1,4 @@
+import 'package:dart_quill/src/blots/abstract/blot.dart';
 import 'package:dart_quill/src/core/emitter.dart';
 import 'package:dart_quill/src/core/quill.dart';
 import 'package:dart_quill/src/core/selection.dart';
@@ -55,6 +56,60 @@ void main() {
   });
 
   group('Quill', () {
+    test('imports', () {
+      for (final entry in Quill.registeredDefinitions.entries) {
+        expect(entry.value, isNotNull, reason: entry.key);
+        expect(Quill.importDefinition(entry.key), same(entry.value));
+      }
+    });
+
+    group('register', () {
+      RegistryEntry entry(String name) => RegistryEntry(
+            blotName: name,
+            scope: Scope.INLINE_BLOT,
+            create: ([dynamic value]) =>
+                throw UnsupportedError('registration-only test blot'),
+          );
+
+      test('register(path, target)', () {
+        dynamic counterFactory(Quill quill, dynamic options) => Object();
+        Quill.register('modules/upstream-counter', counterFactory);
+
+        expect(
+          Quill.importDefinition('modules/upstream-counter'),
+          same(counterFactory),
+        );
+      });
+
+      test('register(formats)', () {
+        final counter = entry('upstream-my-counter');
+        Quill.register(counter);
+
+        expect(
+          Quill.importDefinition('formats/upstream-my-counter'),
+          same(counter),
+        );
+      });
+
+      test('register(targets)', () {
+        final blot = entry('upstream-a-blot');
+        dynamic moduleFactory(Quill quill, dynamic options) => Object();
+        Quill.register({
+          'formats/upstream-a-blot': blot,
+          'modules/upstream-a-module': moduleFactory,
+        });
+
+        expect(
+          Quill.importDefinition('formats/upstream-a-blot'),
+          same(blot),
+        );
+        expect(
+          Quill.importDefinition('modules/upstream-a-module'),
+          same(moduleFactory),
+        );
+      });
+    });
+
     group('construction', () {
       test('empty', () {
         final quill = createEditorQuill('');
@@ -69,8 +124,7 @@ void main() {
       });
 
       test('newlines', () {
-        final quill =
-            createEditorQuill('<p><br></p><p><br></p><p><br></p>');
+        final quill = createEditorQuill('<p><br></p><p><br></p><p><br></p>');
         expectDelta(quill.getContents(), Delta()..insert('\n\n\n'));
         expect(quill.root.innerHTML, '<p><br></p><p><br></p><p><br></p>');
       });
@@ -138,8 +192,21 @@ void main() {
         );
       });
 
-      test('formatText()', () {
+      test('single format', () {
         quill.formatText(3, 2, 'bold', true);
+        expect(quill.root.innerHTML,
+            '<p>012<strong>3<em>4</em></strong><em>5</em>67</p>');
+        changes.expectLast(
+          Delta()
+            ..retain(3)
+            ..retain(2, {'bold': true}),
+          oldDelta,
+          EmitterSource.API,
+        );
+      });
+
+      test('format object', () {
+        quill.formatTextFormats(3, 2, {'bold': true});
         expect(quill.root.innerHTML,
             '<p>012<strong>3<em>4</em></strong><em>5</em>67</p>');
         changes.expectLast(
@@ -217,6 +284,17 @@ void main() {
         expect(quill.root.innerHTML, '<p>0123<em>4</em>|<em>5</em>67</p>');
         changes.expectLast(delta, oldDelta, EmitterSource.API);
       });
+
+      test('updateContents() ops array', () {
+        final operations = <Operation>[
+          Operation.retain(5),
+          Operation.insert('|'),
+        ];
+        final delta = Delta.fromOperations(operations);
+        quill.updateContents(delta);
+        expect(quill.root.innerHTML, '<p>0123<em>4</em>|<em>5</em>67</p>');
+        changes.expectLast(delta, oldDelta, EmitterSource.API);
+      });
     });
 
     group('events', () {
@@ -260,8 +338,7 @@ void main() {
         final delta = Delta()..insert('Hello\n\nWorld!\n');
         quill.setContents(delta);
         expectDelta(quill.getContents(), delta);
-        expect(quill.root.innerHTML,
-            '<p>Hello</p><p><br></p><p>World!</p>');
+        expect(quill.root.innerHTML, '<p>Hello</p><p><br></p><p>World!</p>');
       });
 
       test('basic formats', () {
@@ -281,6 +358,17 @@ void main() {
         );
       });
 
+      test('array of operations', () {
+        final quill = createEditorQuill('');
+        final delta = Delta.fromOperations([
+          Operation.insert('test'),
+          Operation.insert('123', {'bold': true}),
+          Operation.insert('\n'),
+        ]);
+        quill.setContents(delta);
+        expectDelta(quill.getContents(), delta);
+      });
+
       test('no trailing newline', () {
         final quill = createEditorQuill('<h1>Welcome</h1>');
         quill.setContents(Delta()..insert('0123'));
@@ -288,8 +376,8 @@ void main() {
       });
 
       test('inline formatting', () {
-        final quill = createEditorQuill(
-            '<p><strong>Bold</strong></p><p>Not bold</p>');
+        final quill =
+            createEditorQuill('<p><strong>Bold</strong></p><p>Not bold</p>');
         final contents = quill.getContents();
         quill.setContents(contents);
         expectDelta(quill.getContents(), contents);
@@ -318,6 +406,12 @@ void main() {
         final quill = createEditorQuill('<h1>Welcome</h1>');
         expect(quill.getText(2, 3), 'lco');
       });
+
+      test('works with range', () {
+        final quill = createEditorQuill('<h1>Welcome</h1>');
+        const range = Range(2, 3);
+        expect(quill.getText(range.index, range.length), 'lco');
+      });
     });
 
     group('getSemanticHTML()', () {
@@ -334,6 +428,12 @@ void main() {
       test('works when provide index and length', () {
         final quill = createEditorQuill('<h1>Welcome</h1>');
         expect(quill.getSemanticHTML(2, 3), 'lco');
+      });
+
+      test('works with range', () {
+        final quill = createEditorQuill('<h1>Welcome</h1>');
+        const range = Range(2, 3);
+        expect(quill.getSemanticHTML(range.index, range.length), 'lco');
       });
     });
 
@@ -378,8 +478,8 @@ void main() {
     group('placeholder', () {
       Quill setup() => createEditorQuill(
             '<p></p>',
-            options: ThemeOptions(
-                placeholder: 'a great day to be a placeholder'),
+            options:
+                ThemeOptions(placeholder: 'a great day to be a placeholder'),
           );
 
       test('blank editor', () {
