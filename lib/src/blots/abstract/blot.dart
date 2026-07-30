@@ -594,28 +594,20 @@ abstract class ParentBlot extends Blot {
     });
   }
 
+  /// Parity parent.ts:197-206 — plain `children.forEachAt`.
+  ///
+  /// The hand-rolled loop this replaces iterated `children` DIRECTLY while the
+  /// callbacks restructured it (`Inline.formatAt` isolates, which splits the
+  /// blot and inserts siblings), so formatting a range that crosses an inline
+  /// wrapper crashed with "Concurrent modification during iteration".
+  /// `forEachAt` walks a snapshot and captures each child's successor before
+  /// handing it over, exactly like parchment's linked list.
   @override
   void formatAt(int index, int length, String name, dynamic value) {
     if (length <= 0) return;
-
-    var offset = 0;
-    var remaining = length;
-    for (final child in children) {
-      final childLength = child.length();
-      final end = offset + childLength;
-      if (index < end) {
-        final localIndex = index - offset;
-        final localLength =
-            math.min(remaining, childLength - localIndex).toInt();
-        child.formatAt(localIndex, localLength, name, value);
-        remaining -= localLength;
-        index = end;
-        if (remaining <= 0) {
-          break;
-        }
-      }
-      offset = end;
-    }
+    forEachAt(index, length, (child, offset, childLength) {
+      child.formatAt(offset, childLength, name, value);
+    });
   }
 
   void insertBefore(Blot blot, Blot? ref) {

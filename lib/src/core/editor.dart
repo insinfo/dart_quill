@@ -5,21 +5,45 @@ import '../blots/scroll.dart';
 import '../blots/text.dart';
 import '../platform/dom.dart';
 
+import 'package:collection/collection.dart';
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
 
 class Editor {
   final Scroll scroll;
   Delta delta = Delta();
 
-  Editor(this.scroll);
+  /// Parity editor.ts:23-26 — the snapshot starts as the document's delta, not
+  /// as an empty one. Without it a freshly built editor reported
+  /// `getContents() == []` until the first edit, so an untouched empty document
+  /// was missing even its mandatory `\n`.
+  Editor(this.scroll) {
+    delta = getDelta();
+  }
 
-  /// Applies [delta] to the document (parity editor.ts:28-122).
+  /// Parity `Editor.update` (editor.ts:273-317), minus the characterData
+  /// fast path (which needs MutationRecords — see G12).
   ///
-  /// Kept as the single write path so `Quill.setContents`/`updateContents`
-  /// behave like upstream. The name stays `update` for the existing call
-  /// sites; [applyDelta] is the faithful implementation.
-  void update(Delta delta, String source) {
-    applyDelta(delta);
+  /// This is the reconcile step every mutator ends with, and it is what makes
+  /// the emitted change delta describe **what actually happened** instead of
+  /// what was asked for. Two cases the naive delta gets wrong:
+  ///
+  /// * `formatLine(1, 1, header)` is asked as `retain(1).retain(1, header)`,
+  ///   but the format lands on the line's NEWLINE — upstream emits
+  ///   `retain(8).retain(1, header)`;
+  /// * `insertEmbed` inside an `<em>` inherits `italic`, which the requested
+  ///   delta does not mention.
+  ///
+  /// Both come out of the diff below, which is why upstream recomputes the
+  /// change whenever `oldDelta.compose(change)` disagrees with the document.
+  Delta update(Delta? change) {
+    final oldDelta = delta;
+    delta = getDelta();
+    if (change == null ||
+        !const DeepCollectionEquality()
+            .equals(oldDelta.compose(change).toJson(), delta.toJson())) {
+      return oldDelta.diff(delta);
+    }
+    return change;
   }
 
   /// Parity `Editor.applyDelta` (editor.ts:28-122).
@@ -138,8 +162,8 @@ class Editor {
 
     scroll.batchEnd();
     scroll.optimize([], {});
-    _update();
-    return normalized;
+    // Parity editor.ts:122 — the reconcile step owns the returned change.
+    return update(normalized);
   }
 
   /// Parity `Op.length(op)`.
@@ -175,9 +199,12 @@ class Editor {
   Blot? _blockEmbedAt(int index) =>
       scroll.descendant((blot) => blot is BlockEmbed, index).key;
 
-  void deleteText(int index, int length) {
+  /// Parity editor.ts:125-128.
+  Delta deleteText(int index, int length) {
     scroll.deleteAt(index, length);
-    _update();
+    return update(Delta()
+      ..retain(index)
+      ..delete(length));
   }
 
   /// Mirrors editor.ts `formatLine`: applies [formats] directly to every
@@ -190,28 +217,25 @@ class Editor {
       }
     });
     scroll.optimize([], {});
-    _update();
     final change = Delta()..retain(index);
     if (length > 0) {
       change.retain(length, Map<String, dynamic>.from(formats));
     }
-    return change;
+    return update(change);
   }
 
   Delta formatText(int index, int length, String name, dynamic value) {
     scroll.formatAt(index, length, name, value);
-    _update();
-    return Delta()
+    return update(Delta()
       ..retain(index)
-      ..retain(length, {name: value});
+      ..retain(length, {name: value}));
   }
 
   Delta insertEmbed(int index, String type, dynamic data) {
     scroll.insertAt(index, type, data);
-    _update();
-    return Delta()
+    return update(Delta()
       ..retain(index)
-      ..insert({type: data});
+      ..insert({type: data}));
   }
 
   /// Parity editor.ts `insertContents`: inserts a full delta (multiline,
@@ -220,8 +244,7 @@ class Editor {
   Delta insertContents(int index, Delta contents) {
     final normalized = _normalizeDelta(contents);
     scroll.insertContents(index, normalized);
-    _update();
-    return (Delta()..retain(index)).concat(normalized);
+    return update((Delta()..retain(index)).concat(normalized));
   }
 
   /// Parity editor.ts `normalizeDelta` — CRLF→LF on every string insert.
@@ -246,10 +269,11 @@ class Editor {
         scroll.formatAt(index, text.length, name, value);
       });
     }
-    _update();
-    return Delta()
+    // Parity editor.ts:240-242. An EMPTY format map must not reach the delta
+    // as `attributes: {}` — the change would not compare equal to upstream's.
+    return update(Delta()
       ..retain(index)
-      ..insert(text, formats);
+      ..insert(text, (formats == null || formats.isEmpty) ? null : formats));
   }
 
   /// Parity `Editor.getDelta` (editor.ts:162-166) — the document delta is the
@@ -274,9 +298,6 @@ class Editor {
     return tempDelta;
   }
 
-  void _update() {
-    delta = getDelta();
-  }
 
   Delta getContents() {
     return delta;
@@ -289,11 +310,7 @@ class Editor {
   /// Needed whenever the tree is mutated outside the delta pipeline (native
   /// typing absorbed by `Scroll.update`, the Syntax module's `formatAt` pass);
   /// without it `getContents()` keeps serving a stale snapshot.
-  Delta syncFromDocument() {
-    final oldDelta = delta;
-    _update();
-    return oldDelta.diff(delta);
-  }
+  Delta syncFromDocument() => update(null);
 
   /// Parity editor.ts:158-160.
   Delta getContentsRange(int index, int length) =>

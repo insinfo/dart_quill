@@ -1,7 +1,6 @@
 import '../platform/dom.dart';
 import '../platform/platform.dart';
 import 'abstract/blot.dart';
-import 'inline.dart';
 
 class TextBlot extends LeafBlot {
   static const String kBlotName = 'text';
@@ -90,161 +89,12 @@ class TextBlot extends LeafBlot {
     textNode.data = data.replaceRange(index, index + length, '');
   }
 
-  @override
-  void formatAt(int index, int length, String name, dynamic value) {
-    if (length <= 0) {
-      return;
-    }
-
-    final inlineAttribute =
-        scroll.queryAttributor(name, Scope.INLINE_ATTRIBUTE);
-    if (inlineAttribute != null) {
-      final target = _isolate(index, length);
-      if (value == null || value == false) {
-        Blot? current = target.parent;
-        while (current is InlineBlot) {
-          if (current is Inline && current.formats().containsKey(name)) {
-            current.format(name, false);
-            return;
-          }
-          current = current.parent;
-        }
-        return;
-      }
-
-      final parent = target.parent;
-      if (parent is Inline && parent.length() == target.length()) {
-        parent.format(name, value);
-        return;
-      }
-      if (parent is! ParentBlot) {
-        return;
-      }
-      final wrapper = scroll.create(Inline.kBlotName) as Inline;
-      parent.insertBefore(wrapper, target);
-      wrapper.appendChild(target);
-      wrapper.format(name, value);
-      return;
-    }
-
-    final inlineEntry = scroll.query(name, Scope.INLINE_BLOT);
-    if (inlineEntry == null) {
-      super.formatAt(index, length, name, value);
-      return;
-    }
-
-    final target = _isolate(index, length);
-    if (value == null || value == false) {
-      _removeInlineFormat(target, name);
-      return;
-    }
-
-    if (_hasAncestorWithFormat(target, name)) {
-      return;
-    }
-
-    final parentToWrap = _highestWrapTarget(target, name);
-    final parent = parentToWrap.parent;
-    if (parent is! ParentBlot) {
-      return;
-    }
-
-    final wrapper = scroll.create(name, value) as ParentBlot;
-    parent.insertBefore(wrapper, parentToWrap);
-    wrapper.appendChild(parentToWrap);
-    wrapper.optimize();
-  }
-
-  TextBlot _isolate(int index, int length) {
-    final endIndex = index + length;
-    split(endIndex);
-    if (index > 0) {
-      final middle = split(index);
-      if (middle is TextBlot) {
-        return middle;
-      }
-    }
-    return this;
-  }
-
-  bool _hasAncestorWithFormat(Blot blot, String name) {
-    Blot? current = blot.parent;
-    while (current is InlineBlot) {
-      if (current.blotName == name) {
-        return true;
-      }
-      current = current.parent;
-    }
-    return false;
-  }
-
-  Blot _highestWrapTarget(Blot blot, String name) {
-    Blot current = blot;
-    InlineBlot? parentInline =
-        current.parent is InlineBlot ? current.parent as InlineBlot : null;
-    while (parentInline != null) {
-      if (parentInline.blotName == name) {
-        return parentInline;
-      }
-      final comparison = InlineBlot.compare(parentInline.blotName, name);
-      if (comparison > 0) {
-        break;
-      }
-      current = parentInline;
-      parentInline = parentInline.parent is InlineBlot
-          ? parentInline.parent as InlineBlot
-          : null;
-    }
-    return current;
-  }
-
-  void _removeInlineFormat(Blot blot, String name) {
-    Blot? current = blot.parent;
-    while (current is InlineBlot) {
-      if (current.blotName == name) {
-        final inline = current;
-        final parent = inline.parent;
-        if (parent is! ParentBlot) {
-          return;
-        }
-
-        final children = List<Blot>.from(inline.children);
-        final index = children.indexOf(blot);
-        if (index == -1) {
-          return;
-        }
-
-        final inlineNext = inline.next;
-        final afterChildren = children.sublist(index + 1);
-
-        // Lift the isolated blot out of its inline wrapper while keeping
-        // leading and trailing content formatted.
-
-        for (final child in afterChildren) {
-          inline.removeChild(child);
-        }
-
-        ParentBlot? suffix;
-        if (afterChildren.isNotEmpty) {
-          suffix = inline.scroll.create(inline.blotName) as ParentBlot;
-          parent.insertBefore(suffix, inlineNext);
-          for (final child in afterChildren) {
-            suffix.appendChild(child);
-          }
-        }
-
-        inline.removeChild(blot);
-        final reference = suffix ?? inlineNext;
-        parent.insertBefore(blot, reference);
-
-        if (inline.children.isEmpty) {
-          inline.remove();
-        }
-        return;
-      }
-      current = current.parent;
-    }
-  }
+  // Parity: parchment's TextBlot has NO `formatAt` — the base
+  // `ShadowBlot.formatAt` (isolate + wrap / attribute parent) plus
+  // `Inline.formatAt` (which isolates the WRAPPER when the new format belongs
+  // outside it) do the whole job. The bespoke version that lived here climbed
+  // to the outermost inline wrapper and wrapped that, so formatting one
+  // character inside `<em>45</em>` painted both.
 
   @override
   Blot? split(int index, {bool force = false}) {

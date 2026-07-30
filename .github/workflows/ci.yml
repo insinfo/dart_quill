@@ -1,0 +1,168 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Weekly, only for the job that compares the goldens against the real
+    # upstream Quill — that one needs npm and is not on the PR path.
+    - cron: '0 6 * * 1'
+
+# A new push to the same branch cancels the previous run: the browser and E2E
+# jobs are expensive and there is no value in finishing a superseded one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Static analysis, the VM suite and the code generators.
+  # Fast and hermetic: no browser, no network beyond `pub get`.
+  # ---------------------------------------------------------------------------
+  analyze-and-vm:
+    name: analyze + VM tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Cache pub
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.yaml') }}
+          restore-keys: pub-${{ runner.os }}-
+
+      - run: dart pub get
+
+      - name: Analyze
+        run: dart analyze
+
+      - name: VM tests (unit + goldens)
+        run: dart test test/unit test/goldens
+
+      # The icon files are generated from the SVGs in lib/assets/icons; `--check`
+      # fails when someone edited them by hand or forgot to re-run the generator.
+      - name: Generated icons are up to date
+        run: dart run tool/gen_icons.dart --check
+
+  # ---------------------------------------------------------------------------
+  # Real-browser tests (dart test -p chrome).
+  # Serial on purpose: browser suites are heavy, and running them concurrently
+  # is what makes Chrome disconnect mid-run ("browser has disconnected", which
+  # surfaces as a cascade of failures with no assertion behind them).
+  # ---------------------------------------------------------------------------
+  browser:
+    name: browser tests (Chrome)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+
+      - name: Cache pub
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.yaml') }}
+          restore-keys: pub-${{ runner.os }}-
+
+      - run: dart pub get
+
+      - name: Browser tests
+        env:
+          CHROME_EXECUTABLE: ${{ steps.setup-chrome.outputs.chrome-path }}
+        run: dart test test/browser -p chrome -j 1
+
+  # ---------------------------------------------------------------------------
+  # End-to-end: builds the demo with webdev and drives a real Chrome through
+  # Puppeteer with real typing, clicking and dragging.
+  # ---------------------------------------------------------------------------
+  e2e:
+    name: E2E (Puppeteer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Cache pub
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.yaml') }}
+          restore-keys: pub-${{ runner.os }}-
+
+      # Puppeteer downloads its own Chromium on first launch; caching it keeps
+      # later runs from re-downloading ~150 MB.
+      - name: Cache Puppeteer Chromium
+        uses: actions/cache@v4
+        with:
+          path: .local-chromium
+          key: puppeteer-chromium-${{ runner.os }}
+
+      - run: dart pub get
+
+      # Built once here, into the same directory the harness serves
+      # (test/e2e/support/e2e_app.dart), so a build failure is reported as a
+      # build failure instead of an opaque test timeout. The harness still
+      # builds on demand, guarded by a file lock.
+      - name: Build the demo
+        run: dart run webdev build --no-release --output web:build/e2e -- --delete-conflicting-outputs
+
+      - name: E2E tests
+        run: dart test test/e2e -j 1
+
+      - name: Upload the built demo on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-build
+          path: build/e2e
+          retention-days: 5
+
+  # ---------------------------------------------------------------------------
+  # Delta compatibility against the REAL Quill 2.0.3 (and the table-better
+  # plugin): regenerates the goldens from upstream in a headless Chrome and
+  # fails if they drifted. Needs npm, so it is kept out of the PR path and runs
+  # on demand plus weekly.
+  # ---------------------------------------------------------------------------
+  goldens-vs-upstream:
+    name: goldens vs upstream Quill
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: dart pub get
+
+      - name: Install Quill 2.0.3
+        run: npm install --no-save quill@2.0.3
+
+      - name: Goldens are still identical to upstream
+        run: dart run tool/gen_goldens.dart --check --quill node_modules/quill/dist

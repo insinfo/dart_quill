@@ -370,46 +370,45 @@ class Quill {
     return contents.getPlainText(index, effectiveLength);
   }
 
-  void setContents(Delta delta, {String source = EmitterSource.API}) {
-    final before = getContents();
-    final currentLength = scroll.length();
-    var change = Delta();
-    if (currentLength > 0) {
-      final deleteDelta = Delta()..delete(currentLength);
-      editor.update(deleteDelta, source);
-      change = change.concat(deleteDelta);
-    }
-    if (delta.operations.isNotEmpty) {
-      editor.update(delta, source);
-      change = change.concat(delta);
-    }
-    // Applying a delta that ends in '\n' onto the mandatory empty document
-    // leaves an extra trailing line; remove it (quill.ts setContents).
-    final newLength = scroll.length();
-    if (newLength > 1) {
-      final trailingDelete = Delta()
-        ..retain(newLength - 1)
+  /// Parity quill.ts:702-741.
+  ///
+  /// The previous version emitted TEXT_CHANGE/EDITOR_CHANGE by hand instead of
+  /// going through [modify], so it ignored `readOnly` and emitted even for
+  /// `SILENT`; and it dropped the trailing line whenever the document ended up
+  /// longer than one character, where upstream only does it when the APPLIED
+  /// delta itself ends in a newline.
+  Delta setContents(Delta delta, {String source = EmitterSource.API}) {
+    return modify(() {
+      // Parity quill.ts:706-717, step by step: wipe the document, insert the
+      // contents through `insertContents` (NOT applyDelta), then drop the
+      // trailing newline the empty-editor initialization leaves behind.
+      final length = getLength();
+      final delete1 = Delta()..delete(length);
+      editor.deleteText(0, length);
+      final applied = editor.insertContents(0, delta);
+      final tailIndex = getLength() - 1;
+      final delete2 = Delta()
+        ..retain(tailIndex)
         ..delete(1);
-      editor.update(trailingDelete, source);
-      change = change.concat(trailingDelete);
-    }
-    if (change.operations.isEmpty) return;
-    emitter.emit(EmitterEvents.TEXT_CHANGE, change, before, source);
-    emitter.emit(
-      EmitterEvents.EDITOR_CHANGE,
-      EmitterEvents.TEXT_CHANGE,
-      change,
-      before,
-      source,
-    );
+      editor.deleteText(tailIndex, 1);
+      return delete1.compose(applied).compose(delete2);
+    }, source: source);
   }
 
+  /// Parity quill.ts:743-746.
+  Delta setText(String text, {String source = EmitterSource.API}) {
+    return setContents(Delta()..insert(text), source: source);
+  }
+
+  /// Parity quill.ts:961-968 — the emitted change is what `applyDelta`
+  /// reconciled, not the delta that was handed in.
   Delta updateContents(Delta delta, {String source = EmitterSource.API}) {
     if (delta.operations.isEmpty) return Delta();
-    return modify(() {
-      editor.update(delta, source);
-      return delta;
-    }, source: source, indexFromRange: true);
+    return modify(
+      () => editor.applyDelta(delta),
+      source: source,
+      indexFromRange: true,
+    );
   }
 
   MapEntry<Blot?, int> getLine(int index) {

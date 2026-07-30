@@ -110,6 +110,24 @@ abstract class InlineBlot extends ParentBlot {
 
   @override
   void formatAt(int index, int length, String name, dynamic value) {
+    // Parity quill inline.ts:36-48 FIRST: when the requested format belongs
+    // OUTSIDE this one in the wrapper order, this blot isolates ITSELF and the
+    // isolated half gets wrapped — `<em>45</em>` formatted bold over one
+    // character becomes `<strong><em>4</em></strong><em>5</em>`.
+    //
+    // The port did not have this branch; `TextBlot.formatAt` compensated with
+    // a bespoke `_highestWrapTarget` that climbed to the outermost inline
+    // wrapper and wrapped THAT, so the format leaked over the whole `<em>`.
+    if (isAttached &&
+        InlineBlot.compare(blotName, name) < 0 &&
+        scroll.query(name, Scope.BLOT) != null) {
+      final blot = isolate(index, length);
+      final isTruthy = value != null && value != false && value != '';
+      if (isTruthy) {
+        blot.wrap(name, value);
+      }
+      return;
+    }
     // Parity parchment inline.ts:96-111. Without this the attributor branch
     // reached the element of the *whole* blot, so clearing `color` over one
     // character cleared it for every character in the span — losing formatting

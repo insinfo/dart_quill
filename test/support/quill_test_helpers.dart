@@ -59,13 +59,13 @@ Scroll createScrollWithFormats(String html, List<String> paths) =>
 /// Deliberately not `createTestQuill(initialHtml:)`, which pastes the HTML in
 /// afterwards: the constructor path is what upstream exercises, and it is the
 /// path that was silently dropping the content before.
-Quill createEditorQuill(String html) {
+Quill createEditorQuill(String html, {ThemeOptions? options}) {
   ensureQuillTestInitialized();
   final doc = testAdapter.document;
   final container = doc.createElement('div');
   container.innerHTML = normalizeHTML(html);
   doc.body.append(container);
-  final quill = Quill(container);
+  final quill = Quill(container, options: options);
   addTearDown(() {
     quill.container.remove();
   });
