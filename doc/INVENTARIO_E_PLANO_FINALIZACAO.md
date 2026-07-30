@@ -2,7 +2,7 @@
 
 **Data:** 2026-07-28
 **Método:** comparação arquivo-a-arquivo e método-a-método entre `referencias/quilljs/src`, `referencias/quill_table_better/1.2.3/src/src` (+ parchment em `referencias/quill_table_better/1.2.3/src/node_modules/parchment/src`) e `lib/`.
-**Baseline de testes:** 568 unitários VM + 16 browser/Chrome + **37 E2E de interação real** (Puppeteer: digitação, cliques, atalhos e drag verdadeiros) verdes, **zero divergências conhecidas** — goldens core 48/48 e table-better 19/19; `dart analyze` limpo. *(atualizado em 2026-07-29, após G11: Selection nativa fiel (C2 fechado), reconciliação DOM→modelo funcionando em browser real, e a suíte E2E reescrita para pegar exatamente os bugs que só aparecem com input real)*
+**Baseline de testes:** 568 unitários VM + 16 browser/Chrome + **43 E2E de interação real** (Puppeteer: digitação, cliques, atalhos e drag verdadeiros) verdes, **zero divergências conhecidas** — goldens core 48/48 e table-better 19/19; `dart analyze` limpo. *(atualizado em 2026-07-29, após G11: Selection nativa fiel (C2 fechado), reconciliação DOM→modelo funcionando em browser real, e a suíte E2E reescrita para pegar exatamente os bugs que só aparecem com input real)*
 **Complementa:** `doc/PLANO_PORT_COMPLETO.md` (fases F0–F10; F0–F2 concluídas, F7/F8 núcleo entregue). Este documento substitui o detalhamento de lacunas daquele plano.
 
 ---
@@ -126,8 +126,8 @@ A cobertura em **nível de arquivo** é ~1:1 (todo arquivo TS tem contraparte Da
 | T10 | 14 idiomas ausentes (há só en_US/pt_BR; faltam zh_CN, fr_FR, pl_PL, de_DE, ru_RU, tr_TR, pt_PT, ja_JP, cs_CZ, da_DK, nb_NO, it_IT, sv_SE, zh_TW). | `language/` |
 
 ### 4.2 Bugs pontuais (corrigíveis de imediato)
-- Bindings `table-list`: leem `data-cell` do `<li>` (que nunca é definido) em vez do `ListContainer` → geram `cellId` novo e quebram o agrupamento da célula.
-- `table-cell-block backspace`: só aceita `prev is TableCellBlock` (TS: também ListContainer/TableHeader).
+- ~~Bindings `table-list`: leem `data-cell` do `<li>` (que nunca é definido) em vez do `ListContainer`.~~ **Resolvido em G0.8** (verificado em 2026-07-29: `_replaceWithCellBlock` lê o `data-cell` do `TableListContainer`).
+- ~~`table-cell-block backspace`: só aceita `prev is TableCellBlock`.~~ **Resolvido em G0.8** (verificado em 2026-07-29: aceita `TableCellBlock`, `TableListContainer` e `TableHeader`).
 - ~~`table-header enter`: retain usa chave `table-header` (TS: `header`); falta `scrollSelectionIntoView`.~~ **Resolvido em 2026-07-29:** o retain agora emite `{header: null}` como o TS (o TEXT_CHANGE fica delta-idêntico ao upstream; `TableHeader.format` já tratava o ramo) e o `scrollSelectionIntoView` entrou.
 - `TableCellBlock.format`: ramos header/list caem no `super.format` (TODO desatualizado — os formats já existem).
 - `formats/header.dart`/`list.dart`: sem `getCellFormats`/`isReplace`/ramos cruzados header↔list↔cell.
@@ -337,11 +337,27 @@ Ordem interna (dependências primeiro):
   - *Nota de comportamento, não bug:* limpar o documento com Ctrl+A+Delete **preserva o formato de bloco da última linha** (uma lista continua lista) — é o que o Quill faz. O reset dos testes passou a usar um hook `e2eReset` (só setup; as ações continuam por input real) e o comportamento ganhou teste próprio de alternância.
 - [x] **G11.8 Suíte E2E reescrita — 11 testes de input real** (`test/e2e/table_better_e2e_test.dart`): digitação chega ao modelo; select-all + clique em Bold formata E preserva a seleção; Heading 1 pelo picker converte sem apagar; Ctrl+B colapsado + digitação (formato pendente, sem FEFF); Ctrl+C/Ctrl+V reais duplicam texto; evento copy carrega text/plain + text/html; paste de HTML externo no caret; grade 10×10 insere tabela table-better (com prova no delta via hook); menus SVG sobre a célula clicada (zero glifos Tabler); excluir tabela pelo menu esconde a UI flutuante; arrastar a borda da coluna redimensiona e persiste. *Aprendizado de harness: cada teste de tabela recarrega a página — uma tabela sobrevivente e seus menus cobrem a toolbar e engolem cliques reais.*
 
+- [x] **G11.11 Diálogos de propriedades — primeira execução em browser real (2026-07-29).** A UI do G6.6/G6.6b (formulário de tabela e de célula, paleta e roda de cores) nunca tinha sido exercitada fora do fake DOM. Seis E2E novos abriram quatro defeitos reais, todos de "funciona em VM, quebra no browser":
+  1. **O diálogo era desenhado fora do editor.** `updatePropertiesForm` comparava o overflow com a **altura do container** onde o upstream compara com a **altura da viewport** (`getViewportSize().viewHeight` = `documentElement.clientHeight`). Como o container do demo é mais baixo que o formulário, a condição disparava sempre, o diálogo virava para cima (`top = target.top - height - 10`) e, com a tabela perto do topo, ficava em `top: -91px` — recortado e com metade dos controles inalcançáveis. Medido no browser antes e depois: `-91px` → `69.9px`.
+  2. **O que o usuário digitava não valia nada.** O listener de `input` lia `target.getAttribute('value')` — o **atributo**, que fica congelado no valor inicial; o upstream lê a **propriedade** `e.target.value`. Consequência dupla: a validação julgava o texto antigo (nenhum valor inválido era marcado) e o save gravava o valor antigo de volta — digitar uma largura simplesmente não tinha efeito. Corrigido em todos os pontos que leem/escrevem o campo (no fake DOM `.value` mapeia para o mesmo atributo, então os testes VM seguem válidos).
+  3. **O estilo da célula não chegava ao documento.** `saveCellAction` escrevia o estilo direto no `<td>`; o upstream faz `tdBlot.replaceWith(blotName, {...formats, style})` — o estilo é um **format** da célula, e é por isso que sobrevive no Delta. A célula era pintada na tela e `getContents()` não tinha nada: a cor se perdia ao salvar/recarregar. Portado fiel, com o `getCellStyle(td, attrs)` do TS.
+  4. **O estilo da tabela não era aplicado.** O save escreve no elemento `temporary` (como o upstream), de onde o MutationObserver do upstream reconcilia; sem reconcílio, a sincronização temporary→`<table>` nunca roda e a largura salva não chegava nem ao DOM nem ao modelo. O host do formulário ganhou `onSaved`, que os menus ligam a `quill.update(USER)` — o mesmo recurso que o `deleteTable` do módulo e o overlay de resize já usavam.
+  - *Ajuste de teste, não de produto:* dois testes VM guardavam o blot **antigo** da célula; com o `replaceWith` fiel eles precisam recoletar as células depois do save — que é exatamente o que o upstream faz com `newSelectedTds`.
+  - Harness: `E2eApp.clickElement` clica por coordenadas reais **depois** de conferir caixa, viewport e quem está no ponto (`elementFromPoint`), então um alvo invisível/coberto falha dizendo o que havia ali em vez de um "not visible" seco. Foi ele que separou os defeitos reais das minhas ambiguidades de seletor (cada campo de cor tem uma `.properties-form-action-row` própria, escondida, antes da action row do formulário).
+
+### G12 — Lacuna estrutural registrada, ainda não corrigida (2026-07-29)
+
+Encontrada ao investigar o G11.11, com evidência, mas **deliberadamente não mexida** nesta rodada por ser de risco amplo:
+
+- **O `MutationObserver` do `Scroll` não observa atributos.** `observer.observe(domNode, subtree/childList/characterData)` — o `OBSERVER_CONFIG` do parchment tem também `attributes: true` (e `characterDataOldValue`). A abstração `DomMutationObserver.observe` nem expõe o parâmetro.
+- **Ninguém escuta `SCROLL_UPDATE` para reconciliar o delta.** O upstream tem, em quill.ts, `this.scroll.on(SCROLL_UPDATE, (source, mutations) => modify(() => this.editor.update(null, mutations, selectionInfo), source))`. Aqui o evento é emitido e só a `Selection` o consome.
+- **Efeito:** toda escrita direta de atributo/estilo no DOM (idioma normal do table-better upstream) exige um `quill.update(source)` explícito. Já há três lugares com esse remendo documentado (`deleteTable` do módulo e dos menus, `_finishResize` do operate-line) e o G11.11 acrescentou o quarto (`onSaved`). Fechar o G12 permitiria remover os quatro e alinhar a arquitetura com o parchment.
+
 ### G7 — Assets e API pública (2-3 dias)
 - [x] G7.1 **Entregue em 2026-07-29 junto com o G10.10** (o bloqueio era o modelo de lista): `.styl` oficiais compilados para `lib/assets/quill.core.css`/`quill.snow.css`/`quill.bubble.css`, multiconjunto de regras idêntico ao dist publicado; regras dark movidas para `quill.limitless.css`. `QuillAssets` já apontava para os três caminhos.
 - [x] G7.1b **`snow_css.dart` removido** (2026-07-28): os 37.159 caracteres eram byte a byte iguais a `lib/assets/quill.snow.css` (verificado antes de apagar). Foram embora o arquivo, o export `quillSnowCss` e o caminho `<style>` — `QuillAssets` agora só emite `<link rel="stylesheet">`, e ganhou `coreStylesheet`/`bubbleStylesheet`/`tableBetterStylesheet`, `injectBubbleTheme`, `injectTableBetterTheme` e o `injectStylesheet(id, href)` público para folhas do próprio consumidor.
   - ⚠️ **Achado que bloqueia o G7.1:** compilei os `.styl` do upstream com `stylus@0.62.0` para gerar core/snow/bubble e comparei com `lib/assets/quill.snow.css`. **Não batem** — e a diferença não é formatação: o CSS do repositório usa `.ql-indent-N` em `<li>` com contadores por classe, enquanto o compilado usa `li[data-list].ql-indent-N` com `counter-set`. Ou seja, **a folha do repositório está adaptada ao modelo de lista deste port** (tipo no container + tag OL/UL), que diverge do upstream (`data-list` no `<li>`) — a mesma divergência registrada em §3.2 e pendente no G5.2. Trocar o CSS pelo compilado agora quebraria as listas. **G7.1 depende de G5.2**, não de esforço de conversão.
-- [ ] G7.2 Ícones SVG oficiais completos (72) como alternativa ao tema Tabler — como `const String` em Dart, que é o que o upstream faz. **Gerados por script, nunca colados à mão** (ver G7.4).
+- [x] G7.2 **Fechado por verificação em 2026-07-29.** Os "72" eram o número de **arquivos** `.svg` do repositório do Quill, não de ícones embutidos: o `export default` de `src/ui/icons.ts` tem exatamente as chaves `align{'',center,right,justify}`, background, blockquote, bold, clean, code, code-block, color, direction{'',rtl}, formula, header{1..6}, italic, image, indent{+1,-1}, link, list{bullet,check,ordered}, script{sub,super}, strike, table, underline, video — que é **exatamente** o `_quillIconMap` do `tool/gen_icons.dart` (mais as 7 chaves extras dos botões do módulo `table` básico, que o upstream não tem). Os SVGs restantes do diretório (attachment, audio, emoji, map, mention, more…) correspondem a formatos que nem o upstream nem o port possuem, e embuti-los só engordaria o bundle. Guardado por `test/unit/generated_icons_test.dart`.
 - [x] G7.4 **`tool/gen_icons.dart` — embutimento gerado dos SVGs** (2026-07-28). Contraparte do
   `scripts/babel-svg-inline-import.cjs` do Quill: lê `lib/assets/icons/svg_quill/*.svg`
   (os 72 SVGs oficiais, já byte-idênticos ao upstream) e escreve
@@ -463,5 +479,12 @@ diretórios, e atualizar o Quill vira: copiar os SVGs, rodar o gerador, rodar os
 
 - §4.2 restantes: bindings `table-list` lendo `data-cell` do `<li>`; `table-cell-block backspace` aceitando só `TableCellBlock` como prev.
 - G7.2/G7.3: ícones SVG oficiais restantes como alternativa ao Tabler; revisão final de compatibilidade + dartdoc.
+- G8: DOCX (numeração real, page setup, tabelas table-better) e PDF.
+- G9: QA final e empacotamento.
+
+### Próximos alvos (atualizado 2026-07-29, pós-G11.11)
+
+- **G12** (acima): observer com `attributes: true` + listener de `SCROLL_UPDATE` reconciliando o delta — fecharia os quatro `quill.update` de remendo.
+- G7.3: revisão final de compatibilidade da superfície pública + dartdoc.
 - G8: DOCX (numeração real, page setup, tabelas table-better) e PDF.
 - G9: QA final e empacotamento.

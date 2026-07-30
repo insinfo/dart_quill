@@ -286,6 +286,46 @@ class E2eApp {
                 width: r.width, height: r.height};
       }''');
 
+  /// Clicks the centre of [selector] with a real mouse click at real page
+  /// coordinates, after checking what is actually on top at that point.
+  ///
+  /// More informative than `page.click`: when the element is off-screen,
+  /// covered or zero-sized, the failure names the element that is there
+  /// instead of a bare "not visible".
+  Future<void> clickElement(String selector) async {
+    final probe = await eval<Map<String, dynamic>>('''() => {
+      const el = document.querySelector(${_js(selector)});
+      if (!el) return {found: false};
+      const r = el.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const hit = document.elementFromPoint(cx, cy);
+      return {
+        found: true, x: cx, y: cy, width: r.width, height: r.height,
+        onTop: hit === el || el.contains(hit),
+        hitTag: hit ? hit.tagName + '.' + hit.className : 'none',
+        inViewport: r.top >= 0 && r.left >= 0 &&
+            r.bottom <= window.innerHeight && r.right <= window.innerWidth,
+      };
+    }''');
+    if (probe['found'] != true) {
+      throw StateError('clickElement: no element matches $selector');
+    }
+    if ((probe['width'] as num) == 0 || (probe['height'] as num) == 0) {
+      throw StateError('clickElement: $selector has an empty box ($probe)');
+    }
+    if (probe['inViewport'] != true) {
+      throw StateError('clickElement: $selector is outside the viewport '
+          '($probe)');
+    }
+    if (probe['onTop'] != true) {
+      throw StateError('clickElement: $selector is covered by '
+          '${probe['hitTag']} ($probe)');
+    }
+    await page.mouse
+        .click(Point(probe['x'] as num, probe['y'] as num));
+    await settle(80);
+  }
+
   /// Drags from [from] to [to] with a real press-move-release gesture.
   Future<void> drag(Point<num> from, Point<num> to, {int steps = 10}) async {
     await page.mouse.move(from);

@@ -848,6 +848,11 @@ class TableMenus {
           showMenus();
           updateMenus();
         },
+        // The save writes styles onto the table/temporary element directly
+        // (upstream relies on the MutationObserver from there); this port
+        // asks for the reconcile, so the temporary's attributes reach the
+        // `<table>` and `getContents()` reports the new styling.
+        onSaved: () => quill.update(EmitterSource.USER),
       ),
     )..updatePropertiesForm();
   }

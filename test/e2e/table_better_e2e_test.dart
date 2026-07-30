@@ -382,6 +382,182 @@ void main() {
     });
   });
 
+  group('table and cell properties dialogs', () {
+    Future<Map<String, dynamic>> formState() =>
+        app.eval<Map<String, dynamic>>('''() => {
+          const form = document.querySelector('.ql-table-properties-form');
+          if (!form) return {open: false};
+          return {
+            open: true,
+            header: form.querySelector('.properties-form-header')?.textContent,
+            fields: [...form.querySelectorAll('[data-property]')]
+                .map(el => el.dataset.property),
+            // The direct child: each colour field's palette carries its own
+            // (hidden) action row with the same class, earlier in the DOM.
+            saveDisabled: document.querySelector(
+                '.ql-table-properties-form > .properties-form-action-row '
+                + 'button[label="save"]')?.disabled,
+            errors: form.querySelectorAll('.label-field-view-error').length,
+          };
+        }''');
+
+    /// Types [value] into the property field of the open form.
+    Future<void> fillProperty(String property, String value) async {
+      // Single quotes inside the JS string: the selector itself carries
+      // double quotes around the attribute value.
+      final selector =
+          ".ql-table-properties-form [data-property='$property'] "
+          ".property-input";
+      await app.eval<void>('''() => {
+        const input = document.querySelector("$selector");
+        input.value = '';
+      }''');
+      await app.clickElement(selector);
+      await app.page.keyboard.type(value);
+      await app.settle(60);
+    }
+
+    test('the table properties dialog opens with its own fields', () async {
+      await freshTable(2, 2);
+      await app.clickCell(0, 0);
+      await app.openTableMenu('table');
+      await app.settle(200);
+
+      final state = await formState();
+      expect(state['open'], isTrue, reason: 'the dialog must open ($state)');
+      expect(state['header'], t('tblProps'),
+          reason: 'the header follows the configured locale');
+      expect(state['fields'], contains('align'),
+          reason: 'alignment is a table-only property');
+      expect(state['fields'],
+          containsAll(['border-color', 'border-width', 'width', 'height']));
+      expect(
+          await app.eval<int>(
+              '() => document.querySelectorAll(".ql-table-properties-form '
+              '.ql-table-dropdown-properties").length'),
+          greaterThan(0),
+          reason: 'the border-style dropdown is built too');
+    });
+
+    test('saving a width writes it to the table', () async {
+      await freshTable(2, 2);
+      await app.clickCell(0, 0);
+      await app.openTableMenu('table');
+      await app.settle(200);
+
+      await fillProperty('width', '300px');
+      await app.clickElement('.ql-table-properties-form > .properties-form-action-row button[label="save"]');
+      await app.settle(200);
+
+      expect((await formState())['open'], isFalse,
+          reason: 'saving closes the dialog');
+      final width = await app.eval<num?>(
+          '() => document.querySelector(".ql-editor table")'
+          '?.getBoundingClientRect()?.width ?? null');
+      expect(width, isNotNull);
+      expect(width!.round(), closeTo(300, 2),
+          reason: 'the table must render at the saved width');
+      expect(await app.contents(), contains('300px'),
+          reason: 'the width must survive in the model (table-temporary)');
+    });
+
+    test('an invalid dimension shows the error and blocks saving', () async {
+      await freshTable(2, 2);
+      await app.clickCell(0, 0);
+      await app.openTableMenu('table');
+      await app.settle(200);
+
+      await fillProperty('width', 'nao-e-medida');
+      final state = await formState();
+      expect(state['errors'], greaterThan(0),
+          reason: 'the invalid field must be marked ($state)');
+      expect(state['saveDisabled'], isTrue,
+          reason: 'Save stays disabled while a field is invalid ($state)');
+    });
+
+    test('cancel closes the dialog without touching the table', () async {
+      await freshTable(2, 2);
+      await app.clickCell(0, 0);
+      final before = await app.contents();
+      await app.openTableMenu('table');
+      await app.settle(200);
+
+      await fillProperty('width', '250px');
+      await app.clickElement('.ql-table-properties-form > .properties-form-action-row button[label="cancel"]');
+      await app.settle(200);
+
+      expect((await formState())['open'], isFalse);
+      expect(await app.contents(), before,
+          reason: 'cancelling must not change the document');
+    });
+
+    test('the cell dialog paints a background from the palette', () async {
+      await freshTable(2, 2);
+      await app.clickCell(0, 0);
+      await app.openTableMenu('cell');
+      await app.settle(200);
+
+      final state = await formState();
+      expect(state['open'], isTrue, reason: '$state');
+      expect(state['header'], t('cellProps'));
+      expect(state['fields'], contains('padding'),
+          reason: 'padding is a cell-only property');
+
+      // Open the colour picker of background-color and click the red swatch.
+      await app.clickElement(
+          '.ql-table-color-container[data-property="background-color"] '
+          '.color-button');
+      await app.clickElement(
+          '.ql-table-color-container[data-property="background-color"] '
+          '.color-list li[data-color="#ff0000"]');
+
+      final fieldValue = await app.eval<String?>(
+          '() => document.querySelector('
+          '".ql-table-color-container[data-property=\\"background-color\\"] '
+          '.property-input")?.value');
+      expect(fieldValue, '#ff0000',
+          reason: 'clicking a swatch fills the colour field');
+
+      await app.clickElement('.ql-table-properties-form > .properties-form-action-row button[label="save"]');
+      await app.settle(200);
+
+      final background = await app.eval<String?>(
+          '() => getComputedStyle(document.querySelector('
+          '".ql-editor table td")).backgroundColor');
+      expect(background, 'rgb(255, 0, 0)',
+          reason: 'the cell must render with the chosen background');
+      expect(await app.contents(), contains('background-color'),
+          reason: 'the cell style must reach the model');
+    });
+
+    test('the colour wheel commits the colour it is set to', () async {
+      await freshTable(2, 2);
+      await app.clickCell(0, 0);
+      await app.openTableMenu('cell');
+      await app.settle(200);
+
+      await app.clickElement(
+          '.ql-table-color-container[data-property="background-color"] '
+          '.color-button');
+      final wheel = await app.eval<Map<String, dynamic>>('''() => {
+        const container = document.querySelector(
+            '.ql-table-color-container[data-property="background-color"]');
+        const palette = container.querySelector('.color-picker-palette');
+        const wheelEl = container.querySelector('.IroWheel');
+        return {
+          hasPalette: palette != null,
+          hasWheel: wheelEl != null,
+          layers: wheelEl ? wheelEl.children.length : 0,
+        };
+      }''');
+      expect(wheel['hasPalette'], isTrue,
+          reason: 'the palette (colour wheel) must be built ($wheel)');
+      expect(wheel['hasWheel'], isTrue);
+      expect(wheel['layers'], greaterThan(0),
+          reason: 'the wheel renders its hue/saturation/handle layers');
+    });
+  });
+
   group('deleting the table', () {
     test('the delete menu removes the table and hides the floating UI',
         () async {

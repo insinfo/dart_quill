@@ -243,7 +243,12 @@ void main() {
       form.setAttribute('background-color', '#ff0000');
       form.saveAction();
 
-      for (final cell in cells) {
+      // Saving REPLACES each cell blot with one carrying the new `style`
+      // format (upstream `replaceWith`, which is what puts the styling in
+      // the document instead of only on the element), so the cells must be
+      // read again — upstream re-collects them into `newSelectedTds` too.
+      final saved = table.descendants<TableCell>().take(cells.length);
+      for (final cell in saved) {
         expect(cell.element.getAttribute('style'),
             contains('background-color: #ff0000'));
       }
@@ -257,9 +262,10 @@ void main() {
       form.setAttribute('text-align', 'center');
       form.saveAction();
 
-      expect(cell.element.getAttribute('style') ?? '',
+      final saved = table.descendants<TableCell>().first;
+      expect(saved.element.getAttribute('style') ?? '',
           isNot(contains('text-align')));
-      expect(cell.children.first.formats()['align'], equals('center'));
+      expect(saved.children.first.formats()['align'], equals('center'));
     });
 
     test('save closes the form and hands control back', () {

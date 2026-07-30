@@ -18,6 +18,7 @@
 library;
 
 import '../../platform/dom.dart';
+import '../../platform/platform.dart';
 import '../assets/icons.dart';
 import '../config/config.dart';
 import '../formats/table.dart';
@@ -59,6 +60,7 @@ class TablePropertiesFormHost {
     required this.container,
     required this.language,
     required this.onClose,
+    this.onSaved,
     this.table,
     this.selectedCells = const [],
     this.containerBounds,
@@ -71,6 +73,15 @@ class TablePropertiesFormHost {
 
   /// Called after save/cancel so the menus can reappear.
   final void Function() onClose;
+
+  /// Called after a save wrote to the document.
+  ///
+  /// The save writes styles straight onto the `<table>`/`temporary` element,
+  /// as upstream does; there the MutationObserver reconciles the model
+  /// afterwards. This port needs the reconcile requested explicitly — the
+  /// menus wire this to `quill.update(USER)`, exactly like the module's
+  /// `deleteTable` and the resize overlay already do.
+  final void Function()? onSaved;
 
   /// The table being edited (`type == 'table'`).
   final TableContainer? table;
@@ -240,11 +251,15 @@ class TablePropertiesForm {
       utils.setElementAttribute(input, child.attribute!);
     }
     input.classes.add('property-input');
-    input.setAttribute('value', child.value ?? '');
+    // The live `value` PROPERTY, not the attribute: typing updates the
+    // property and leaves the attribute at its initial value, so reading the
+    // attribute made validation judge the old text and `save` write it back
+    // — a typed width simply never took effect (upstream reads
+    // `e.target.value`).
+    input.value = child.value ?? '';
     input.addEventListener('input', (event) {
       final target = event.target;
-      final value =
-          target is DomElement ? target.getAttribute('value') ?? '' : '';
+      final value = target is DomElement ? target.value : '';
       onInput(child, container, wrapper, status, value);
     });
     status.classes.add('label-field-view-status');
@@ -285,7 +300,7 @@ class TablePropertiesForm {
         if (container == null) return false;
         final inputs = container.querySelectorAll('.property-input');
         if (inputs.isEmpty) return false;
-        inputs.first.setAttribute('value', value);
+        inputs.first.value = value;
         final wrappers =
             container.querySelectorAll('.label-field-view-input-wrapper');
         final statuses = container.querySelectorAll('.label-field-view-status');
@@ -502,7 +517,7 @@ class TablePropertiesForm {
       utils.setElementProperty(colorButton, {'background-color': value});
     }
     final inputs = element.querySelectorAll('.property-input');
-    if (inputs.isNotEmpty) inputs.first.setAttribute('value', value);
+    if (inputs.isNotEmpty) inputs.first.value = value;
     for (final select in element.querySelectorAll('.color-picker-select')) {
       select.classes.add('ql-hidden');
     }
@@ -612,7 +627,7 @@ class TablePropertiesForm {
       attrs['border-width'] = '';
       updateSelectColor(colorContainer, '');
       final inputs = widthContainer.querySelectorAll('.property-input');
-      if (inputs.isNotEmpty) inputs.first.setAttribute('value', '');
+      if (inputs.isNotEmpty) inputs.first.value = '';
       colorContainer.classes.add('ql-table-disabled');
       widthContainer.classes.add('ql-table-disabled');
     } else {
@@ -650,6 +665,16 @@ class TablePropertiesForm {
     } else {
       saveCellAction();
     }
+    host.onSaved?.call();
+  }
+
+  /// TS `getCellStyle(td, attrs)` — the cell's current inline style merged
+  /// with the changed properties, serialized back into a style string.
+  String getCellStyle(DomElement td, Map<String, String> attrs) {
+    final style = <String, String>{...utils.parseInlineStyle(td), ...attrs};
+    final buffer = StringBuffer();
+    style.forEach((key, value) => buffer.write('$key: $value; '));
+    return buffer.toString();
   }
 
   /// TS `saveTableAction()` — `align` becomes a margin declaration and the
@@ -678,8 +703,14 @@ class TablePropertiesForm {
     utils.setElementProperty(temporary?.element ?? table.element, attributes);
   }
 
-  /// TS `saveCellAction()` — `text-align` propagates into the cell's blocks
-  /// (and into list items through their container), the rest becomes style.
+  /// TS `saveCellAction()` (table-properties-form.ts:559-605) — `text-align`
+  /// propagates into the cell's blocks (and into list items through their
+  /// container); the rest becomes the cell's `style` **format**.
+  ///
+  /// The style goes through `replaceWith(blotName, {...formats, style})`, as
+  /// upstream: writing it straight onto the `<td>` (as this port did) painted
+  /// the cell but never reached the document — `getContents()` returned a
+  /// table with no cell styling at all, so the colour was lost on save/reload.
   void saveCellAction() {
     final cells = host.selectedCells;
     if (cells.isEmpty) return;
@@ -699,9 +730,14 @@ class TablePropertiesForm {
           }
         }
       }
-      if (attributes.isNotEmpty) {
-        utils.setElementProperty(cell.element, attributes);
-      }
+      if (attributes.isEmpty) continue;
+      final blotName = cell.blotName;
+      final formats = Map<String, String>.from(
+        (cell.formats()[blotName] as Map?)?.cast<String, String>() ??
+            const <String, String>{},
+      );
+      formats['style'] = getCellStyle(cell.element, attributes);
+      replaceBlotWith(cell, blotName, formats);
     }
   }
 
@@ -725,7 +761,14 @@ class TablePropertiesForm {
     var correctTop = target.bottom + 10;
     var correctLeft =
         ((target.left + target.right - width) / 2).floorToDouble();
-    if (correctTop + containerBounds.top + height > containerBounds.height) {
+    // The overflow test is against the VIEWPORT height (upstream
+    // `getViewportSize().viewHeight` = `documentElement.clientHeight`), not
+    // the editor container's. Using the container's height made every
+    // editor shorter than the dialog flip it above the table, where a table
+    // near the top left it at a negative `top` — drawn outside the editor
+    // and clipped.
+    final viewHeight = _viewportHeight();
+    if (correctTop + containerBounds.top + height > viewHeight) {
       correctTop = target.top - height - 10;
       if (correctTop < 0) {
         correctTop = ((containerBounds.height - height) / 2).floorToDouble();
@@ -752,6 +795,14 @@ class TablePropertiesForm {
   }
 
   // --- helpers ------------------------------------------------------------
+
+  /// TS `getViewportSize().viewHeight` — `documentElement.clientHeight`.
+  double _viewportHeight() {
+    final bounds = domBindings.adapter.getViewportBounds(_document);
+    final height = bounds['height'] ?? 0;
+    if (height > 0) return height;
+    return _document.documentElement.clientHeight.toDouble();
+  }
 
   DomElement? _containerFor(String propertyName) {
     for (final candidate in form.querySelectorAll('[data-property]')) {
