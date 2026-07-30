@@ -68,6 +68,18 @@ abstract class InlineBlot extends ParentBlot {
   void format(String name, dynamic value) {
     // Parity parchment inline.ts:62-85.
     if (name == blotName && (value == null || value == false)) {
+      // The attributor store of the blot being dissolved is copied onto each
+      // child first (wrapping bare children in a generic `inline`), exactly
+      // as inline.ts:63-71 does. Without it, removing a link dropped the
+      // `size`/`color`/`font` that lived on the `<a>` itself.
+      _ensureAttributesBuilt();
+      if (attributes.values().isNotEmpty) {
+        for (final child in List<Blot>.from(children)) {
+          final target =
+              child is InlineBlot ? child : child.wrap(Inline.kBlotName);
+          attributes.copy(target.format);
+        }
+      }
       unwrap();
       return;
     }

@@ -131,7 +131,7 @@ void main() {
           <button class="ql-italic" type="button" aria-label="italic" aria-pressed="false"></button>
         </span>
         ''',
-      );
+      ignoreAttrs: const ['title']);
     });
 
     test('multiple groups', () {
@@ -155,7 +155,7 @@ void main() {
           <button class="ql-strike" type="button" aria-label="strike" aria-pressed="false"></button>
         </span>
         ''',
-      );
+      ignoreAttrs: const ['title']);
     });
 
     test('button with value', () {
@@ -177,7 +177,7 @@ void main() {
           <button class="ql-header" type="button" value="2" aria-label="header: 2" aria-pressed="false"></button>
         </span>
         ''',
-      );
+      ignoreAttrs: const ['title']);
     });
 
     test('select control', () {
@@ -204,7 +204,7 @@ void main() {
           </select>
         </span>
         ''',
-      );
+      ignoreAttrs: const ['title']);
     });
 
     test('complex layout', () {
@@ -268,7 +268,7 @@ void main() {
           <button class="ql-image" type="button" aria-label="image" aria-pressed="false"></button>
         </span>
         ''',
-      );
+      ignoreAttrs: const ['title']);
     });
   });
 

@@ -14,6 +14,11 @@ Quill _createQuill(String html) {
   );
 }
 
+/// Upstream's own `table.spec.ts` compares with `{ ignoreAttrs: ['data-row'] }`:
+/// the row ids are random by design, so they carry no meaning to assert.
+Matcher _tableHTML(String expected) =>
+    EqualHTML(expected, ignoreAttrs: const ['data-row']);
+
 void main() {
   group('Table Module', () {
     group('insert table', () {
@@ -75,7 +80,7 @@ void main() {
         table.insertTable(2, 3);
         expect(
           quill.root,
-          quill.root.toEqualHTML(
+          _tableHTML(
             '''
             <table>
               <tbody>
@@ -96,7 +101,7 @@ void main() {
         table.insertTable(2, 3);
         expect(
           quill.root,
-          quill.root.toEqualHTML(
+          _tableHTML(
             '''
             <table>
               <tbody>
@@ -131,7 +136,7 @@ void main() {
         table.insertRowAbove();
         expect(
           quill.root,
-          quill.root.toEqualHTML(
+          _tableHTML(
             '''
             <table>
               <tbody>
@@ -152,7 +157,7 @@ void main() {
         table.insertRowBelow();
         expect(
           quill.root,
-          quill.root.toEqualHTML(
+          _tableHTML(
             '''
             <table>
               <tbody>
@@ -173,7 +178,7 @@ void main() {
         table.insertColumnLeft();
         expect(
           quill.root,
-          quill.root.toEqualHTML(
+          _tableHTML(
             '''
             <table>
               <tbody>
@@ -193,7 +198,7 @@ void main() {
         table.insertColumnRight();
         expect(
           quill.root,
-          quill.root.toEqualHTML(
+          _tableHTML(
             '''
             <table>
               <tbody>
@@ -258,7 +263,7 @@ void main() {
         table.deleteRow();
         expect(
           quill.root,
-          quill.root.toEqualHTML(
+          _tableHTML(
             '''
             <table>
               <tbody>
@@ -277,7 +282,7 @@ void main() {
         table.deleteColumn();
         expect(
           quill.root,
-          quill.root.toEqualHTML(
+          _tableHTML(
             '''
             <table>
               <tbody>
@@ -295,7 +300,7 @@ void main() {
         quill.updateContents(Delta()..insert('\n'));
         expect(
           quill.root,
-          quill.root.toEqualHTML(
+          _tableHTML(
             '''
             <p><br></p>
             <table>
@@ -316,7 +321,7 @@ void main() {
           ..insert('\n'));
         expect(
           quill.root,
-          quill.root.toEqualHTML(
+          _tableHTML(
             '''
             <table>
               <tbody>

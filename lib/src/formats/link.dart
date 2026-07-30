@@ -56,28 +56,24 @@ class Link extends InlineBlot {
 
   @override
   void format(String name, dynamic value) {
-    if (name == kBlotName) {
-      if (value == null) {
-        unwrap();
-      } else {
-        element.setAttribute('href', sanitize(value.toString()));
-      }
+    // Parity link.ts:25-32 — anything but this blot with a TRUTHY value goes
+    // to `super.format`, whose unwrap branch copies the anchor's attributor
+    // formats onto the children first. Handling `null` with a bare `unwrap()`
+    // dropped those formats, and `false` fell through to the else and wrote
+    // `href="false"` instead of removing the link at all.
+    final truthy = value != null && value != false && value != '';
+    if (name != kBlotName || !truthy) {
+      super.format(name, value);
       return;
     }
-    super.format(name, value);
+    element.setAttribute('href', sanitize(value.toString()));
   }
 
   @override
   Link clone() => Link(element.cloneNode(deep: true));
 
-  @override
-  void optimize([
-    List<DomMutationRecord>? mutations,
-    Map<String, dynamic>? context,
-  ]) {
-    super.optimize(mutations, context);
-    if (element.getAttribute('href') == kSanitizedUrl) {
-      unwrap();
-    }
-  }
+  // No `optimize` override: upstream's link.ts has none. This port used to
+  // unwrap the anchor whenever its href was the sanitized `about:blank`,
+  // which silently DELETED links the sanitizer had neutralised — upstream
+  // keeps them, and the delta keeps `link: 'about:blank'`.
 }

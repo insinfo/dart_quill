@@ -1,5 +1,7 @@
+import 'package:dart_quill/src/blots/abstract/blot.dart';
 import 'package:dart_quill/src/core/initialization.dart';
 import 'package:dart_quill/src/core/quill.dart';
+import 'package:dart_quill/src/formats/abstract/attributor.dart';
 import 'package:dart_quill/src/core/theme.dart';
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
 import 'package:dart_quill/src/modules/clipboard.dart';
@@ -16,6 +18,29 @@ void ensureQuillTestInitialized() {
   initializeFakeDom();
   initializeQuill();
   _quillTestInitialized = true;
+}
+
+/// Builds a [Registry] with the base blots plus the formats named by their
+/// Quill import paths, e.g. `registryWithFormats(['formats/header'])`.
+///
+/// This is the Dart counterpart of the upstream test factory's
+/// `createRegistry([Header, Bold])`: the definitions come from the SAME
+/// registration the library ships (`Quill.importDefinition`), so a port test
+/// exercises the real format instead of a hand-built stand-in.
+Registry registryWithFormats(List<String> paths) {
+  ensureQuillTestInitialized();
+  final registry = createRegistry();
+  for (final path in paths) {
+    final definition = Quill.importDefinition(path);
+    if (definition is RegistryEntry) {
+      registry.register(definition);
+    } else if (definition is Attributor) {
+      registry.registerAttributor(definition);
+    } else {
+      throw StateError('Unknown format definition for "$path": $definition');
+    }
+  }
+  return registry;
 }
 
 /// Creates a fresh Quill instance backed by the fake DOM.

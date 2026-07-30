@@ -107,17 +107,26 @@ class Registry {
   /// parchment tag map that [queryByTagName] exposes.
   RegistryEntry? scanByTagName(String tagName, {int scope = Scope.ANY}) {
     final upper = tagName.toUpperCase();
+    RegistryEntry? classed;
     for (final entry in _entries.values) {
       if (!Scope.matches(entry.scope, scope)) {
         continue;
       }
       for (final tag in entry.tagNames) {
-        if (tag.toUpperCase() == upper) {
-          return entry;
-        }
+        if (tag.toUpperCase() != upper) continue;
+        // Parchment's `register` only lets a definition claim a tag when it
+        // has NO className (`this.tags[tag] == null || definition.className
+        // == null`). A class-qualified blot answers for its class, never for
+        // the bare tag: without this, `<span style="color: red">x</span>`
+        // hydrated as a `cursor` (registered first, class `ql-cursor`) — a
+        // zero-length blot with a FEFF guard, so the text vanished from the
+        // document. The first-registered tie-break survives for entries that
+        // are equally unqualified (a bare `<tr>` is a `table-row`).
+        if (entry.classNames.isEmpty) return entry;
+        classed ??= entry;
       }
     }
-    return null;
+    return classed;
   }
 
   RegistryEntry? queryByClassName(String className, {int scope = Scope.ANY}) {

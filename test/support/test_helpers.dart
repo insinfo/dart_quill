@@ -2,6 +2,7 @@ import 'package:dart_quill/src/blots/abstract/blot.dart';
 import 'package:dart_quill/src/blots/block.dart';
 import 'package:dart_quill/src/blots/break.dart';
 import 'package:dart_quill/src/blots/cursor.dart';
+import 'package:dart_quill/src/blots/inline.dart';
 import 'package:dart_quill/src/blots/scroll.dart';
 import 'package:dart_quill/src/blots/text.dart';
 import 'package:dart_quill/src/core/emitter.dart';
@@ -75,7 +76,17 @@ Registry createRegistry([List<RegistryEntry>? formats]) {
       tagNames: ['SPAN'],
       classNames: ['ql-cursor']));
 
-  // Note: InlineBlot is abstract, skip registration as it's a base class
+  // The generic inline wrapper (`<span>`), which upstream's factory registers
+  // too: it is what hosts an inline ATTRIBUTOR (color/size/font) when the
+  // text has no wrapper yet. Without it `TextBlot.formatAt` throws
+  // "Unknown blot inline".
+  registry.register(_createEntry(
+      'inline',
+      Scope.INLINE_BLOT,
+      ([value]) => Inline(value is DomElement
+          ? value
+          : testAdapter.document.createElement('span')),
+      tagNames: ['SPAN']));
 
   registry.register(_createEntry('scroll', Scope.BLOCK_BLOT, ([value]) {
     if (value is! DomElement) throw ArgumentError('Scroll requires DomElement');
@@ -126,29 +137,49 @@ Scroll createScroll(String html, {Registry? registry, DomElement? container}) {
   return scroll;
 }
 
-/// Custom matcher for comparing HTML content (innerHTML by default)
+/// Custom matcher for comparing HTML content (innerHTML by default).
+///
+/// Port of the upstream test helper `toEqualHTML`
+/// (`referencias/quilljs/test/unit/__helpers__/expect.ts`): both sides are
+/// parsed and re-serialized, `.ql-ui` nodes are dropped and attributes are
+/// sorted by name, so only meaningful differences fail.
+///
+/// The previous version serialized a **whitelist** of attributes, which hid
+/// everything else — `data-list`, `rel`, `target`, `style` never showed up,
+/// so a wrong element compared equal to a right one.
 class EqualHTML extends Matcher {
-  EqualHTML(this.expected, {this.includeOuterTag = false});
+  EqualHTML(this.expected,
+      {this.includeOuterTag = false, this.ignoreAttrs = const []});
 
   final String expected;
   final bool includeOuterTag;
 
+  /// Attributes dropped from BOTH sides before comparing, like upstream's
+  /// `toEqualHTML(html, { ignoreAttrs })` — used for values that are random
+  /// by design, such as the table module's `data-row` ids.
+  final List<String> ignoreAttrs;
+
   @override
   bool matches(dynamic item, Map<dynamic, dynamic> matchState) {
     if (item is! DomElement) return false;
+    return _getHTML(item, includeOuterTag: includeOuterTag) ==
+        _expectedHTML();
+  }
 
-    final actual = _getHTML(item, includeOuterTag: includeOuterTag);
-    final normalizedExpected = normalizeHTML(expected);
-    final normalizedActual = normalizeHTML(actual);
-
-    return normalizedActual == normalizedExpected;
+  /// Parses the expectation with the same DOM the editor uses, then
+  /// serializes it through the same writer — upstream does exactly this by
+  /// assigning `innerHTML` on a scratch `<div>`.
+  String _expectedHTML() {
+    final holder = testAdapter.document.createElement('div');
+    if (holder is FakeDomElement) {
+      holder.innerHTML = normalizeHTML(expected);
+    }
+    return _getHTML(holder);
   }
 
   @override
   Description describe(Description description) {
-    return description
-        .add('HTML equals ')
-        .addDescriptionOf(normalizeHTML(expected));
+    return description.add('HTML equals ').addDescriptionOf(_expectedHTML());
   }
 
   @override
@@ -158,8 +189,7 @@ class EqualHTML extends Matcher {
       return mismatchDescription.add('is not a DomElement');
     }
 
-    final actual =
-        normalizeHTML(_getHTML(item, includeOuterTag: includeOuterTag));
+    final actual = _getHTML(item, includeOuterTag: includeOuterTag);
     return mismatchDescription.add('has HTML ').addDescriptionOf(actual);
   }
 
@@ -179,66 +209,38 @@ class EqualHTML extends Matcher {
   void _buildHTML(DomNode node, StringBuffer buffer) {
     if (node is DomText) {
       buffer.write(node.data);
-    } else if (node is DomElement) {
-      final tagName = node.tagName.toLowerCase();
-      buffer.write('<$tagName');
-
-      // Add attributes
-      if (node is FakeDomElement) {
-        const attributeOrder = [
-          'src',
-          'href',
-          'class',
-          'id',
-          'type',
-          'value',
-          'aria-label',
-          'aria-pressed',
-          'selected',
-          'frameborder',
-          'allowfullscreen',
-          'width',
-          'height',
-          'alt',
-        ];
-
-        for (final name in attributeOrder) {
-          if (name == 'class') {
-            final className = node.className;
-            if (className != null && className.isNotEmpty) {
-              buffer.write(' class="$className"');
-            }
-            continue;
-          }
-          if (name == 'id') {
-            final id = node.id;
-            if (id != null && id.isNotEmpty) {
-              buffer.write(' id="$id"');
-            }
-            continue;
-          }
-          final value = node.getAttribute(name);
-          if (value != null) {
-            buffer.write(' $name="$value"');
-          }
-        }
-      }
-
-      buffer.write('>');
-
-      // Check if it's a void/self-closing element
-      const voidElements = ['br', 'hr', 'img', 'input', 'meta', 'link'];
-      final isVoid = voidElements.contains(tagName);
-
-      if (!isVoid) {
-        // Add children
-        for (final child in node.childNodes) {
-          _buildHTML(child, buffer);
-        }
-
-        buffer.write('</$tagName>');
-      }
+      return;
     }
+    if (node is! DomElement) return;
+    // Upstream's helper deletes every `.ql-ui` node before comparing: they
+    // are editor chrome (the checklist/list marker), not document content.
+    if (node.classes.contains('ql-ui')) return;
+
+    final tagName = node.tagName.toLowerCase();
+    buffer.write('<$tagName');
+
+    // ALL attributes, sorted by name — upstream sorts both sides so the
+    // comparison never depends on insertion order.
+    final names = node.attributeNames.toList()..sort();
+    for (final name in names) {
+      if (ignoreAttrs.contains(name)) continue;
+      final value = node.getAttribute(name);
+      if (value == null) continue;
+      buffer.write(' $name="$value"');
+    }
+
+    buffer.write('>');
+
+    const voidElements = [
+      'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', //
+      'link', 'meta', 'source', 'track', 'wbr',
+    ];
+    if (voidElements.contains(tagName)) return;
+
+    for (final child in node.childNodes) {
+      _buildHTML(child, buffer);
+    }
+    buffer.write('</$tagName>');
   }
 }
 
@@ -249,6 +251,9 @@ extension HtmlMatchers on DomElement {
 
 /// Expect that a DomElement's innerHTML equals the expected HTML (default behavior)
 void expectHTML(DomElement element, String expected,
-    {bool includeOuterTag = false}) {
-  expect(element, EqualHTML(expected, includeOuterTag: includeOuterTag));
+    {bool includeOuterTag = false, List<String> ignoreAttrs = const []}) {
+  expect(
+      element,
+      EqualHTML(expected,
+          includeOuterTag: includeOuterTag, ignoreAttrs: ignoreAttrs));
 }
