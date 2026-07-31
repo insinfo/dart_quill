@@ -88,6 +88,10 @@ class PdfReader {
     return buffer.toString();
   }
 
+  /// Decoded payload of every stream object in the file — content streams,
+  /// the `/ToUnicode` CMap, and anything else that is not an image.
+  List<String> get decodedStreams => _streams();
+
   /// Decoded payload of every stream object in the file.
   List<String> _streams() {
     final result = <String>[];

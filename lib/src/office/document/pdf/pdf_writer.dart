@@ -20,6 +20,11 @@ class PdfWriter {
   final List<Uint8List?> _objects = <Uint8List?>[null]; // índice 0 não usado
   final List<int> _pageIds = <int>[];
   final Map<String, int> _fontIds = <String, int>{};
+
+  /// Fontes registradas por nome de recurso (`TT1`, `TT2`, …), usadas pelas
+  /// fontes embutidas. Ficam separadas das standard-14, cujo nome (`/F1`) é
+  /// derivado da ordem de registro.
+  final Map<String, int> _namedFontIds = <String, int>{};
   late final int _catalogId;
   late final int _pagesId;
 
@@ -83,6 +88,17 @@ class PdfWriter {
     return '/F${_fontIds.keys.toList().indexOf(baseFont) + 1}';
   }
 
+  /// Associa um nome de recurso (`TT1`) ao objeto de uma fonte já montada.
+  ///
+  /// É por aqui que uma fonte embutida entra nos `/Resources` da página; o
+  /// [fontId] cuida apenas das 14 padrão.
+  void registerFontResource(String resourceName, int objectId) {
+    final name = resourceName.startsWith('/')
+        ? resourceName.substring(1)
+        : resourceName;
+    _namedFontIds[name] = objectId;
+  }
+
   /// Registra uma imagem decodificada como XObject; retorna o id do objeto.
   int addImage(PdfImageData image) {
     int? smaskId;
@@ -130,13 +146,16 @@ class PdfWriter {
   }) {
     final int contentId = addStream(content);
     final StringBuffer resources = StringBuffer('<< ');
-    if (_fontIds.isNotEmpty) {
+    if (_fontIds.isNotEmpty || _namedFontIds.isNotEmpty) {
       resources.write('/Font << ');
       int index = 1;
       for (final int id in _fontIds.values) {
         resources.write('/F$index $id 0 R ');
         index++;
       }
+      _namedFontIds.forEach((String name, int id) {
+        resources.write('/$name $id 0 R ');
+      });
       resources.write('>> ');
     }
     if (xObjects.isNotEmpty) {
