@@ -183,6 +183,22 @@ class TrueTypeFont {
   int advanceWidthOfChar(int charCode) =>
       (advanceWidthOf(glyphIdFor(charCode)) * 1000 / unitsPerEm).round();
 
+  /// Deslocamento lateral esquerdo de [glyphId], em unidades de projeto.
+  ///
+  /// A `hmtx` guarda `numberOfHMetrics` pares (avanço, lsb) e, depois deles,
+  /// **só lsb** para os glifos restantes. Ler isso errado desloca o desenho
+  /// dos últimos glifos dentro da própria caixa.
+  int leftSideBearingOf(int glyphId) {
+    final hmtx = _tables['hmtx'];
+    if (hmtx == null || glyphId < 0 || glyphId >= numGlyphs) return 0;
+    final count = _hhea.numberOfHMetrics;
+    final at = glyphId < count
+        ? hmtx.offset + glyphId * 4 + 2
+        : hmtx.offset + count * 4 + (glyphId - count) * 2;
+    if (at + 2 > _bytes.length) return 0;
+    return _readInt16(at);
+  }
+
   /// Bytes do contorno de [glyphId] na tabela `glyf`.
   ///
   /// Vazio para um glifo sem contorno (o espaço, por exemplo) — o que é
