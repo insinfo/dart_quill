@@ -23,3 +23,5 @@ library dart_quill_html;
 
 export 'src/converters/html/delta_to_html.dart'
     show deltaToHtml, opsToHtml, HtmlConvertOptions;
+export 'src/converters/html/html_to_delta.dart'
+    show htmlToDelta, HtmlToDelta, HtmlOperations, CustomHtmlPart;

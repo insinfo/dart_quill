@@ -90,7 +90,7 @@ confinada em `utils/css_util.dart` (107 l.).
 ```
 package:dart_quill/dart_quill.dart          # editor        → só `web`
 package:dart_quill/dart_quill_docx.dart     # DOCX ⇄ Delta  → já existe
-package:dart_quill/dart_quill_html.dart     # Delta ⇄ HTML  → sem deps
+package:dart_quill/dart_quill_html.dart     # Delta ⇄ HTML  → `html`
 package:dart_quill/dart_quill_pdf.dart      # Delta → PDF   → sem deps
 ```
 
@@ -169,16 +169,18 @@ entrypoints):** 226 arquivos em `lib/`, **196 alcançáveis, 30 não**.
 - [ ] P3.4 Níveis de `indent` em listas (limitação 4).
 - **Aceite:** `quill_table_better_pdf_test.dart` e `table_aware_delta_parser_test.dart` portados; o fixture "colunas iguais menores que a largura da página" renderiza com as larguras certas.
 
-### P4 — Delta → HTML — ✅ **CONCLUÍDO (2026-07-31)**; P4.5 (HTML → Delta) pendente
+### P4 — Delta ⇄ HTML — ✅ **CONCLUÍDO (2026-07-31)**
 - [x] P4.1 `nadar_delta_to_html/` (31 arq., 1.899 l.) copiado para `lib/src/converters/html/`, com os imports apontando para o Delta daqui. **Nenhuma mudança de lógica foi necessária** — o achado do §2.1 se confirmou na prática: o `Delta` deste pacote é superconjunto do de lá.
 - [x] P4.2 `utils/css_util.dart` reescrito **sem `csslib`**: um parser de declarações que respeita parênteses (`rgb(1, 2, 3)`, `url(a;b)`) e aspas. O original embrulhava o estilo num seletor falso (`.x { … }`), parseava uma folha inteira e caminhava a AST com dois níveis de `try`/`catch` para lidar com mudanças de API.
 - [x] P4.3 `lib/dart_quill_html.dart` exporta `deltaToHtml(Delta)`, `opsToHtml(List)` — para o Delta que chega do banco, sem construir um objeto só para converter — e `HtmlConvertOptions` (escape e o wrapper `<div style="…">` que o frontend do SALI concatenava à mão, agora com a constante `saliDocumentStyle`).
 - [x] P4.4 **30 casos** (`html_export_test.dart` 19, `css_util_test.dart` 11): formatos inline e de bloco, escape de `<script>`, wrapper, os 4 documentos reais do SALI (com asserção de que uma amostra do texto sobrevive — sem isso um conversor que devolvesse `<p></p>` passaria), tabela virando `<table>` e determinismo.
 - **Dois defeitos reais encontrados, ambos silenciosos:**
   1. `stripWidthQuick` usava a flag inline `(?i)`, que **Dart não aceita**: qualquer chamada lançava `FormatException`. O comentário "use apenas como último recurso" é provavelmente a razão de nunca ter estourado em produção.
-  2. Depois de corrigida a flag, `width` **não** protegia o `max-width` — o hífen já é fronteira de palavra, então `` casa entre `max-` e `width`. A regex passou a ancorar em início-de-string ou `;`. Levar o `max-width` junto tiraria justamente o que segura a tabela dentro da página impressa.
-- [ ] P4.5 `delta_from_html` (HTML → Delta, 16 arq., 2.162 l.) — **destravado pela decisão 3**: o package `html` está autorizado. Fecha o par e substitui o `HtmlToDelta` do frontend.
-- **Aceite (parcial):** 1.008 VM verdes. Falta o round-trip `delta → html → delta`, que depende do P4.5.
+  2. Depois de corrigida a flag, `\bwidth` **não** protegia o `max-width` — o hífen já é fronteira de palavra, então `\b` casa entre `max-` e `width`. A regex passou a ancorar em início-de-string ou `;`. Levar o `max-width` junto tiraria justamente o que segura a tabela dentro da página impressa.
+- [x] **P4.5 HTML → Delta (2026-07-31).** `delta_from_html` (16 arq., 2.162 l.) em `lib/src/converters/html/from_html/`, exportado como `htmlToDelta(String)` mais `HtmlToDelta`/`HtmlOperations`/`CustomHtmlPart` para quem precisa customizar. É o caminho que roda **sem DOM e sem editor** — o que o backend precisa para importar documento de fora, e o que o distingue do `Clipboard.convert`, que trabalha sobre o DOM vivo do navegador.
+- [x] **P4.6 `html: ^0.15.4` entrou no `pubspec.yaml`** (decisão 3), saindo de `dev_dependencies`, com o motivo escrito ao lado da linha. Verificado que o build web do demo continua compilando: quem não importa `dart_quill_html.dart` não paga por ele.
+- [x] **P4.7 Round-trip provado (18 casos em `html_import_test.dart`).** É o teste que dá valor ao par: cada formato tem de sobreviver à ida **e à volta**. Um conversor pode gerar HTML bonito e mesmo assim perder o formato ao reimportar — e é assim que um documento se degrada, uma conversão de cada vez. Cobertos: negrito, itálico, link com query string, cabeçalho, lista, acentuação/travessão, e o caso que mais assusta — texto com `<` e `&` **não** pode voltar escapado duas vezes.
+- **Aceite:** 1.026 VM + 96 Chrome verdes; round-trip estável nos formatos cobertos.
 
 ### P5 — Fechar a malha DOCX ⇄ HTML/PDF (1–2 dias)
 - [ ] P5.1 Teste de cadeia sobre um `.docx` real: `docx → Delta → HTML` e `docx → Delta → PDF`.
