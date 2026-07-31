@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:dart_quill/dart_quill_docx.dart';
-import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/delta/delta.dart';
 import 'package:test/test.dart';
 
 /// Concatenates every string insert of [delta] into the document plain text.

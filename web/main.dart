@@ -9,7 +9,7 @@ import 'package:dart_quill/dart_quill_docx.dart' as docx;
 import 'package:dart_quill/src/core/emitter.dart';
 import 'package:dart_quill/src/core/initialization.dart';
 import 'package:dart_quill/src/core/selection.dart' show Range;
-import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/delta/delta.dart';
 import 'package:dart_quill/src/core/quill.dart';
 import 'package:dart_quill/src/core/theme.dart';
 import 'package:dart_quill/src/platform/html_dom.dart';

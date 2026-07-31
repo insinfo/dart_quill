@@ -1,4 +1,4 @@
-import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/delta/delta.dart';
 import 'package:dart_quill/src/table_better/formats/table.dart';
 import 'package:dart_quill/src/table_better/register.dart';
 import 'package:test/test.dart';

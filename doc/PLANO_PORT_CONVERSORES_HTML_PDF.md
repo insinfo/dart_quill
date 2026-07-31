@@ -22,7 +22,7 @@ canvas_editor — ele apenas **não está exportado nem coberto por testes**:
 | Peça | Arquivo | Linhas |
 |---|---|---:|
 | Exportador Delta→PDF | `lib/src/converters/pdf/pdf_exporter.dart` | 1.073 |
-| Escritor de PDF (objetos, xref, streams) | `…/canvas_editor/document/pdf/pdf_writer.dart` | 259 |
+| Escritor de PDF (objetos, xref, streams) | `…/office/document/pdf/pdf_writer.dart` | 259 |
 | Content stream (operadores, WinAnsi) | `…/document/pdf/pdf_content.dart` | 304 |
 | Imagens (JPEG/PNG + SMask) | `…/document/pdf/pdf_image.dart` | 286 |
 | Rasterizador auxiliar | `…/document/pdf/raster_pdf_encoder.dart` | 147 |
@@ -76,7 +76,7 @@ como código: os 7 testes e os fixtures de delta real (`Férias`, `TR de sistema
 `tabela com colunas iguais`) migram e passam a ser o contrato do nosso
 exportador.
 
-Também não vêm: `highlight` (14.609 l. — temos o `dart_highlight` do G13.7),
+Também não vêm: `highlight` (14.609 l. — temos o realçador de `lib/src/highlighter/`),
 `numerus` (numeração romana: ~40 linhas próprias), `quill_delta_easy_parser`
 (o nosso exportador já tem o seu parser), `delta_html` e `delta_to_pdf` (mortos,
 zero call sites).
@@ -138,9 +138,10 @@ entrypoints):** 226 arquivos em `lib/`, **196 alcançáveis, 30 não**.
   - `dependencies/dart_highlight/` → **`lib/src/highlighter/`** (barril `highlighter.dart`)
   - `dependencies/dart_math/` → **`lib/src/math/`** (barril `tex_math.dart`)
   - Testes acompanharam (`test/unit/highlighter/`, `test/unit/math/`) e o README foi atualizado.
-- [ ] **PX.3 `dart_quill_delta` → `lib/src/delta/`.** É *o modelo do editor*, com **67 consumidores** — o oposto de uma dependência externa. Mudança mecânica (um `sed` nos imports), mas grande; fazer isolada, com a suíte verde antes e depois.
-- [ ] **PX.4 `diff_match_patch` → `lib/src/delta/diff/`.** Consumidor único: `Delta.diff`. Fica junto de quem o usa.
-- [ ] **PX.5 `canvas_editor` (70 arq., 19.151 l.) — o caso legítimo, mas mal endereçado.** É port de um projeto de terceiros, então `dependencies/` faz sentido; o problema é que **metade dele não é editor**: `document/{docx,opc,xml,zip}` é a máquina do DOCX e `document/{pdf,fonts}` é a do PDF — as duas coisas que este plano promove a produto. Proposta: mover `document/pdf` + `document/fonts` para **`lib/src/converters/pdf/backend/`** (junto do `pdf_exporter.dart`, que já é o consumidor) e manter o resto sob `dependencies/canvas_editor` com um `README.md` dizendo de onde veio e o que foi adaptado. Fazer **depois** do P1, para não mover o chão embaixo do trabalho de fontes.
+- [x] **PX.3 `dart_quill_delta` → `lib/src/delta/` (2026-07-30).** É *o modelo do editor*, com **66 consumidores** — o oposto de uma dependência externa. O barril virou `delta/delta.dart`.
+- [x] **PX.4 `diff_match_patch` → `lib/src/delta/diff_match_patch/` (2026-07-30).** Consumidor único: `Delta.diff`. Agora mora junto de quem o usa; o nome fica, porque é o nome do algoritmo e é o que preserva a procedência.
+- [x] **PX.5 `canvas_editor` → `lib/src/office/` (2026-07-30).** O nome dizia "editor de canvas", que é de onde o código veio, não o que ele faz aqui: OOXML (`document/{docx,opc,xml,zip}`), escritor de PDF (`document/pdf`), métricas de fonte (`document/fonts`), o modelo de elementos (`editor/`) e as pontes Delta⇄docx (`word/`). Movido inteiro, preservando a estrutura interna — os imports relativos internos continuaram válidos e só os 5 consumidores externos mudaram. Ganhou **`lib/src/office/README.md`** com a procedência (port do canvas-editor, o que foi adaptado) e o mapa dos diretórios.
+- [x] **PX.5b `lib/src/dependencies/` deixou de existir (2026-07-30).**
 - [ ] **PX.6 Guarda contra reincidência:** `tool/find_unreachable.dart` (o analisador usado aqui) vira ferramenta versionada, com `--check` para o CI reprovar código morto novo. Ele precisa entender `part` e `import ... if (...)` antes de virar guarda — os dois falsos positivos acima.
 - **Aceite:** suíte verde a cada passo; `lib/src/dependencies/` contendo **só** o que veio mesmo de fora, cada um com um README de procedência.
 
@@ -149,7 +150,7 @@ entrypoints):** 226 arquivos em `lib/`, **196 alcançáveis, 30 não**.
 `Calibri` não existem no PDF e qualquer caractere fora do cp1252 vira `?`.
 - [ ] P1.1 **Parser TTF/OTF mínimo**: tabelas `head`, `hhea`, `hmtx`, `maxp`, `cmap` (formatos 4 e 12), `loca`, `glyf`, `name`, `post`, `OS/2`. Só leitura, só o que o embedding exige. Referência de formato: `dart_graphics/lib/src/typography/openfont/`, `jsPDF/lib/src/libs/ttffont.dart` e `itext/lib/src/io/font/` — **como referência, sem copiar dependência**.
 - [ ] P1.2 **Subsetting**: manter só os glifos usados pelo documento, remapeando `loca`/`glyf` e recalculando `hmtx`. É o que impede o PDF de um despacho de 2 páginas pesar 2 MB por causa de quatro variantes da Inter.
-- [ ] P1.3 **Embedding CID**: `/Type0` + `/Identity-H`, `CIDFontType2`, `/FontFile2` (subset comprimido em Flate — o codec zlib **já existe** em `canvas_editor/document/zip/codecs/zlib/`), `/W` a partir do `hmtx` e **`/ToUnicode`**, sem o qual copiar texto do PDF assinado devolve lixo.
+- [ ] P1.3 **Embedding CID**: `/Type0` + `/Identity-H`, `CIDFontType2`, `/FontFile2` (subset comprimido em Flate — o codec zlib **já existe** em `office/document/zip/codecs/zlib/`), `/W` a partir do `hmtx` e **`/ToUnicode`**, sem o qual copiar texto do PDF assinado devolve lixo.
 - [ ] P1.4 Trocar a medição: `FontMetrics` passa a ler `hmtx` da fonte embutida, eliminando a estimativa ×1,05 do negrito (limitação 2).
 - [ ] P1.5 API: `PdfFontSource.fromBytes(Uint8List, family: 'inter', weight/style)`, um `PdfFontRegistry` que resolve família→fonte e cai nas standard-14 quando não há bytes.
 - **Aceite:** PDF com Inter embutida abre no Acrobat/Chrome/Word; texto copiado volta correto (inclusive `ç`, `ã`, `—`); um teste mede o tamanho do arquivo para provar que o subset funcionou.
@@ -207,6 +208,6 @@ verde, em vez de aposta.
 ## 7. Decisões que preciso de você
 
 1. **Fontes**: confirmo que os `.ttf` **não** entram na lib (o consumidor passa os bytes)? Embutir a Inter resolveria o "funciona out-of-the-box" ao custo de ~300 KB por variante dentro do pacote.
-2. **Perfil SALI** (sanitizer, page-setup, whitelist de fontes): entra como perfil opcional aqui — recomendado, some do `new_sali` — ou fica lá?
-3. **`delta_from_html`** (P4.5): incluo, reescrevendo sobre o `DomParser` da abstração para não adicionar o package `html` como dependência?
+2. **Perfil SALI** (sanitizer, page-setup, whitelist de fontes): entra como perfil opcional aqui — recomendado, some do `new_sali` — ou fica lá? some do `new_sali e fica aqui
+3. **`delta_from_html`** (P4.5): incluo, reescrevendo sobre o `DomParser` da abstração para não adicionar o package `html` como dependência? unica biblioteca permitida ser adcionada ao pubspec os html é aceitavel ser adicionado como depedencia
 4. **Ordem**: começo pelo P0 (expor + testar o que já existe) ou você prefere P4 (HTML) primeiro, que é mais barato e já substitui o `getValidSemanticHTML` do frontend?

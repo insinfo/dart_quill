@@ -6,7 +6,7 @@ import '../blots/text.dart';
 import '../platform/dom.dart';
 
 import 'package:collection/collection.dart';
-import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/delta/delta.dart';
 
 class Editor {
   final Scroll scroll;

@@ -3,7 +3,7 @@ library tooltip_position_test;
 
 import 'package:dart_quill/src/core/initialization.dart';
 import 'package:dart_quill/src/core/quill.dart';
-import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/delta/delta.dart';
 import 'package:dart_quill/src/platform/html_dom.dart';
 import 'package:dart_quill/src/ui/dom_interop.dart';
 import 'package:dart_quill/src/ui/tooltip.dart';

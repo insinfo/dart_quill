@@ -1,6 +1,6 @@
 import '../core/module.dart';
 import '../core/quill.dart';
-import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
+import '../delta/delta.dart';
 
 Map<String, dynamic> _normalizeTableData(dynamic data) {
   if (data is Map<String, dynamic>) {

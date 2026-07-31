@@ -1,7 +1,7 @@
 import 'package:dart_quill/src/core/emitter.dart';
 import 'package:dart_quill/src/core/quill.dart';
 import 'package:dart_quill/src/core/selection.dart';
-import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/delta/delta.dart';
 import 'package:dart_quill/src/formats/code.dart';
 import 'package:dart_quill/src/modules/keyboard.dart';
 import 'package:test/test.dart';

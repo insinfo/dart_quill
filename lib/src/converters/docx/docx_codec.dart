@@ -1,6 +1,6 @@
 /// Delta <-> DOCX codec.
 ///
-/// Bridges the vendored pure-Dart OOXML stack (`dependencies/canvas_editor`)
+/// Bridges the pure-Dart OOXML stack (`office/`)
 /// with the dart_quill [Delta] model:
 ///
 /// - [docxToDelta]: DOCX bytes -> `DocxReader` -> `DocxToElementConverter`
@@ -27,23 +27,23 @@ library;
 
 import 'dart:typed_data';
 
-import '../../dependencies/canvas_editor/ce_docx.dart'
+import '../../office/ce_docx.dart'
     show DocxFile, DocxReader, DocxWriter;
-import '../../dependencies/canvas_editor/editor/dataset/enum/element.dart'
+import '../../office/editor/dataset/enum/element.dart'
     show ElementType;
-import '../../dependencies/canvas_editor/editor/dataset/enum/list.dart'
+import '../../office/editor/dataset/enum/list.dart'
     show ListType;
-import '../../dependencies/canvas_editor/editor/dataset/enum/row.dart'
+import '../../office/editor/dataset/enum/row.dart'
     show RowFlex;
-import '../../dependencies/canvas_editor/editor/interface/element.dart'
+import '../../office/editor/interface/element.dart'
     show IElement;
-import '../../dependencies/canvas_editor/word/docx_to_element.dart'
+import '../../office/word/docx_to_element.dart'
     show DocxConversionResult, DocxToElementConverter;
-import '../../dependencies/canvas_editor/word/element_to_docx.dart'
+import '../../office/word/element_to_docx.dart'
     show EditorToDocx;
-import '../../dependencies/canvas_editor/word/quill_delta.dart'
+import '../../office/word/quill_delta.dart'
     show QuillDeltaConverter;
-import '../../dependencies/dart_quill_delta/dart_quill_delta.dart' show Delta;
+import '../../delta/delta.dart' show Delta;
 
 /// Converts the bytes of a `.docx` file into a Quill [Delta].
 ///

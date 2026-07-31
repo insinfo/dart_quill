@@ -13,7 +13,7 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:dart_quill/src/dependencies/canvas_editor/document/pdf/pdf_writer.dart'
+import 'package:dart_quill/src/office/document/pdf/pdf_writer.dart'
     show zlibDecode;
 
 class PdfReader {

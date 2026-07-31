@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/delta/delta.dart';
 import 'package:dart_quill/src/modules/table_embed.dart';
 import 'package:test/test.dart';
 

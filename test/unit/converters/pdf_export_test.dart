@@ -15,9 +15,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dart_quill/dart_quill_pdf.dart';
-import 'package:dart_quill/src/dependencies/canvas_editor/document/pdf/pdf_writer.dart'
+import 'package:dart_quill/src/office/document/pdf/pdf_writer.dart'
     show zlibDecode, zlibEncode;
-import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/delta/delta.dart';
 import 'package:test/test.dart';
 
 import '../../support/pdf_reader.dart';

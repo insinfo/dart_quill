@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:dart_quill/src/core/emitter.dart';
-import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/delta/delta.dart';
 
 import '../platform/dom.dart';
 import '../platform/platform.dart';

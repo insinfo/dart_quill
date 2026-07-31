@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import '../formats/abstract/attributor.dart';
 import '../platform/dom.dart';
-import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/delta/delta.dart';
 import 'abstract/blot.dart';
 import 'break.dart';
 import 'inline.dart';

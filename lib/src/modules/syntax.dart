@@ -10,7 +10,7 @@ import '../blots/text.dart';
 import '../core/emitter.dart';
 import '../core/module.dart';
 import '../core/quill.dart';
-import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
+import '../delta/delta.dart';
 import '../formats/abstract/attributor.dart';
 import '../formats/code.dart' as code_format;
 import '../platform/dom.dart';

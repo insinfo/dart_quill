@@ -102,4 +102,4 @@ export 'src/ui/icons.dart';
 export 'src/ui/picker.dart' show ColorPicker, IconPicker, Picker;
 export 'src/ui/tabler_icons.dart';
 export 'src/ui/tooltip.dart' show Tooltip, isScrollable;
-export 'src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+export 'src/delta/delta.dart';

@@ -3,7 +3,7 @@
 /// Case for case, with the upstream expectations verbatim.
 import 'package:dart_quill/src/blots/scroll.dart';
 import 'package:dart_quill/src/core/editor.dart';
-import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/delta/delta.dart';
 import 'package:test/test.dart';
 
 import '../../support/quill_test_helpers.dart';

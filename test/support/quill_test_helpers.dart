@@ -5,7 +5,7 @@ import 'package:dart_quill/src/core/initialization.dart';
 import 'package:dart_quill/src/core/quill.dart';
 import 'package:dart_quill/src/formats/abstract/attributor.dart';
 import 'package:dart_quill/src/core/theme.dart';
-import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/delta/delta.dart';
 import 'package:dart_quill/src/modules/clipboard.dart';
 import 'package:test/test.dart';
 import 'test_helpers.dart';

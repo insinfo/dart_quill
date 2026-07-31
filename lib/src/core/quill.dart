@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import '../blots/abstract/blot.dart';
 import '../blots/scroll.dart';
-import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
+import '../delta/delta.dart';
 import '../formats/abstract/attributor.dart';
 import '../modules/clipboard.dart';
 import '../modules/history.dart';

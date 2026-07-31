@@ -11,7 +11,7 @@ import 'package:dart_quill/src/blots/abstract/blot.dart';
 import 'package:dart_quill/src/blots/embed.dart';
 import 'package:dart_quill/src/blots/inline.dart';
 import 'package:dart_quill/src/core/quill.dart';
-import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/delta/delta.dart';
 import 'package:dart_quill/src/platform/dom.dart';
 import 'package:dart_quill/src/platform/platform.dart';
 import 'package:test/test.dart';

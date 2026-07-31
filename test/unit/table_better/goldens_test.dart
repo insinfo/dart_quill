@@ -6,7 +6,7 @@ import 'dart:io';
 
 import 'package:dart_quill/src/core/quill.dart';
 import 'package:dart_quill/src/core/selection.dart';
-import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/delta/delta.dart';
 import 'package:dart_quill/src/modules/toolbar.dart';
 import 'package:dart_quill/src/table_better/register.dart';
 import 'package:dart_quill/src/table_better/table_better.dart';

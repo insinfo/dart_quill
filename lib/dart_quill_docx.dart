@@ -2,7 +2,7 @@
 ///
 /// Pure-Dart (VM and web) conversion between Quill [Delta] documents and
 /// Office Open XML (`.docx`) files, backed by the vendored OOXML stack in
-/// `src/dependencies/canvas_editor`.
+/// `src/office`.
 ///
 /// ```dart
 /// import 'dart:io';

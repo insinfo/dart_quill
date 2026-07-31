@@ -13,7 +13,7 @@ library;
 import '../../core/emitter.dart';
 import '../../core/quill.dart';
 import '../../core/selection.dart';
-import '../../dependencies/dart_quill_delta/dart_quill_delta.dart';
+import '../../delta/delta.dart';
 import '../../platform/dom.dart';
 import '../assets/icons.dart';
 import '../config/config.dart';

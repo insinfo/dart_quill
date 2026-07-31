@@ -1,8 +1,8 @@
 /// Delta -> PDF exporter.
 ///
-/// Bridges the dart_quill [Delta] model with the vendored pure-Dart PDF
-/// stack (`dependencies/canvas_editor/document/pdf`) and the embedded font
-/// metrics (`dependencies/canvas_editor/document/fonts`):
+/// Bridges the dart_quill [Delta] model with the pure-Dart PDF
+/// stack (`office/document/pdf`) and the embedded font
+/// metrics (`office/document/fonts`):
 ///
 /// - [deltaToPdf]: [Delta] -> `QuillDeltaConverter.fromDelta` (element list)
 ///   -> paginated layout (this file) -> `PdfWriter` -> PDF bytes.
@@ -35,33 +35,33 @@ library;
 
 import 'dart:typed_data';
 
-import '../../dependencies/canvas_editor/document/fonts/font_metrics.dart'
+import '../../office/document/fonts/font_metrics.dart'
     show FontMetrics;
-import '../../dependencies/canvas_editor/document/fonts/font_registry.dart'
+import '../../office/document/fonts/font_registry.dart'
     show FontRegistry;
-import '../../dependencies/canvas_editor/document/pdf/pdf_content.dart'
+import '../../office/document/pdf/pdf_content.dart'
     show PdfContentBuilder, encodeWinAnsi, standardFontFor;
-import '../../dependencies/canvas_editor/document/pdf/pdf_image.dart'
+import '../../office/document/pdf/pdf_image.dart'
     show PdfImageData, decodeDataUrlImage;
-import '../../dependencies/canvas_editor/document/pdf/pdf_writer.dart'
+import '../../office/document/pdf/pdf_writer.dart'
     show PdfWriter;
-import '../../dependencies/canvas_editor/editor/dataset/enum/element.dart'
+import '../../office/editor/dataset/enum/element.dart'
     show ElementType;
-import '../../dependencies/canvas_editor/editor/dataset/enum/list.dart'
+import '../../office/editor/dataset/enum/list.dart'
     show ListType;
-import '../../dependencies/canvas_editor/editor/dataset/enum/row.dart'
+import '../../office/editor/dataset/enum/row.dart'
     show RowFlex;
-import '../../dependencies/canvas_editor/editor/dataset/enum/title.dart'
+import '../../office/editor/dataset/enum/title.dart'
     show TitleLevel;
-import '../../dependencies/canvas_editor/editor/interface/element.dart'
+import '../../office/editor/interface/element.dart'
     show IColgroup, IElement;
-import '../../dependencies/canvas_editor/editor/interface/table/td.dart'
+import '../../office/editor/interface/table/td.dart'
     show ITd;
-import '../../dependencies/canvas_editor/editor/interface/table/tr.dart'
+import '../../office/editor/interface/table/tr.dart'
     show ITr;
-import '../../dependencies/canvas_editor/word/quill_delta.dart'
+import '../../office/word/quill_delta.dart'
     show QuillDeltaConverter;
-import '../../dependencies/dart_quill_delta/dart_quill_delta.dart' show Delta;
+import '../../delta/delta.dart' show Delta;
 
 /// Conversion factor: CSS px (96 dpi) -> PDF points (72 dpi).
 const double _pxToPt = 72 / 96;

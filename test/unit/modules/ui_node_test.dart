@@ -1,5 +1,5 @@
 import 'package:dart_quill/src/core/emitter.dart';
-import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
+import 'package:dart_quill/src/delta/delta.dart';
 import 'package:dart_quill/src/formats/list.dart';
 import 'package:dart_quill/src/modules/ui_node.dart';
 import 'package:dart_quill/src/platform/dom.dart';

@@ -1,5 +1,5 @@
 import '../../blots/scroll.dart';
-import '../../dependencies/dart_quill_delta/dart_quill_delta.dart';
+import '../../delta/delta.dart';
 import '../../platform/dom.dart';
 import '../formats/table.dart';
 import 'utils.dart' as utils;

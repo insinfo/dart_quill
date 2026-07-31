@@ -4,7 +4,7 @@ import '../core/module.dart';
 import '../core/quill.dart';
 import '../core/selection.dart';
 import '../core/emitter.dart';
-import '../dependencies/dart_quill_delta/dart_quill_delta.dart';
+import '../delta/delta.dart';
 import '../blots/block.dart';
 import '../blots/text.dart';
 import '../blots/abstract/blot.dart';

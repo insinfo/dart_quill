@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:collection/collection.dart';
-import '../../diff_match_patch/diff_match_patch.dart' as dmp;
+import '../diff_match_patch/diff_match_patch.dart' as dmp;
 
 import 'operation.dart';
 import 'delta_iterator.dart';
