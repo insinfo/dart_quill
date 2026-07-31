@@ -7,7 +7,7 @@
 /// document it is only supposed to colour.
 library;
 
-import 'package:dart_quill/src/dependencies/dart_highlight/dart_highlight.dart';
+import 'package:dart_quill/src/highlighter/highlighter.dart';
 import 'package:test/test.dart';
 
 void main() {

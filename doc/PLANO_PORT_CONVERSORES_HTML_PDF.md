@@ -120,6 +120,30 @@ Inter/Arial/Calibri e dos caminhos onde elas moram.
 - [x] P0.5 A limitação do cp1252 está **fixada como teste**, não como comentário: `preço` passa, `日本` não. No dia em que o P1 entregar as fontes embutidas, esse teste falha e é reescrito — em vez de continuar passando silenciosamente.
 - **Resultado:** 972 VM verdes, `dart analyze` limpo, `pubspec.yaml` **inalterado** (zero dependências).
 
+### PX — Faxina e integração de `lib/src/dependencies/` (2–3 dias) — parcialmente feito
+O diretório `dependencies/` diz "código de fora, tratado como caixa-preta". Boa
+parte dele **não é mais isso**: há código escrito do zero aqui e há código morto.
+Enquanto ficar sob esse nome, ninguém o refatora, ninguém o testa direito, e o
+`dart2js` carrega o que não deveria existir.
+
+**Levantamento (medido com um analisador de alcançabilidade a partir dos quatro
+entrypoints):** 226 arquivos em `lib/`, **196 alcançáveis, 30 não**.
+
+- [x] **PX.1 Código morto removido (2026-07-30): 2.099 linhas.**
+  - `dependencies/quill_delta_easy_parser/` (17 arq., 1.918 l.) — importado **só por si mesmo**; nada no pacote o alcança.
+  - `core/attributes/attributor_store.dart` (21 l.) — o "AttributorStore ingênuo" que o inventário já registrava como morto no **B19**; o real é o de `formats/abstract/attributor.dart`.
+  - `canvas_editor/ce_fonts.dart` e `ce_pdf.dart` (barris que ninguém importa) e `document/pdf/raster_pdf_encoder.dart` (147 l.), alcançável só pelo barril morto.
+  - *Falsos positivos confirmados e **preservados**: `platform_stub.dart` e `dom_interop_stub.dart` (só chegam por `import ... if (dart.library.js)`, que o analisador não segue) e `diff_match_patch/src/diff/*.dart` (são `part` de `src/diff.dart`). Apagar qualquer um deles quebraria o pacote.*
+- [x] **PX.2 O que foi escrito aqui saiu de `dependencies/` (2026-07-30).** Chamar de dependência código nascido neste repositório é enganoso:
+  - `dependencies/dart_highlight/` → **`lib/src/highlighter/`** (barril `highlighter.dart`)
+  - `dependencies/dart_math/` → **`lib/src/math/`** (barril `tex_math.dart`)
+  - Testes acompanharam (`test/unit/highlighter/`, `test/unit/math/`) e o README foi atualizado.
+- [ ] **PX.3 `dart_quill_delta` → `lib/src/delta/`.** É *o modelo do editor*, com **67 consumidores** — o oposto de uma dependência externa. Mudança mecânica (um `sed` nos imports), mas grande; fazer isolada, com a suíte verde antes e depois.
+- [ ] **PX.4 `diff_match_patch` → `lib/src/delta/diff/`.** Consumidor único: `Delta.diff`. Fica junto de quem o usa.
+- [ ] **PX.5 `canvas_editor` (70 arq., 19.151 l.) — o caso legítimo, mas mal endereçado.** É port de um projeto de terceiros, então `dependencies/` faz sentido; o problema é que **metade dele não é editor**: `document/{docx,opc,xml,zip}` é a máquina do DOCX e `document/{pdf,fonts}` é a do PDF — as duas coisas que este plano promove a produto. Proposta: mover `document/pdf` + `document/fonts` para **`lib/src/converters/pdf/backend/`** (junto do `pdf_exporter.dart`, que já é o consumidor) e manter o resto sob `dependencies/canvas_editor` com um `README.md` dizendo de onde veio e o que foi adaptado. Fazer **depois** do P1, para não mover o chão embaixo do trabalho de fontes.
+- [ ] **PX.6 Guarda contra reincidência:** `tool/find_unreachable.dart` (o analisador usado aqui) vira ferramenta versionada, com `--check` para o CI reprovar código morto novo. Ele precisa entender `part` e `import ... if (...)` antes de virar guarda — os dois falsos positivos acima.
+- **Aceite:** suíte verde a cada passo; `lib/src/dependencies/` contendo **só** o que veio mesmo de fora, cada um com um README de procedência.
+
 ### P1 — Fontes TrueType embutidas (3–5 dias) — **o item crítico**
 É o que separa o exportador atual do PDF do SALI. Sem isso, `Inter`/`Arial`/
 `Calibri` não existem no PDF e qualquer caractere fora do cp1252 vira `?`.

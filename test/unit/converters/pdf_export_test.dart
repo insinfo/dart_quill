@@ -15,6 +15,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dart_quill/dart_quill_pdf.dart';
+import 'package:dart_quill/src/dependencies/canvas_editor/document/pdf/pdf_writer.dart'
+    show zlibDecode, zlibEncode;
 import 'package:dart_quill/src/dependencies/dart_quill_delta/dart_quill_delta.dart';
 import 'package:test/test.dart';
 
@@ -171,6 +173,30 @@ void main() {
       // prove the signed document is the one that was generated.
       final delta = _loadDelta('documento.delta.json');
       expect(_pdfOf(delta), equals(_pdfOf(delta)));
+    });
+  });
+
+  group('zlib round-trip', () {
+    // `zlibEncode` wraps raw deflate in an RFC 1950 envelope; the bundled
+    // `Inflate` consumes raw deflate. Feeding it the whole payload returns
+    // zero bytes *silently* — so the pair has to be tested together, and
+    // `zlibDecode` exists precisely so nobody has to know this.
+    test('encode then decode returns the original bytes', () {
+      for (final sample in <List<int>>[
+        <int>[],
+        <int>[0],
+        utf8.encode('BT /F1 12 Tf (olá, mundo) Tj ET'),
+        List<int>.generate(50000, (i) => i % 256),
+      ]) {
+        expect(zlibDecode(zlibEncode(sample)), equals(sample),
+            reason: 'falhou para ${sample.length} bytes');
+      }
+    });
+
+    test('decode also accepts a raw deflate stream', () {
+      final wrapped = zlibEncode(utf8.encode('conteúdo'));
+      final raw = wrapped.sublist(2, wrapped.length - 4);
+      expect(utf8.decode(zlibDecode(raw)), 'conteúdo');
     });
   });
 

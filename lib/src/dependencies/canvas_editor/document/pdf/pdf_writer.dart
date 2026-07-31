@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../zip/codecs/zlib/deflate.dart';
+import '../zip/codecs/zlib/inflate.dart';
 import 'pdf_image.dart';
 
 /// Escritor PDF de baixo nível, Dart puro, orientado a objetos indiretos.
@@ -228,6 +229,23 @@ String escapePdfString(String value) {
     }
   }
   return out.toString();
+}
+
+/// Desfaz [zlibEncode]: valida o header zlib (RFC 1950), descarta o Adler-32
+/// e devolve os bytes originais.
+///
+/// Existe para fechar o par com [zlibEncode]. Sem ele, quem precisa reler um
+/// stream `/FlateDecode` (um teste, um inspetor de PDF) descobre do jeito
+/// difícil que o [Inflate] embutido consome **deflate cru**, sem header — e
+/// alimentá-lo com o payload inteiro devolve zero bytes, em silêncio.
+Uint8List zlibDecode(List<int> data) {
+  final List<int> bytes = data is Uint8List ? data : Uint8List.fromList(data);
+  // CMF/FLG: os 4 bits baixos do CMF são o método de compressão (8 = deflate).
+  final bool hasHeader = bytes.length > 6 && (bytes[0] & 0x0f) == 0x08;
+  final List<int> deflated = hasHeader
+      ? Uint8List.sublistView(bytes as Uint8List, 2, bytes.length - 4)
+      : bytes;
+  return Inflate(deflated).getBytes();
 }
 
 /// Envolve [raw] em zlib (RFC 1950): header + deflate + Adler-32.

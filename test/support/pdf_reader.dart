@@ -13,7 +13,8 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:dart_quill/src/dependencies/canvas_editor/document/zip/codecs/zlib/inflate.dart';
+import 'package:dart_quill/src/dependencies/canvas_editor/document/pdf/pdf_writer.dart'
+    show zlibDecode;
 
 class PdfReader {
   PdfReader(this.bytes) : rawLatin1 = latin1.decode(bytes, allowInvalid: true);
@@ -108,8 +109,7 @@ class PdfReader {
       final payload = bytes.sublist(dataStart, end);
       if (dictionary.contains('FlateDecode')) {
         try {
-          result.add(latin1.decode(Inflate(_rawDeflate(payload)).getBytes(),
-              allowInvalid: true));
+          result.add(latin1.decode(zlibDecode(payload), allowInvalid: true));
         } catch (_) {
           // A stream this reader cannot inflate is not text worth asserting.
         }
@@ -118,17 +118,6 @@ class PdfReader {
       }
     }
     return result;
-  }
-
-  /// Strips the zlib (RFC 1950) header and Adler-32 trailer.
-  ///
-  /// `PdfWriter.zlibEncode` wraps a raw deflate stream, which is what
-  /// `/FlateDecode` means, but the bundled [Inflate] consumes raw deflate.
-  static Uint8List _rawDeflate(Uint8List payload) {
-    if (payload.length > 6 && (payload[0] & 0x0f) == 0x08) {
-      return Uint8List.sublistView(payload, 2, payload.length - 4);
-    }
-    return payload;
   }
 
   String _dictionaryBefore(int streamKeyword) {

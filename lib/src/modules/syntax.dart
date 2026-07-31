@@ -15,7 +15,7 @@ import '../formats/abstract/attributor.dart';
 import '../formats/code.dart' as code_format;
 import '../platform/dom.dart';
 import '../platform/platform.dart';
-import '../dependencies/dart_highlight/dart_highlight.dart' as dart_highlight;
+import '../highlighter/highlighter.dart' as dart_highlight;
 import '../ui/dom_interop.dart' as dom_interop;
 import 'clipboard.dart' show Matcher, traverse;
 

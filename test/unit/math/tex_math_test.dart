@@ -6,7 +6,7 @@
 /// editor, which is why upstream passes `throwOnError: false` to KaTeX.
 library;
 
-import 'package:dart_quill/src/dependencies/dart_math/dart_math.dart';
+import 'package:dart_quill/src/math/tex_math.dart';
 import 'package:test/test.dart';
 
 void main() {

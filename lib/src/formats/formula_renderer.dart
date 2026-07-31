@@ -1,4 +1,4 @@
-import '../dependencies/dart_math/dart_math.dart';
+import '../math/tex_math.dart';
 import '../platform/dom.dart';
 
 /// Colour used for a formula that does not parse.

@@ -275,7 +275,7 @@ grade, e os 16 idiomas do plugin.
 ## Realce de sintaxe
 
 O upstream exige que a aplicação carregue o **highlight.js** de um CDN. Aqui o
-realçador é parte do pacote (`lib/src/dependencies/dart_highlight/`), escrito em
+realçador é parte do pacote (`lib/src/highlighter/`), escrito em
 Dart, então basta ligar o módulo:
 
 ```dart
@@ -296,7 +296,7 @@ qualquer tema hljs colore o resultado — as cores empacotadas estão em
 Para uma linguagem própria, sem tocar no pacote:
 
 ```dart
-import 'package:dart_quill/src/dependencies/dart_highlight/dart_highlight.dart';
+import 'package:dart_quill/src/highlighter/highlighter.dart';
 
 registerLanguage(const Language(
   name: 'dart',
@@ -330,7 +330,7 @@ Nota de paridade: `code-token` fica **fora** do Delta do documento — o
 ## Fórmulas (LaTeX)
 
 O upstream exige o **KaTeX** em `window`. Aqui o renderizador é parte do pacote
-(`lib/src/dependencies/dart_math/`) e produz **MathML**, que o navegador desenha
+(`lib/src/math/`) e produz **MathML**, que o navegador desenha
 nativamente — sem script, sem fonte para baixar e sem folha de estilo de
 terceiros. O botão `formula` da toolbar funciona sem configuração:
 
@@ -351,7 +351,7 @@ Como o renderizador é Dart puro, o mesmo MathML sai na VM — útil para export
 ou testar:
 
 ```dart
-import 'package:dart_quill/src/dependencies/dart_math/dart_math.dart';
+import 'package:dart_quill/src/math/tex_math.dart';
 
 texToMathML(r'e=mc^2');            // <math …><mi>e</mi>…</math>
 isValidTex(r'\frac{1}');           // false
