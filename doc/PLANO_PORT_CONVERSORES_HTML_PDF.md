@@ -67,9 +67,14 @@ Do `new_sali/core/lib/src/services/pdf` (634 l., 9 arquivos) e do
 O `quill_to_pdf` (5.446 l.) existe para falar com o `pdf_plus`: é um tradutor
 Delta→*widgets* (`pw.Widget`, `pw.RichText`, `pw.SpanningTable`… **68 APIs
 distintas**). Portá-lo obrigaria a reimplementar um motor de layout tipo Flutter
-inteiro — constraints, `MultiPage`, `LayoutBuilder`, `FittedBox`, `SvgImage` —
-para depois desenhar o mesmo que o nosso exportador já desenha direto no content
-stream. **É exatamente o inchaço que a restrição do projeto rejeita.**
+inteiro — constraints, `MultiPage`, `LayoutBuilder`, `FittedBox` — para depois
+desenhar o mesmo que o nosso exportador já desenha direto no content stream.
+**É exatamente o inchaço que a restrição do projeto rejeita.**
+
+*Correção de 2026-07-31:* eu havia listado o `pw.SvgImage` como parte desse
+inchaço. **Errado** — o SALI depende dele para o brasão da prefeitura, e sem
+ele o cabeçalho some do PDF. O que não vem é o SVG genérico do `pdf_plus`; o
+que precisa existir aqui está no **P7**, dimensionado pelo arquivo real.
 
 Do lado do PDF, o `new_sali` entra como **especificação e banco de testes**, não
 como código: os 7 testes e os fixtures de delta real (`Férias`, `TR de sistema`,
@@ -188,6 +193,44 @@ entrypoints):** 226 arquivos em `lib/`, **196 alcançáveis, 30 não**.
 - [x] **P4.6 `html: ^0.15.4` entrou no `pubspec.yaml`** (decisão 3), saindo de `dev_dependencies`, com o motivo escrito ao lado da linha. Verificado que o build web do demo continua compilando: quem não importa `dart_quill_html.dart` não paga por ele.
 - [x] **P4.7 Round-trip provado (18 casos em `html_import_test.dart`).** É o teste que dá valor ao par: cada formato tem de sobreviver à ida **e à volta**. Um conversor pode gerar HTML bonito e mesmo assim perder o formato ao reimportar — e é assim que um documento se degrada, uma conversão de cada vez. Cobertos: negrito, itálico, link com query string, cabeçalho, lista, acentuação/travessão, e o caso que mais assusta — texto com `<` e `&` **não** pode voltar escapado duas vezes.
 - **Aceite:** 1.026 VM + 96 Chrome verdes; round-trip estável nos formatos cobertos.
+
+### P7 — Imagem de cabeçalho e SVG no PDF — **lacuna encontrada em 2026-07-31**
+
+**O brasão da prefeitura some do PDF, sem aviso.** Medido: o Delta do SALI
+começa com `{"insert":{"headerImage":"…/document_header.svg"}}`; o conversor de
+HTML já o transforma em `<img>` (veio no P4), mas o exportador de PDF **não
+conhece o embed nem sabe desenhar SVG** — o documento sai sem cabeçalho e nada
+reclama. É o pior tipo de defeito: o PDF abre, parece certo, e falta o brasão.
+
+No `new_sali` isso funcionava porque o `quill_to_pdf` delegava ao
+`pw.SvgImage` do `pdf_plus` (com `svgCustomFontLookup` para a fonte do texto
+dentro do SVG). Como o `pdf_plus` está fora, o suporte tem de existir aqui.
+
+**Inventário do arquivo real** (`document_header.svg`, 180 KB, exportado do
+CorelDRAW) — é ele que define o escopo, não a especificação SVG inteira:
+
+| Elemento | Qtd. | O que exige |
+|---|---:|---|
+| `<path>` | 26 | parser do atributo `d` → operadores de caminho do PDF |
+| `<text>` | 2 | texto com `font-size` e `font-family: Inter` — **depende do P1** |
+| `<linearGradient>` + `<stop>` | 1 + 4 | *shading* axial (tipo 2) e padrão de preenchimento |
+| `<g>` | 4 | agrupamento — **sem nenhum `transform`** no arquivo |
+| `<svg viewBox>` | 1 | uma escala, e só |
+
+Ou seja: **zero `transform`**, zero `<image>` aninhada, zero filtro, zero
+`clipPath`, zero `stroke`. Um renderizador que cubra caminhos, cores sólidas,
+um gradiente linear e texto resolve **este** cabeçalho por inteiro — e é uma
+fração do `pw.SvgImage`, que carrega o SVG genérico.
+
+- [ ] **P7.1 Embed `headerImage` no exportador de PDF.** Hoje o op é descartado em silêncio; passa a ser desenhado no topo da primeira página, com a largura da área útil. Enquanto o P7.2 não existir, um formato não suportado tem de **falhar visivelmente ou registrar**, nunca sumir calado.
+- [x] **P7.2 Renderizador de SVG (2026-07-31)** — `lib/src/office/document/pdf/svg/{svg_path,svg_renderer}.dart`. Parser do atributo `d` (`M/m L/l H/h V/v C/c S/s Q/q T/t A/a Z`, com quadráticas e arcos convertidos para cúbicas, a única curva que o PDF desenha) e travessia de `<svg>/<g>/<path>/<rect>/<polygon>` com herança de `fill`, `fill-rule` e opacidade, `viewBox` → matriz e proporção preservada como no `preserveAspectRatio` padrão.
+  - **Medido no brasão real:** 26 caminhos, **8.048 segmentos**, 8 cores, `viewBox 0 0 1342.93 287.06` — e 8.086 linhas de operadores de PDF.
+  - **Nada some calado.** O que o renderizador não faz vai para `warnings`: `transform`, `<image>`, `<use>`, `clipPath`, filtros, formas ainda não desenhadas e o `<text>` (que espera o P1.3). O gradiente linear é **aproximado pela média ponderada das paradas** e o aviso diz isso — pintar de chapado difere visivelmente do degradê, mas é muito melhor que deixar a peça do brasão sem cor.
+  - **30 casos**, sendo metade sobre as licenças da gramática do `d` que só aparecem em arquivo de editor gráfico: vírgula e espaço intercambiáveis, o sinal como separador (`10-5`), `.5.5` como dois números, comando repetido sem a letra, e a regra mais esquecida — **pares depois de `M` são `L`**, não `M`. Mais o brasão inteiro: cores normalizadas, gradiente avisado, operadores sem notação científica (que um content stream não aceita) e determinismo.
+- [ ] **P7.3 `<text>` dentro do SVG** — depende do P1.3 (fonte embutida): sem ela, "ESTADO DO RIO DE JANEIRO" sairia em Helvetica, não em Inter. É a razão de o `new_sali` precisar do `svgCustomFontLookup`.
+- [ ] **P7.4 Resolução da URL.** O embed guarda uma **URL** (`http://localhost:8080/…`), não os bytes. Igual ao `onDetectImageUrl` do `new_sali`: a biblioteca recebe um resolvedor `Future<Uint8List?> Function(String)` e **não** faz rede por conta própria — o backend lê do disco, o frontend busca, e a lib não decide política de rede.
+- [~] **P7.5 O arquivo real já é fixture** (`test/assets/svg/document_header.svg`); falta a regressão de ponta a ponta, que depende do P7.1.
+- **Aceite:** o PDF do fixture `documento` mostra o brasão; um SVG com recurso não suportado é reportado, não engolido.
 
 ### P5 — Fechar a malha DOCX ⇄ HTML/PDF (1–2 dias)
 - [ ] P5.1 Teste de cadeia sobre um `.docx` real: `docx → Delta → HTML` e `docx → Delta → PDF`.
