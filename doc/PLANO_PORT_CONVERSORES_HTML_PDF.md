@@ -94,9 +94,9 @@ package:dart_quill/dart_quill_html.dart     # Delta ⇄ HTML  → sem deps
 package:dart_quill/dart_quill_pdf.dart      # Delta → PDF   → sem deps
 ```
 
-**Zero dependências novas no `pubspec.yaml`.** O critério de aceite do inventário
-("única dependência runtime: `web`") continua valendo **para a biblioteca
-inteira**, não só para o editor.
+**Dependências: `web` e `html`.** O critério de aceite do inventário
+("única dependência runtime: `web`") passa a admitir **uma** exceção, decidida
+em 2026-07-30: o package `html`, usado só pelo import de HTML externo.
 
 **Fontes são da aplicação — decidido em 2026-07-30.** A biblioteca embute o
 *código* que lê e embute um TTF, **nunca os arquivos `.ttf`**. O que é permitido
@@ -169,13 +169,16 @@ entrypoints):** 226 arquivos em `lib/`, **196 alcançáveis, 30 não**.
 - [ ] P3.4 Níveis de `indent` em listas (limitação 4).
 - **Aceite:** `quill_table_better_pdf_test.dart` e `table_aware_delta_parser_test.dart` portados; o fixture "colunas iguais menores que a largura da página" renderiza com as larguras certas.
 
-### P4 — Delta ⇄ HTML (1–2 dias)
-- [ ] P4.1 Copiar `nadar_delta_to_html/` para `lib/src/converters/html/`, reescrevendo imports para o Delta daqui (**compatível**: o nosso `Delta` é superconjunto do de lá — mesma base, só o hash difere: `quiver.hash2` × `Object.hash`).
-- [ ] P4.2 Substituir `utils/css_util.dart` por um parser de declarações próprio (107 l. → ~40), eliminando o `csslib`.
-- [ ] P4.3 Revisar os 22 listeners contra o que **este** editor produz: `data-list` no `<li>` (G10.10), `data-language` no code-block, e o `table_better.dart` que já existe lá.
-- [ ] P4.4 API: `String deltaToHtml(Delta, {HtmlConvertOptions})`, com o wrapper `<div style="font-size:12pt…">` que hoje o frontend concatena à mão como opção.
-- [ ] P4.5 Trazer `delta_from_html` (HTML→Delta, 16 arq.) para fechar o par — o frontend já o usa. *Ele depende do package `html`, hoje só em `dev_dependencies`: ou vira dependência normal (viola a regra) ou é reescrito sobre o `DomParser` da abstração de plataforma, que o clipboard já usa. **Recomendo o segundo.***
-- **Aceite:** round-trip `delta → html → delta` estável nos fixtures; golden de HTML por formato.
+### P4 — Delta → HTML — ✅ **CONCLUÍDO (2026-07-31)**; P4.5 (HTML → Delta) pendente
+- [x] P4.1 `nadar_delta_to_html/` (31 arq., 1.899 l.) copiado para `lib/src/converters/html/`, com os imports apontando para o Delta daqui. **Nenhuma mudança de lógica foi necessária** — o achado do §2.1 se confirmou na prática: o `Delta` deste pacote é superconjunto do de lá.
+- [x] P4.2 `utils/css_util.dart` reescrito **sem `csslib`**: um parser de declarações que respeita parênteses (`rgb(1, 2, 3)`, `url(a;b)`) e aspas. O original embrulhava o estilo num seletor falso (`.x { … }`), parseava uma folha inteira e caminhava a AST com dois níveis de `try`/`catch` para lidar com mudanças de API.
+- [x] P4.3 `lib/dart_quill_html.dart` exporta `deltaToHtml(Delta)`, `opsToHtml(List)` — para o Delta que chega do banco, sem construir um objeto só para converter — e `HtmlConvertOptions` (escape e o wrapper `<div style="…">` que o frontend do SALI concatenava à mão, agora com a constante `saliDocumentStyle`).
+- [x] P4.4 **30 casos** (`html_export_test.dart` 19, `css_util_test.dart` 11): formatos inline e de bloco, escape de `<script>`, wrapper, os 4 documentos reais do SALI (com asserção de que uma amostra do texto sobrevive — sem isso um conversor que devolvesse `<p></p>` passaria), tabela virando `<table>` e determinismo.
+- **Dois defeitos reais encontrados, ambos silenciosos:**
+  1. `stripWidthQuick` usava a flag inline `(?i)`, que **Dart não aceita**: qualquer chamada lançava `FormatException`. O comentário "use apenas como último recurso" é provavelmente a razão de nunca ter estourado em produção.
+  2. Depois de corrigida a flag, `width` **não** protegia o `max-width` — o hífen já é fronteira de palavra, então `` casa entre `max-` e `width`. A regex passou a ancorar em início-de-string ou `;`. Levar o `max-width` junto tiraria justamente o que segura a tabela dentro da página impressa.
+- [ ] P4.5 `delta_from_html` (HTML → Delta, 16 arq., 2.162 l.) — **destravado pela decisão 3**: o package `html` está autorizado. Fecha o par e substitui o `HtmlToDelta` do frontend.
+- **Aceite (parcial):** 1.008 VM verdes. Falta o round-trip `delta → html → delta`, que depende do P4.5.
 
 ### P5 — Fechar a malha DOCX ⇄ HTML/PDF (1–2 dias)
 - [ ] P5.1 Teste de cadeia sobre um `.docx` real: `docx → Delta → HTML` e `docx → Delta → PDF`.
@@ -205,9 +208,9 @@ verde, em vez de aposta.
 **Estimativa:** P0 1d · P1 3–5d · P2 2–3d · P3 2–3d · P4 1–2d · P5 1–2d →
 **10–16 dias** de trabalho focado, fora o P6.
 
-## 7. Decisões que preciso de você
+## 7. Decisões — respondidas
 
-1. **Fontes**: confirmo que os `.ttf` **não** entram na lib (o consumidor passa os bytes)? Embutir a Inter resolveria o "funciona out-of-the-box" ao custo de ~300 KB por variante dentro do pacote.
-2. **Perfil SALI** (sanitizer, page-setup, whitelist de fontes): entra como perfil opcional aqui — recomendado, some do `new_sali` — ou fica lá? some do `new_sali e fica aqui
-3. **`delta_from_html`** (P4.5): incluo, reescrevendo sobre o `DomParser` da abstração para não adicionar o package `html` como dependência? unica biblioteca permitida ser adcionada ao pubspec os html é aceitavel ser adicionado como depedencia
-4. **Ordem**: começo pelo P0 (expor + testar o que já existe) ou você prefere P4 (HTML) primeiro, que é mais barato e já substitui o `getValidSemanticHTML` do frontend?
+1. **Fontes (2026-07-30):** os `.ttf` **não** entram na lib. Permitido em Dart: arquivos de **métricas** das fontes padrão do PDF. Para fontes reais, só as APIs de carregamento, servindo backend e frontend com a mesma interface.
+2. **Perfil SALI (2026-07-30):** **entra aqui** e **some do `new_sali`** — sanitizer, page-setup e whitelist de fontes viram um perfil opcional desta biblioteca (P2.4).
+3. **`delta_from_html` (2026-07-30):** incluído, e o package **`html` é a única dependência autorizada** a entrar no `pubspec.yaml` além de `web`. O parser de HTML externo (colagem, importação) não vale reescrever do zero — é área de segurança e de casos de borda, onde uma implementação caseira erra mais do que economiza.
+4. **Ordem:** P0 ✅ → PX ✅ → **P4 (HTML)** → P1 (fontes) → P2 → P3 → P5.

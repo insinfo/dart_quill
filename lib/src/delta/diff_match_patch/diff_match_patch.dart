@@ -1,6 +1,6 @@
 library diff_match_patch;
 
-export 'src/diff.dart'
+export 'core/diff.dart'
     show
         Diff,
         diff,
@@ -11,9 +11,9 @@ export 'src/diff.dart'
         DIFF_INSERT,
         DIFF_EQUAL;
 
-export 'src/match.dart' show match;
+export 'core/match.dart' show match;
 
-export 'src/patch.dart'
+export 'core/patch.dart'
     show Patch, patchMake, patchToText, patchFromText, patchApply;
 
-export 'src/api.dart' show DiffMatchPatch;
+export 'core/api.dart' show DiffMatchPatch;
