@@ -10,7 +10,7 @@ analyzer:
   exclude:
     - build/**
     # Requires ngdart, which consumers add themselves; not part of the lib build.
-    #- example/ngdart/**
+    - example/ngdart/**
     # Reference sources are kept only for comparison and should not be analyzed.
     - referencias/**
   errors:
