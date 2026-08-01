@@ -106,8 +106,12 @@ class QuillEditorComponent implements AfterViewInit {
     // classe: é o que sobrevive a um documento de terceiros, em que a família
     // e o tamanho vêm do arquivo. O padrão do upstream é por classe, com uma
     // whitelist de três nomes.
-    Quill.register(FontStyleAttributor.instance);
-    Quill.register(SizeStyle.instance);
+    // O `true` é obrigatório: `formats/font` e `formats/size` já foram
+    // tomados pelos attributors de CLASSE no initializeQuill, e sem
+    // sobrescrever a registração é ignorada em silêncio — o texto continua
+    // passando pela whitelist de três nomes e o tamanho do documento some.
+    Quill.register(FontStyleAttributor.instance, true);
+    Quill.register(SizeStyle.instance, true);
     setFontWhitelist(_wordFonts);
     // Sem whitelist de tamanho: o importador de DOCX converte os pontos do
     // Word para px, então qualquer valor precisa passar. A toolbar continua

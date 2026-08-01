@@ -70,4 +70,22 @@ void main() {
     expect(PdfReader(bytes).endsWithEof, isTrue);
     expect(PdfReader(bytes).extractText(), contains('linha longa'));
   });
+
+  test('o tamanho do Word chega ao Delta em PONTOS, com o valor original', () {
+    final ops = docxToDelta(
+            File('test/assets/docx/etp_corpus.docx').readAsBytesSync())
+        .toJson();
+    final sizes = ops
+        .map((op) => (op['attributes'] as Map?)?['size'])
+        .whereType<String>()
+        .toSet();
+    expect(sizes, isNotEmpty);
+    for (final size in sizes) {
+      expect(size, endsWith('pt'),
+          reason: 'o Word trabalha em pontos; px nao casa com nenhuma lista '
+              'de tamanhos padrao (veio "\$size")');
+    }
+    expect(sizes, contains('10pt'),
+        reason: 'o corpo do ETP e Arial 10 — o valor tem de voltar exato');
+  });
 }

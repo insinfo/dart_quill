@@ -180,23 +180,48 @@ conversores.
 | Frente | Estado |
 |---|---|
 | H1 — `<tr>` por id de linha string | **corrigido** |
-| H2 — célula multi-bloco num único `<td>` (`<p>`/`<hN>`/`<ul>`/`<ol>`), `table-header` e `table-list` renderizados, inline completo | **corrigido** |
-| H3 — `<colgroup>` a partir de `table-col` e de `table-temporary.col-widths`, com `table-layout: fixed` | **corrigido** |
-| H4–H7, W1–W10, P1–P20 | pendentes |
+| H2 — célula multi-bloco num único `<td>` | **corrigido** |
+| H3 — `<colgroup>` + `col-widths` + `table-layout: fixed` | **corrigido** |
+| P5 — `rowspan` na tabela do PDF | **corrigido** (grade de ocupação) |
+| P8 — recuo por nível de lista no PDF | **corrigido** |
+| P17 — suíte de testes de tabela no PDF | **criada** |
+| W1/W2 — fonte e tamanho descartados pela whitelist | **corrigido** (configurável) |
+| H4–H7, W3–W10, P1–P4, P6/P7, P9–P16, P18–P20 | pendentes |
 
-Testes que travam o corrigido: `test/unit/converters/html_table_rows_test.dart`
-e `test/unit/converters/html_table_cells_test.dart` (este alimentado pelos
-deltas reais dos goldens do plugin).
+Testes que travam o corrigido: `html_table_rows_test.dart`,
+`html_table_cells_test.dart`, `cell_text_hydration_test.dart`,
+`pdf_table_test.dart`, `tab_stop_test.dart`,
+`font_size_whitelist_test.dart` e `style_attributor_override_test.dart`.
 
-Fora desta lista, corrigidos na mesma passagem por serem bugs de produto
-reportados no exemplo ngdart (ambos com E2E que reproduz a condição):
+Corrigidos na mesma passagem por serem bugs de produto reportados no exemplo
+ngdart, todos com teste que reproduz a condição:
 
 - `insertColumn` misturava bounds de viewport com bounds relativos ao
-  container — "inserir coluna à esquerda" não fazia nada quando o editor não
-  estava em x≈0;
-- o dropdown de estilo de borda não fechava ao escolher um valor (guard de
-  `<li>` que o upstream não tem);
-- tabela sem bordas visíveis sob o Limitless (regras de tabela ausentes) e
-  mini-UI do table-better visível sem tabela (especificidade de `.ql-hidden`).
+  container — "inserir coluna à esquerda" não fazia nada fora de x≈0;
+- o dropdown de estilo de borda não fechava ao escolher um valor;
+- tabela sem bordas e mini-UI visível sem tabela sob o Limitless;
+- lista de bullets saindo numerada sob o Limitless (CSS do Quill 1);
+- rótulo do picker quebrando em duas linhas; editor sem rolagem própria;
+- Delete não apagava a imagem selecionada; ícones de posicionamento
+  invisíveis; impressão disparada duas vezes;
+- importação de DOCX com tabela estourava (`Cannot insert into empty
+  TableCell`) e célula do Word com dois parágrafos virava duas colunas;
+- marcador de lista/título colado no texto (o Word usa tabulação);
+- tamanho do Word chegava como px (`13px`) e não casava com nenhuma lista
+  de tamanhos padrão — agora chega em pontos, com o valor original.
+
+## Achados abertos, com diagnóstico pronto
+
+- **Espaçamento de parágrafo e tamanho do marcador** divergem do Word. Raiz
+  comum: o importador materializa o marcador como TEXTO literal, então o
+  bullet é desenhado no tamanho da fonte do parágrafo (o Word usa um
+  marcador próprio, maior e mais recuado), e o espaço entre parágrafos do
+  Word (`w:spacing w:after`) não tem representação no Delta. A correção de
+  fundo é mapear a numeração do Word para listas de verdade do Quill
+  (`list` + `indent`), o que também resolve o recuo; títulos numerados
+  continuam com número literal por não caberem como item de lista.
+- **DOCX grande trava o navegador.** O TR de 140 páginas (10.968 ops, 22
+  tabelas) hidrata na VM em minutos. É custo de hidratação, não erro; o
+  perfil ainda não foi levantado.
 
 Atualizar esta tabela a cada item fechado.

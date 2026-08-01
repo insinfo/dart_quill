@@ -205,7 +205,7 @@ class QuillDeltaConverter {
       if (element.color != null) 'color': element.color,
       if (element.highlight != null) 'background': element.highlight,
       if (element.font != null) 'font': element.font,
-      if (element.size != null) 'size': '${element.size}px',
+      if (element.size != null) 'size': _sizeToPt(element.size!),
       if (element.type == ElementType.superscript) 'script': 'super',
       if (element.type == ElementType.subscript) 'script': 'sub',
     };
@@ -279,6 +279,15 @@ class QuillDeltaConverter {
     void flushLine(Map<String, dynamic> lineAttributes) {
       final Object? header = lineAttributes['header'];
       final Object? list = lineAttributes['list'];
+      // Nível de indentação da linha (Quill: `indent: 1..8`). Viaja no
+      // `extension` porque o modelo Office não tem campo próprio; o
+      // exportador de PDF o converte em recuo à esquerda. Sem isto todos os
+      // níveis de uma lista aninhada saíam alinhados no mesmo recuo.
+      final Object? rawIndent = lineAttributes['indent'];
+      final int indentLevel =
+          rawIndent is int ? rawIndent : int.tryParse('$rawIndent') ?? 0;
+      Map<String, dynamic>? indentExtension() =>
+          indentLevel > 0 ? <String, dynamic>{'listIndent': indentLevel} : null;
       final RowFlex? rowFlex = _alignToRowFlex(lineAttributes['align']);
       if (rowFlex != null) {
         for (final IElement element in line) {
@@ -309,7 +318,7 @@ class QuillDeltaConverter {
           listType: list == 'ordered' ? ListType.ordered : ListType.unordered,
           rowFlex: rowFlex,
           valueList: List<IElement>.from(line),
-        ));
+        )..extension = indentExtension());
       } else {
         if (line.isEmpty) {
           if (separator.isNotEmpty) {
@@ -522,9 +531,26 @@ class QuillDeltaConverter {
     }
   }
 
+  /// Tamanho do modelo Office (px) para o Delta, em PONTOS.
+  ///
+  /// O Word, o PDF e as aplicações trabalham em pontos; emitir px obrigava a
+  /// uma conversão que não fecha — um `Arial 10` do Word virava `13px`, que
+  /// de volta dá 9,75pt, e nenhuma lista de tamanhos padrão casava com esse
+  /// valor (o seletor da toolbar ficava em branco). O px veio de um pt
+  /// arredondado, então arredondar de volta para o meio ponto mais próximo
+  /// recupera o valor original.
+  static String _sizeToPt(int px) {
+    final double pt = (px * 0.75 * 2).round() / 2;
+    final String text =
+        pt == pt.roundToDouble() ? '${pt.round()}' : pt.toString();
+    return '${text}pt';
+  }
+
   static int? _parseSize(Object? size) {
     if (size is num) return size.round();
     if (size is String) {
+      final double? pt = _ptValue(size);
+      if (pt != null) return (pt / 0.75).round();
       final String cleaned =
           size.endsWith('px') ? size.substring(0, size.length - 2) : size;
       return int.tryParse(cleaned);
@@ -532,9 +558,17 @@ class QuillDeltaConverter {
     return null;
   }
 
+  /// Valor em pontos de uma string como `10pt`; null quando não é pt.
+  static double? _ptValue(String value) {
+    if (!value.endsWith('pt')) return null;
+    return double.tryParse(value.substring(0, value.length - 2));
+  }
+
   static double? _toDouble(Object? value) {
     if (value is num) return value.toDouble();
     if (value is String) {
+      final double? pt = _ptValue(value);
+      if (pt != null) return pt / 0.75;
       final String cleaned =
           value.endsWith('px') ? value.substring(0, value.length - 2) : value;
       return double.tryParse(cleaned);
@@ -661,6 +695,8 @@ class _TableAccumulator {
   static double? _parsePx(Object? value) {
     if (value is num) return value.toDouble();
     if (value is String) {
+      final double? pt = QuillDeltaConverter._ptValue(value);
+      if (pt != null) return pt / 0.75;
       final String cleaned =
           value.endsWith('px') ? value.substring(0, value.length - 2) : value;
       return double.tryParse(cleaned);

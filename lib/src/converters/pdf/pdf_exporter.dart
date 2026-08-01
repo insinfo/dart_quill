@@ -189,6 +189,27 @@ class _ImageRef {
 }
 
 /// A measured token of a line: a word, a whitespace stretch or an image.
+/// Uma célula já posicionada na grade da tabela.
+class _TableCellBox {
+  _TableCellBox({
+    required this.td,
+    required this.row,
+    required this.rowspan,
+    required this.x,
+    required this.width,
+    required this.blocks,
+    required this.contentHeight,
+  });
+
+  final ITd td;
+  final int row;
+  final int rowspan;
+  final double x;
+  final double width;
+  final List<_Block> blocks;
+  final double contentHeight;
+}
+
 class _Seg {
   _Seg({
     required this.run,
@@ -386,7 +407,9 @@ class _PdfLayoutEngine {
                 defaultSize: options.baseFontSize),
             align: _alignOf(element.rowFlex),
             marker: ordered ? '$listOrdinal. ' : '• ',
-            indent: 21.6,
+            // Um recuo por nível: uma lista aninhada saía toda alinhada no
+            // mesmo ponto, e os níveis viravam indistinguíveis.
+            indent: _listIndent * (1 + _indentLevelOf(element)),
           ));
           skipNextNewline = true;
           continue;
@@ -851,52 +874,136 @@ class _PdfLayoutEngine {
     final List<double> columnWidths = _columnWidths(table);
     if (columnWidths.isEmpty) return;
 
-    for (final ITr tr in rows) {
-      // Measure the row: lay out each cell's blocks at its column width.
-      final List<List<_Block>> cellBlocks = <List<_Block>>[];
-      final List<double> cellWidths = <double>[];
-      final List<double> cellX = <double>[];
-      double x = _contentX;
+    // x de cada coluna, acumulado uma vez.
+    final List<double> columnX = <double>[];
+    var acc = _contentX;
+    for (final double w in columnWidths) {
+      columnX.add(acc);
+      acc += w;
+    }
+
+    // --- grade de ocupação -------------------------------------------------
+    // Uma célula com rowspan ocupa a MESMA coluna nas linhas seguintes, e as
+    // células dessas linhas têm de pular por cima dela. Sem isso as colunas
+    // escorregam para a esquerda a cada linha e a célula mesclada é desenhada
+    // com a altura de uma linha só — era assim que a tabela de TCO saía
+    // achatada no PDF.
+    final List<_TableCellBox> boxes = <_TableCellBox>[];
+    final List<int> occupied = List<int>.filled(columnWidths.length, 0);
+    for (int r = 0; r < rows.length; r++) {
       int column = 0;
-      double rowHeight = tr.height * _pxToPt;
-      if (rowHeight < 16) rowHeight = 16;
-      for (final ITd td in tr.tdList) {
+      for (final ITd td in rows[r].tdList) {
+        while (column < occupied.length && occupied[column] > 0) {
+          column++;
+        }
+        if (column >= columnWidths.length) break;
+        final int colspan = td.colspan < 1 ? 1 : td.colspan;
+        final int rowspan = td.rowspan < 1 ? 1 : td.rowspan;
         double width = 0;
-        for (int span = 0; span < td.colspan; span++) {
-          if (column < columnWidths.length) {
-            width += columnWidths[column];
-            column++;
-          }
+        for (int c = column; c < column + colspan && c < columnWidths.length; c++) {
+          width += columnWidths[c];
+          if (rowspan > 1) occupied[c] = rowspan;
         }
         if (width <= 0) width = 36;
         final List<_Block> blocks = _buildBlocks(td.value);
-        final double contentHeight =
-            _measureBlocks(blocks, width - 2 * _cellPadding);
-        final double cellHeight = contentHeight + 2 * _cellPadding;
-        if (cellHeight > rowHeight) rowHeight = cellHeight;
-        cellBlocks.add(blocks);
-        cellWidths.add(width);
-        cellX.add(x);
-        x += width;
+        boxes.add(_TableCellBox(
+          td: td,
+          row: r,
+          rowspan: rowspan,
+          x: columnX[column],
+          width: width,
+          blocks: blocks,
+          contentHeight:
+              _measureBlocks(blocks, width - 2 * _cellPadding) + 2 * _cellPadding,
+        ));
+        column += colspan;
       }
+      for (int c = 0; c < occupied.length; c++) {
+        if (occupied[c] > 0) occupied[c]--;
+      }
+    }
 
-      _ensureSpace(rowHeight);
-      final double rowTop = _cursorY;
-      for (int i = 0; i < tr.tdList.length; i++) {
-        final ITd td = tr.tdList[i];
-        if (td.backgroundColor != null) {
-          _sink.builder.fillRect(
-              cellX[i], rowTop, cellWidths[i], rowHeight, td.backgroundColor!);
-        }
-        _sink.builder.strokeRect(cellX[i], rowTop, cellWidths[i], rowHeight,
-            color: table.borderColor ?? '#000000',
-            widthPx: table.borderWidth ?? 0.75);
-        _drawBlocksAt(_sink, cellBlocks[i], cellX[i] + _cellPadding,
-            rowTop + _cellPadding, cellWidths[i] - 2 * _cellPadding);
+    // --- alturas das linhas ------------------------------------------------
+    final List<double> rowHeights = <double>[];
+    for (final ITr tr in rows) {
+      final double declared = tr.height * _pxToPt;
+      rowHeights.add(declared < 16 ? 16 : declared);
+    }
+    for (final _TableCellBox box in boxes) {
+      if (box.rowspan == 1 && box.contentHeight > rowHeights[box.row]) {
+        rowHeights[box.row] = box.contentHeight;
       }
-      _cursorY = rowTop + rowHeight;
+    }
+    // Uma célula mesclada só força crescimento se as linhas que ela cobre não
+    // couberem: a sobra vai para a última delas, como faz o Word.
+    for (final _TableCellBox box in boxes) {
+      if (box.rowspan == 1) continue;
+      final int last =
+          (box.row + box.rowspan - 1).clamp(0, rowHeights.length - 1);
+      double span = 0;
+      for (int r = box.row; r <= last; r++) {
+        span += rowHeights[r];
+      }
+      if (box.contentHeight > span) {
+        rowHeights[last] += box.contentHeight - span;
+      }
+    }
+
+    // --- desenho -----------------------------------------------------------
+    final String borderColor = table.borderColor ?? '#000000';
+    final double borderWidth = table.borderWidth ?? 0.75;
+    final List<double> rowTops = List<double>.filled(rows.length, 0);
+    for (int r = 0; r < rows.length; r++) {
+      // Uma célula mesclada é atômica: reserva a altura de todas as suas
+      // linhas para não ser cortada no meio por uma quebra de página.
+      double needed = rowHeights[r];
+      for (final _TableCellBox box in boxes) {
+        if (box.row != r || box.rowspan == 1) continue;
+        double span = 0;
+        for (int i = r;
+            i < r + box.rowspan && i < rowHeights.length;
+            i++) {
+          span += rowHeights[i];
+        }
+        if (span > needed) needed = span;
+      }
+      _ensureSpace(needed);
+      rowTops[r] = _cursorY;
+      _cursorY += rowHeights[r];
       _pageHasContent = true;
     }
+
+    for (final _TableCellBox box in boxes) {
+      double height = 0;
+      for (int r = box.row;
+          r < box.row + box.rowspan && r < rowHeights.length;
+          r++) {
+        height += rowHeights[r];
+      }
+      final double top = rowTops[box.row];
+      if (box.td.backgroundColor != null) {
+        _sink.builder
+            .fillRect(box.x, top, box.width, height, box.td.backgroundColor!);
+      }
+      _sink.builder.strokeRect(box.x, top, box.width, height,
+          color: borderColor, widthPx: borderWidth);
+      _drawBlocksAt(_sink, box.blocks, box.x + _cellPadding, top + _cellPadding,
+          box.width - 2 * _cellPadding);
+    }
+  }
+
+  /// Recuo de um nível de lista, em pontos.
+  static const double _listIndent = 21.6;
+
+  /// Nível de indentação que o conversor anexou à linha (`indent` do Delta).
+  static int _indentLevelOf(IElement element) {
+    final dynamic extension = element.extension;
+    if (extension is Map) {
+      final dynamic level = extension['listIndent'];
+      if (level is int) return level;
+      return int.tryParse('$level') ?? 0;
+    }
+    return 0;
   }
 
   /// Column widths in points, scaled down proportionally when the table is
