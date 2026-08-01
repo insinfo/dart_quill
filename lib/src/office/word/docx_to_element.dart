@@ -458,7 +458,12 @@ class DocxToElementConverter {
       final marker = _counters.next(numPr.numId!, numPr.ilvl);
       if (marker != null && marker.isNotEmpty) {
         final markerStyle = _resolver.resolveRun(paragraph, null);
-        elements.add(_styledText('$marker ', markerStyle, rowFlex, spacing)
+        // TAB, não espaço: o Word separa o marcador do texto por tabulação
+        // (`w:suff` default), e é isso que abre o vão entre "1."/"•" e o
+        // título/item. Com um espaço simples o texto colava no marcador, bem
+        // diferente do documento original. O `.ql-editor` usa
+        // `white-space: pre-wrap`, então a tabulação é renderizada de fato.
+        elements.add(_styledText('$marker\t', markerStyle, rowFlex, spacing)
           ..extension = const {'wpMarker': true});
       }
     }

@@ -195,12 +195,18 @@ class _Seg {
     required this.text,
     required this.width,
     this.isSpace = false,
+    this.isTab = false,
   });
 
   final _Run run;
   final String text;
   final double width;
   final bool isSpace;
+
+  /// Tabulação: a largura não é a do glifo (que não existe), é o avanço até a
+  /// próxima parada, e por isso só pode ser resolvida durante a quebra de
+  /// linhas, quando o x corrente é conhecido.
+  final bool isTab;
 }
 
 /// A laid-out line: segments plus vertical metrics.
@@ -563,6 +569,9 @@ class _PdfLayoutEngine {
 
   static final RegExp _tokenPattern = RegExp(r'\s+|[^\s]+');
 
+  /// Parada de tabulação padrão do Word: 1,25 cm.
+  static const double _tabStopPt = 35.43;
+
   List<_Line> _breakLines(List<_Run> runs, double maxWidth) {
     final double width = maxWidth < 1 ? 1 : maxWidth;
     final List<_Seg> tokens = <_Seg>[];
@@ -586,6 +595,7 @@ class _PdfLayoutEngine {
           text: token,
           width: _measure(run, token),
           isSpace: isSpace,
+          isTab: token.contains('	'),
         ));
       }
     }
@@ -621,6 +631,21 @@ class _PdfLayoutEngine {
     }
 
     for (final _Seg token in tokens) {
+      if (token.isTab) {
+        // Avança até a próxima parada de tabulação, como o Word: é isto que
+        // abre o vão entre o marcador de lista ("1.", "•") e o texto. Medir o
+        // caractere de tabulação daria zero e o texto colaria no marcador.
+        final double stop =
+            ((currentWidth / _tabStopPt).floor() + 1) * _tabStopPt;
+        current.add(_Seg(
+          run: token.run,
+          text: '',
+          width: stop - currentWidth,
+          isSpace: true,
+        ));
+        currentWidth = stop;
+        continue;
+      }
       if (token.isSpace) {
         if (current.isEmpty && wrapped) continue; // collapse at wrap point
         current.add(token);
