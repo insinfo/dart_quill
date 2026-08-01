@@ -1,16 +1,12 @@
 # Extend the default sub-set of linter/analyzer rules used in google3.
 #include: package:lints/recommended.yaml
 
-
-
 analyzer:
   # language:
   #   strict-casts: true
   #   strict-raw-types: true
   exclude:
-    - build/**
-    # Requires ngdart, which consumers add themselves; not part of the lib build.
-    - example/ngdart/**
+    - build/** 
     # Reference sources are kept only for comparison and should not be analyzed.
     - referencias/**
   errors:

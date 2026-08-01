@@ -37,10 +37,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.yaml') }}
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.yaml', 'example/ngdart/pubspec.yaml') }}
           restore-keys: pub-${{ runner.os }}-
 
       - run: dart pub get
+
+      # The ngdart example is its own package: without its deps and the
+      # generated .template.dart files, the root `dart analyze` fails on it.
+      - name: Example deps (ngdart)
+        run: dart pub get
+        working-directory: example/ngdart
+
+      - name: Example codegen + compile (ngdart)
+        run: dart run build_runner build --delete-conflicting-outputs
+        working-directory: example/ngdart
 
       - name: Analyze
         run: dart analyze
