@@ -1,53 +1,54 @@
 # dart_quill
 
-Port em Dart puro do [Quill 2.0.3](https://quilljs.com) e do plugin
-[quill-table-better 1.2.3](https://github.com/attoae/quill-table-better), para
-aplicações web em Dart — com ou sem AngularDart.
+A pure-Dart port of [Quill 2.0.3](https://quilljs.com) and the
+[quill-table-better 1.2.3](https://github.com/attoae/quill-table-better) plugin,
+for Dart web applications — with or without AngularDart.
 
-Não é um *wrapper* sobre o Quill JavaScript: os blots, o parchment, o pipeline
-de Delta, os módulos e os temas foram portados para Dart. A única dependência de
-runtime é `web`.
+This is not a wrapper around the JavaScript Quill: the blots, parchment, the
+Delta pipeline, the modules and the themes were ported to Dart. The only
+runtime dependency is `web`.
 
-> **Estado:** o port está em finalização. O núcleo (Delta, blots, teclado,
-> clipboard, temas, tabelas) está funcional e coberto por testes; o
-> acompanhamento detalhado de paridade contra o TypeScript está em
+> **Status:** the port is in its final stretch. The core (Delta, blots,
+> keyboard, clipboard, themes, tables) is functional and covered by tests;
+> detailed parity tracking against the TypeScript source lives in
 > [`doc/INVENTARIO_E_PLANO_FINALIZACAO.md`](doc/INVENTARIO_E_PLANO_FINALIZACAO.md).
 
 ---
 
-## Índice
+## Table of contents
 
-- [Instalação](#instalação)
-- [Uso mínimo](#uso-mínimo)
-- [Folhas de estilo](#folhas-de-estilo)
-- [Ícones](#ícones)
-- [Tabelas](#tabelas)
-- [Realce de sintaxe](#realce-de-sintaxe)
+- [Installation](#installation)
+- [Minimal usage](#minimal-usage)
+- [Stylesheets](#stylesheets)
+- [Icons](#icons)
+- [Tables](#tables)
+- [Syntax highlighting](#syntax-highlighting)
+- [Formulas (LaTeX)](#formulas-latex)
 - [DOCX](#docx)
-- [Estendendo o editor](#estendendo-o-editor)
-- [Desenvolvimento](#desenvolvimento)
-- [Arquitetura](#arquitetura)
-- [Licença](#licença)
+- [Extending the editor](#extending-the-editor)
+- [Development](#development)
+- [Architecture](#architecture)
+- [License](#license)
 
 ---
 
-## Instalação
+## Installation
 
 ```yaml
 dependencies:
   dart_quill:
-    path: ../dart_quill   # ou git:, enquanto não publicado
+    path: ../dart_quill   # or git:, while not yet published
 ```
 
 ```bash
 dart pub get
 ```
 
-Requer SDK Dart `^3.6.0`.
+Requires Dart SDK `^3.6.0`.
 
 ---
 
-## Uso mínimo
+## Minimal usage
 
 ```dart
 import 'package:web/web.dart' as web;
@@ -55,15 +56,15 @@ import 'package:dart_quill/dart_quill.dart';
 import 'package:dart_quill/src/platform/html_dom.dart' show HtmlDomElement;
 
 void main() {
-  // Registra blots, formatos e módulos padrão. Chame uma vez, no boot.
+  // Registers the default blots, formats and modules. Call once, at boot.
   initializeQuill();
 
-  // Carrega a folha do tema Snow (ver "Folhas de estilo" para a alternativa
-  // de declarar o <link> no próprio HTML).
+  // Loads the Snow theme stylesheet (see "Stylesheets" for the alternative
+  // of declaring the <link> in the HTML itself).
   QuillAssets.injectSnowTheme();
 
-  // O editor fala com a abstração de DOM do pacote, não com package:web
-  // diretamente; `HtmlDomElement` é a ponte.
+  // The editor talks to the package's DOM abstraction, not to package:web
+  // directly; `HtmlDomElement` is the bridge.
   final host = HtmlDomElement(web.document.querySelector('#editor')!);
 
   final quill = Quill(
@@ -89,22 +90,22 @@ void main() {
     ),
   );
 
-  quill.setContents(Delta()..insert('Olá, mundo!\n'));
+  quill.setContents(Delta()..insert('Hello, world!\n'));
   print(quill.getContents().toJson());
 }
 ```
 
-### API principal
+### Main API
 
-O contrato segue o do Quill; os mutadores devolvem o Delta aplicado.
+The contract follows Quill's; mutators return the applied Delta.
 
 ```dart
-quill.getText();                       // texto puro
-quill.getContents();                   // Delta do documento
-quill.setContents(Delta()..insert('texto\n'));
+quill.getText();                       // plain text
+quill.getContents();                   // document Delta
+quill.setContents(Delta()..insert('text\n'));
 quill.updateContents(delta, source: EmitterSource.USER);
 
-quill.insertText(0, 'texto', source: EmitterSource.API);
+quill.insertText(0, 'text', source: EmitterSource.API);
 quill.deleteText(0, 5);
 quill.formatText(0, 5, 'bold', true);
 quill.formatLine(0, 1, 'header', 2);
@@ -113,9 +114,9 @@ quill.removeFormat(0, 5);
 
 quill.getSelection();                  // Range?
 quill.setSelection(const Range(0, 5));
-quill.getFormat(0, 5);                 // formatos ativos no intervalo
+quill.getFormat(0, 5);                 // active formats in the range
 
-quill.enable();  quill.disable();      // somente leitura
+quill.enable();  quill.disable();      // read-only
 quill.getSemanticHTML();
 
 quill.on(EmitterEvents.TEXT_CHANGE, (delta, oldDelta, source) { /* … */ });
@@ -124,41 +125,41 @@ quill.on(EmitterEvents.SELECTION_CHANGE, (range, oldRange, source) { /* … */ }
 
 ---
 
-## Folhas de estilo
+## Stylesheets
 
-**O CSS não é embutido no código Dart.** Ele vive em `lib/assets/*.css` como
-arquivos, servidos em `packages/dart_quill/assets/…`. É o mesmo que o Quill faz
-— o `quill.js` publicado não contém CSS, e o consumidor importa
-`quill/dist/quill.snow.css` — e traz duas vantagens práticas:
+**The CSS is not embedded in Dart code.** It lives in `lib/assets/*.css` as
+files, served from `packages/dart_quill/assets/…`. This is the same thing Quill
+does — the published `quill.js` contains no CSS, and the consumer imports
+`quill/dist/quill.snow.css` — and it brings two practical advantages:
 
-- você edita o tema, sobrescreve regras ou troca por outra folha sem recompilar
-  a biblioteca nem fazer fork;
-- uma constante de CSS em Dart não é removida pelo *tree-shaking* do `dart2js`:
-  ela entraria no JavaScript de toda aplicação, mesmo nas que trazem o próprio
-  tema.
+- you can edit the theme, override rules or swap in another stylesheet without
+  recompiling the library or forking it;
+- a CSS constant in Dart is not removed by `dart2js` tree-shaking: it would end
+  up in the JavaScript of every application, even those shipping their own
+  theme.
 
-Declare os `<link>` no HTML:
+Declare the `<link>` tags in the HTML:
 
 ```html
 <link rel="stylesheet" href="packages/dart_quill/assets/quill.snow.css">
 ```
 
-Ou deixe a biblioteca inseri-los:
+Or let the library insert them:
 
 ```dart
-QuillAssets.injectSnowTheme();          // <link> do tema Snow
-QuillAssets.injectFileTheme();          // Snow + Tabler + camada Limitless
-QuillAssets.injectStylesheet('meu-tema', 'assets/meu-quill.css');
+QuillAssets.injectSnowTheme();          // Snow theme <link>
+QuillAssets.injectFileTheme();          // Snow + Tabler + Limitless layer
+QuillAssets.injectStylesheet('my-theme', 'assets/my-quill.css');
 ```
 
-Cada folha é inserida no máximo uma vez por documento (a chave é o `id`
-passado).
+Each stylesheet is inserted at most once per document (the key is the `id`
+passed in).
 
-### Integração com Limitless
+### Limitless integration
 
-Se a aplicação já carrega o `all.min.css` do Limitless, **não** carregue o
-`quill.snow.css`: o Limitless já traz as regras do tema Quill. Use apenas o
-Tabler e a camada de integração, nessa ordem:
+If the application already loads Limitless's `all.min.css`, do **not** load
+`quill.snow.css`: Limitless already ships the Quill theme rules. Use only the
+Tabler font and the integration layer, in this order:
 
 ```html
 <link rel="stylesheet" href="assets/css/ltr/all.min.css">
@@ -166,79 +167,80 @@ Tabler e a camada de integração, nessa ordem:
 <link rel="stylesheet" href="packages/dart_quill/assets/quill.limitless.css">
 ```
 
-A camada `quill.limitless.css` precisa vir **depois** da folha global do
-Limitless.
+The `quill.limitless.css` layer must come **after** the global Limitless
+stylesheet.
 
 ---
 
-## Ícones
+## Icons
 
-Dois conjuntos, mutuamente exclusivos por instância de editor:
+Two sets, mutually exclusive per editor instance:
 
 ```dart
 ThemeOptions(
   theme: 'snow',
-  iconTheme: QuillIconTheme.svg,     // padrão: os SVGs oficiais do Quill
+  iconTheme: QuillIconTheme.svg,     // default: Quill's official SVGs
 );
 
 ThemeOptions(
   theme: 'snow',
-  iconTheme: QuillIconTheme.tabler,  // webfont Tabler (exige o CSS acima)
+  iconTheme: QuillIconTheme.tabler,  // Tabler webfont (requires the CSS above)
 );
 ```
 
-Nunca misture os dois modos no mesmo editor.
+Never mix the two modes in the same editor.
 
-### Os SVGs são gerados, não colados
+### The SVGs are generated, not pasted
 
-Os 72 SVGs oficiais ficam em `lib/assets/icons/svg_quill/` — essa é a fonte de
-verdade, versionada e comparável com o upstream por um `diff` de diretórios. Os
-literais Dart em `lib/src/ui/icons.dart` saem daí:
+The 72 official SVGs live in `lib/assets/icons/svg_quill/` — that is the source
+of truth, versioned and comparable against upstream with a directory `diff`.
+The Dart literals in `lib/src/ui/icons.dart` are produced from it:
 
 ```bash
-dart run tool/gen_icons.dart          # regrava os arquivos gerados
-dart run tool/gen_icons.dart --check  # falha se estiverem defasados (CI)
+dart run tool/gen_icons.dart          # rewrites the generated files
+dart run tool/gen_icons.dart --check  # fails when they are stale (CI)
 ```
 
-É a contraparte do `scripts/babel-svg-inline-import.cjs` do Quill, que resolve
-`import boldIcon from '../assets/icons/bold.svg'` em tempo de build. Ícone é
-`innerHTML` de botão, não folha de estilo — por isso ele é embutido, e o CSS
-não. Editar `icons.dart` à mão faz `test/unit/generated_icons_test.dart` falhar.
+It is the counterpart of Quill's `scripts/babel-svg-inline-import.cjs`, which
+resolves `import boldIcon from '../assets/icons/bold.svg'` at build time. An
+icon is a button's `innerHTML`, not a stylesheet — that is why it is embedded
+and the CSS is not. Editing `icons.dart` by hand makes
+`test/unit/generated_icons_test.dart` fail.
 
-Para trocar um ícone: substitua o `.svg`, rode o gerador, rode os testes.
+To replace an icon: swap the `.svg`, run the generator, run the tests.
 
 ---
 
-## Tabelas
+## Tables
 
-Há dois módulos, e eles são independentes.
+There are two modules, and they are independent.
 
-### `table` — o módulo básico do Quill
+### `table` — Quill's basic module
 
 ```dart
 ThemeOptions(modules: {'table': true});
 
 final table = quill.getModule('table') as Table;
 table.insertTable(3, 3);
-table.insertRow(1);         // 1 = abaixo, 0 = acima
+table.insertRow(1);         // 1 = below, 0 = above
 table.insertColumn(1);
 table.deleteTable();
 ```
 
-### `table-better` — o plugin completo
+### `table-better` — the full plugin
 
-Tabelas com colgroup, células mescladas, menus flutuantes, redimensionamento por
-arrasto e formulário de propriedades.
+Tables with colgroup, merged cells, floating menus, drag resizing and a
+properties form.
 
 ```dart
 import 'package:dart_quill/dart_quill.dart';
 import 'package:dart_quill/dart_quill_table_better.dart';
 
 initializeQuill();
-registerTableBetter();                 // registra os 13 blots e o clipboard
+registerTableBetter();                 // registers the 13 blots and the clipboard
 
 final quill = Quill(
-  host,                                // HtmlDomElement, como no exemplo acima
+  host,                                // HtmlDomElement, as in the example above
   options: ThemeOptions(
     theme: 'snow',
     modules: {
@@ -248,8 +250,8 @@ final quill = Quill(
         ]),
       ),
       'table-better': {
-        'language': 'pt_BR',           // 16 locales disponíveis
-        'toolbarTable': true,          // botão com o seletor 10×10
+        'language': 'en_US',           // 16 locales available
+        'toolbarTable': true,          // button with the 10×10 grid picker
         'menus': ['column', 'row', 'merge', 'table', 'cell', 'delete'],
         'toolbarButtons': {
           'whiteList': ['bold', 'italic', 'link'],
@@ -264,36 +266,34 @@ final tables = quill.getModule('table-better') as TableBetter;
 tables.insertTable(3, 3);
 ```
 
-O que está disponível: seleção de células por arrasto, menus flutuantes
-(coluna/linha/mesclar/tabela/célula/quebra/excluir/copiar), conversão de linha
-de cabeçalho, redimensionamento visual de colunas e linhas, formulário de
-propriedades com paleta de 15 cores **e roda de cor**, recortar/copiar/colar por
-grade, e os 16 idiomas do plugin.
+What is available: cell selection by dragging, floating menus
+(column/row/merge/table/cell/wrap/delete/copy), header-row conversion, visual
+resizing of columns and rows, a properties form with a 15-color palette **and a
+color wheel**, grid-based cut/copy/paste, and the plugin's 16 languages.
 
 ---
 
-## Realce de sintaxe
+## Syntax highlighting
 
-O upstream exige que a aplicação carregue o **highlight.js** de um CDN. Aqui o
-realçador é parte do pacote (`lib/src/highlighter/`), escrito em
-Dart, então basta ligar o módulo:
+Upstream requires the application to load **highlight.js** from a CDN. Here the
+highlighter is part of the package (`lib/src/highlighter/`), written in Dart,
+so just enable the module:
 
 ```dart
 ThemeOptions(modules: {'syntax': true});
 ```
 
-As 14 linguagens do seletor do Quill vêm prontas (plain, bash, cpp, cs, css,
-diff, xml/html, java, javascript/ts, markdown, php, python, ruby, sql), e cada
-bloco de código ganha um `<select>` de linguagem como nó de UI. Os nomes de
-classe são os do highlight.js (`hljs-keyword`, `hljs-string`, …), então
-qualquer tema hljs colore o resultado — as cores empacotadas estão em
-`assets/quill.syntax.css`:
+The 14 languages of Quill's picker come ready (plain, bash, cpp, cs, css, diff,
+xml/html, java, javascript/ts, markdown, php, python, ruby, sql), and each code
+block gets a language `<select>` as a UI node. The class names are
+highlight.js's (`hljs-keyword`, `hljs-string`, …), so any hljs theme colors the
+output — the bundled colors are in `assets/quill.syntax.css`:
 
 ```html
 <link rel="stylesheet" href="packages/dart_quill/assets/quill.syntax.css">
 ```
 
-Para uma linguagem própria, sem tocar no pacote:
+For your own language, without touching the package:
 
 ```dart
 import 'package:dart_quill/src/highlighter/highlighter.dart';
@@ -304,35 +304,36 @@ registerLanguage(const Language(
 ));
 ```
 
-E as opções continuam aceitando um realçador da aplicação, que tem precedência
-sobre o embutido:
+And the options still accept an application-provided highlighter, which takes
+precedence over the built-in one:
 
 ```dart
 ThemeOptions(modules: {
   'syntax': SyntaxOptions(
     interval: const Duration(milliseconds: 500),
-    // Um highlighter que devolve Delta…
+    // A highlighter returning a Delta…
     highlighter: (text, language) => Delta()
       ..insert('final', {'code-token': 'keyword'})
       ..insert(' x = 1;')
       ..insert('\n', {'code-block': language}),
-    // …ou um no contrato do highlight.js, devolvendo HTML com classes hljs-*:
+    // …or one following the highlight.js contract, returning HTML with hljs-* classes:
     // htmlHighlighter: (text, language) => hljs.highlight(text, language),
   ),
 });
 ```
 
-Nota de paridade: `code-token` fica **fora** do Delta do documento — o
-`bubbleFormats` o remove, exatamente como no upstream. O realce é apresentação.
+Parity note: `code-token` stays **out** of the document Delta —
+`bubbleFormats` strips it, exactly as upstream does. Highlighting is
+presentation.
 
 ---
 
-## Fórmulas (LaTeX)
+## Formulas (LaTeX)
 
-O upstream exige o **KaTeX** em `window`. Aqui o renderizador é parte do pacote
-(`lib/src/math/`) e produz **MathML**, que o navegador desenha
-nativamente — sem script, sem fonte para baixar e sem folha de estilo de
-terceiros. O botão `formula` da toolbar funciona sem configuração:
+Upstream requires **KaTeX** on `window`. Here the renderer is part of the
+package (`lib/src/math/`) and produces **MathML**, which the browser draws
+natively — no script, no font download and no third-party stylesheet. The
+toolbar's `formula` button works with no configuration:
 
 ```dart
 final quill = Quill(container, options: ThemeOptions(
@@ -342,13 +343,14 @@ final quill = Quill(container, options: ThemeOptions(
 quill.insertEmbed(0, 'formula', r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}');
 ```
 
-Cobre o que aparece em texto real: frações, raízes, índices e expoentes,
-`\left…\right`, somatórios e integrais com limites, gregas, acentos
-(`\hat`, `\vec`, `\overline`), `\text`, fontes (`\mathbb`, `\mathbf`, …),
-espaçamentos e ambientes (`pmatrix`, `bmatrix`, `cases`, `array`, `aligned`).
+It covers what shows up in real text: fractions, roots, subscripts and
+superscripts, `\left…\right`, sums and integrals with limits, Greek letters,
+accents (`\hat`, `\vec`, `\overline`), `\text`, fonts (`\mathbb`, `\mathbf`,
+…), spacing and environments (`pmatrix`, `bmatrix`, `cases`, `array`,
+`aligned`).
 
-Como o renderizador é Dart puro, o mesmo MathML sai na VM — útil para exportar
-ou testar:
+Since the renderer is pure Dart, the same MathML comes out on the VM — useful
+for exporting or testing:
 
 ```dart
 import 'package:dart_quill/src/math/tex_math.dart';
@@ -357,29 +359,29 @@ texToMathML(r'e=mc^2');            // <math …><mi>e</mi>…</math>
 isValidTex(r'\frac{1}');           // false
 ```
 
-LaTeX inválido não derruba o editor: a fórmula mostra o próprio código-fonte em
-vermelho, como o `throwOnError: false` do KaTeX.
+Invalid LaTeX does not crash the editor: the formula shows its own source in
+red, like KaTeX's `throwOnError: false`.
 
 ---
 
 ## DOCX
 
-Conversão em Dart puro (VM e web), sem dependências externas:
+Pure-Dart conversion (VM and web), no external dependencies:
 
 ```dart
 import 'dart:io';
 import 'package:dart_quill/dart_quill_docx.dart';
 
-final delta = docxToDelta(File('entrada.docx').readAsBytesSync());
-File('saida.docx').writeAsBytesSync(deltaToDocx(delta));
+final delta = docxToDelta(File('input.docx').readAsBytesSync());
+File('output.docx').writeAsBytesSync(deltaToDocx(delta));
 ```
 
 ---
 
-## Estendendo o editor
+## Extending the editor
 
-O entrypoint público exporta o suficiente para criar formatos e módulos sem
-tocar em `src/`:
+The public entrypoint exports enough to create formats and modules without
+touching `src/`:
 
 ```dart
 import 'package:dart_quill/dart_quill.dart';
@@ -415,7 +417,7 @@ Quill.register(
 );
 ```
 
-Um módulo é uma classe registrada por nome e instanciada pelo tema:
+A module is a class registered by name and instantiated by the theme:
 
 ```dart
 class WordCount extends Module<Map<String, dynamic>> {
@@ -427,79 +429,79 @@ class WordCount extends Module<Map<String, dynamic>> {
 }
 ```
 
-Também estão expostos `Quill.registerPath`, `Quill.importDefinition` e
-`Quill.registeredDefinitions`, a contraparte Dart do `Quill.import` do upstream
-(`import` é palavra reservada em Dart).
+Also exposed are `Quill.registerPath`, `Quill.importDefinition` and
+`Quill.registeredDefinitions`, the Dart counterpart of upstream's
+`Quill.import` (`import` is a reserved word in Dart).
 
 ---
 
-## Desenvolvimento
+## Development
 
 ```bash
 dart pub get
 
-dart analyze                          # deve ficar limpo
-dart test test/unit                   # suíte VM (DOM falso)
-dart test test/browser -p chrome      # suíte de navegador (layout real)
-dart run tool/gen_icons.dart --check  # os arquivos gerados estão em dia?
+dart analyze                          # must stay clean
+dart test test/unit                   # VM suite (fake DOM)
+dart test test/browser -p chrome      # browser suite (real layout)
+dart run tool/gen_icons.dart --check  # are the generated files up to date?
 
-webdev serve                          # exemplo em http://localhost:8080
+webdev serve                          # example at http://localhost:8080
 webdev build
 ```
 
-O exemplo AngularDart está em `example/ngdart/`.
+The AngularDart example is in `example/ngdart/`.
 
-### Testes
+### Tests
 
-- `test/unit/` roda na VM contra um DOM falso — cobre modelo, Delta, blots,
-  teclado, clipboard e toda a lógica de grade das tabelas.
-- `test/browser/` roda em Chrome quando o comportamento depende de layout real
-  (posicionamento de tooltip, *scroll into view*, medição de células).
-- `test/e2e/` usa Puppeteer para os fluxos de ponta a ponta.
+- `test/unit/` runs on the VM against a fake DOM — covers the model, Delta,
+  blots, keyboard, clipboard and all the table grid logic.
+- `test/browser/` runs in Chrome when the behavior depends on real layout
+  (tooltip positioning, scroll into view, cell measurement).
+- `test/e2e/` uses Puppeteer for the end-to-end flows.
 
 ---
 
-## Arquitetura
+## Architecture
 
 ```
 lib/
-  dart_quill.dart               entrypoint principal
-  dart_quill_table_better.dart  plugin de tabelas
-  dart_quill_docx.dart          conversão DOCX
-  assets/                       CSS, webfont e SVGs (arquivos)
+  dart_quill.dart               main entrypoint
+  dart_quill_table_better.dart  tables plugin
+  dart_quill_docx.dart          DOCX conversion
+  assets/                       CSS, webfont and SVGs (files)
     quill.snow.css
     quill.limitless.css
     icons/tabler/
-    icons/svg_quill/            fonte dos ícones embutidos
+    icons/svg_quill/            source of the embedded icons
     icons/svg_table_better/
   src/
-    blots/                      parchment portado + blots do documento
+    blots/                      ported parchment + document blots
     core/                       Quill, Editor, Selection, Emitter, Theme
-    formats/                    negrito, cabeçalho, lista, link, …
+    formats/                    bold, header, list, link, …
     modules/                    toolbar, keyboard, clipboard, history, syntax, …
     themes/                     snow, bubble
-    ui/                         picker, tooltip, ícones
-    table_better/               port do plugin (blots, UI, i18n)
+    ui/                         picker, tooltip, icons
+    table_better/               plugin port (blots, UI, i18n)
     converters/                 DOCX, PDF
-    dependencies/               vendorizado: delta, zip, xml, fontes, …
-    platform/                   abstração de DOM (package:web / stub / fake)
+    dependencies/               vendored: delta, zip, xml, fonts, …
+    platform/                   DOM abstraction (package:web / stub / fake)
 tool/
   gen_icons.dart                SVG → Dart
 ```
 
-**Regra de assets:** CSS e fontes ficam em `lib/assets/` como arquivos; SVG de
-ícone é embutido como constante Dart, porque vai para o `innerHTML` de um botão.
-É a mesma divisão que o `webpack.common.cjs` do Quill faz, e está justificada em
+**Assets rule:** CSS and fonts live in `lib/assets/` as files; icon SVGs are
+embedded as Dart constants, because they go into a button's `innerHTML`. It is
+the same split Quill's `webpack.common.cjs` makes, justified in
 `doc/INVENTARIO_E_PLANO_FINALIZACAO.md` §6.
 
-**Camada de plataforma:** nada fora de `src/platform/` fala com o DOM
-diretamente. É o que permite rodar quase toda a suíte na VM, contra um DOM
-falso, e o que mantém o `dart:html` fora do projeto (só `package:web` +
+**Platform layer:** nothing outside `src/platform/` talks to the DOM directly.
+That is what allows almost the entire suite to run on the VM against a fake
+DOM, and what keeps `dart:html` out of the project (only `package:web` +
 `dart:js_interop`).
 
 ---
 
-## Licença
+## License
 
-Consulte `LICENSE`. O código portado preserva os avisos de copyright do Quill
-(Slab, Jason Chen, salesforce.com) e do quill-table-better.
+See `LICENSE`. The ported code preserves the copyright notices of Quill (Slab,
+Jason Chen, salesforce.com) and quill-table-better.
