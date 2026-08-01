@@ -30,7 +30,11 @@ class Table extends BlockListener {
 
     final buf = StringBuffer();
     bool tableOpen = false;
-    int? currentRow;
+    bool rowOpen = false;
+    // O id da linha é uma STRING opaca ("row-xxxx" no editor, "1"/"2" em
+    // conteúdo colado). Convertê-lo para int fazia ids não numéricos virarem
+    // null e nenhum <tr> era emitido.
+    String? currentRow;
 
     void openTable() {
       buf.write('<table style="border-collapse:collapse;width:100%;">\n');
@@ -47,8 +51,7 @@ class Table extends BlockListener {
     for (var i = 0; i < picks.length; i++) {
       final p = picks[i];
 
-      final rowVal = p.optionValue('row');
-      final row = rowVal is int ? rowVal : int.tryParse(rowVal.toString());
+      final row = p.optionValue('row')?.toString() ?? '';
       final text = (p.optionValue('text') ?? '').toString();
       final align = p.optionValue('align');
       final tdStyle = (align is String && align.isNotEmpty)
@@ -57,27 +60,20 @@ class Table extends BlockListener {
 
       if (!tableOpen) openTable();
 
-      if (currentRow != row) {
-        if (currentRow != null) buf.write('</tr>\n');
+      if (!rowOpen) {
         buf.write('<tr>');
+        rowOpen = true;
+        currentRow = row;
+      } else if (currentRow != row) {
+        buf.write('</tr>\n<tr>');
         currentRow = row;
       }
 
       buf.write('<td$tdStyle>$text</td>');
       p.line.setDone();
-
-      // fecha a <tr> quando mudar de linha ou for o último pick
-      final isLast = i == picks.length - 1;
-      int? nextRow;
-      if (!isLast) {
-        final nr = picks[i + 1].optionValue('row');
-        nextRow = nr is int ? nr : int.tryParse(nr.toString());
-      }
-      if (isLast || nextRow != currentRow) {
-        buf.write('</tr>\n');
-      }
     }
 
+    if (rowOpen) buf.write('</tr>\n');
     closeTable();
 
     // escreve a tabela em um único lugar (no último pick)

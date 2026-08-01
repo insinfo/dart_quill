@@ -104,6 +104,18 @@ Future<void> main() async {
     }''');
     check('3x3 table inserted', tableState == 'rows=3 cells=9', tableState);
 
+    // Cell borders must be visible: Limitless bundles a pre-tables Quill and
+    // Bootstrap's reboot zeroes td borders; quill.limitless.css restores the
+    // core rules.
+    final tdBorder = await page.evaluate<String>('''() => {
+      const td = document.querySelector('.ql-editor td');
+      if (!td) return 'no-td';
+      const cs = getComputedStyle(td);
+      return cs.borderTopWidth + ' ' + cs.borderTopStyle;
+    }''');
+    check('table cell has a visible border', tdBorder == '1px solid',
+        tdBorder);
+
     // Menus bar should now be visible (caret inside the table).
     final menusAfter = await page.evaluate<String>('''() => {
       const el = document.querySelector('.ql-table-menus-container');
@@ -111,8 +123,8 @@ Future<void> main() async {
     }''');
     stdout.writeln('menus bar after insert: display=$menusAfter');
 
-    await page.screenshot().then(
-        (bytes) => File(r'C:\Users\pmro\AppData\Local\Temp\claude\c--MyDartProjects-dart-quill\600f6d86-9fa1-491c-850f-7bf9bc29db12\scratchpad\ngdart_smoke.png')
+    await page.screenshot().then((bytes) =>
+        File(r'c:\MyDartProjects\dart_quill\example\ngdart\build\smoke.png')
             .writeAsBytesSync(bytes));
 
     if (consoleErrors.isNotEmpty) {

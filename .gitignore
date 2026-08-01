@@ -12,6 +12,6 @@ pubspec.lock
 *.log
 
 .local-chrome/
-
+resources/
 # melos
 # pubspec_overrides.yaml

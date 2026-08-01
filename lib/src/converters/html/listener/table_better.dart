@@ -61,11 +61,14 @@ class TableBetter extends BlockListener {
     }
   }
 
-  static int _readRow(dynamic meta) {
+  static String _readRow(dynamic meta) {
     // o plugin costuma enviar 'data-row', mas aceitamos 'row' por segurança.
+    // O id é uma STRING opaca: tabelas criadas no editor usam ids como
+    // "row-is10" (tableId()), e só deltas colados de HTML/Word trazem "1","2".
+    // Converter para int fazia todo id não numérico virar 0 e a tabela
+    // inteira colapsar em um único <tr>.
     final raw = (meta is Map) ? (meta['data-row'] ?? meta['row']) : meta;
-    if (raw is int) return raw;
-    return int.tryParse(raw?.toString() ?? '0') ?? 0;
+    return raw?.toString() ?? '';
   }
 
   @override
@@ -75,7 +78,7 @@ class TableBetter extends BlockListener {
     // agrupamos por tabelas: cada ocorrência de 'table-start' inicia um novo buffer
     StringBuffer? buf;
     Pick? attachPick; // pick onde o HTML final da tabela será escrito
-    int? currentRow;
+    String? currentRow;
     bool rowOpen = false;
     bool tbodyOpen = false;
 
@@ -178,9 +181,10 @@ class TableBetter extends BlockListener {
         tbodyOpen = true;
       }
 
-      // troca de linha?
-      final row = (opts['row'] as int?) ?? 0;
-      if (currentRow != row) {
+      // troca de linha? (comparação por STRING do id — nova linha quando o
+      // valor muda; o primeiro <tr> abre porque rowOpen começa falso)
+      final row = (opts['row'] as String?) ?? '';
+      if (!rowOpen || currentRow != row) {
         _closeRow();
         buf!.write('<tr>');
         rowOpen = true;
@@ -231,7 +235,7 @@ class TableBetter extends BlockListener {
           _openTable(const {}, p);
         }
         _writeCell({
-          'row': p.optionValue('row') ?? 0,
+          'row': p.optionValue('row') ?? '',
           'width': p.optionValue('width'),
           'rowspan': p.optionValue('rowspan'),
           'colspan': p.optionValue('colspan'),

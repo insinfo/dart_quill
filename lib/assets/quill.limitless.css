@@ -344,3 +344,18 @@ html[data-color-theme=dark] .ql-snow .ql-picker.ql-expanded .ql-picker-label .ql
 html[data-color-theme=dark] .ql-snow .ql-transparent {
     opacity: .7;
 }
+/* O Quill embutido no all.min.css do Limitless é anterior ao suporte de
+   tabelas: não existe nenhuma regra .ql-editor table/td lá, e o reboot do
+   Bootstrap ainda zera as bordas de td (tbody, td, ... { border-width: 0 }).
+   Estas são as regras de tabela do quill.core.css (editor.styl upstream),
+   necessárias para tabela — básica ou table-better — ficar visível. */
+.ql-editor table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+}
+.ql-editor td {
+  border: 1px solid #000;
+  padding: 2px 5px;
+  outline: none;
+}
