@@ -22,8 +22,11 @@ A opção mais viável é:
    dependência de runtime nem como segundo produto concorrente;
 6. manter o `canvas-editor-port` como referência de layout, benchmark e possível
    renderer especializado futuro, mas não como engine principal;
-7. criar um perfil de interoperabilidade específico do SALI para reproduzir o
-   dialeto formado por Quill 2.0.3, table-better 1.2.3 e plugins próprios;
+7. implementar como **recursos genéricos e configuráveis do `dart_quill`** as
+   funcionalidades que hoje vivem em plugins do SALI por serem lacunas do
+   Quill upstream (imagem de cabeçalho, atributos de página, fontes/tamanhos,
+   paste do Word, exportação PDF/HTML sem CSS), e reproduzir o comportamento
+   do SALI como um perfil de configuração sobre esses recursos;
 8. persistir documentos avançados em um `OfficeDeltaSnapshot` versionado, ainda
    no envelope JSON `{"ops":[...]}`, sem depender do binário DOCX para reabrir.
 
@@ -174,6 +177,15 @@ O perfil observado inclui ainda:
 - fontes `inter`, `arial` e `calibri`, além de aliases locais;
 - `page-orientation` e `page-margin` na primeira linha;
 - links usados também por citações internas.
+
+Importante: esse perfil **não é um formato proprietário do SALI**. São plugins
+que preencheram lacunas do próprio Quill TypeScript — não havia imagem de
+cabeçalho, colar conteúdo do Word dava problema, não existiam régua, margens e
+orientação de página, nem exportação para PDF e HTML puro sem dependência de
+CSS. Qualquer consumidor sério de um editor de documentos precisa dessas
+capacidades; no port, elas devem nascer como recursos genéricos do
+`dart_quill`, com o SALI apenas como primeiro consumidor e perfil de
+configuração.
 
 Assim, “compatível com Quill 2.0.3” possui dois níveis:
 
@@ -580,22 +592,28 @@ Responsabilidades:
 O modo básico não importa a biblioteca Office. Isso protege tamanho, startup,
 registries e comportamento legado.
 
-### 10.2 Perfil SALI por instância
+### 10.2 Recursos genéricos primeiro; perfil SALI como configuração
 
-Criar um `SaliQuill203Profile`, inicialmente no adaptador da aplicação e depois
-generalizável, com:
+Os recursos abaixo entram no `dart_quill` como funcionalidades genéricas e
+configuráveis, úteis a qualquer consumidor:
 
 - formatos padrão Quill 2.0.3;
 - formatos table-better 1.2.3;
-- `headerImage`;
-- fontes Inter, Arial, Calibri e aliases atuais;
-- tamanhos aceitos pelo SALI;
-- atributos de página;
+- embed genérico de imagem de cabeçalho (`headerImage`);
+- whitelists configuráveis de fonte e tamanho por instância;
+- atributos de página (orientação e margens) e régua;
 - `table-temporary.col-widths`;
 - política de links e imagens;
-- normalização de paste Word;
-- geração de HTML semântico;
+- normalização de paste do Word;
+- geração de HTML semântico sem dependência de CSS;
+- exportação PDF (entrypoints `dart_quill_html.dart` e `dart_quill_pdf.dart`
+  já existem);
 - limites de segurança.
+
+O `SaliQuill203Profile` passa a ser somente um **preset de configuração**
+dessas capacidades — as fontes Inter/Arial/Calibri e aliases, os tamanhos
+aceitos e as políticas do SALI — mantido no adaptador da aplicação ou como
+preset opcional do pacote.
 
 O registry precisa ser por instância. Abrir um editor avançado não pode
 contaminar outro editor básico na mesma página.

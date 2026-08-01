@@ -25,6 +25,27 @@ Porém, não é correto tratar isso como uma nova opção visual do Quill atual.
 8. Tratar compatibilidade como contrato mensurável: fidelidade de armazenamento, semântica editável, fidelidade visual e comportamento são dimensões diferentes.
 9. Fazer o engine avançado aceitar e produzir **documentos Delta compatíveis com o Quill 2.0.3**. Um Delta Quill normal pode alternar entre as duas superfícies sem perda semântica; só recursos Office não representáveis exigem promoção de formato e bloqueiam um retorno silenciosamente lossy ao editor básico.
 
+### Objetivo de produto
+
+O `dart_quill` permanece **genérico**, publicável e utilizável por qualquer
+pessoa. Os recursos que hoje existem como plugins da aplicação SALI não são um
+dialeto proprietário: são lacunas do Quill TypeScript que tiveram de ser
+preenchidas na aplicação — imagem de cabeçalho, correção do paste do Word,
+régua/margens/orientação de página, exportação para PDF e para HTML puro sem
+dependência de CSS. No port, cada um vira funcionalidade nativa e configurável
+do pacote.
+
+O SALI é o primeiro consumidor, com dois requisitos de rollout inegociáveis
+por ser um sistema de processo administrativo (ETP, TR, memorandos, ofícios,
+despachos):
+
+1. os Deltas Quill já gravados no banco — inclusive rascunhos de despacho —
+   continuam abrindo e sendo editáveis sem quebra;
+2. a conversão para PDF existente continua funcionando sem regressão.
+
+Sobre essa base genérica entra o modo avançado: edição paginada estilo Word,
+com alto desempenho para documentos grandes (150+ páginas).
+
 ### Limite honesto
 
 É viável obter alta fidelidade para um subconjunto explicitamente suportado e preservação sem perdas do conteúdo não alterado. Não é honesto prometer paridade visual absoluta com qualquer arquivo Word. O Word Online usa um motor proprietário de line layout, paginação cliente e WASM; ONLYOFFICE e LibreOffice também possuem motores de layout próprios, acumulados durante anos. Fontes, fallback, hinting, hifenização e detalhes do algoritmo alteram quebras de linha e página.
