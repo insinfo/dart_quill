@@ -493,8 +493,11 @@ Proposta:
 
 ```text
 lib/dart_quill.dart                  # inalterado: Quill/Delta
-lib/dart_quill_document.dart         # novo: API Office
+lib/dart_quill_office.dart           # novo: API Office
 lib/dart_quill_docx.dart             # codecs existentes/compatibilidade
+lib/dart_quill_html.dart             # inalterado: Delta -> HTML semântico
+lib/dart_quill_pdf.dart              # inalterado: Delta -> PDF
+lib/dart_quill_table_better.dart     # inalterado: plugin de tabelas
 ```
 
 O novo entrypoint não deve exportar tipos ProseMirror/Tiptap. Eles são detalhes internos e podem evoluir sem quebrar a API pública.
@@ -641,7 +644,7 @@ O formato persistido é o JSON convencional `{"ops": [...]}`. O snapshot é **in
 > PDF assinado. No rollout do SALI, o snapshot Office fica em sidecar JSON
 > versionado; `delta` e `descricao` continuam como projeções Quill/HTML. A
 > decisão e os gates específicos estão em
-> [ADR_ESCOLHA_ENGINE_EDITOR_NEW_SALI.md](ADR_ESCOLHA_ENGINE_EDITOR_NEW_SALI.md).
+> [ADR_ESCOLHA_ENGINE_EDITOR_NEW_SALI.md](sali/ADR_ESCOLHA_ENGINE_EDITOR_NEW_SALI.md).
 
 ```json
 {
@@ -1697,7 +1700,7 @@ Os ports Dart incorporados ainda exigem proveniência/licenças e passam a ser m
 ```text
 lib/
   dart_quill.dart
-  dart_quill_document.dart
+  dart_quill_office.dart
   src/
     office/                         # OPC/DOCX/fonts/PDF existentes
     document_editor/
@@ -1911,7 +1914,7 @@ Gate:
 Entregas:
 
 - portar seletivamente model/state/transform/view;
-- novo `dart_quill_document.dart`;
+- novo `dart_quill_office.dart`;
 - registry/handlers Office por instância, sem mutação global;
 - importador/exportador bidirecional do perfil Quill 2.0.3;
 - `DocumentModeController` opcional com checkpoint/seleção/foco e gate lossless;
@@ -2220,6 +2223,11 @@ Esses números precisam ser ratificados na fase 0, não “alcançados” por re
 ## 16. Licença e proveniência
 
 Há um bloqueio de release: nem `dart_quill` nem `docx_rendering` possuíam `LICENSE`/`NOTICE` na raiz durante esta auditoria, embora contenham ports e referências com licenças diferentes.
+
+> **Atualização 2026-08-01:** o `dart_quill` agora possui `LICENSE` na raiz
+> (BSD-3-Clause com os copyrights do Quill — Slab, Jason Chen, salesforce.com —
+> mais a seção MIT do quill-table-better). Continuam pendentes o `NOTICE`, o
+> inventário `THIRD_PARTY` e o `LICENSE` do `docx_rendering`.
 
 | Origem | Licença observada | Uso permitido no plano |
 |---|---|---|

@@ -6,7 +6,7 @@
 
 **Escopo:** `dart_quill`, `new_sali`, `docx_rendering` e `canvas-editor-port`
 
-**Plano detalhado relacionado:** [PLANO_EDITOR_DOCX_PAGINADO_AVANCADO.md](PLANO_EDITOR_DOCX_PAGINADO_AVANCADO.md)
+**Plano detalhado relacionado:** [PLANO_EDITOR_DOCX_PAGINADO_AVANCADO.md](../PLANO_EDITOR_DOCX_PAGINADO_AVANCADO.md)
 
 ## 1. Decisão
 
@@ -550,11 +550,14 @@ equivalente. Perda silenciosa é falha.
 
 ### 10.1 Bibliotecas públicas
 
-Manter:
+Manter os entrypoints já existentes:
 
 ```text
 dart_quill.dart
 dart_quill_table_better.dart
+dart_quill_docx.dart
+dart_quill_html.dart
+dart_quill_pdf.dart
 ```
 
 Adicionar, quando estabilizado:
@@ -567,9 +570,12 @@ Responsabilidades:
 
 | Biblioteca | Responsabilidade |
 |---|---|
-| `dart_quill.dart` | Delta/Quill básico, HTML e API compatível |
+| `dart_quill.dart` | Delta/Quill básico e API compatível |
 | `dart_quill_table_better.dart` | perfil table-better e comandos de tabela Quill |
-| `dart_quill_office.dart` | sessão avançada, DOCX, OfficeDelta, paginação e PDF |
+| `dart_quill_docx.dart` | codec DOCX público simplificado existente |
+| `dart_quill_html.dart` | conversão Delta ↔ HTML semântico |
+| `dart_quill_pdf.dart` | geração de PDF a partir de Delta |
+| `dart_quill_office.dart` | sessão avançada, DOCX preservador, OfficeDelta e paginação |
 
 O modo básico não importa a biblioteca Office. Isso protege tamanho, startup,
 registries e comportamento legado.
