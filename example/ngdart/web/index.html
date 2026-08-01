@@ -11,6 +11,23 @@
   <link rel="stylesheet" href="packages/dart_quill/assets/quill.limitless.css">
   <link rel="stylesheet" href="packages/dart_quill/assets/quill-table-better.css">
   <link rel="stylesheet" href="packages/dart_quill/assets/quill.syntax.css">
+  <style>
+    /* Os rótulos dos pickers vêm do CSS (`content:`), e o tema traz regras só
+       para os valores do upstream. Para as fontes/tamanhos declarados pela
+       aplicação, o próprio valor serve de rótulo. */
+    .ql-snow .ql-picker.ql-font .ql-picker-label[data-value]::before,
+    .ql-snow .ql-picker.ql-font .ql-picker-item[data-value]::before,
+    .ql-snow .ql-picker.ql-size .ql-picker-label[data-value]::before,
+    .ql-snow .ql-picker.ql-size .ql-picker-item[data-value]::before {
+      content: attr(data-value);
+    }
+    /* Cada item da lista de fontes é desenhado na própria família. */
+    .ql-snow .ql-picker.ql-font .ql-picker-item[data-value]::before {
+      font-family: attr(data-value);
+    }
+    .ql-snow .ql-picker.ql-font { width: 150px; }
+    .ql-snow .ql-picker.ql-size { width: 92px; }
+  </style>
   <script defer src="main.dart.js"></script>
 </head>
 <body>

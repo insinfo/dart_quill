@@ -44,13 +44,30 @@ class QuillEditorComponent implements AfterViewInit {
   // Mirrors web/main.dart, the configuration exercised by the E2E suite:
   // the table button comes from the table-better module ('table-better' in the
   // toolbar + toolbarTable), not from the basic 'table' module.
-  static const List<List<dynamic>> _defaultToolbar = [
+  /// Famílias e tamanhos do Word. O pacote nasce com a whitelist enxuta do
+  /// upstream (`serif`/`monospace`, três tamanhos em px), que descarta em
+  /// silêncio o `Arial 10` de qualquer DOCX; a aplicação declara o que aceita.
+  static const List<String> _wordFonts = [
+    'Arial',
+    'Calibri',
+    'Times New Roman',
+    'Verdana',
+    'Georgia',
+    'Courier New',
+    'Inter',
+  ];
+  static const List<String> _wordSizes = [
+    '8pt', '9pt', '10pt', '11pt', '12pt', '14pt', '16pt', '18pt', //
+    '20pt', '22pt', '24pt', '26pt', '28pt', '36pt', '48pt', '72pt',
+  ];
+
+  static final List<List<dynamic>> _defaultToolbar = [
     [
       {
         'header': [false, '1', '2', '3']
       },
-      {'font': []},
-      {'size': []},
+      {'font': _wordFonts},
+      {'size': _wordSizes},
     ],
     ['bold', 'italic', 'underline'],
     [
@@ -85,6 +102,17 @@ class QuillEditorComponent implements AfterViewInit {
   @override
   void ngAfterViewInit() {
     initializeQuill();
+    // Fonte e tamanho por ESTILO (font-family / font-size inline), não por
+    // classe: é o que sobrevive a um documento de terceiros, em que a família
+    // e o tamanho vêm do arquivo. O padrão do upstream é por classe, com uma
+    // whitelist de três nomes.
+    Quill.register(FontStyleAttributor.instance);
+    Quill.register(SizeStyle.instance);
+    setFontWhitelist(_wordFonts);
+    // Sem whitelist de tamanho: o importador de DOCX converte os pontos do
+    // Word para px, então qualquer valor precisa passar. A toolbar continua
+    // oferecendo só os tamanhos padrão.
+    setSizeStyleWhitelist(null);
     registerTableBetter();
     final host = web.document.getElementById('quillEditorHost');
     if (host == null) {
