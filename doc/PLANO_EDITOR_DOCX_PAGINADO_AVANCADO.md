@@ -236,7 +236,7 @@ O código em `D:\EuroOfficeNative\DocumentServer` é uma distribuição baseada 
 Arquivos examinados somente durante a auditoria de viabilidade, excluídos da implementação:
 
 - `sdkjs/word/Editor/Document.js`;
-- `sdkjs/word/Editor/Paragraph/Paragraph_Recalculate.js`;
+- `sdkjs/word/Editor/Paragraph_Recalculate.js`;
 - `sdkjs/word/Editor/Table/TableRecalculate.js`;
 - `sdkjs/word/Editor/Paragraph/ComplexFieldInstruction.js`;
 - `sdkjs/word/Drawing/Rulers.js`;
