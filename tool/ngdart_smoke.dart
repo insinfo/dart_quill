@@ -71,6 +71,52 @@ Future<void> main() async {
     check('placeholder cleared after typing', blankAfter == false,
         'ql-blank=$blankAfter, ::before content=$beforeContent');
 
+    // 2b. Bullet list must render a bullet, not a number. Quill 2 always uses
+    // <ol> + li[data-list] and draws the marker in li > .ql-ui:before;
+    // Limitless bundles the Quill 1 CSS, which numbers every <li> in an <ol>.
+    await page.evaluate('''() => {
+      const q = window.__quill || null;
+      const ed = document.querySelector('.ql-editor');
+      ed.focus();
+    }''');
+    await page.click('.ql-editor');
+    await page.keyboard.type('um');
+    await page.click('button.ql-list[value="bullet"]');
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+
+    final listState = await page.evaluate<String>('''() => {
+      const li = document.querySelector('.ql-editor li[data-list]');
+      if (!li) return JSON.stringify({found: false});
+      const ui = li.querySelector('.ql-ui');
+      return JSON.stringify({
+        found: true,
+        dataList: li.getAttribute('data-list'),
+        liBefore: getComputedStyle(li, '::before').content,
+        uiBefore: ui ? getComputedStyle(ui, '::before').content : 'no-ql-ui',
+      });
+    }''');
+    stdout.writeln('bullet list state: $listState');
+    check('bullet list is not numbered by the old CSS',
+        listState.contains('"liBefore":"none"'), listState);
+    check('bullet marker comes from .ql-ui',
+        listState.contains('\\u2022') || listState.contains('•'), listState);
+
+    // ...and the ordered list must still number, from the Quill 2 counters.
+    await page.click('button.ql-list[value="ordered"]');
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final orderedState = await page.evaluate<String>('''() => {
+      const li = document.querySelector('.ql-editor li[data-list]');
+      const ui = li ? li.querySelector('.ql-ui') : null;
+      return JSON.stringify({
+        dataList: li ? li.getAttribute('data-list') : 'none',
+        uiBefore: ui ? getComputedStyle(ui, '::before').content : 'no-ql-ui',
+      });
+    }''');
+    // getComputedStyle does not resolve counter(); seeing the function itself
+    // is the proof that the Quill 2 ordered rule (not the old one) applied.
+    check('ordered list still numbers',
+        orderedState.contains('counter(list-0)'), orderedState);
+
     // 3. Insert a table through the toolbar grid.
     await page.click('button.ql-table-better');
     await Future<void>.delayed(const Duration(milliseconds: 300));
