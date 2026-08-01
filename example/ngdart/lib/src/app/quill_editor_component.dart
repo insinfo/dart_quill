@@ -1,4 +1,5 @@
 import 'package:dart_quill/dart_quill.dart' hide Input;
+import 'package:dart_quill/dart_quill_table_better.dart';
 import 'package:dart_quill/src/platform/html_dom.dart';
 import 'package:ngdart/angular.dart';
 import 'package:web/web.dart' as web;
@@ -15,6 +16,9 @@ import 'package:web/web.dart' as web;
 class QuillEditorComponent implements AfterViewInit {
   QuillEditorComponent();
 
+  // Mirrors web/main.dart, the configuration exercised by the E2E suite:
+  // the table button comes from the table-better module ('table-better' in the
+  // toolbar + toolbarTable), not from the basic 'table' module.
   static const List<List<dynamic>> _defaultToolbar = [
     [
       {
@@ -24,14 +28,16 @@ class QuillEditorComponent implements AfterViewInit {
     ],
     ['bold', 'italic', 'underline'],
     [
+      {'color': []},
+      {'background': []},
+    ],
+    [
       {'list': 'ordered'},
       {'list': 'bullet'},
       {'align': []},
     ],
     ['link', 'image', 'video'],
-    [
-      {'table': '3x3'},
-    ],
+    ['table-better'],
     ['formula', 'code-block'],
     ['clean'],
   ];
@@ -50,6 +56,7 @@ class QuillEditorComponent implements AfterViewInit {
   @override
   void ngAfterViewInit() {
     initializeQuill();
+    registerTableBetter();
     final host = web.document.getElementById('quillEditorHost');
     if (host == null) {
       return;
@@ -57,7 +64,22 @@ class QuillEditorComponent implements AfterViewInit {
 
     final container = HtmlDomElement(host);
     final modules = <String, dynamic>{
-      'table': true,
+      'syntax': true,
+      'table': false,
+      'table-better': <String, dynamic>{
+        'language': 'pt_BR',
+        'menus': <String>[
+          'column',
+          'row',
+          'merge',
+          'table',
+          'cell',
+          'wrap',
+          'copy',
+          'delete',
+        ],
+        'toolbarTable': true,
+      },
       if (showToolbar)
         'toolbar': <String, dynamic>{
           'container': _defaultToolbar,
@@ -66,7 +88,7 @@ class QuillEditorComponent implements AfterViewInit {
 
     final options = ThemeOptions(
       theme: theme,
-      iconTheme: QuillIconTheme.tabler,
+      iconTheme: QuillIconTheme.svg,
       modules: modules,
     );
 
