@@ -225,8 +225,11 @@ class TablePropertiesForm {
         updateSelectedStatus(container, value, 'dropdown');
       });
       container.append(list);
+      // Sem guard de LI, como no TS: o clique num item borbulha do <ul> até
+      // aqui e este toggle é justamente o que FECHA a lista depois de
+      // escolher. O `<ul>` já rodou e atualizou `dropText`, então o status
+      // abaixo é calculado com o valor novo.
       container.addEventListener('click', (event) {
-        if (_closest(event.target, 'LI') != null) return;
         toggleHidden(list);
         updateSelectedStatus(container, dropText.text ?? '', 'dropdown');
       });

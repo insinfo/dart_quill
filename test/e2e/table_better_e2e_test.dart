@@ -172,6 +172,37 @@ void main() {
       expect(shape['rows'], 2);
     });
 
+    // Regressão: o demo monta o editor direto no <body>, com o container em
+    // x≈0, e nesse caso qualquer confusão entre bounds de viewport e bounds
+    // relativos ao container passa despercebida. Numa página real (um card
+    // com padding, como o exemplo ngdart) o container é deslocado e
+    // "inserir coluna à esquerda" não fazia nada. Este teste desloca o
+    // container de propósito.
+    test('column insert still works with the editor offset on the page',
+        () async {
+      await freshTable(2, 2);
+      await app.eval<void>('''() => {
+        const c = document.querySelector('.ql-container');
+        c.style.marginLeft = '220px';
+        c.style.marginTop = '60px';
+      }''');
+      await app.settle();
+
+      await app.clickCell(0, 0);
+      await app.openTableMenu('column');
+      await app.clickTableMenuItem('column', t('insColL'));
+      expect((await app.tableShape())['columns'], 3,
+          reason: 'insert-left must add a column even when the editor is '
+              'not at x=0');
+
+      await app.clickCell(0, 1);
+      await app.openTableMenu('column');
+      await app.clickTableMenuItem('column', t('insColR'));
+      final shape = await app.tableShape();
+      expect(shape['columns'], 4);
+      expect(shape['rows'], 2);
+    });
+
     test('deleting a row and a column shrinks the table', () async {
       await freshTable(3, 3);
       await app.clickCell(1, 1);
@@ -437,6 +468,56 @@ void main() {
               '.ql-table-dropdown-properties").length'),
           greaterThan(0),
           reason: 'the border-style dropdown is built too');
+    });
+
+    // Regressão: escolher um estilo de borda deixava a lista aberta por
+    // cima do resto do formulário. O port tinha um guard que abortava o
+    // clique vindo de um <li>; é justamente esse borbulhamento que o
+    // upstream usa para FECHAR a lista depois da escolha.
+    test('picking a border style closes the dropdown list', () async {
+      await freshTable(2, 2);
+      await app.clickCell(0, 0);
+      await app.openTableMenu('table');
+      await app.settle(200);
+
+      const dropdown = '.ql-table-properties-form .ql-table-dropdown-properties';
+      Future<Map<String, dynamic>> dropdownState() =>
+          app.eval<Map<String, dynamic>>('''() => {
+            const d = document.querySelector('$dropdown');
+            const list = d.querySelector('.ql-table-dropdown-list');
+            return {
+              hidden: list.classList.contains('ql-hidden'),
+              display: getComputedStyle(list).display,
+              text: d.querySelector('.ql-table-dropdown-text')?.textContent,
+            };
+          }''');
+
+      expect((await dropdownState())['hidden'], isTrue,
+          reason: 'a lista começa fechada');
+
+      await app.clickElement('$dropdown .ql-table-dropdown-text');
+      await app.settle(120);
+      final opened = await dropdownState();
+      expect(opened['hidden'], isFalse, reason: 'o clique abre a lista');
+      expect(opened['display'], isNot('none'));
+
+      // Clica o item "dashed" pelo rótulo visível.
+      await app.eval<void>('''() => {
+        const items = document.querySelectorAll(
+            '$dropdown .ql-table-dropdown-list li');
+        for (const li of items) {
+          if (li.textContent.trim() === 'dashed') { li.click(); return; }
+        }
+        throw new Error('dashed option not found');
+      }''');
+      await app.settle(150);
+
+      final afterPick = await dropdownState();
+      expect(afterPick['hidden'], isTrue,
+          reason: 'escolher um estilo deve FECHAR a lista ($afterPick)');
+      expect(afterPick['display'], 'none');
+      expect(afterPick['text'], 'dashed',
+          reason: 'o valor escolhido aparece no dropdown');
     });
 
     test('saving a width writes it to the table', () async {

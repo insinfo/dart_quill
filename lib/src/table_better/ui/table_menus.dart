@@ -514,8 +514,14 @@ class TableMenus {
         ? _cellAt(selection, range.startRow, range.endColumn)
         : _cellAt(selection, range.startRow, range.startColumn);
     if (reference == null) return;
-    final referenceBounds =
-        utils.getCorrectBounds(reference.element, quill.container);
+    // VIEWPORT bounds, not container-relative: `TableContainer.insertColumn`
+    // matches this `position` against `elementRectResolver` rects (viewport),
+    // exactly as the TS does with `td.getBoundingClientRect()`. Mixing the two
+    // spaces made every match fail whenever the editor was not at x≈0 — the
+    // demo appends the host to <body> and hid the bug, but any real page
+    // (a card with padding) shifted the container and "insert column left"
+    // silently did nothing.
+    final referenceBounds = utils.elementRectResolver(reference.element);
     final isLast = reference.next == null;
     final position = offset > 0 ? referenceBounds.right : referenceBounds.left;
     blot.insertColumn(position, isLast, referenceBounds.width, offset);
