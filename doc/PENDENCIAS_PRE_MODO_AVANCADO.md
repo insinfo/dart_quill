@@ -179,7 +179,24 @@ conversores.
 
 | Frente | Estado |
 |---|---|
-| H1 — `<tr>` por id de linha string | **corrigido** (ver CHANGELOG) |
-| Demais | pendentes |
+| H1 — `<tr>` por id de linha string | **corrigido** |
+| H2 — célula multi-bloco num único `<td>` (`<p>`/`<hN>`/`<ul>`/`<ol>`), `table-header` e `table-list` renderizados, inline completo | **corrigido** |
+| H3 — `<colgroup>` a partir de `table-col` e de `table-temporary.col-widths`, com `table-layout: fixed` | **corrigido** |
+| H4–H7, W1–W10, P1–P20 | pendentes |
+
+Testes que travam o corrigido: `test/unit/converters/html_table_rows_test.dart`
+e `test/unit/converters/html_table_cells_test.dart` (este alimentado pelos
+deltas reais dos goldens do plugin).
+
+Fora desta lista, corrigidos na mesma passagem por serem bugs de produto
+reportados no exemplo ngdart (ambos com E2E que reproduz a condição):
+
+- `insertColumn` misturava bounds de viewport com bounds relativos ao
+  container — "inserir coluna à esquerda" não fazia nada quando o editor não
+  estava em x≈0;
+- o dropdown de estilo de borda não fechava ao escolher um valor (guard de
+  `<li>` que o upstream não tem);
+- tabela sem bordas visíveis sob o Limitless (regras de tabela ausentes) e
+  mini-UI do table-better visível sem tabela (especificidade de `.ql-hidden`).
 
 Atualizar esta tabela a cada item fechado.
