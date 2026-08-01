@@ -616,3 +616,13 @@ ol.table-list-container {
     transform: translateX(1px);
   }
 }
+
+/* Upstream relies on Quill's `.ql-snow .ql-hidden` to hide the floating UI
+   (menus bar, dropdowns, grid picker, tooltips). Under a host theme whose
+   `.ql-hidden` rule is unscoped (e.g. Limitless's all.min.css), source order
+   lets `.ql-table-menus-container { display: flex }` above win the cascade
+   and the overlays render permanently. Doubling the class raises specificity
+   to (0,2,0) so hiding wins regardless of stylesheet order or theme. */
+.ql-hidden.ql-hidden {
+  display: none;
+}

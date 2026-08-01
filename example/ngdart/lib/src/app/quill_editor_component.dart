@@ -63,7 +63,14 @@ class QuillEditorComponent implements AfterViewInit {
     }
 
     final container = HtmlDomElement(host);
+    // The toolbar entry must come BEFORE table-better: modules are built in
+    // map order and registerToolbarTable looks the toolbar up at construction
+    // time (same order sensitivity as upstream quill-table-better).
     final modules = <String, dynamic>{
+      if (showToolbar)
+        'toolbar': <String, dynamic>{
+          'container': _defaultToolbar,
+        },
       'syntax': true,
       'table': false,
       'table-better': <String, dynamic>{
@@ -80,10 +87,6 @@ class QuillEditorComponent implements AfterViewInit {
         ],
         'toolbarTable': true,
       },
-      if (showToolbar)
-        'toolbar': <String, dynamic>{
-          'container': _defaultToolbar,
-        },
     };
 
     final options = ThemeOptions(
