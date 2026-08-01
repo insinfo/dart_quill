@@ -516,6 +516,20 @@ class TableCell extends TableBetterContainer {
       child is TableHeader ||
       child is TableListContainer;
 
+  /// Parchment `ParentBlot.insertAt` cria um bloco padrão quando o pai está
+  /// vazio (`this.scroll.create('block')`); a base deste port devolve null e
+  /// lançava "Cannot insert into empty TableCell". Acontecia sempre que um
+  /// Delta trazia TEXTO dentro de célula — o caso de todo DOCX importado e do
+  /// próprio golden `a table with a colgroup`. O bloco padrão de uma célula é
+  /// o seu cellBlock, com um cellId novo, como o plugin faz em
+  /// `insertColumnCell`.
+  @override
+  Blot? createDefaultChild([dynamic value]) =>
+      scroll.create(defaultChildBlotName, cellId()) as Blot?;
+
+  /// `table-cell-block` numa célula comum, `table-th-block` num cabeçalho.
+  String get defaultChildBlotName => TableCellBlock.kBlotName;
+
   String? _childCellId(Blot child) =>
       utils.getCellId(child.formats()[child.blotName]);
 
@@ -622,6 +636,9 @@ class TableTh extends TableCell {
 
   @override
   TableTh clone() => TableTh(element.cloneNode(deep: false));
+
+  @override
+  String get defaultChildBlotName => TableThBlock.kBlotName;
 
   /// TS `TableTh.requiredContainer = TableThRow` (table.ts:867).
   @override

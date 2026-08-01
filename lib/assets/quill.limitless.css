@@ -158,6 +158,13 @@
   font-size: var(--body-font-size, 0.875rem);
   height: auto;
   min-height: 20rem;
+  /* O upstream dá `height: 100%` ao container e ao .ql-editor, e é isso que
+     faz o `overflow-y: auto` do editor valer. Aqui o container cresce com o
+     conteúdo (`height: auto`), então o 100% do editor resolve para auto e a
+     rolagem interna nunca acontece: o editor cresce sem limite. Definir
+     `--dq-editor-max-height` na aplicação (ou no host do componente) devolve a
+     caixa com rolagem própria; sem a variável, nada muda. */
+  max-height: var(--dq-editor-max-height, none);
 }
 
 .ql-container.ql-snow .ql-editor {
@@ -165,6 +172,10 @@
   font-size: inherit;
   line-height: var(--body-line-height, 1.5715);
   min-height: 20rem;
+  /* Herda o teto do container para poder rolar dentro dele; sem
+     `--dq-editor-max-height` isto é `none` e o comportamento não muda. */
+  max-height: inherit;
+  overflow-y: auto;
   padding: var(--spacer, 1.25rem);
 }
 
@@ -672,4 +683,28 @@ html[data-color-theme=dark] .ql-snow .ql-transparent {
   margin-left: 0.3em;
   margin-right: -1.5em;
   text-align: left;
+}
+
+/* ---------------------------------------------------------------------------
+   Pickers (Normal/Heading, fonte, tamanho).
+   O rótulo do picker é `content: attr()`/texto em `::before`, e o upstream
+   dimensiona a caixa por larguras fixas contando com o seu próprio padding
+   (8px + 2px). O Limitless reserva bem mais espaço para a seta
+   (padding: 10px + 28px), então sobram 60px de área útil onde "Heading 1"
+   precisa de 66 e "Heading 3" de 68 — o rótulo quebrava em duas linhas e
+   esticava a toolbar. Larguras recalculadas para o padding do Limitless,
+   com nowrap para que um rótulo maior (outro locale, outra fonte) transborde
+   em vez de quebrar a linha.
+   --------------------------------------------------------------------------- */
+.ql-snow .ql-picker-label,
+.ql-snow .ql-picker-label::before,
+.ql-snow .ql-picker-item,
+.ql-snow .ql-picker-item::before {
+  white-space: nowrap;
+}
+.ql-snow .ql-picker.ql-header {
+  width: 112px;
+}
+.ql-snow .ql-picker.ql-font {
+  width: 124px;
 }

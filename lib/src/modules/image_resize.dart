@@ -1,9 +1,13 @@
 import 'dart:math' as math;
 
+import '../core/emitter.dart';
 import '../core/module.dart';
 import '../core/quill.dart';
+import '../core/selection.dart' show Range;
+import '../core/theme.dart';
 import '../platform/dom.dart';
 import '../platform/platform.dart';
+import '../ui/icons.dart' as ui_icons;
 
 enum ImageWrap { inline, left, center, right }
 
@@ -42,6 +46,12 @@ class ImageResize extends Module<ImageResizeOptions> {
     quill.container.addEventListener('mousedown', _onResizeMouseDown);
     quill.container.ownerDocument.body.addEventListener('mousemove', _onMove);
     quill.container.ownerDocument.body.addEventListener('mouseup', _onUp);
+    // Apagar a imagem (Delete, Backspace, undo, recortar) tira o elemento do
+    // DOM; sem isto o overlay ficaria pairando sobre um nó que já não existe.
+    quill.on(EmitterEvents.TEXT_CHANGE, (_, __, ___) {
+      final image = selectedImage;
+      if (image != null && !quill.root.contains(image)) hide();
+    });
   }
 
   late final DomElement _overlay;
@@ -79,6 +89,12 @@ class ImageResize extends Module<ImageResizeOptions> {
         'position:absolute;left:0;top:-34px;display:flex;gap:0;padding:2px;'
         'background:#fff;border:1px solid #bbb;border-radius:4px;'
         'box-shadow:0 2px 6px rgba(0,0,0,.18);pointer-events:auto;';
+    // Honors the editor's icon theme, like the table module does: Tabler
+    // webfont glyphs only when the theme asked for them, the official SVG set
+    // otherwise. Hardcoding `<i class="ti ...">` rendered an empty toolbar
+    // under the default QuillIconTheme.svg, which is what the layout buttons
+    // did until now.
+    final useTabler = quill.theme.options.iconTheme == QuillIconTheme.tabler;
     for (final entry in const {
       'inline': ('Em linha com o texto', 'float-none'),
       'left': ('Alinhar à esquerda com quebra de texto', 'float-left'),
@@ -92,12 +108,31 @@ class ImageResize extends Module<ImageResizeOptions> {
       button.setAttribute('aria-label', entry.value.$1);
       button.classes.add('ql-image-layout-button');
       button.style.cssText = _contextButtonStyle;
-      button.innerHTML =
-          '<i class="ti ti-${entry.value.$2}" aria-hidden="true"></i>';
+      button.innerHTML = useTabler
+          ? '<i class="ti ti-${entry.value.$2}" aria-hidden="true"></i>'
+          : _svgIcon(entry.key);
       _layoutButtons.add(button);
       toolbar.append(button);
     }
     _overlay.append(toolbar);
+  }
+
+  /// The official Quill SVGs for the layout buttons: the alignment glyphs for
+  /// left/center/right and the image glyph for "inline with the text".
+  static String _svgIcon(String wrap) {
+    final align = ui_icons.icons['align'];
+    dynamic icon;
+    if (align is Map) {
+      icon = switch (wrap) {
+        'left' => align[''],
+        'center' => align['center'],
+        'right' => align['right'],
+        _ => null,
+      };
+    }
+    icon ??= ui_icons.icons['image'];
+    if (icon is! String) return '';
+    return icon.replaceFirst('<svg ', '<svg width="18" height="18" ');
   }
 
   static const String _contextButtonStyle =
@@ -201,7 +236,23 @@ class ImageResize extends Module<ImageResizeOptions> {
   void select(DomElement image) {
     selectedImage = image;
     image.classes.add('ql-image-selected');
+    // Selecionar a imagem no MODELO, não só desenhar o overlay: sem isto a
+    // seleção do Quill continua onde estava (ou nenhuma), e Delete/Backspace,
+    // recortar e formatar não tinham o que atingir — a imagem parecia
+    // selecionada e não apagava.
+    _selectInModel(image);
     refresh();
+  }
+
+  /// Põe a seleção do editor exatamente sobre o embed da imagem (comprimento
+  /// 1, como todo embed do Quill).
+  void _selectInModel(DomElement image) {
+    final found = quill.scroll.find(image, bubble: true).key;
+    if (found == null) return;
+    final index = quill.scroll.offset(found);
+    if (index < 0) return;
+    quill.setSelection(Range(index, found.length()),
+        source: EmitterSource.USER);
   }
 
   void hide() {

@@ -71,6 +71,53 @@ Future<void> main() async {
     check('placeholder cleared after typing', blankAfter == false,
         'ql-blank=$blankAfter, ::before content=$beforeContent');
 
+    // 1b. The editor must be able to scroll inside its own box: with
+    // `height: auto` on the container the core's `overflow-y: auto` is inert,
+    // so the layer exposes --dq-editor-max-height (the example sets it).
+    final scrollState = await page.evaluate<String>('''() => {
+      const ed = document.querySelector('.ql-editor');
+      const cs = getComputedStyle(ed);
+      return JSON.stringify({
+        overflowY: cs.overflowY,
+        maxHeight: cs.maxHeight,
+        bounded: cs.maxHeight !== 'none',
+      });
+    }''');
+    check('editor has a scrollable box', scrollState.contains('"bounded":true') &&
+        scrollState.contains('"overflowY":"auto"'), scrollState);
+
+    // 2a. Picker labels must fit on ONE line. The Limitless layer reserves
+    // 28px on the right for the arrow (upstream reserves 2px), so the
+    // upstream fixed widths left "Heading 1"/"Heading 3" without room and the
+    // label wrapped, stretching the toolbar.
+    final pickerFit = await page.evaluate<String>('''() => {
+      const probe = document.createElement('span');
+      document.body.appendChild(probe);
+      const out = {};
+      for (const kind of ['header', 'font']) {
+        const picker = document.querySelector('.ql-picker.ql-' + kind);
+        if (!picker) { out[kind] = null; continue; }
+        const label = picker.querySelector('.ql-picker-label');
+        const cs = getComputedStyle(label);
+        let widest = 0;
+        for (const el of [label, ...picker.querySelectorAll('.ql-picker-item')]) {
+          const t = getComputedStyle(el, '::before').content.replace(/^"|"\$/g, '');
+          probe.style.cssText = 'position:absolute;visibility:hidden;' +
+              'white-space:nowrap;font:' + cs.font;
+          probe.textContent = t;
+          widest = Math.max(widest, probe.getBoundingClientRect().width);
+        }
+        const content = label.getBoundingClientRect().width -
+            parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+        out[kind] = {fits: content >= widest,
+                     content: Math.round(content), widest: Math.ceil(widest)};
+      }
+      probe.remove();
+      return JSON.stringify(out);
+    }''');
+    check('picker labels fit on one line', !pickerFit.contains('"fits":false'),
+        pickerFit);
+
     // 2b. Bullet list must render a bullet, not a number. Quill 2 always uses
     // <ol> + li[data-list] and draws the marker in li > .ql-ui:before;
     // Limitless bundles the Quill 1 CSS, which numbers every <li> in an <ol>.

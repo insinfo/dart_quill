@@ -366,4 +366,65 @@ void main() {
       expect(await app.editorText(), contains('depois'));
     });
   });
+
+  group('image selection', () {
+    // 1x1 PNG transparente — pequeno o bastante para viver no teste e real o
+    // bastante para o browser renderizar um <img> com caixa.
+    const png = 'data:image/png;base64,'
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+    Future<void> documentWithImage() async {
+      await app.reload();
+      await app.resetEditor();
+      await app.setContents([
+        {'insert': 'antes\n'},
+        {
+          'insert': {'image': png},
+          'attributes': {'width': '120', 'height': '120'},
+        },
+        {'insert': '\n'},
+      ]);
+      await app.settle(200);
+    }
+
+    // Regressão: clicar na imagem só desenhava o overlay de redimensionamento;
+    // a seleção do MODELO ficava onde estava, então Delete/Backspace não
+    // tinham o que apagar e a imagem parecia selecionada mas não saía.
+    test('clicking an image selects it in the model and Delete removes it',
+        () async {
+      await documentWithImage();
+      expect(await app.contents(), contains('image'),
+          reason: 'a imagem precisa estar no documento para o teste valer');
+
+      await app.clickElement('.ql-editor img');
+      await app.settle(200);
+
+      expect(await app.eval<bool>('() => !!document.querySelector('
+          '".ql-image-resize-overlay") && getComputedStyle('
+          'document.querySelector(".ql-image-resize-overlay")).display '
+          '!== "none"'),
+          isTrue,
+          reason: 'o overlay de redimensionamento aparece no clique');
+
+      final selection = await app.selection();
+      expect(selection.endsWith(':1'), isTrue,
+          reason: 'a seleção precisa cobrir o embed (comprimento 1), '
+              'não ser um caret — veio "$selection"');
+
+      await app.page.keyboard.press(Key.delete);
+      await app.settle(250);
+
+      expect(await app.contents(), isNot(contains('image')),
+          reason: 'Delete com a imagem selecionada precisa apagá-la');
+      expect(await app.eval<int>(
+          '() => document.querySelectorAll(".ql-editor img").length'), 0);
+      expect(
+          await app.eval<String>('() => { const o = document.querySelector('
+              '".ql-image-resize-overlay"); return o ? '
+              'getComputedStyle(o).display : "absent"; }'),
+          anyOf('none', 'absent'),
+          reason: 'o overlay não pode ficar pairando sobre uma imagem que '
+              'já não existe');
+    });
+  });
 }
