@@ -437,10 +437,10 @@ class Scroll extends ScrollBlot {
 
       for (final renderBlock in renderBlocks) {
         if (renderBlock['type'] == 'block') {
-          final block = createBlock(
+          createBlock(
               Map<String, dynamic>.from(renderBlock['attributes'] as Map),
-              refBlot);
-          insertInlineContents(block, 0, renderBlock['delta'] as Delta);
+              refBlot,
+              renderBlock['delta'] as Delta);
         } else {
           final blockEmbed =
               create(renderBlock['key'] as String, renderBlock['value']);
@@ -540,11 +540,34 @@ class Scroll extends ScrollBlot {
     return renderBlocks;
   }
 
-  ParentBlot createBlock(Map<String, dynamic> attributes, [Blot? refBlot]) {
+  /// [contents] é o conteúdo inline da linha. O upstream o insere DEPOIS de
+  /// aplicar os formatos restantes (scroll.ts:392-400), o que funciona para um
+  /// Block — vazio, ele já tem comprimento 1 (o newline). Um blot de bloco que
+  /// é CONTAINER (a `table-cell` do table-better) tem comprimento 0 enquanto
+  /// vazio, então `formatAt(0, 0, ...)` é no-op e o formato se perde: era
+  /// assim que o cellId do Delta sumia e uma célula com dois parágrafos virava
+  /// duas colunas. Nesse caso o conteúdo entra primeiro, e os formatos caem
+  /// sobre o bloco filho que ele criou.
+  ParentBlot createBlock(Map<String, dynamic> attributes,
+      [Blot? refBlot, Delta? contents]) {
     String? blockName;
     final formats = <String, dynamic>{};
+    // Chaves de bloco preteridas pela última. Dois blots de LINHA conflitam
+    // (`{list, header}`: o upstream fica só com um) e estas são descartadas;
+    // mas quando o vencedor é um CONTAINER — a `table-cell` do table-better —
+    // eles compõem, e a preterida precisa ser aplicada. Era assim que o
+    // `table-cell-block` (o cellId vindo do Delta) sumia: sem ele o merge de
+    // células não reconhece dois parágrafos da MESMA célula do Word e a linha
+    // ganha uma coluna a mais.
+    final supersededBlockKeys = <String>[];
     attributes.forEach((name, value) {
       if (query(name, Scope.BLOCK_BLOT) != null) {
+        // A ÚLTIMA chave de bloco vence, como no upstream (scroll.ts:383-390)
+        // — fazer a primeira vencer colapsa a tabela numa linha só, porque a
+        // linha passaria a nascer como cellBlock e o `table-cell` seguinte a
+        // embrulharia numa TableRow sem data-row (o split de TableRow por
+        // data-row ainda não existe, G1.10).
+        if (blockName != null) supersededBlockKeys.add(blockName!);
         blockName = name;
       } else {
         formats[name] = value;
@@ -561,11 +584,23 @@ class Scroll extends ScrollBlot {
       blockName != null ? attributes[blockName] : null,
     );
     insertBefore(block, refBlot);
-    final blockLength = block.length();
+    final parent = block as ParentBlot;
+    var pending = contents;
+    if (pending != null && parent.length() == 0) {
+      for (final key in supersededBlockKeys) {
+        formats[key] = attributes[key];
+      }
+      insertInlineContents(parent, 0, pending);
+      pending = null;
+    }
+    final blockLength = parent.length();
     formats.forEach((name, value) {
-      block.formatAt(0, blockLength, name, value);
+      parent.formatAt(0, blockLength, name, value);
     });
-    return block as ParentBlot;
+    if (pending != null) {
+      insertInlineContents(parent, 0, pending);
+    }
+    return parent;
   }
 
   /// Builds the blot tree from pre-existing DOM children of the scroll root.

@@ -523,6 +523,14 @@ class TableCell extends TableBetterContainer {
   /// próprio golden `a table with a colgroup`. O bloco padrão de uma célula é
   /// o seu cellBlock, com um cellId novo, como o plugin faz em
   /// `insertColumnCell`.
+  /// O parchment cria um bloco padrão quando o pai está vazio
+  /// (`scroll.create('block')`) e a base deste port devolvia null, lançando
+  /// "Cannot insert into empty TableCell" — o que derrubava toda importação
+  /// de DOCX com tabela. Um Block simples não serve: `allowedChildren` o
+  /// expulsa da célula antes de qualquer formatação. O bloco padrão de uma
+  /// célula é o seu cellBlock; o id novo só vale quando o Delta não trouxe um
+  /// (é o mesmo que o plugin faz em `insertColumnCell`), porque no caminho
+  /// normal a linha já nasce como cellBlock com o id que veio no Delta.
   @override
   Blot? createDefaultChild([dynamic value]) =>
       scroll.create(defaultChildBlotName, cellId()) as Blot?;

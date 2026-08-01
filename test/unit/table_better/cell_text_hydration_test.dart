@@ -94,12 +94,58 @@ void main() {
 
   // O ETP do corpus, versionado em test/assets/docx para o CI cobrir o caso
   // real (os originais em resources/ não entram no repositório).
-  test('um DOCX real do corpus abre com suas tabelas', () {
-    final delta =
-        docxToDelta(File('test/assets/docx/etp_corpus.docx').readAsBytesSync());
-    final quill = createTestQuill(initialHtml: '<p><br></p>');
-    quill.setContents(delta);
-    expect(quill.scroll.descendants<TableContainer>().toList(), hasLength(3));
-    expect(quill.getText(), contains('ESTUDO TÉCNICO PRELIMINAR'));
+  //
+  // As contagens vêm do XML do proprio DOCX (w:tr / w:tblGrid), não do que o
+  // port produz: a tabela 1 tem 5 linhas x 3 colunas e a tabela 3 (TCO) tem
+  // 3 linhas x 7 colunas, com gridSpan 5 e dois vMerge na primeira linha.
+  // Sem estas asserções uma tabela podia colapsar em UMA linha só (ou ganhar
+  // uma coluna fantasma) sem nenhum teste reclamar.
+  group('DOCX real do corpus', () {
+    late List<TableContainer> tables;
+
+    setUpAll(() {
+      final delta = docxToDelta(
+          File('test/assets/docx/etp_corpus.docx').readAsBytesSync());
+      final quill = createTestQuill(initialHtml: '<p><br></p>');
+      quill.setContents(delta);
+      tables = quill.scroll.descendants<TableContainer>().toList();
+    });
+
+    test('abre com as três tabelas do documento', () {
+      expect(tables, hasLength(3));
+    });
+
+    test('a primeira tabela tem 5 linhas de 3 colunas', () {
+      final rows = tables[0].element.querySelectorAll('tr');
+      expect(rows, hasLength(5),
+          reason: 'as linhas não podem colapsar numa só');
+      for (final row in rows) {
+        expect(row.querySelectorAll('td'), hasLength(3));
+      }
+    });
+
+    test('a tabela de TCO mantém 3 linhas, colgroup de 7 e os spans', () {
+      final tco = tables[2];
+      expect(tco.element.querySelectorAll('tr'), hasLength(3));
+      expect(tco.element.querySelectorAll('col'), hasLength(7),
+          reason: 'o colgroup precisa ter uma coluna por gridCol do DOCX');
+      final html = tco.element.outerHTML;
+      expect(html, contains('colspan="5"'),
+          reason: 'o gridSpan do cabeçalho vira colspan');
+      expect(html, contains('rowspan="2"'),
+          reason: 'os vMerge viram rowspan');
+    });
+
+    test('uma célula com dois parágrafos continua sendo UMA célula', () {
+      // A última linha da TCO tem 7 células no DOCX; uma delas ("R$" +
+      // "2.823.940,44") tem dois parágrafos. Sem o cellId do Delta chegando ao
+      // bloco, o merge de células não os reconhece e a linha ganha uma coluna
+      // fantasma — foi o que deformou a tabela na importação.
+      final rows = tables[2].element.querySelectorAll('tr');
+      expect(rows[0].querySelectorAll('td'), hasLength(3));
+      expect(rows[1].querySelectorAll('td'), hasLength(5));
+      expect(rows[2].querySelectorAll('td'), hasLength(7),
+          reason: 'a célula de dois parágrafos não pode virar duas');
+    });
   });
 }
