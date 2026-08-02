@@ -63,9 +63,15 @@ void main() {
     // régua acompanha.
     final pageWidth = (page as web.HTMLElement).getBoundingClientRect().width;
     expect(pageWidth, closeTo(794, 2));
-    final track = web.document.querySelector('.dq-office-ruler-track')
+    final center = web.document.querySelector('.dq-office-ruler-center')
         as web.HTMLElement;
-    expect(track.getBoundingClientRect().width, closeTo(pageWidth, 2));
+    expect(center.getBoundingClientRect().width, closeTo(pageWidth, 2));
+    // ALINHAMENTO: o centro da régua e a página compartilham o eixo — a
+    // diferença de left tem de ser subpixel.
+    final page2 = web.document.querySelector('.dq-office-page')
+        as web.HTMLElement;
+    expect(center.getBoundingClientRect().left,
+        closeTo(page2.getBoundingClientRect().left, 1.5));
   });
 
   test('clique REAL no botão de negrito formata a seleção nativa', () {

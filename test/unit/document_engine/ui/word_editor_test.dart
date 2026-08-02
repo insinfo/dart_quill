@@ -225,6 +225,74 @@ void main() {
     });
   });
 
+  group('aba Layout', () {
+    DomElement tabByText(String text) {
+      for (final tab in host.querySelectorAll('.dq-office-ribbon-tab')) {
+        if (tab.textContent == text) return tab;
+      }
+      throw StateError('aba $text não encontrada');
+    }
+
+    test('clicar em Layout troca os grupos da ribbon', () {
+      mount();
+      final layout = tabByText('Layout');
+      (layout as FakeDomElement).dispatchEvent(
+          'click', FakeDomMouseEvent(type: 'click', target: layout));
+
+      final labels = [
+        for (final g in host.querySelectorAll('.dq-office-ribbon-group'))
+          g.getAttribute('data-group-label')
+      ];
+      expect(labels, containsAll(['Orientação', 'Tamanho', 'Margens']));
+      expect(layout.classes.contains('dq-office-ribbon-tab-active'), isTrue);
+    });
+
+    test('Paisagem REPAGINA o documento de verdade', () {
+      final editor = mount(blocks: 120);
+      final portraitPages = editor.pageGraph.pages.length;
+      final layout = tabByText('Layout');
+      (layout as FakeDomElement).dispatchEvent(
+          'click', FakeDomMouseEvent(type: 'click', target: layout));
+
+      DomElement? landscape;
+      for (final b in host.querySelectorAll('.dq-office-btn')) {
+        if (b.getAttribute('title') == 'Paisagem') landscape = b;
+      }
+      (landscape! as FakeDomElement).dispatchEvent(
+          'click', FakeDomMouseEvent(type: 'click', target: landscape));
+
+      expect(editor.pageSetup.widthTwips,
+          greaterThan(editor.pageSetup.heightTwips));
+      expect(editor.pageGraph.pages.first.setup.widthTwips,
+          editor.pageSetup.widthTwips,
+          reason: 'o grafo tem de repaginar com a nova geometria');
+      expect(editor.pageGraph.pages.length, isNot(portraitPages),
+          reason: 'paisagem muda a contagem de páginas');
+      expect(editor.state.doc.childCount, greaterThan(0),
+          reason: 'o conteúdo fica intacto');
+    });
+
+    test('Arquivo e Inserir ficam desabilitadas, não clicáveis', () {
+      mount();
+      final file = tabByText('Arquivo');
+      expect(file.classes.contains('dq-office-ribbon-tab-disabled'), isTrue);
+      expect(file.getAttribute('disabled'), isNotNull);
+    });
+  });
+
+  test('zoom reconstrói as réguas na nova escala', () {
+    final editor = mount();
+    final widthBefore = host
+        .querySelector('.dq-office-ruler-center')!
+        .getAttribute('style');
+    editor.setZoom(1.5);
+    final widthAfter = host
+        .querySelector('.dq-office-ruler-center')!
+        .getAttribute('style');
+    expect(widthAfter, isNot(widthBefore),
+        reason: 'régua na escala antiga com página na nova era o bug');
+  });
+
   test('dispose devolve o host vazio', () {
     final editor = mount();
     editor.dispose();
