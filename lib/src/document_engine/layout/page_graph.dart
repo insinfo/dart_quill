@@ -97,19 +97,14 @@ class LineBox {
   final int charEnd;
 }
 
-/// Fragmento de um bloco numa página. Um parágrafo que atravessa páginas
-/// continua sendo UM nó no documento — produz vários fragments.
-class BlockFragment {
-  const BlockFragment({
+/// Fragmento de layout numa página. Um nó que atravessa páginas continua
+/// sendo UM nó no documento — produz vários fragments.
+sealed class PageFragment {
+  const PageFragment({
     required this.nodeId,
     required this.docPos,
-    required this.kind,
-    required this.lines,
     required this.yTwips,
     required this.heightTwips,
-    this.indentTwips = 0,
-    this.align = LayoutAlign.left,
-    this.marker,
     this.continuesFromPreviousPage = false,
     this.continuesOnNextPage = false,
   });
@@ -121,22 +116,81 @@ class BlockFragment {
   /// Posição PM do nó no documento (início do bloco).
   final int docPos;
 
+  /// Topo do fragment, relativo ao content box da página.
+  final int yTwips;
+  final int heightTwips;
+
+  final bool continuesFromPreviousPage;
+  final bool continuesOnNextPage;
+}
+
+/// Fragmento de bloco textual (parágrafo, heading, item de lista...).
+class BlockFragment extends PageFragment {
+  const BlockFragment({
+    required super.nodeId,
+    required super.docPos,
+    required this.kind,
+    required this.lines,
+    required super.yTwips,
+    required super.heightTwips,
+    this.indentTwips = 0,
+    this.align = LayoutAlign.left,
+    this.marker,
+    super.continuesFromPreviousPage,
+    super.continuesOnNextPage,
+  });
+
   /// Nome do tipo do nó ('paragraph', 'heading', 'listItem', ...).
   final String kind;
 
   final List<LineBox> lines;
-
-  /// Topo do fragment, relativo ao content box da página.
-  final int yTwips;
-  final int heightTwips;
   final int indentTwips;
   final LayoutAlign align;
 
   /// Marcador de lista ('1. ', '• ') quando o fragment abre o item.
   final String? marker;
+}
 
-  final bool continuesFromPreviousPage;
-  final bool continuesOnNextPage;
+/// Célula composta: blocos internos com posição relativa ao topo da célula.
+class TableCellBox {
+  const TableCellBox({
+    required this.xTwips,
+    required this.widthTwips,
+    required this.blocks,
+    required this.contentHeightTwips,
+  });
+
+  /// x relativo ao content box da página.
+  final int xTwips;
+  final int widthTwips;
+
+  /// Blocos internos (yTwips relativo ao TOPO da célula).
+  final List<BlockFragment> blocks;
+  final int contentHeightTwips;
+}
+
+/// Linha de tabela composta.
+class TableRowBox {
+  const TableRowBox({required this.heightTwips, required this.cells});
+
+  final int heightTwips;
+  final List<TableCellBox> cells;
+}
+
+/// Fragmento de tabela: as linhas desta página (granularidade de LINHA DE
+/// TABELA no draft; a fragmentação fina de célula fica com o fidelity).
+class TableFragment extends PageFragment {
+  const TableFragment({
+    required super.nodeId,
+    required super.docPos,
+    required this.rows,
+    required super.yTwips,
+    required super.heightTwips,
+    super.continuesFromPreviousPage,
+    super.continuesOnNextPage,
+  });
+
+  final List<TableRowBox> rows;
 }
 
 /// Uma página composta.
@@ -149,7 +203,7 @@ class PageLayout {
 
   final int index;
   final PageSetupTwips setup;
-  final List<BlockFragment> fragments;
+  final List<PageFragment> fragments;
 }
 
 /// Mapeia posição do documento ↔ página (v1: granularidade de linha).

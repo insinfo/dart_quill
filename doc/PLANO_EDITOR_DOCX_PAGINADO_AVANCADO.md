@@ -3632,9 +3632,14 @@ tabela de revisões própria).
    codeBlock do perfil Quill) e `layout/pdf_renderer.dart` (transcreve o
    grafo, não decide layout). Testes: paridade POR PÁGINA grafo↔PDF,
    determinismo, PositionMap, corpus real via importQuillDelta→compose→
-   render. Pendências da fase: tabelas no composer, TextShaper etapa 1,
-   fontes embutidas CID no renderer, e o lado EDITOR do gate (DOMRenderer
-   da Fase 2 consumindo o mesmo grafo))*
+   render. Tabelas entregues em seguida no mesmo dia:
+   `TableFragment`/`TableRowBox`/`TableCellBox` no grafo (PageFragment
+   virou sealed), composição com cascata de larguras (colWidths verbatim →
+   células → reescala à área útil), fragmentação por LINHA DE TABELA entre
+   páginas sem perder linha (testado com 60 linhas × 2 células = 120
+   grades no PDF, continuesFrom/OnNextPage no mesmo nó). Pendências da
+   fase: TextShaper etapa 1, fontes embutidas CID no renderer, e o lado
+   EDITOR do gate (DOMRenderer da Fase 2 consumindo o mesmo grafo))*
 6. **Recursos Word** — tabelas divididas, repeat header, cantSplit,
    widow/orphan, keep-next, footnotes, fields, TOC, seções múltiplas.
 7. **200 páginas** — invalidação incremental por PageSignature, cache

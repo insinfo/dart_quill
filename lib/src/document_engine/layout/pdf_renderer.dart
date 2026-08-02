@@ -32,77 +32,21 @@ class PageGraphPdfRenderer {
       final contentWidth = _twipsToPt(setup.contentWidthTwips);
 
       for (final fragment in page.fragments) {
-        var y = contentTop + _twipsToPt(fragment.yTwips);
-        final left = contentX + _twipsToPt(fragment.indentTwips);
-        final available = contentWidth - _twipsToPt(fragment.indentTwips);
-
-        var firstLine = true;
-        for (final line in fragment.lines) {
-          final baseline = y + _twipsToPt(line.ascentTwips);
-          var x = left;
-          final lineWidth = _twipsToPt(line.widthTwips);
-          if (fragment.align == LayoutAlign.center) {
-            x += (available - lineWidth) / 2;
-          } else if (fragment.align == LayoutAlign.right) {
-            x += available - lineWidth;
-          }
-
-          if (firstLine && fragment.marker != null) {
-            final style = line.segments.isNotEmpty
-                ? line.segments.first.style
-                : const ResolvedRunStyle(family: 'Arial', sizePt: 12);
-            final font = standardFontFor(
-                family: style.family, bold: style.bold, italic: style.italic);
-            builder.text(
-              fontResource: writer.fontResourceName(font),
-              sizePx: style.sizePt,
-              winAnsiText: encodeWinAnsi(fragment.marker!),
-              x: left - style.sizePt * 1.4,
-              baselineY: baseline,
-              color: style.color,
+        switch (fragment) {
+          case BlockFragment():
+            _renderBlock(
+              writer,
+              builder,
+              fragment,
+              x: contentX + _twipsToPt(fragment.indentTwips),
+              top: contentTop + _twipsToPt(fragment.yTwips),
+              available: contentWidth - _twipsToPt(fragment.indentTwips),
+              withMarker: true,
             );
-          }
-
-          for (final segment in line.segments) {
-            final style = segment.style;
-            if (segment.text.trim().isNotEmpty || segment.text.isNotEmpty) {
-              final font = standardFontFor(
-                  family: style.family,
-                  bold: style.bold,
-                  italic: style.italic);
-              builder.text(
-                fontResource: writer.fontResourceName(font),
-                sizePx: style.sizePt,
-                winAnsiText: encodeWinAnsi(segment.text),
-                x: x,
-                baselineY: baseline,
-                color: style.color,
-              );
-              if (style.underline) {
-                builder.strokeLine(
-                  x,
-                  baseline + style.sizePt * 0.11,
-                  x + _twipsToPt(segment.widthTwips),
-                  baseline + style.sizePt * 0.11,
-                  color: style.color,
-                  widthPx: style.sizePt * 0.055,
-                );
-              }
-              if (style.strike) {
-                builder.strokeLine(
-                  x,
-                  baseline - style.sizePt * 0.27,
-                  x + _twipsToPt(segment.widthTwips),
-                  baseline - style.sizePt * 0.27,
-                  color: style.color,
-                  widthPx: style.sizePt * 0.055,
-                );
-              }
-            }
-            x += _twipsToPt(segment.widthTwips);
-          }
-          y += _twipsToPt(line.heightTwips);
-          firstLine = false;
+          case TableFragment():
+            _renderTable(writer, builder, fragment,
+                contentX: contentX,
+                top: contentTop + _twipsToPt(fragment.yTwips));
         }
       }
 
@@ -114,5 +58,114 @@ class PageGraphPdfRenderer {
     }
 
     return writer.build(title: title, producer: 'dart_quill office');
+  }
+
+  void _renderTable(
+    PdfWriter writer,
+    PdfContentBuilder builder,
+    TableFragment fragment, {
+    required double contentX,
+    required double top,
+  }) {
+    var y = top;
+    for (final row in fragment.rows) {
+      final rowHeight = _twipsToPt(row.heightTwips);
+      for (final cell in row.cells) {
+        final x = contentX + _twipsToPt(cell.xTwips);
+        final width = _twipsToPt(cell.widthTwips);
+        builder.strokeRect(x, y, width, rowHeight,
+            color: '#000000', widthPx: 0.75);
+        for (final block in cell.blocks) {
+          _renderBlock(
+            writer,
+            builder,
+            block,
+            x: x + _twipsToPt(block.indentTwips) + 3,
+            top: y + _twipsToPt(block.yTwips) + 3,
+            available: width - _twipsToPt(block.indentTwips) - 6,
+            withMarker: false,
+          );
+        }
+      }
+      y += rowHeight;
+    }
+  }
+
+  void _renderBlock(
+    PdfWriter writer,
+    PdfContentBuilder builder,
+    BlockFragment fragment, {
+    required double x,
+    required double top,
+    required double available,
+    required bool withMarker,
+  }) {
+    var y = top;
+    var firstLine = true;
+    for (final line in fragment.lines) {
+      final baseline = y + _twipsToPt(line.ascentTwips);
+      var cursorX = x;
+      final lineWidth = _twipsToPt(line.widthTwips);
+      if (fragment.align == LayoutAlign.center) {
+        cursorX += (available - lineWidth) / 2;
+      } else if (fragment.align == LayoutAlign.right) {
+        cursorX += available - lineWidth;
+      }
+
+      if (withMarker && firstLine && fragment.marker != null) {
+        final style = line.segments.isNotEmpty
+            ? line.segments.first.style
+            : const ResolvedRunStyle(family: 'Arial', sizePt: 12);
+        final font = standardFontFor(
+            family: style.family, bold: style.bold, italic: style.italic);
+        builder.text(
+          fontResource: writer.fontResourceName(font),
+          sizePx: style.sizePt,
+          winAnsiText: encodeWinAnsi(fragment.marker!),
+          x: x - style.sizePt * 1.4,
+          baselineY: baseline,
+          color: style.color,
+        );
+      }
+
+      for (final segment in line.segments) {
+        final style = segment.style;
+        if (segment.text.isNotEmpty) {
+          final font = standardFontFor(
+              family: style.family, bold: style.bold, italic: style.italic);
+          builder.text(
+            fontResource: writer.fontResourceName(font),
+            sizePx: style.sizePt,
+            winAnsiText: encodeWinAnsi(segment.text),
+            x: cursorX,
+            baselineY: baseline,
+            color: style.color,
+          );
+          if (style.underline) {
+            builder.strokeLine(
+              cursorX,
+              baseline + style.sizePt * 0.11,
+              cursorX + _twipsToPt(segment.widthTwips),
+              baseline + style.sizePt * 0.11,
+              color: style.color,
+              widthPx: style.sizePt * 0.055,
+            );
+          }
+          if (style.strike) {
+            builder.strokeLine(
+              cursorX,
+              baseline - style.sizePt * 0.27,
+              cursorX + _twipsToPt(segment.widthTwips),
+              baseline - style.sizePt * 0.27,
+              color: style.color,
+              widthPx: style.sizePt * 0.055,
+            );
+          }
+        }
+        cursorX += _twipsToPt(segment.widthTwips);
+      }
+      y += _twipsToPt(line.heightTwips);
+      firstLine = false;
+    }
   }
 }

@@ -60,8 +60,8 @@ void main() {
               2000, (i) => 'palavra$i').join(' '));
       final graph = LayoutComposer().compose(docOf([long]));
       expect(graph.pages.length, greaterThan(1));
-      final first = graph.pages.first.fragments.single;
-      final second = graph.pages[1].fragments.first;
+      final first = graph.pages.first.fragments.single as BlockFragment;
+      final second = graph.pages[1].fragments.first as BlockFragment;
       expect(first.continuesOnNextPage, isTrue);
       expect(second.continuesFromPreviousPage, isTrue);
       expect(first.docPos, second.docPos,
@@ -81,7 +81,8 @@ void main() {
                     f.docPos,
                     f.yTwips,
                     f.heightTwips,
-                    for (final l in f.lines) [l.charStart, l.charEnd]
+                    if (f is BlockFragment)
+                      for (final l in f.lines) [l.charStart, l.charEnd]
                   ]
               ]
           ]);
@@ -111,7 +112,8 @@ void main() {
             Fragment.from([schema.text('item')])),
       ]);
       final graph = LayoutComposer().compose(doc);
-      final fragments = graph.pages.first.fragments;
+      final fragments =
+          graph.pages.first.fragments.cast<BlockFragment>();
       expect(fragments[0].lines.first.heightTwips,
           greaterThan(fragments[1].lines.first.heightTwips),
           reason: 'H1 é maior que texto de lista');
@@ -145,7 +147,8 @@ void main() {
           .toList();
       expect(streams.length, graph.pages.length);
       for (var p = 0; p < graph.pages.length; p++) {
-        for (final fragment in graph.pages[p].fragments) {
+        for (final fragment
+            in graph.pages[p].fragments.whereType<BlockFragment>()) {
           for (final line in fragment.lines) {
             for (final segment in line.segments) {
               // WinAnsi escapa acentos como octal no stream: amostra ASCII.
@@ -161,6 +164,49 @@ void main() {
           }
         }
       }
+    });
+
+    test('tabela compõe TableFragment e fragmenta por linha de tabela', () {
+      // 60 linhas de tabela não cabem numa página: o MESMO nó produz
+      // fragments em páginas consecutivas.
+      final rows = <PMNode>[];
+      for (var r = 0; r < 60; r++) {
+        rows.add(schema.node('tableRow', {'rowId': 'r$r'}, Fragment.from([
+          schema.node('tableCell', {'cellId': 'a$r'}, Fragment.from([
+            paragraph('célula A da linha $r'),
+          ])),
+          schema.node('tableCell', {'cellId': 'b$r'}, Fragment.from([
+            paragraph('célula B $r'),
+          ])),
+        ])));
+      }
+      final table = schema.node('table', {
+        'colWidths': [
+          {'width': '300'},
+          {'width': '300'},
+        ],
+      }, Fragment.from(rows));
+      final graph = LayoutComposer().compose(docOf([table]));
+      expect(graph.pages.length, greaterThan(1));
+      final first = graph.pages.first.fragments.single as TableFragment;
+      final second = graph.pages[1].fragments.first as TableFragment;
+      expect(first.continuesOnNextPage, isTrue);
+      expect(second.continuesFromPreviousPage, isTrue);
+      expect(first.docPos, second.docPos,
+          reason: 'a MESMA tabela produz os fragments');
+      final totalRows = graph.pages
+          .expand((p) => p.fragments)
+          .whereType<TableFragment>()
+          .expand((f) => f.rows)
+          .length;
+      expect(totalRows, 60, reason: 'nenhuma linha se perde na fragmentação');
+
+      // E o PDF desenha as grades: um retângulo por célula.
+      final streams = PdfReader(PageGraphPdfRenderer().render(graph))
+          .decodedStreams
+          .join('\n');
+      final rects = RegExp(r'(?:[-\d.]+ ){4}re S').allMatches(streams).length;
+      expect(rects, 120, reason: '60 linhas × 2 células');
     });
 
     test('Delta real do SALI passa pelo grafo até o PDF', () {

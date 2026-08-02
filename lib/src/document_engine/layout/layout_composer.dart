@@ -48,7 +48,7 @@ class LayoutComposer {
     final pages = <PageLayout>[];
     final mapEntries = <PositionMapEntry>[];
 
-    var currentFragments = <BlockFragment>[];
+    var currentFragments = <PageFragment>[];
     var cursorTwips = 0;
     final capacity = setup.contentHeightTwips;
 
@@ -67,6 +67,54 @@ class LayoutComposer {
     doc.content.forEach((block, offset, index) {
       final docPos = offset + 1;
       final kind = block.type.name;
+
+      if (kind == 'table') {
+        listOrdinal = 0;
+        final rows = _composeTableRows(block, diagnostics);
+        var i = 0;
+        var firstOfTable = true;
+        while (i < rows.length) {
+          final remaining = capacity - cursorTwips;
+          var take = 0;
+          var height = 0;
+          while (i + take < rows.length &&
+              height + rows[i + take].heightTwips <= remaining) {
+            height += rows[i + take].heightTwips;
+            take++;
+          }
+          if (take == 0) {
+            if (cursorTwips == 0) {
+              // Linha de tabela maior que a página: entra com corte estável.
+              take = 1;
+              height = rows[i].heightTwips;
+              diagnostics.warnings
+                  .add('linha de tabela mais alta que a página');
+            } else {
+              closePage();
+              continue;
+            }
+          }
+          final slice = rows.sublist(i, i + take);
+          currentFragments.add(TableFragment(
+            nodeId: officeNodeId(block),
+            docPos: docPos,
+            rows: slice,
+            yTwips: cursorTwips,
+            heightTwips: height,
+            continuesFromPreviousPage: !firstOfTable,
+            continuesOnNextPage: i + take < rows.length,
+          ));
+          mapEntries.add(PositionMapEntry(
+            docPosStart: docPos,
+            docPosEnd: docPos + block.nodeSize - 2,
+            pageIndex: pages.length,
+          ));
+          cursorTwips += height;
+          firstOfTable = false;
+          i += take;
+        }
+        return;
+      }
 
       // Estado da numeração de lista ordenada.
       if (kind == 'listItem' && block.attrs['kind'] == 'ordered') {
@@ -419,6 +467,101 @@ class LayoutComposer {
     }
     flush();
     return lines;
+  }
+}
+
+extension _TableComposition on LayoutComposer {
+  /// Larguras de coluna em twips: `colWidths` verbatim (px → twips ×15) ou
+  /// larguras das células, com reescala para caber na área útil — a mesma
+  /// cascata P12 do exportador linear.
+  List<int> _tableColumnWidths(PMNode table) {
+    final available = setup.contentWidthTwips;
+    var widths = <int>[];
+    final colWidths = table.attrs['colWidths'];
+    if (colWidths is List && colWidths.isNotEmpty) {
+      for (final col in colWidths) {
+        final raw = col is Map ? col['width'] : null;
+        final px = raw is num ? raw.toDouble() : double.tryParse('$raw') ?? 72;
+        widths.add((px * 15).round()); // 1 px = 0,75 pt = 15 twips
+      }
+    } else {
+      // Da primeira linha: célula sem colspan define a coluna.
+      final firstRow =
+          table.content.size > 0 ? table.content.child(0) : null;
+      if (firstRow != null) {
+        firstRow.content.forEach((cell, _, __) {
+          final cellMap = cell.attrs['cell'];
+          final raw = cellMap is Map ? cellMap['width'] : null;
+          final px = raw is num
+              ? raw.toDouble()
+              : double.tryParse('$raw') ?? 72;
+          widths.add((px * 15).round());
+        });
+      }
+    }
+    if (widths.isEmpty) return [available];
+    final total = widths.fold<int>(0, (a, b) => a + b);
+    if (total > available && total > 0) {
+      widths = widths
+          .map((w) => (w * available / total).round())
+          .toList();
+    }
+    return widths;
+  }
+
+  List<TableRowBox> _composeTableRows(
+      PMNode table, LayoutDiagnostics diagnostics) {
+    final columnWidths = _tableColumnWidths(table);
+    const cellPaddingTwips = 60; // 3 pt
+    final rows = <TableRowBox>[];
+    table.content.forEach((row, _, __) {
+      final cells = <TableCellBox>[];
+      var x = 0;
+      var column = 0;
+      var rowHeight = 0;
+      row.content.forEach((cell, ___, ____) {
+        final width = column < columnWidths.length
+            ? columnWidths[column]
+            : columnWidths.last;
+        final innerWidth = width - 2 * cellPaddingTwips;
+        final blocks = <BlockFragment>[];
+        var y = cellPaddingTwips;
+        cell.content.forEach((inner, _____, offset) {
+          final style = _blockStyleOf(inner, 0);
+          final lines =
+              _breakLines(inner, innerWidth, style, diagnostics);
+          var height = 0;
+          for (final line in lines) {
+            height += line.heightTwips;
+          }
+          if (lines.isEmpty) {
+            height = _lineHeightTwips(baseFontFamily, baseFontSizePt);
+          }
+          blocks.add(BlockFragment(
+            nodeId: officeNodeId(inner),
+            docPos: 0,
+            kind: inner.type.name,
+            lines: lines,
+            yTwips: y,
+            heightTwips: height,
+            align: style.align,
+          ));
+          y += height;
+        });
+        final contentHeight = y + cellPaddingTwips;
+        if (contentHeight > rowHeight) rowHeight = contentHeight;
+        cells.add(TableCellBox(
+          xTwips: x,
+          widthTwips: width,
+          blocks: blocks,
+          contentHeightTwips: contentHeight,
+        ));
+        x += width;
+        column++;
+      });
+      rows.add(TableRowBox(heightTwips: rowHeight, cells: cells));
+    });
+    return rows;
   }
 }
 
