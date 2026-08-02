@@ -3592,7 +3592,14 @@ tabela de revisões própria).
 
 1. **Núcleo documental** — model/transform/state + schema + JSON versionado
    + IDs estáveis. Gate: árvore + transações + undo SEM DOM.
-   *(iniciada: vendorização com 334 testes verdes)*
+   *(em andamento: vendorização com 334 testes verdes; camada Office
+   entregue em 2026-08-02 — fachada `Office*` por alias de tipo
+   (`office/api.dart`), `officeIdsPlugin` com invariante de unicidade via
+   `appendTransaction` (nulos ganham id, duplicados de colar são
+   re-cunhados na 2ª ocorrência), `OfficeDocumentSnapshot` com envelope
+   versionado/validado, serialização canônica de chaves ordenadas e
+   `contentHash()` SHA-256 puro-Dart; falta: history/commands do port,
+   IDs incrementais por range mapeado quando medição pedir)*
 2. **Editor flow** — view/contenteditable/seleção/IME/clipboard/histórico +
    camada de extensões Dart. Gate: editor contínuo robusto.
 3. **Delta** — importer/exporter + compatibility report + custom op opaco +

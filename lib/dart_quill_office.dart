@@ -11,11 +11,15 @@
 /// interoperar via Delta, importar/exportar OOXML preservador e paginar com
 /// um PageGraph único consumido pelo editor e pelo PDF.
 ///
-/// Os nomes públicos definitivos (OfficeNode, OfficeSchema,
-/// OfficeTransaction…) entram quando a fachada estabilizar; por ora este
-/// entrypoint expõe o núcleo com os nomes do port para desenvolvimento.
+/// A fachada pública usa os nomes Office* (`office/api.dart`); os nomes do
+/// port interno também são exportados por ora, para desenvolvimento — código
+/// novo deve preferir os Office*.
 library;
 
 export 'src/document_engine/model/index.dart';
+export 'src/document_engine/office/api.dart';
+export 'src/document_engine/office/ids.dart';
+export 'src/document_engine/office/sha256.dart' show sha256, sha256Hex;
+export 'src/document_engine/office/snapshot.dart';
 export 'src/document_engine/state/index.dart';
 export 'src/document_engine/transform/index.dart';
