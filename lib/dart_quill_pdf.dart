@@ -33,3 +33,12 @@ export 'src/converters/pdf/pdf_exporter.dart'
         PdfExportOptions,
         PdfExportResult,
         PdfFontFace;
+export 'src/converters/pdf/pdf_page_setup.dart'
+    show
+        InvalidPdfOperation,
+        PdfPageSetup,
+        PdfSanitizePolicy,
+        pageSetupOptions,
+        parsePageMarginCm,
+        readPdfPageSetup,
+        sanitizeOpsForPdf;
