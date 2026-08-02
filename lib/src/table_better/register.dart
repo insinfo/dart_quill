@@ -78,12 +78,18 @@ List<RegistryEntry> registerTableBetterFormats() {
       tagNames: const [TableCellBlock.kTagName],
       classNames: const [TableCellBlock.kClassName],
       create: TableCellBlock.create,
+      // Sem isto o `matchBlot` do clipboard reporta `true` (o fallback de um
+      // blot identificado por classe) em vez do cellId, e como o merge de
+      // células compara cellIds, colar uma tabela juntava TODAS as células
+      // numa só.
+      staticFormats: (node) => node.getAttribute('data-cell'),
     ),
     RegistryEntry(
       blotName: TableThBlock.kBlotName,
       scope: TableThBlock.kScope,
       tagNames: const [TableThBlock.kTagName],
       classNames: const [TableThBlock.kClassName],
+      staticFormats: (node) => node.getAttribute('data-cell'),
       create: TableThBlock.create,
     ),
     RegistryEntry(

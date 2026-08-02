@@ -198,6 +198,16 @@ Duas leituras:
 Corrigir (1) destrava o caminho mais rápido de todos: gerar o HTML no worker e
 deixar o parser nativo do navegador montar o DOM.
 
+**Achado colateral, já corrigido:** investigando isto apareceu um bug
+independente no caminho do CLIPBOARD (`dangerouslyPasteHTML`, que é como uma
+aplicação carrega HTML hoje). O `matchBlot` reporta o que a entrada do
+registro declara em `staticFormats`; sem declaração, um blot identificado por
+CLASSE cai no fallback `true`. Como `table-cell-block` não declarava nada,
+TODAS as células de uma tabela colada chegavam com o mesmo id `true` e o merge
+por cellId as fundia numa célula só. Coberto por
+`test/unit/table_better/paste_cell_id_test.dart`. O caso equivalente com
+`<thead>`/`<th>` ainda esbarra na não-convergência descrita acima.
+
 ## Como reproduzir
 
 ```bash
