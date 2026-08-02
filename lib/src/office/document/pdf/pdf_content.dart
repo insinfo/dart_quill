@@ -83,6 +83,28 @@ class PdfContentBuilder {
       ..writeln('ET');
   }
 
+  /// Texto codificado como string hexadecimal de CIDs (`Identity-H`), para
+  /// fontes embutidas — [hexString] já vem com os delimitadores `<...>` de
+  /// `EmbeddedCidFont.encodeText`. O `(...) Tj` de [text] só fala WinAnsi;
+  /// sem este operador a fonte CID ficava pronta e inutilizável.
+  void textCid({
+    required String fontResource,
+    required double sizePx,
+    required String hexString,
+    required double x,
+    required double baselineY,
+    String color = '#000000',
+  }) {
+    if (hexString.length <= 2) return;
+    _setFill(color);
+    _ops
+      ..writeln('BT')
+      ..writeln('$fontResource ${_n(sizePx * k)} Tf')
+      ..writeln('${_n(_x(x))} ${_n(_y(baselineY))} Td')
+      ..writeln('$hexString Tj')
+      ..writeln('ET');
+  }
+
   /// Retângulo preenchido; coordenadas/tamanho em px do canvas.
   void fillRect(double x, double y, double w, double h, String cssColor) {
     if (w <= 0 || h <= 0) return;

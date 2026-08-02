@@ -188,8 +188,10 @@ conversores.
 | P2/P3 — `headerImage` + SVG no PDF | **corrigido** (brasão real coberto por teste) |
 | P4 — imagens por URL no PDF | **corrigido** (`PdfExportOptions.resources`; a app resolve com fetch) |
 | P16 — canal de warnings no PDF | **corrigido** (`deltaToPdfWithReport`) |
+| P1 — fonte embutida (CID) no exportador | **corrigido** (`PdfExportOptions.fontFaces`, opt-in) |
+| P9 — largura de negrito estimada ×1,05 | **corrigido** quando há face embutida (métrica real da hmtx) |
 | W1/W2 — fonte e tamanho descartados pela whitelist | **corrigido** (configurável) |
-| H4–H7, W3–W10, P1, P6/P7, P9–P15, P18–P20 | pendentes |
+| H4–H7, W3–W10, P6/P7, P10–P15, P18–P20 | pendentes |
 
 Testes que travam o corrigido: `html_table_rows_test.dart`,
 `html_table_cells_test.dart`, `cell_text_hydration_test.dart`,

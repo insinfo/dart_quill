@@ -46,6 +46,8 @@ import '../../office/document/pdf/pdf_image.dart'
     show PdfImageData, decodeDataUrlImage, decodeImageBytes;
 import '../../office/document/pdf/svg/svg_renderer.dart'
     show SvgPicture, SvgRenderResult, parseSvg, renderSvgToPdfOperators;
+import '../../office/document/pdf/pdf_cid_font.dart'
+    show EmbeddedCidFont, embedCidFont;
 import '../../office/document/pdf/pdf_writer.dart'
     show PdfWriter;
 import '../../office/editor/dataset/enum/element.dart'
@@ -95,6 +97,7 @@ class PdfExportOptions {
     this.title = 'Documento',
     this.resources = const <String, Uint8List>{},
     this.headerImageHeightPt = 45,
+    this.fontFaces = const <PdfFontFace>[],
   })  : marginTop = marginTop ?? margin,
         marginBottom = marginBottom ?? margin,
         marginLeft = marginLeft ?? margin,
@@ -133,6 +136,33 @@ class PdfExportOptions {
   /// Altura, em pontos, do cabeçalho institucional (`headerImage`). O plugin
   /// do SALI o desenha com 60px no editor; 45pt é o equivalente.
   final double headerImageHeightPt;
+
+  /// Fontes TrueType a embutir. Texto cuja família casa com uma face sai na
+  /// fonte REAL (subset embutido, qualquer caractere que ela cubra, cópia de
+  /// texto correta via /ToUnicode); sem face correspondente o texto continua
+  /// nas standard-14 com WinAnsi, exatamente como antes.
+  final List<PdfFontFace> fontFaces;
+}
+
+/// Uma face de fonte TrueType fornecida pela aplicação para ser EMBUTIDA no
+/// PDF (subset + `Identity-H` + `/ToUnicode`).
+///
+/// Os bytes vêm sempre da aplicação — o pacote publica métricas, nunca
+/// arquivos de fonte. Declare uma face por variante (`Inter` regular, bold,
+/// italic, bold+italic); quando a variante exata de um trecho não foi
+/// fornecida, a regular da mesma família assume, com aviso.
+class PdfFontFace {
+  const PdfFontFace(
+    this.family,
+    this.bytes, {
+    this.bold = false,
+    this.italic = false,
+  });
+
+  final String family;
+  final Uint8List bytes;
+  final bool bold;
+  final bool italic;
 }
 
 /// O PDF gerado mais o que NÃO pôde ser desenhado.
@@ -357,6 +387,74 @@ class _PdfLayoutEngine {
   final Map<String, _ImageRef?> _imageCache = <String, _ImageRef?>{};
   final Map<String, SvgPicture?> _svgCache = <String, SvgPicture?>{};
 
+  /// Faces embutidas, por chave `família|bold|italic` (minúscula). Preenchido
+  /// em [_embedFonts] antes de qualquer desenho, porque o subset precisa do
+  /// conjunto completo de runas.
+  final Map<String, EmbeddedCidFont> _embedded = <String, EmbeddedCidFont>{};
+  final Set<String> _missingVariantWarned = <String>{};
+
+  static String _faceKey(String family, bool bold, bool italic) =>
+      '${family.trim().toLowerCase()}|$bold|$italic';
+
+  /// A face embutida para um trecho: a variante exata, ou a regular da mesma
+  /// família (com aviso, uma vez por variante).
+  EmbeddedCidFont? _faceFor(String family, bool bold, bool italic) {
+    final exact = _embedded[_faceKey(family, bold, italic)];
+    if (exact != null) return exact;
+    if (!bold && !italic) return null;
+    final regular = _embedded[_faceKey(family, false, false)];
+    if (regular != null &&
+        _missingVariantWarned.add(_faceKey(family, bold, italic))) {
+      warnings.add('face ${bold ? 'bold ' : ''}${italic ? 'italic ' : ''}'
+          'de "$family" não fornecida em fontFaces; usando a regular');
+    }
+    return regular;
+  }
+
+  /// Embute as faces fornecidas, com subset limitado às runas que o documento
+  /// realmente usa (mais os marcadores que o próprio exportador desenha).
+  void _embedFonts(List<IElement> elements) {
+    if (options.fontFaces.isEmpty) return;
+    final runes = <int>{};
+    void collect(List<IElement>? list) {
+      if (list == null) return;
+      for (final IElement element in list) {
+        runes.addAll(element.value.runes);
+        collect(element.valueList);
+        for (final ITr tr in element.trList ?? const <ITr>[]) {
+          for (final ITd td in tr.tdList) {
+            collect(td.value);
+          }
+        }
+      }
+    }
+
+    collect(elements);
+    // Marcadores gerados pelo exportador: numeração, bullet, espaço.
+    runes.addAll('0123456789.•  '.runes);
+
+    var index = 1;
+    for (final PdfFontFace face in options.fontFaces) {
+      final String key = _faceKey(face.family, face.bold, face.italic);
+      if (_embedded.containsKey(key)) continue;
+      try {
+        final EmbeddedCidFont embedded = embedCidFont(
+          _writer,
+          face.bytes,
+          usedRunes: runes,
+          resourceName: '/TT$index',
+        );
+        _writer.registerFontResource(
+            embedded.resourceName, embedded.objectId);
+        _embedded[key] = embedded;
+        index++;
+      } catch (error) {
+        warnings.add('fonte "${face.family}" não pôde ser embutida e ficou '
+            'de fora: $error');
+      }
+    }
+  }
+
   /// Conteúdo que não pôde ser desenhado ou foi aproximado, uma entrada por
   /// ocorrência. Exposto por [deltaToPdfWithReport].
   final List<String> warnings = <String>[];
@@ -372,6 +470,7 @@ class _PdfLayoutEngine {
   double get _contentBottom => options.pageHeight - options.marginBottom;
 
   Uint8List render(List<IElement> elements) {
+    _embedFonts(elements);
     _sink = _newSink();
     _cursorY = _contentTop;
     for (final _Block block in _buildBlocks(elements)) {
@@ -664,6 +763,13 @@ class _PdfLayoutEngine {
   }
 
   double _measure(_Run run, String text) {
+    final EmbeddedCidFont? face =
+        _faceFor(run.family, run.bold, run.italic);
+    if (face != null) {
+      // Métrica REAL da hmtx da fonte embutida — o que elimina a estimativa
+      // de negrito (a face bold mede o próprio traço).
+      return face.measure(text, run.size);
+    }
     final double width = _metricsFor(run.family).measureWidth(text, run.size);
     // The embedded metrics are for the regular weight; bold glyphs of the
     // standard-14 families are slightly wider.
@@ -873,16 +979,29 @@ class _PdfLayoutEngine {
       }
       final double segBaseline = baseline - run.baselineShift;
       if (seg.text.isNotEmpty) {
-        final String baseFont = standardFontFor(
-            family: run.family, bold: run.bold, italic: run.italic);
-        sink.builder.text(
-          fontResource: _writer.fontResourceName(baseFont),
-          sizePx: run.size,
-          winAnsiText: encodeWinAnsi(seg.text),
-          x: cx,
-          baselineY: segBaseline,
-          color: run.color,
-        );
+        final EmbeddedCidFont? face =
+            _faceFor(run.family, run.bold, run.italic);
+        if (face != null) {
+          sink.builder.textCid(
+            fontResource: face.resourceName,
+            sizePx: run.size,
+            hexString: face.encodeText(seg.text),
+            x: cx,
+            baselineY: segBaseline,
+            color: run.color,
+          );
+        } else {
+          final String baseFont = standardFontFor(
+              family: run.family, bold: run.bold, italic: run.italic);
+          sink.builder.text(
+            fontResource: _writer.fontResourceName(baseFont),
+            sizePx: run.size,
+            winAnsiText: encodeWinAnsi(seg.text),
+            x: cx,
+            baselineY: segBaseline,
+            color: run.color,
+          );
+        }
       }
       if (run.underline && !seg.isSpace && seg.text.isNotEmpty) {
         sink.builder.strokeLine(cx, segBaseline + run.size * 0.11,
