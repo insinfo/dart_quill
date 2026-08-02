@@ -239,6 +239,13 @@ class LayoutComposer {
       }
       final block = doc.child(index);
       final blockOffset = offset;
+      // Quebra de página MANUAL (Ctrl+Enter / aba Inserir): o bloco marcado
+      // abre página nova. Processada antes de compor, para o bloco inteiro
+      // cair na página seguinte — e antes da captura de estado, para a
+      // assinatura registrar a página nova começando nele.
+      if (_pageBreakBefore(block) && currentFragments.isNotEmpty) {
+        closePage();
+      }
       // ANTES da atualização de numeração: retomar neste bloco tem de
       // reproduzir o mesmo incremento, não contá-lo duas vezes.
       final ordinalBefore = listOrdinal;
@@ -517,6 +524,13 @@ class LayoutComposer {
     }
 
     return mapNode(region);
+  }
+
+  /// O bloco pede página nova antes de si (quebra manual ou
+  /// `w:pageBreakBefore` importado).
+  static bool _pageBreakBefore(PMNode block) {
+    final style = block.attrs['style'];
+    return style is Map && style['pageBreakBefore'] == true;
   }
 
   /// O bloco encerra uma seção?

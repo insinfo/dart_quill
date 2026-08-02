@@ -318,6 +318,92 @@ void main() {
     expect(editor.state.doc.child(0).attrs['kind'], 'ordered');
   });
 
+  group('aba Inserir', () {
+    DomElement tab(String text) {
+      for (final t in host.querySelectorAll('.dq-office-ribbon-tab')) {
+        if (t.textContent == text) return t;
+      }
+      throw StateError('aba não encontrada');
+    }
+
+    DomElement byTitlePrefix(String prefix) {
+      for (final b in host.querySelectorAll('.dq-office-btn')) {
+        final title = b.getAttribute('title') ?? '';
+        if (title.startsWith(prefix)) return b;
+      }
+      throw StateError('botão $prefix não encontrado');
+    }
+
+    void click(DomElement el) => (el as FakeDomElement)
+        .dispatchEvent('click', FakeDomMouseEvent(type: 'click', target: el));
+
+    void caretAt(int position) {
+      const map = OfficeDomPositionMap();
+      final pages = host.querySelector('.dq-office-pages')!;
+      final p = map.domPositionFor(pages, position)!;
+      adapter.setSelectionByNodes(p.node, p.offset, p.node, p.offset);
+    }
+
+    test('a quebra de página manda o resto do parágrafo para a próxima', () {
+      final editor = mount(blocks: 3);
+      final pagesBefore = editor.pageGraph.pages.length;
+      caretAt(1 + 5); // meio do primeiro parágrafo
+      click(tab('Inserir'));
+      click(byTitlePrefix('Quebra de Página'));
+
+      expect(editor.pageGraph.pages.length, pagesBefore + 1,
+          reason: 'a quebra manual abre página nova');
+      // O primeiro fragmento da página 2 é o bloco que carrega a quebra.
+      final second = editor.pageGraph.pages[1].fragments.first;
+      expect(second.docPos,
+          editor.pageGraph.pages[1].signature.firstBlockOffset + 1);
+      // E o PDF pagina IGUAL — mesma contagem.
+      expect(OfficePdfService().fromPageGraph(editor.pageGraph).pageCount,
+          editor.pageGraph.pages.length);
+    });
+
+    test('a quebra sobrevive ao undo', () {
+      final editor = mount(blocks: 3);
+      final before = editor.pageGraph.pages.length;
+      caretAt(1 + 5);
+      click(tab('Inserir'));
+      click(byTitlePrefix('Quebra de Página'));
+      expect(editor.pageGraph.pages.length, before + 1);
+
+      // O listener de teclado vive na superfície de páginas, não no shell.
+      final pages = host.querySelector('.dq-office-pages')!;
+      (pages as FakeDomElement).dispatchEvent(
+          'keydown',
+          FakeDomKeyboardEvent(
+              type: 'keydown', target: pages, key: 'z', ctrlKey: true));
+      expect(editor.pageGraph.pages.length, before,
+          reason: 'undo desfaz split E marca numa transação só');
+    });
+
+    test('inserir tabela cria a grade no grafo e na projeção', () {
+      final editor = mount(blocks: 3);
+      caretAt(1 + 5);
+      click(tab('Inserir'));
+      click(byTitlePrefix('Inserir tabela'));
+
+      var tables = 0;
+      for (var i = 0; i < editor.state.doc.childCount; i++) {
+        if (editor.state.doc.child(i).type.name == 'table') tables++;
+      }
+      expect(tables, 1);
+      expect(
+          editor.pageGraph.pages
+              .expand((p) => p.fragments)
+              .whereType<TableFragment>()
+              .length,
+          greaterThan(0),
+          reason: 'a tabela tem de aparecer paginada');
+      expect(count('.dq-office-table'), greaterThan(0));
+      expect(count('.dq-office-table-cell'), 9,
+          reason: '3×3 células projetadas');
+    });
+  });
+
   test('zoom reconstrói as réguas na nova escala', () {
     final editor = mount();
     final widthBefore = host

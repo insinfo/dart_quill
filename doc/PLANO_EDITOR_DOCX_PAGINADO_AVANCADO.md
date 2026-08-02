@@ -2531,8 +2531,21 @@ quando a seleção está em negrito — no caret valem as `storedMarks`, que
 são o que a próxima digitação usará; em faixa vale `rangeHasMark` — e o
 select de Estilos reflete o bloco do cursor; leitura pura do estado: a UI
 reflete o modelo, nunca o contrário) e a RÉGUA VERTICAL (sticky no canvas,
-margens sombreadas, números por centímetro; só no modo word). Pendências
-declaradas: drag de recuos na régua e abas Inserir/Layout funcionais.
+margens sombreadas, números por centímetro; só no modo word). A ABA LAYOUT ficou
+funcional em seguida (orientação retrato/paisagem, papel A4/Ofício/Carta,
+margens Normal/Estreita/Larga — cada escolha vira `setPageSetup` e o
+documento REPAGINA com conteúdo e histórico intactos), o visual foi
+reescrito no padrão do shell do docx_rendering (title bar, ribbon de duas
+linhas, réguas com banda alinhadas à página por construção — o teste de
+browser trava o alinhamento em 1,5px), e a ABA INSERIR entrou com QUEBRA
+DE PÁGINA manual (Ctrl+Enter do Word: split no cursor + atributo
+`pageBreakBefore` que o composer honra — quebra é atributo do bloco, não
+nó, então o PDF pagina igual e o undo desfaz split e marca numa transação
+só) e INSERIR TABELA 3×3 (células nascem com parágrafo vazio — o alvo de
+caret que a projeção de bloco vazio garante). Grupo Parágrafo ganhou
+listas com marcadores/numeração com o toggle do Word. Pendências
+declaradas: drag de recuos na régua, galeria de tamanhos de tabela e a
+aba Arquivo.
 
 ---|---|
 | digitar/apagar/Enter sobre páginas | o laço `beforeinput → modelo → PageGraph → projeção` |

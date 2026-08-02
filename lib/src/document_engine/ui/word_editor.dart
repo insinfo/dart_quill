@@ -314,7 +314,7 @@ class OfficeWordEditor {
       for (final (key, label, enabled) in [
         ('file', 'Arquivo', false),
         ('home', 'Página Inicial', true),
-        ('insert', 'Inserir', false),
+        ('insert', 'Inserir', true),
         ('layout', 'Layout', true),
       ]) {
         final tab = _el('button', 'dq-office-ribbon-tab');
@@ -366,7 +366,12 @@ class OfficeWordEditor {
     while (body.firstChild != null) {
       body.firstChild!.remove();
     }
-    for (final group in key == 'layout' ? _layoutGroups() : _homeGroups()) {
+    final groups = switch (key) {
+      'layout' => _layoutGroups(),
+      'insert' => _insertGroups(),
+      _ => _homeGroups(),
+    };
+    for (final group in groups) {
       body.append(group);
     }
     _refreshRibbonState();
@@ -427,6 +432,62 @@ class OfficeWordEditor {
         ]),
       ]),
     ];
+  }
+
+  /// Inserir — quebra de página e tabela.
+  List<DomElement> _insertGroups() {
+    _markButtons.clear();
+    _styleSelect = null;
+    return [
+      _group('Páginas', [
+        _row([
+          _button('⤓┄', 'Quebra de Página (o texto após o cursor vai para a '
+              'próxima página)', _insertPageBreak),
+        ]),
+      ]),
+      _group('Tabelas', [
+        _row([
+          _button('⊞', 'Inserir tabela 3×3', () => _insertTable(3, 3)),
+        ]),
+      ]),
+    ];
+  }
+
+  /// Ctrl+Enter do Word: divide o parágrafo no cursor e o bloco novo abre a
+  /// página seguinte. A quebra é um ATRIBUTO do bloco, não um nó — o
+  /// composer fecha a página ao encontrá-lo, e o PDF sai igual.
+  void _insertPageBreak() {
+    _view.syncSelectionFromDom();
+    final state = _view.state;
+    final tr = state.tr;
+    final from = state.selection.from;
+    tr.split(from);
+    final resolved = tr.doc.resolve(tr.mapping.map(from));
+    final blockPos = resolved.before(resolved.depth);
+    final block = tr.doc.nodeAt(blockPos);
+    if (block == null) return;
+    final style = block.attrs['style'];
+    tr.setNodeMarkup(blockPos, null, {
+      ...block.attrs,
+      'style': {
+        if (style is Map) ...style.cast<String, dynamic>(),
+        'pageBreakBefore': true,
+      },
+    });
+    _view.dispatch(tr);
+  }
+
+  /// Insere uma tabela vazia no cursor. Cada célula nasce com um parágrafo
+  /// vazio — o alvo de caret que a projeção de bloco vazio garante.
+  void _insertTable(int rows, int cols) {
+    _view.syncSelectionFromDom();
+    PMNode cell() => _schema.node(
+        'tableCell', null, Fragment.from([_schema.node('paragraph')]));
+    PMNode row() => _schema.node('tableRow', null,
+        Fragment.from([for (var c = 0; c < cols; c++) cell()]));
+    final table = _schema.node(
+        'table', null, Fragment.from([for (var r = 0; r < rows; r++) row()]));
+    _view.dispatch(_view.state.tr..replaceSelectionWith(table));
   }
 
   /// Layout — orientação, papel e margens. Cada escolha vira `setPageSetup`.
