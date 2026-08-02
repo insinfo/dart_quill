@@ -1,0 +1,8 @@
+# Saídas do compilador e o corpus: gerados/copiados, não versionados.
+*.js
+*.js.deps
+*.js.map
+*.mjs
+*.wasm
+*.wasm.map
+tr.docx
