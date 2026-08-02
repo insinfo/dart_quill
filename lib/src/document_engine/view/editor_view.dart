@@ -226,12 +226,27 @@ class OfficeEditorView {
   ({int from, int to})? readNativeSelection() {
     final native = _adapter.getNativeSelectionRange();
     if (native == null) return null;
+    // A seleção nativa é GLOBAL: pode pertencer a outro editor na página ou
+    // apontar para uma projeção já substituída. Fora do host, ela não diz
+    // nada sobre ESTE documento — mesma guarda do reconciliador.
+    if (!_containsNode(host, native.startContainer)) return null;
     final anchor = _positions.modelPositionAt(
         native.startContainer, native.startOffset);
     final head =
         _positions.modelPositionAt(native.endContainer, native.endOffset);
     if (anchor == null || head == null) return null;
     return (from: anchor < head ? anchor : head, to: anchor < head ? head : anchor);
+  }
+
+  /// [ancestor] contém [node]? Igualdade de nó, nunca identidade — o
+  /// adaptador web cunha wrapper novo a cada acesso.
+  static bool _containsNode(DomNode ancestor, DomNode node) {
+    DomNode? current = node;
+    while (current != null) {
+      if (current == ancestor) return true;
+      current = current.parentNode;
+    }
+    return false;
   }
 
   void dispose() {

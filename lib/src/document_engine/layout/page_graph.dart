@@ -92,7 +92,13 @@ class LineBox {
     required this.heightTwips,
     required this.charStart,
     required this.charEnd,
+    this.indentTwips = 0,
   });
+
+  /// Deslocamento X DESTA linha dentro do bloco — o recuo de primeira
+  /// linha do Word. Negativo é o recuo pendente (hanging): a primeira
+  /// linha fica à esquerda das demais.
+  final int indentTwips;
 
   final List<LineSegment> segments;
   final int widthTwips;
@@ -149,6 +155,7 @@ class BlockFragment extends PageFragment {
     required super.yTwips,
     required super.heightTwips,
     this.indentTwips = 0,
+    this.rightIndentTwips = 0,
     this.align = LayoutAlign.left,
     this.marker,
     super.continuesFromPreviousPage,
@@ -171,11 +178,16 @@ class BlockFragment extends PageFragment {
         yTwips: yTwips,
         heightTwips: heightTwips,
         indentTwips: indentTwips,
+        rightIndentTwips: rightIndentTwips,
         align: align,
         marker: marker,
         continuesFromPreviousPage: continuesFromPreviousPage,
         continuesOnNextPage: continuesOnNextPage,
       );
+
+  /// Recuo DIREITO do parágrafo, em twips: as linhas quebram antes e o
+  /// alinhamento center/right respeita a borda recuada.
+  final int rightIndentTwips;
 
   /// Marcador de lista ('1. ', '• ') quando o fragment abre o item.
   final String? marker;

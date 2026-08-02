@@ -201,12 +201,17 @@ class PageGraphPdfRenderer {
     var firstLine = true;
     for (final line in fragment.lines) {
       final baseline = y + _twipsToPt(line.ascentTwips);
-      var cursorX = x;
+      // O recuo de primeira linha desloca o X; o recuo direito encolhe a
+      // caixa em que center/right se apoiam — igual ao DOM.
+      var cursorX = x + _twipsToPt(line.indentTwips);
+      final lineAvailable = available -
+          _twipsToPt(line.indentTwips) -
+          _twipsToPt(fragment.rightIndentTwips);
       final lineWidth = _twipsToPt(line.widthTwips);
       if (fragment.align == LayoutAlign.center) {
-        cursorX += (available - lineWidth) / 2;
+        cursorX += (lineAvailable - lineWidth) / 2;
       } else if (fragment.align == LayoutAlign.right) {
-        cursorX += available - lineWidth;
+        cursorX += lineAvailable - lineWidth;
       }
 
       if (withMarker && firstLine && fragment.marker != null) {

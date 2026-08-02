@@ -316,7 +316,9 @@ class LayoutComposer {
       final blockStyle = _blockStyleOf(block, listOrdinal);
       final lines = _breakLines(
         block,
-        activeSetup.contentWidthTwips - blockStyle.indentTwips,
+        activeSetup.contentWidthTwips -
+            blockStyle.indentTwips -
+            blockStyle.rightIndentTwips,
         blockStyle,
         diagnostics,
       );
@@ -362,6 +364,7 @@ class LayoutComposer {
           yTwips: cursorTwips,
           heightTwips: height,
           indentTwips: blockStyle.indentTwips,
+          rightIndentTwips: blockStyle.rightIndentTwips,
           align: blockStyle.align,
           marker: firstLineOfBlock ? blockStyle.marker : null,
           continuesFromPreviousPage: !firstLineOfBlock,
@@ -578,13 +581,17 @@ class LayoutComposer {
   /// A heurística por nível de heading continua como fallback para
   /// documentos que nunca passaram por um importador — Delta do Quill, por
   /// exemplo, onde `header: 1` é tudo que se sabe.
+  /// O `style` resolvido é um mapa PARCIAL: cada chave presente sobrepõe a
+  /// heurística, as ausentes herdam dela. Exigir o mapa completo faria a
+  /// régua (que só grava recuos) apagar o tamanho de fonte do documento.
   _BlockStyle? _resolvedStyleOf(PMNode block, int listOrdinal) {
     final raw = block.attrs['style'];
     if (raw is! Map) return null;
-    final sizePt = raw['sizePt'];
-    if (sizePt is! num || sizePt <= 0) return null;
 
     final heuristic = _heuristicStyleOf(block, listOrdinal);
+    final sizePt = raw['sizePt'];
+    int intOr(String key, int fallback) =>
+        raw[key] is num ? (raw[key] as num).toInt() : fallback;
     return _BlockStyle(
       align: switch (raw['align'] ?? block.attrs['align']) {
         'center' => LayoutAlign.center,
@@ -593,11 +600,14 @@ class LayoutComposer {
         'left' => LayoutAlign.left,
         _ => heuristic.align,
       },
-      baseSizePt: sizePt.toDouble(),
+      baseSizePt:
+          sizePt is num && sizePt > 0 ? sizePt.toDouble() : heuristic.baseSizePt,
       bold: raw['bold'] is bool ? raw['bold'] as bool : heuristic.bold,
-      indentTwips: raw['indentTwips'] is num
-          ? (raw['indentTwips'] as num).toInt()
-          : heuristic.indentTwips,
+      indentTwips: intOr('indentTwips', heuristic.indentTwips),
+      rightIndentTwips:
+          intOr('rightIndentTwips', heuristic.rightIndentTwips),
+      firstLineIndentTwips:
+          intOr('firstLineIndentTwips', heuristic.firstLineIndentTwips),
       // O rótulo de numeração resolvido do `numbering.xml` ganha do
       // marcador heurístico: ele é o que o Word desenharia.
       marker: raw['marker'] is String ? raw['marker'] as String : heuristic.marker,
@@ -841,9 +851,19 @@ class LayoutComposer {
         heightTwips: height,
         charStart: current.first.charStart,
         charEnd: current.last.charStart + current.last.text.length,
+        // O recuo de primeira linha só vale para a PRIMEIRA linha do bloco.
+        indentTwips: lines.isEmpty ? blockStyle.firstLineIndentTwips : 0,
       ));
       current = [];
       currentWidth = 0;
+    }
+
+    // A primeira linha tem largura própria: o recuo de primeira linha a
+    // encurta (positivo) ou alarga (pendente, negativo).
+    int lineWidthLimit() {
+      if (lines.isNotEmpty) return widthTwips;
+      final first = widthTwips - blockStyle.firstLineIndentTwips;
+      return first < 400 ? 400 : first;
     }
 
     for (final token in tokens) {
@@ -853,7 +873,7 @@ class LayoutComposer {
         currentWidth += token.widthTwips;
         continue;
       }
-      if (currentWidth + token.widthTwips > widthTwips && current.isNotEmpty) {
+      if (currentWidth + token.widthTwips > lineWidthLimit() && current.isNotEmpty) {
         flush();
       }
       if (token.widthTwips > widthTwips && current.isEmpty) {
@@ -999,6 +1019,8 @@ class _BlockStyle {
     required this.baseSizePt,
     this.bold = false,
     this.indentTwips = 0,
+    this.rightIndentTwips = 0,
+    this.firstLineIndentTwips = 0,
     this.marker,
     this.family,
   });
@@ -1007,6 +1029,14 @@ class _BlockStyle {
   final double baseSizePt;
   final bool bold;
   final int indentTwips;
+
+  /// Recuo direito (Word `w:ind/@right`).
+  final int rightIndentTwips;
+
+  /// Recuo de primeira linha (Word `w:ind/@firstLine`); negativo = pendente
+  /// (`w:ind/@hanging`).
+  final int firstLineIndentTwips;
+
   final String? marker;
   final String? family;
 }

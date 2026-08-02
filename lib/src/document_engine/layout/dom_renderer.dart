@@ -311,7 +311,9 @@ class PageGraphDomRenderer {
       lineElement.setAttribute('data-char-end', '${line.charEnd}');
       lineElement.setAttribute(
           'style',
-          'position:absolute;left:0;right:0;'
+          'position:absolute;'
+          'left:${_n(_px(line.indentTwips))}px;'
+          'right:${_n(_px(fragment.rightIndentTwips))}px;'
           'top:${_n(_px(y))}px;'
           'height:${_n(_px(line.heightTwips))}px;'
           'line-height:${_n(_px(line.heightTwips))}px;'
