@@ -265,6 +265,11 @@ class WpParagraphProperties {
   /// rPr da marca de parágrafo (formata o pilcrow; útil para parágrafo vazio).
   final WpRunProperties? markRunProperties;
 
+  /// `w:sectPr` dentro do `w:pPr` — é assim que o OOXML marca uma QUEBRA DE
+  /// SEÇÃO: as propriedades descrevem a seção que TERMINA neste parágrafo,
+  /// não a que começa. O `sectPr` do fim do body governa a última seção.
+  final WpSectionProperties? sectionBreak;
+
   const WpParagraphProperties({
     this.styleId,
     this.numPr,
@@ -273,6 +278,7 @@ class WpParagraphProperties {
     this.indent,
     this.tabs,
     this.shading,
+    this.sectionBreak,
     this.borders,
     this.keepNext,
     this.keepLines,
@@ -321,6 +327,7 @@ class WpParagraphProperties {
       contextualSpacing: _onOff(el.firstChild('w:contextualSpacing')),
       outlineLvl: _intVal(el.firstChild('w:outlineLvl')),
       markRunProperties: WpRunProperties.fromXml(el.firstChild('w:rPr')),
+      sectionBreak: WpSectionProperties.fromXml(el.firstChild('w:sectPr')),
     );
   }
 

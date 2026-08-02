@@ -3960,8 +3960,23 @@ tabela de revisões própria).
    O rótulo vira MARCADOR (`style.marker` → `BlockFragment.marker`), nunca
    texto do documento — se virasse texto, editar o parágrafo o corromperia
    e salvar gravaria o número literal por cima da numeração automática. 12
-   testes. Pendências da fase: MÚLTIPLAS seções (hoje a primeira governa o
-   documento) e a região AUTORITATIVA para editar o cabeçalho.)*
+   testes. MÚLTIPLAS SEÇÕES fecharam o último caso de saída ERRADA: um documento
+   com anexo em paisagem tem duas geometrias, e até aqui a primeira
+   governava tudo — o anexo era paginado em retrato na tela E no PDF. A
+   regra que decide a correção: no OOXML o `w:sectPr` fica no parágrafo que
+   TERMINA a seção, não no que começa a seguinte; ler ao contrário
+   aplicaria a geometria errada ao documento inteiro. Por isso a quebra é
+   processada DEPOIS do bloco (ele ainda pertence à geometria antiga) e
+   força página nova. O leitor precisou ser estendido: ele só expunha o
+   `sectPr` do fim do body e IGNORAVA o de parágrafo, que é justamente
+   onde a quebra é registrada. A importação coleta as seções na ORDEM da
+   travessia — é a ordem que liga cada geometria ao trecho certo — e marca
+   o bloco com `style.sectionBreak`. Mais quebras que geometrias não
+   estoura: a última conhecida continua valendo, porque documento
+   malformado existe. 8 testes, entre eles a garantia de que o parágrafo da
+   quebra fica na página ANTIGA e que o PDF emite cada página no MediaBox
+   da sua seção. Pendências da fase: a região AUTORITATIVA para editar
+   cabeçalho/rodapé (hoje eles são visíveis e corretamente inertes).)*
 5. **Layout determinístico e PDF** — StyleResolver, shaping latino, line
    breaking, page composer, fragmentação, PageGraph, PdfWriter dirigido
    pelo PageGraph. Gate: editor e PDF usam o MESMO PageGraph.

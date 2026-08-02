@@ -37,6 +37,7 @@ class LayoutComposer {
     LayoutFontSet? fonts,
     this.header,
     this.footer,
+    this.sections = const [],
   }) : fonts = fonts ?? LayoutFontSet(const []);
 
   final PageSetupTwips setup;
@@ -47,6 +48,18 @@ class LayoutComposer {
   /// Faces embutidas: quando presentes, a medição usa a hmtx REAL da face —
   /// a mesma que o renderer embute — e as duas saídas quebram igual.
   final LayoutFontSet fonts;
+
+  /// Geometrias por SEÇÃO, na ordem do documento.
+  ///
+  /// Vazio significa "uma seção só", que é `setup`. Com várias, um bloco
+  /// que carrega `style.sectionBreak` ENCERRA a seção corrente: o OOXML
+  /// coloca o `sectPr` no parágrafo que TERMINA a seção, não no que
+  /// começa a seguinte — ler ao contrário aplicaria a geometria errada ao
+  /// documento inteiro.
+  ///
+  /// Sem isto, um anexo em paisagem seria paginado em retrato na tela E no
+  /// PDF, porque os dois consomem o mesmo grafo.
+  final List<PageSetupTwips> sections;
 
   /// Regiões de cabeçalho/rodapé — árvores próprias, não parte do corpo.
   ///
@@ -128,7 +141,9 @@ class LayoutComposer {
 
     var currentFragments = <PageFragment>[];
     var cursorTwips = 0;
-    final capacity = setup.contentHeightTwips;
+    var sectionIndex = 0;
+    var activeSetup = sections.isEmpty ? setup : sections.first;
+    var capacity = activeSetup.contentHeightTwips;
 
     // Estado de ENTRADA da página aberta (o que a assinatura registra).
     var pageStartBlockIndex = startBlockIndex;
@@ -139,7 +154,7 @@ class LayoutComposer {
       final first = currentFragments.isEmpty ? null : currentFragments.first;
       pages.add(PageLayout(
         index: pages.length,
-        setup: setup,
+        setup: activeSetup,
         fragments: currentFragments,
         signature: PageSignature(
           firstBlockIndex: pageStartBlockIndex,
@@ -294,7 +309,7 @@ class LayoutComposer {
       final blockStyle = _blockStyleOf(block, listOrdinal);
       final lines = _breakLines(
         block,
-        setup.contentWidthTwips - blockStyle.indentTwips,
+        activeSetup.contentWidthTwips - blockStyle.indentTwips,
         blockStyle,
         diagnostics,
       );
@@ -355,6 +370,15 @@ class LayoutComposer {
         i += take;
       }
       if (converged) break;
+      // A quebra de seção é processada DEPOIS do bloco: o `sectPr` descreve
+      // a seção que termina NELE, então ele ainda pertence à geometria
+      // antiga.
+      if (_endsSection(block) && sectionIndex + 1 < sections.length) {
+        if (currentFragments.isNotEmpty) closePage();
+        sectionIndex++;
+        activeSetup = sections[sectionIndex];
+        capacity = activeSetup.contentHeightTwips;
+      }
       if (lines.isEmpty) {
         // Bloco vazio: uma linha em branco na altura da fonte base.
         final blank = _lineHeightTwips(baseFontFamily, baseFontSizePt);
@@ -493,6 +517,15 @@ class LayoutComposer {
     }
 
     return mapNode(region);
+  }
+
+  /// O bloco encerra uma seção?
+  ///
+  /// A marca vem da importação (`style.sectionBreak`), que a lê do
+  /// `w:pPr/w:sectPr` — o lugar onde o OOXML registra a quebra.
+  static bool _endsSection(PMNode block) {
+    final style = block.attrs['style'];
+    return style is Map && style['sectionBreak'] == true;
   }
 
   static bool _continuesFrom(PageFragment fragment) => switch (fragment) {

@@ -115,11 +115,15 @@ class OfficeDocxCodec {
   /// rótulo de um parágrafo depende de tudo que veio antes dele.
   OfficeNumberingCounter? _counter;
 
+  /// Quebras de seção encontradas nos parágrafos, na ordem do documento.
+  final List<WpSectionProperties> _sectionBreaks = [];
+
   /// Importa o pacote inteiro, preservando o que não sabemos ler.
   OfficeDocxImport import(Uint8List bytes, {String documentId = 'docx'}) {
     final docx = DocxReader.read(bytes);
     _styles = docx.styles;
     _counter = OfficeNumberingCounter(docx.numbering);
+    _sectionBreaks.clear();
     final report = OfficeCompatibilityReport();
     final anchors = <OfficeSourceAnchor>[];
 
@@ -199,7 +203,11 @@ class OfficeDocxCodec {
         resources: OfficeResourcesSnapshot(
           opaqueParts: parts,
           assets: assets,
+          // TODAS as seções, na ordem: as quebras encontradas nos
+          // parágrafos e, por último, a do fim do body — que governa a
+          // seção final.
           sections: [
+            for (final section in _sectionBreaks) _sectionToJson(section),
             if (docx.document.section != null)
               _sectionToJson(docx.document.section!),
           ],
@@ -362,6 +370,30 @@ class OfficeDocxCodec {
   /// documento em ofício ou paisagem quebraria nas linhas erradas — na tela
   /// E no PDF, porque os dois consomem o mesmo grafo. O default só entra
   /// quando o DOCX realmente não declara a medida.
+  /// TODAS as geometrias do snapshot, na ordem das seções.
+  static List<PageSetupTwips> pageSetupsOf(OfficeDocumentSnapshot snapshot) => [
+        for (var i = 0; i < snapshot.resources.sections.length; i++)
+          _setupAt(snapshot, i)
+      ];
+
+  static PageSetupTwips _setupAt(OfficeDocumentSnapshot snapshot, int index) {
+    const fallback = PageSetupTwips();
+    final section = snapshot.resources.sections[index];
+    int value(String key, int byDefault) {
+      final raw = section[key];
+      return raw is num && raw > 0 ? raw.toInt() : byDefault;
+    }
+
+    return PageSetupTwips(
+      widthTwips: value('pageWidthTwips', fallback.widthTwips),
+      heightTwips: value('pageHeightTwips', fallback.heightTwips),
+      marginTopTwips: value('marginTopTwips', fallback.marginTopTwips),
+      marginRightTwips: value('marginRightTwips', fallback.marginRightTwips),
+      marginBottomTwips: value('marginBottomTwips', fallback.marginBottomTwips),
+      marginLeftTwips: value('marginLeftTwips', fallback.marginLeftTwips),
+    );
+  }
+
   static PageSetupTwips pageSetupOf(OfficeDocumentSnapshot snapshot) {
     const fallback = PageSetupTwips();
     if (snapshot.resources.sections.isEmpty) return fallback;
@@ -531,18 +563,30 @@ class OfficeDocxCodec {
     // virasse texto, editar o parágrafo o corromperia e salvar gravaria o
     // número literal por cima da numeração automática do Word.
     final label = _counter?.labelFor(paragraph);
-    final resolved = label == null || label.isEmpty
-        ? presentation
-        : {...?presentation, 'marker': label};
+    // O `sectPr` do parágrafo ENCERRA a seção corrente. Registrar aqui,
+    // durante a travessia, é o que mantém a ORDEM das seções — e a ordem é
+    // o que liga cada geometria ao trecho certo do documento.
+    final sectionBreak = paragraph.properties?.sectionBreak;
+    if (sectionBreak != null) _sectionBreaks.add(sectionBreak);
+
+    final resolved = <String, dynamic>{
+      ...?presentation,
+      if (label != null && label.isNotEmpty) 'marker': label,
+      if (sectionBreak != null) 'sectionBreak': true,
+    };
     if (level != null) {
       return schema.node(
           'heading',
-          {officeIdAttribute: nodeId, 'level': level, 'style': resolved},
+          {
+            officeIdAttribute: nodeId,
+            'level': level,
+            'style': resolved.isEmpty ? null : resolved
+          },
           Fragment.from(inline));
     }
     return schema.node(
         'paragraph',
-        {officeIdAttribute: nodeId, 'style': resolved},
+        {officeIdAttribute: nodeId, 'style': resolved.isEmpty ? null : resolved},
         Fragment.from(inline));
   }
 

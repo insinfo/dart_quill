@@ -93,6 +93,8 @@ class OfficePdfService {
   OfficePdfResult fromSnapshot(OfficeDocumentSnapshot snapshot) {
     final graph = LayoutComposer(
       setup: OfficeDocxCodec.pageSetupOf(snapshot),
+      // Um anexo em paisagem tem de sair em paisagem no PDF assinado.
+      sections: OfficeDocxCodec.pageSetupsOf(snapshot),
       quality: quality,
       baseFontFamily: baseFontFamily,
       baseFontSizePt: baseFontSizePt,
