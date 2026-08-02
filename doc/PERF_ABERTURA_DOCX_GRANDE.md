@@ -168,8 +168,35 @@ diferença entre o JIT da VM e o JavaScript compilado. Os cenários 2 e 4 (via
    o JS compilado, custa 88 ms de startup e um segundo artefato de build.
 4. **O caminho `innerHTML` + parser nativo** continua promissor (o navegador
    monta DOM muito mais rápido que qualquer laço nosso) e combina bem com um
-   worker que devolve HTML pronto — mas depende de o `Scroll.build()` convergir
-   sobre documentos com muitas tabelas.
+   worker que devolve HTML pronto — mas depende de corrigir a hidratação
+   descrita abaixo.
+
+## Por que o caminho via HTML falha (diagnóstico)
+
+Reproduzido na VM com o ETP (157 KB de HTML): `Maximum optimize iterations
+exceeded`. Capturando o HTML a cada passada, o estado **oscila** entre dois
+formatos, indefinidamente:
+
+```text
+A: <table>…<colgroup></colgroup></table><tr><td>Severidade</td></tr><tr><td>…
+B: <table>…<colgroup></colgroup></table><td>Severidade</td><td>…
+```
+
+Duas leituras:
+
+1. **As células ficam FORA do `<table>`.** O `Scroll.build()` não aninhou
+   `<tbody>`/`<tr>`/`<td>` dentro da tabela ao hidratar o HTML — a tabela sai
+   vazia (só o `<colgroup>`) e as células viram irmãs dela, no nível do
+   scroll. Esse é o bug de fato.
+2. **A convergência entra em ciclo por causa disso.** Com as células soltas, o
+   `requiredContainer` embrulha cada `<td>` num `<tr>` (passada A) e o
+   `enforceAllowedChildren` do scroll rejeita `<tr>` naquele nível e desfaz o
+   embrulho (passada B) — para sempre. As duas regras estão certas
+   isoladamente; o que falta é a terceira, que colocaria as células dentro da
+   tabela.
+
+Corrigir (1) destrava o caminho mais rápido de todos: gerar o HTML no worker e
+deixar o parser nativo do navegador montar o DOM.
 
 ## Como reproduzir
 
