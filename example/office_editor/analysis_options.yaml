@@ -1,1 +1,9 @@
-include: package:lints/recommended.yaml
+# O `include: package:lints/...` fica COMENTADO de propósito, como nos
+# demais analysis_options deste repositório: a CI roda `dart analyze` da
+# RAIZ, e dali o package do exemplo não está resolvido — o include viraria
+# `include_file_not_found` e derrubaria a análise do projeto inteiro.
+#include: package:lints/recommended.yaml
+
+analyzer:
+  exclude:
+    - build/**
