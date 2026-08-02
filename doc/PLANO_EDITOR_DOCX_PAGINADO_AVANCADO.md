@@ -3598,8 +3598,10 @@ tabela de revisões própria).
    `appendTransaction` (nulos ganham id, duplicados de colar são
    re-cunhados na 2ª ocorrência), `OfficeDocumentSnapshot` com envelope
    versionado/validado, serialização canônica de chaves ordenadas e
-   `contentHash()` SHA-256 puro-Dart; falta: history/commands do port,
-   IDs incrementais por range mapeado quando medição pedir)*
+   `contentHash()` SHA-256 puro-Dart; history/commands do
+   port vendorizados com seus testes — o gate "árvore + transações + undo
+   SEM DOM" está CUMPRIDO; falta apenas otimização incremental dos IDs por
+   range mapeado quando medição pedir)*
 2. **Editor flow** — view/contenteditable/seleção/IME/clipboard/histórico +
    camada de extensões Dart. Gate: editor contínuo robusto.
 3. **Delta** — importer/exporter + compatibility report + custom op opaco +

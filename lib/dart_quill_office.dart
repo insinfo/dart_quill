@@ -16,10 +16,12 @@
 /// novo deve preferir os Office*.
 library;
 
+export 'src/document_engine/commands/index.dart';
+export 'src/document_engine/history/history.dart';
 export 'src/document_engine/model/index.dart';
 export 'src/document_engine/office/api.dart';
 export 'src/document_engine/office/ids.dart';
 export 'src/document_engine/office/sha256.dart' show sha256, sha256Hex;
 export 'src/document_engine/office/snapshot.dart';
 export 'src/document_engine/state/index.dart';
-export 'src/document_engine/transform/index.dart';
+export 'src/document_engine/transform/index.dart' hide lift, setBlockType;
