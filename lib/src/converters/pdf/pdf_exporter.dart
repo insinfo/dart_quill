@@ -295,6 +295,23 @@ class _TableCellBox {
   final double contentHeight;
 }
 
+/// Trecho de página ocupado por uma tabela: mapeia o espaço-y da tabela
+/// (0 = topo dela) para uma página concreta.
+class _TableBand {
+  _TableBand({required this.sink, required this.pageTop, required this.startY});
+
+  final _PageSink sink;
+
+  /// y na página onde a banda começa.
+  final double pageTop;
+
+  /// y no espaço da tabela onde a banda começa.
+  final double startY;
+
+  /// y no espaço da tabela onde a banda termina (exclusivo).
+  double endY = 0;
+}
+
 class _Seg {
   _Seg({
     required this.run,
@@ -472,6 +489,13 @@ class _PdfLayoutEngine {
   final List<String> warnings = <String>[];
 
   late _PageSink _sink;
+
+  /// Todas as páginas do documento, na ordem. As páginas só são serializadas
+  /// no FIM: uma tabela que atravessa páginas desenha células em páginas já
+  /// "passadas", o que era impossível quando `_newPage` serializava na hora —
+  /// era assim que uma tabela multi-página saía inteira na última página,
+  /// sobreposta, deixando as anteriores em branco.
+  final List<_PageSink> _pages = <_PageSink>[];
   late double _cursorY;
   bool _pageHasContent = false;
 
@@ -484,6 +508,7 @@ class _PdfLayoutEngine {
   Uint8List render(List<IElement> elements) {
     _embedFonts(elements);
     _sink = _newSink();
+    _pages.add(_sink);
     _cursorY = _contentTop;
     for (final _Block block in _buildBlocks(elements)) {
       if (block is _ParagraphBlock) {
@@ -494,7 +519,15 @@ class _PdfLayoutEngine {
         _renderSvg(block);
       }
     }
-    _flushPage();
+    for (final _PageSink page in _pages) {
+      _writer.addPage(
+        widthPt: options.pageWidth,
+        heightPt: options.pageHeight,
+        content: page.builder.build(),
+        xObjects: page.xObjects,
+        annotationIds: page.annotationIds,
+      );
+    }
     return _writer.build(title: options.title, producer: 'dart_quill');
   }
 
@@ -518,19 +551,9 @@ class _PdfLayoutEngine {
   _PageSink _newSink() =>
       _PageSink(PdfContentBuilder(pageHeightPt: options.pageHeight, k: 1));
 
-  void _flushPage() {
-    _writer.addPage(
-      widthPt: options.pageWidth,
-      heightPt: options.pageHeight,
-      content: _sink.builder.build(),
-      xObjects: _sink.xObjects,
-      annotationIds: _sink.annotationIds,
-    );
-  }
-
   void _newPage() {
-    _flushPage();
     _sink = _newSink();
+    _pages.add(_sink);
     _cursorY = _contentTop;
     _pageHasContent = false;
   }
@@ -1239,45 +1262,138 @@ class _PdfLayoutEngine {
     }
 
     // --- desenho -----------------------------------------------------------
+    // A tabela vive num espaço próprio de y (0 = topo da tabela) mapeado em
+    // BANDAS, uma por trecho de página. As células desenham segmento a
+    // segmento em cada banda — inclusive nas páginas já "passadas".
     final String borderColor = table.borderColor ?? '#000000';
     final double borderWidth = table.borderWidth ?? 0.75;
-    final List<double> rowTops = List<double>.filled(rows.length, 0);
+    final double pageCapacity = _contentBottom - _contentTop;
+
+    final List<double> rowY = List<double>.filled(rows.length + 1, 0);
     for (int r = 0; r < rows.length; r++) {
-      // Uma célula mesclada é atômica: reserva a altura de todas as suas
-      // linhas para não ser cortada no meio por uma quebra de página.
-      double needed = rowHeights[r];
-      for (final _TableCellBox box in boxes) {
-        if (box.row != r || box.rowspan == 1) continue;
-        double span = 0;
-        for (int i = r;
-            i < r + box.rowspan && i < rowHeights.length;
-            i++) {
-          span += rowHeights[i];
-        }
-        if (span > needed) needed = span;
-      }
-      _ensureSpace(needed);
-      rowTops[r] = _cursorY;
-      _cursorY += rowHeights[r];
-      _pageHasContent = true;
+      rowY[r + 1] = rowY[r] + rowHeights[r];
+    }
+    // Necessidade atômica por linha: uma célula mesclada reserva a altura de
+    // todas as suas linhas para não ser cortada por uma quebra de página.
+    final List<double> needs = List<double>.of(rowHeights);
+    for (final _TableCellBox box in boxes) {
+      if (box.rowspan == 1) continue;
+      final int last = (box.row + box.rowspan).clamp(0, rows.length);
+      final double span = rowY[last] - rowY[box.row];
+      if (span > needs[box.row]) needs[box.row] = span;
     }
 
+    final List<_TableBand> bands = <_TableBand>[];
+    void openBand(double startY) {
+      bands.add(_TableBand(sink: _sink, pageTop: _cursorY, startY: startY));
+    }
+
+    // A primeira linha ganha a mesma cortesia do _ensureSpace: página nova
+    // quando não cabe no que resta da atual (e a unidade cabe numa página).
+    if (_pageHasContent &&
+        _cursorY + needs[0] > _contentBottom &&
+        needs[0] <= pageCapacity) {
+      _newPage();
+    }
+    openBand(0);
+    for (int r = 0; r < rows.length; r++) {
+      final _TableBand band = bands.last;
+      final double topOnPage = band.pageTop + (rowY[r] - band.startY);
+      if (topOnPage + needs[r] > _contentBottom + 0.01 &&
+          needs[r] <= pageCapacity + 0.01 &&
+          topOnPage > _contentTop + 0.01) {
+        // Quebra limpa antes da linha: a unidade cabe numa página inteira.
+        band.endY = rowY[r];
+        _newPage();
+        _pageHasContent = true;
+        openBand(rowY[r]);
+      } else {
+        // Linha (ou mescla) mais alta que a página — P14: o conteúdo FLUI,
+        // abrindo quantas bandas forem precisas pelo caminho.
+        while (bands.last.pageTop + (rowY[r] - bands.last.startY) >=
+            _contentBottom - 0.01) {
+          final _TableBand full = bands.last;
+          full.endY = full.startY + (_contentBottom - full.pageTop);
+          _newPage();
+          _pageHasContent = true;
+          openBand(full.endY);
+        }
+      }
+    }
+    // A cauda da última linha também pode transbordar a última banda.
+    while (bands.last.pageTop + (rowY[rows.length] - bands.last.startY) >
+        _contentBottom + 0.01) {
+      final _TableBand full = bands.last;
+      full.endY = full.startY + (_contentBottom - full.pageTop);
+      _newPage();
+      _pageHasContent = true;
+      openBand(full.endY);
+    }
+    bands.last.endY = rowY[rows.length];
+    _cursorY = bands.last.pageTop + (rowY[rows.length] - bands.last.startY);
+    _pageHasContent = true;
+
     for (final _TableCellBox box in boxes) {
-      double height = 0;
-      for (int r = box.row;
-          r < box.row + box.rowspan && r < rowHeights.length;
-          r++) {
-        height += rowHeights[r];
+      final int lastRow = (box.row + box.rowspan).clamp(0, rows.length);
+      final double y0 = rowY[box.row];
+      final double y1 = rowY[lastRow];
+      // Moldura e fundo, segmento a segmento (o Word também redesenha as
+      // bordas da linha partida na quebra de página).
+      for (final _TableBand band in bands) {
+        final double segStart = y0 > band.startY ? y0 : band.startY;
+        final double segEnd = y1 < band.endY ? y1 : band.endY;
+        if (segEnd - segStart <= 0.01) continue;
+        final double top = band.pageTop + (segStart - band.startY);
+        final double height = segEnd - segStart;
+        if (box.td.backgroundColor != null) {
+          band.sink.builder
+              .fillRect(box.x, top, box.width, height, box.td.backgroundColor!);
+        }
+        band.sink.builder.strokeRect(box.x, top, box.width, height,
+            color: borderColor, widthPx: borderWidth);
       }
-      final double top = rowTops[box.row];
-      if (box.td.backgroundColor != null) {
-        _sink.builder
-            .fillRect(box.x, top, box.width, height, box.td.backgroundColor!);
+      // Conteúdo: cada bloco cai na banda em que COMEÇA; blocos contíguos na
+      // mesma banda são desenhados juntos. Um bloco único mais alto que a
+      // página ainda é atômico — cortado, com aviso.
+      double blockY = y0 + _cellPadding;
+      final double innerWidth = box.width - 2 * _cellPadding;
+      final List<_Block> group = <_Block>[];
+      _TableBand? groupBand;
+      double groupStartY = blockY;
+      void flushGroup() {
+        final _TableBand? target = groupBand;
+        if (group.isEmpty || target == null) return;
+        _drawBlocksAt(
+            target.sink,
+            List<_Block>.from(group),
+            box.x + _cellPadding,
+            target.pageTop + (groupStartY - target.startY),
+            innerWidth);
+        group.clear();
       }
-      _sink.builder.strokeRect(box.x, top, box.width, height,
-          color: borderColor, widthPx: borderWidth);
-      _drawBlocksAt(_sink, box.blocks, box.x + _cellPadding, top + _cellPadding,
-          box.width - 2 * _cellPadding);
+
+      for (final _Block block in box.blocks) {
+        final double blockHeight = _measureBlocks(<_Block>[block], innerWidth);
+        _TableBand band = bands.last;
+        for (final _TableBand candidate in bands) {
+          if (blockY < candidate.endY - 0.01 || identical(candidate, bands.last)) {
+            band = candidate;
+            break;
+          }
+        }
+        if (!identical(band, groupBand)) {
+          flushGroup();
+          groupBand = band;
+          groupStartY = blockY;
+        }
+        group.add(block);
+        if (blockHeight > pageCapacity) {
+          warnings.add('bloco de célula mais alto que a página: '
+              'o excedente é cortado');
+        }
+        blockY += blockHeight;
+      }
+      flushGroup();
     }
   }
 
