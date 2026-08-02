@@ -2486,18 +2486,42 @@ Com essa arquitetura, o usuário pode importar DOCX no browser, armazenar Office
 
 ---
 
-## 20.1 Exemplo executável do modo avançado
+## 20.1 Componente `OfficeWordEditor` e exemplo executável
 
-`example/office_editor` demonstra o engine numa página só:
+**[REVISADO 2026-08-02 — feedback do mantenedor.]** A primeira versão do
+exemplo montava toolbar/CSS na aplicação, o que invertia a responsabilidade:
+**a UI pertence à biblioteca**. O consumidor faz UMA chamada
+(`OfficeWordEditor.mount(host, document, options)`) e recebe a experiência
+Word completa — ribbon com abas e grupos (Desfazer, Fonte com
+família/tamanho/B/I/U/S, Parágrafo com alinhamentos, Estilos), régua
+horizontal com margens sombreadas e numeração por centímetro, páginas com
+sombra, cabeçalho/rodapé com `{PAGE}`/`{NUMPAGES}`, barra de status com a
+página corrente e seletor de zoom. O CSS é injetado pelo componente,
+escopado em `dq-office-*`, e não alcança `.ql-editor` — Quill simples e
+editor Word coexistem na página.
 
-```bash
-cd example/office_editor && dart pub get && dart run build_runner serve web:8080
-```
+Três modos de produto (`OfficeWordMode`): `view` (somente leitura, sem
+chrome de edição, nenhuma superfície `contenteditable`), `flow` (edição
+contínua sem paginação visível — as páginas existem no grafo e a projeção
+as cola numa coluna sem sombra, como o modo rascunho) e `word` (completo).
 
-O que ele torna VISÍVEL, e por que cada item está lá:
+Decisões de arquitetura visíveis no componente: a ribbon usa os MESMOS
+comandos dos atalhos (`runCommand`/transações — a UI não tem caminho
+próprio para mudar o documento); o zoom muda apenas a escala twips→px da
+projeção (`pxPerPt`), então grafo, mapa de posições e PDF não mudam, e o
+`EditorState` é reaproveitado — o undo sobrevive ao zoom; `exportPdf()`
+sai de `fromPageGraph` com o grafo da tela, sem segunda paginação.
 
-| Na tela | O que prova |
-|---|---|
+O exemplo (`example/office_editor`) virou o que devia ser: um `<div>` e uma
+chamada, com o modo escolhido por query string. Testes em VM
+(fake DOM: chrome completo, modos, botão da ribbon aplicando marca, zoom
+preservando histórico, dispose limpo) e em Chrome real (geometria de ~794 px
+da página A4 com a régua acompanhando, clique real no botão de negrito
+sobre a seleção nativa, zoom mudando a largura real, digitação sob o
+chrome). Pendências declaradas: régua vertical, drag de recuos na régua,
+abas Inserir/Layout funcionais e realce de estado ativo nos botões.
+
+---|---|
 | digitar/apagar/Enter sobre páginas | o laço `beforeinput → modelo → PageGraph → projeção` |
 | barra de ferramentas | usa `runCommand`, o MESMO caminho dos atalhos — a UI não tem rota própria para mudar o documento |
 | rodapé "montadas no DOM: N de M" | a virtualização é conferível, não uma promessa |

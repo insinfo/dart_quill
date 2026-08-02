@@ -40,3 +40,4 @@ export 'src/document_engine/view/clipboard.dart';
 export 'src/document_engine/view/editor_view.dart';
 export 'src/document_engine/view/extension.dart';
 export 'src/document_engine/view/reconciler.dart';
+export 'src/document_engine/ui/word_editor.dart';

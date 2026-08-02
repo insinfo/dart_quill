@@ -3,124 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>dart_quill — modo avançado (editor paginado)</title>
+  <title>dart_quill — editor Word</title>
   <link rel="icon" href="data:,">
   <style>
-    :root { color-scheme: light; }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: #eceff1;
-      color: #212121;
-    }
-
-    header {
-      position: sticky; top: 0; z-index: 10;
-      background: #fff;
-      border-bottom: 1px solid #cfd8dc;
-      padding: 8px 12px;
-      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
-    }
-    header .sep { width: 1px; height: 24px; background: #cfd8dc; margin: 0 4px; }
-    button, select {
-      font: inherit;
-      padding: 5px 10px;
-      border: 1px solid #b0bec5;
-      background: #fff;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    button:hover { background: #eceff1; }
-    button:active { background: #cfd8dc; }
-    button.icon { font-weight: 700; min-width: 34px; }
-    button.icon.i { font-style: italic; font-weight: 400; }
-    button.icon.u { text-decoration: underline; font-weight: 400; }
-
-    /* A área de rolagem é o container da virtualização. */
-    #scroller {
-      height: calc(100vh - 96px);
-      overflow: auto;
-      padding: 24px 0 48px;
-    }
-    #host { display: flex; flex-direction: column; align-items: center; gap: 20px; }
-
-    /* Os seletores do modo Office são todos `dq-office-*` — nada aqui toca
-       `.ql-editor` nem o tema do Quill simples. */
-    .dq-office-page {
-      background: #fff;
-      box-shadow: 0 1px 4px rgba(0,0,0,.22);
-    }
-    .dq-office-page-placeholder {
-      background: repeating-linear-gradient(
-        45deg, #e0e4e7, #e0e4e7 10px, #d7dbde 10px, #d7dbde 20px);
-      border-radius: 2px;
-    }
-    .dq-office-page-content:focus { outline: none; }
-    .dq-office-marker { color: #37474f; user-select: none; }
-    /* Regiões repetidas: inertes e discretas, como no Word. */
-    .dq-office-header, .dq-office-footer {
-      color: #546e7a;
-      font-size: 11px;
-      user-select: none;
-    }
-
-    footer {
-      position: fixed; left: 0; right: 0; bottom: 0;
-      background: #263238; color: #eceff1;
-      padding: 6px 12px;
-      display: flex; gap: 18px; flex-wrap: wrap;
-      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
-    }
-    footer b { color: #80cbc4; font-weight: 600; }
-
-    dialog { border: 1px solid #b0bec5; border-radius: 6px; padding: 16px; max-width: 620px; }
-    dialog textarea { width: 100%; height: 220px; font: 12px ui-monospace, monospace; }
-    dialog .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+    /* A aplicação só reserva o espaço. TODO o chrome do editor — ribbon,
+       régua, páginas, barra de status — vem da biblioteca. */
+    html, body { margin: 0; height: 100%; }
+    #editor { height: 100%; }
   </style>
 </head>
 <body>
-  <header>
-    <button id="bold" class="icon" title="Ctrl+B">B</button>
-    <button id="italic" class="icon i" title="Ctrl+I">I</button>
-    <button id="underline" class="icon u" title="Ctrl+U">U</button>
-    <span class="sep"></span>
-    <button id="undo" title="Ctrl+Z">↶ Desfazer</button>
-    <button id="redo" title="Ctrl+Shift+Z">↷ Refazer</button>
-    <span class="sep"></span>
-    <select id="size" title="Tamanho do documento de demonstração">
-      <option value="60">documento curto</option>
-      <option value="600" selected>~10 páginas</option>
-      <option value="4000">~150 páginas</option>
-      <option value="9000">~330 páginas</option>
-    </select>
-    <button id="reload">Gerar</button>
-    <span class="sep"></span>
-    <label><input type="checkbox" id="virtual" checked> virtualizar (±3)</label>
-    <span class="sep"></span>
-    <button id="importDelta">Importar Delta…</button>
-    <button id="pdf">Gerar PDF</button>
-  </header>
-
-  <div id="scroller"><div id="host"></div></div>
-
-  <footer>
-    <span>páginas: <b id="pages">–</b></span>
-    <span>montadas no DOM: <b id="mounted">–</b></span>
-    <span>última recomposição: <b id="ms">–</b></span>
-    <span>blocos: <b id="blocks">–</b></span>
-    <span id="note"></span>
-  </footer>
-
-  <dialog id="deltaDialog">
-    <p>Cole um Delta do Quill (<code>{"ops":[…]}</code> ou a lista de ops):</p>
-    <textarea id="deltaText">{"ops":[{"insert":"Despacho"},{"insert":"\n","attributes":{"header":1}},{"insert":"Texto do "},{"insert":"despacho","attributes":{"bold":true}},{"insert":" importado do Quill.\n"}]}</textarea>
-    <div class="row">
-      <button id="deltaCancel">Cancelar</button>
-      <button id="deltaOk">Importar</button>
-    </div>
-  </dialog>
-
+  <div id="editor"></div>
   <script defer src="main.dart.js"></script>
 </body>
 </html>
