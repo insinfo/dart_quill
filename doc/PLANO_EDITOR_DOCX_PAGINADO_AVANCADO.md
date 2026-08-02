@@ -102,6 +102,11 @@ O projeto deve preservar estes contratos:
 - nenhuma perda pode ser silenciosa: toda importação, conversão e gravação produz um relatório de compatibilidade;
 - o estado completo de um DOCX pode ser serializado em uma única lista `OfficeDeltaSnapshot`/JSON de custom ops e reaberto sem os bytes `.docx` originais;
 - imagens, fontes incorporadas, embeddings e outras partes binárias são armazenados como ops `office-asset` autocontidos (deflate+base64); nenhum dado necessário fica fora do Delta;
+- a geração de PDF roda na **Dart VM sem navegador** (backend), a partir do
+  JSON persistido ou do Delta do banco, e produz as MESMAS páginas que o
+  editor mostrou — é o que o fluxo de assinatura do SALI exige;
+- por consequência, a autoridade de medição tipográfica é Dart puro; o DOM
+  nunca mede para o modelo;
 - edição paginada continua responsiva em documentos grandes e não faz um diff/rebuild do documento inteiro a cada tecla;
 - viewer e editor compartilham a mesma semântica de estilos, fontes, seções e paginação;
 - o paginador oferece `fast` (fluxo leve/aproximado) e `fidelity` (Word-like mais pesado) sobre a mesma sessão, sem alterar o conteúdo ao alternar;
@@ -998,15 +1003,65 @@ Ao encontrar uma página cuja assinatura e estado de saída sejam iguais aos ant
 
 `lib/src/office/document/fonts/truetype.dart` declara corretamente que não é motor tipográfico: não faz shaping nem lê GSUB/GPOS. Logo, medir advances simples não reproduz ligaturas, kerning/positioning complexo, bidi, scripts contextuais ou line breaking do Word.
 
-Decisão recomendada para v0/v1:
+**[REVISADO 2026-08-02 — a recomendação original foi INVERTIDA.]** A versão
+anterior deste item mandava usar o browser/DOM como autoridade de shaping e
+métricas. Isso é incompatível com um requisito de produto que só ficou
+explícito depois: o **PDF precisa ser gerado no backend, na Dart VM, sem
+navegador** (§7.6.2). Se a medição vier do DOM, o servidor não consegue
+paginar, e um PDF paginado no servidor por outro caminho divergiria do que
+o usuário viu — quebrando o gate central da arquitetura no exato momento em
+que ele mais importa, a assinatura.
 
-- usar o browser/DOM como autoridade de shaping e coleta de métricas;
-- aceitar que o resultado será de alta fidelidade aproximada, não quebra idêntica ao Word;
-- manter medição DOM no main thread, cacheada e em lotes;
-- enviar ao Worker somente métricas já coletadas e etapas puras de paginação;
+Decisão vigente:
+
+- a autoridade de medição é o **parser TrueType em Dart**
+  (`LayoutFontSet`/`FontMetrics`), única nas duas saídas e nos dois
+  ambientes;
+- o DOM NUNCA mede para o modelo; ele só projeta o `PageGraph` já composto;
+- aceitar que o resultado é de alta fidelidade aproximada, não quebra
+  idêntica ao Word — o limite do TextShaper (etapa latina) vale igual no
+  editor e no servidor;
+- o mesmo cálculo puro pode ir para Worker no browser ou rodar direto na VM;
 - registrar fontes/fallbacks no resultado visual.
 
 Um shaper Dart próprio exigiria, no mínimo, GSUB/GPOS, Unicode bidi, line breaking, fallback, variações, complex scripts e hifenização por idioma. Isso é uma iniciativa separada, muito maior que “melhorar o paginador”, e não deve estar implícita no prazo inicial.
+
+### 7.6.2 PDF no backend (Dart VM, sem navegador) — requisito
+
+No SALI, o pedido de assinatura de um despacho dispara a conversão do
+documento em PDF **no backend**, e esse PDF é gravado em pasta para ser
+assinado e preservado permanentemente. Portanto:
+
+- a geração de PDF NÃO pode depender de DOM, `package:web`, Chrome
+  headless, screenshot ou `window.print()`;
+- ela roda na Dart VM, a partir do JSON persistido (`OfficeDocumentSnapshot`)
+  ou do Delta Quill que já está no banco;
+- o PDF assinado tem de ter as MESMAS páginas que o usuário viu ao aprovar
+  — não é aceitável o servidor paginar por um caminho próprio.
+
+Consequência arquitetural (a razão da revisão do §7.6.1): a autoridade de
+medição precisa ser Dart puro. É o que permite `PageGraph` idêntico no
+editor e no servidor.
+
+Para o PDF sair idêntico à tela, o servidor precisa das MESMAS faces de
+fonte que o editor usou; sem elas a medição cai nas métricas embarcadas e
+as quebras podem diferir. Isso é configuração de implantação, não detalhe:
+as fontes do documento acompanham o snapshot (assets por hash, §5) e o
+serviço as recebe.
+
+*(ENTREGUE 2026-08-02 — `office/pdf_service.dart`, `OfficePdfService`:
+`fromSnapshotJson` (a entrada do backend: lê a coluna, devolve os bytes),
+`fromSnapshot`, `fromQuillDelta` (o caso do SALI hoje, devolvendo TAMBÉM o
+`OfficeCompatibilityReport` — um despacho que use algo não representável
+aparece no relatório em vez de sumir do PDF assinado), `fromDocument` e
+`fromPageGraph`. Este último é o que fecha a paridade sem recompor: o
+editor pode entregar o grafo que já tem. A pilha de layout já era DOM-free
+— só `dom_renderer` e `dom_position_map` tocam o DOM, e são exclusivos do
+editor. 8 testes `@TestOn('vm')` num arquivo que deliberadamente NÃO importa
+`package:web` nem `platform/dom.dart`, para que uma dependência de DOM
+introduzida por engano quebre no teste e não na hora de assinar; entre eles,
+a paridade de contagem de páginas entre `compose` do editor e o PDF do
+serviço num documento de 300 blocos.)*
 
 ### 7.7 Regras de paginação mínimas
 
@@ -2342,6 +2397,8 @@ O modo avançado só pode ser chamado de estável quando:
 - o corpus TR atende aos SLOs;
 - DOM é limitado após virtualização;
 - import/export roda inteiramente no browser;
+- a conversão para PDF roda também **sem browser**, na Dart VM, e o PDF do
+  backend tem a mesma paginação do editor;
 - worker Dart pode ser compilado para JS ou Wasm e produz resultado determinístico equivalente ao fallback;
 - não há chamada de rede implícita;
 - não há JS/WASM/binário/backend de terceiros;
