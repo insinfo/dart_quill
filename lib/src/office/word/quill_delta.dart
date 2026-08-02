@@ -357,6 +357,14 @@ class QuillDeltaConverter {
           if (separator.isNotEmpty) {
             main.add(IElement(value: separator, rowFlex: rowFlex));
           }
+        } else if (line.first.type == ElementType.image) {
+          // O value de um embed é o SOURCE (URL/data URL), não texto:
+          // prefixar o separador nele quebrava o decode de qualquer imagem
+          // que abrisse uma linha que não fosse a primeira do documento.
+          if (separator.isNotEmpty) {
+            main.add(IElement(value: separator, rowFlex: rowFlex));
+          }
+          main.addAll(line);
         } else {
           line.first.value = '$separator${line.first.value}';
           main.addAll(line);

@@ -145,25 +145,83 @@ void main() {
   });
 
   group('real SALI documents', () {
-    const fixtures = <String, String>{
-      'documento.delta.json': 'documento',
-      'ferias.delta.json': 'férias',
-      'tabela_colunas_iguais.delta.json': 'tabela com colunas iguais',
-      'termo_referencia.delta.json': 'termo de referência (2 MB)',
+    const fixtures = <String,
+        ({
+      String label,
+      int pages,
+      int maxPages,
+      List<String> words,
+      int minCellRects,
+    })>{
+      // P19: "abre" não bastava — um PDF estruturalmente válido pode estar
+      // em branco. Cada fixture agora pina faixa de páginas, palavras que um
+      // leitor extrairia e a presença das grades de tabela.
+      'documento.delta.json': (
+        label: 'documento',
+        pages: 3, // ~4
+        maxPages: 6,
+        words: <String>['Servidores', 'NOME'],
+        minCellRects: 100, // 129 linhas de célula no delta
+      ),
+      'ferias.delta.json': (
+        label: 'férias',
+        pages: 2, // ~3
+        maxPages: 5,
+        words: <String>['Servidores', 'NOME'],
+        minCellRects: 100,
+      ),
+      'tabela_colunas_iguais.delta.json': (
+        label: 'tabela com colunas iguais',
+        pages: 2, // ~3
+        maxPages: 5,
+        words: <String>['Servidores', 'NOME'],
+        minCellRects: 100,
+      ),
+      'termo_referencia.delta.json': (
+        label: 'termo de referência (2 MB)',
+        pages: 180, // ~224 (140 páginas de Word em A4 com margem de 2 cm)
+        maxPages: 280,
+        words: <String>['TERMO', 'Processo', 'SIAFIC'],
+        minCellRects: 4000, // 5134 linhas de célula no delta
+      ),
     };
 
-    fixtures.forEach((file, label) {
-      test('$label renders', () {
-        final bytes = _pdfOf(_loadDelta(file));
+    fixtures.forEach((file, expected) {
+      test('${expected.label} renders with its real content', () {
+        final result =
+            deltaToPdfWithReport(_loadDelta(file));
+        final bytes = result.bytes;
         final pdf = PdfReader(bytes);
 
         expect(bytes.length, greaterThan(1000));
         expect(pdf.hasTrailerRoot, isTrue);
-        expect(pdf.pageCount, greaterThan(0));
+        expect(pdf.pageCount,
+            inInclusiveRange(expected.pages, expected.maxPages));
         expect(pdf.endsWithEof, isTrue);
         for (final offset in pdf.xrefOffsets) {
           expect(pdf.objectHeaderAt(offset), isNotNull,
               reason: 'corrupt xref in $file');
+        }
+
+        final streams = pdf.decodedStreams.join('\n');
+        for (final word in expected.words) {
+          expect(streams, contains(word),
+              reason: '"$word" deve ser extraível do PDF de $file');
+        }
+        final cellRects =
+            RegExp(r'(?:[-\d.]+ ){4}re S').allMatches(streams).length;
+        expect(cellRects, greaterThan(expected.minCellRects),
+            reason: 'as grades de tabela de $file devem estar desenhadas');
+
+        // Perda tolerada: só o brasão por URL (a aplicação resolve com
+        // fetch) e um op de imagem com source lixo ("//:0") gravado no termo
+        // de referência real.
+        for (final warning in result.warnings) {
+          expect(
+              warning.contains('document_header.svg') ||
+                  warning.trim().endsWith('//:0'),
+              isTrue,
+              reason: 'aviso inesperado em $file: $warning');
         }
       });
     });

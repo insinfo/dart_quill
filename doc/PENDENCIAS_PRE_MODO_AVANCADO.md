@@ -199,7 +199,10 @@ conversores.
 | P12 — cascata de larguras de tabela | **corrigido**: `table-col` > largura das células > padrão, com reescala pela âncora `table-temporary` (px/pt no conversor; `%` resolve no exportador sobre a área útil) — tabela colada do Word não tem NENHUM `table-col` |
 | P14 — tabela e linha maiores que a página | **corrigido** (e mais grave do que o auditado: as páginas eram serializadas na quebra, então uma tabela multi-página desenhava TUDO na última página, sobreposto, com as anteriores em branco; agora a tabela mapeia em bandas por página e cada célula desenha segmento a segmento; uma linha mais alta que a página flui, com a moldura redesenhada em cada segmento; limitação: a partição do conteúdo é por BLOCO — um parágrafo único mais alto que a página ainda corta, com aviso) |
 | P13 — tabela aninhada no PDF | **corrigido**: desenha dentro da célula (a externa cresce para caber), sem paginação interna — atômica na célula; o Delta plano do quill-table-better não expressa aninhamento, então o caminho entra pelo modelo office via `elementsToPdfWithReport` (nova API pública, importação de DOCX) |
-| H4–H7, W3–W10, P18–P20 | pendentes |
+| P18 — imagem fim-a-fim no PDF | **coberto** (`pdf_image_test.dart`: data URL, URL+resources, falha auditada, dimensionamento, dedup de XObject) — e o teste achou um bug real: o separador de linha era prefixado no VALUE do embed, quebrando o decode de qualquer imagem que abrisse linha não-primeira |
+| P19 — os 4 deltas reais só assertavam "abre" | **coberto**: cada fixture agora pina faixa de páginas, palavras extraíveis, grades de tabela desenhadas e a lista fechada de warnings tolerados |
+| P20 — corpus DOCX+PDF sem teste de comparação | **coberto** (`pdf_corpus_test.dart` + `test/assets/pdf/etp_reference.pdf`, o PDF que o Word imprimiu do mesmo DOCX): páginas na faixa da referência, ≥98% do vocabulário do DOCX chega ao nosso PDF, tabelas desenhadas, zero perda não auditada |
+| H4–H7, W3–W10 | pendentes |
 
 Testes que travam o corrigido: `html_table_rows_test.dart`,
 `html_table_cells_test.dart`, `cell_text_hydration_test.dart`,
