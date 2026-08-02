@@ -89,12 +89,44 @@ void main() {
       );
     });
 
-    test('edição no INÍCIO recompõe tudo e continua correta', () {
+    test('edição no INÍCIO converge e continua correta', () {
       final composer = LayoutComposer();
       final before = longDoc(60);
       final graph = composer.compose(before);
 
       final after = longDoc(60, changeIndex: 0, changeAt: 'INICIO');
+      expectSameGraph(
+        composer.composeIncremental(after,
+            previous: graph, changedFromDocPos: 1),
+        LayoutComposer().compose(after),
+      );
+    });
+
+    test('inserir bloco no INÍCIO desloca o sufixo corretamente', () {
+      final composer = LayoutComposer();
+      final before = longDoc(120);
+      final graph = composer.compose(before);
+
+      final blocks = [for (var i = 0; i < 120; i++) before.child(i)]
+        ..insert(0, paragraph('bloco novo no topo'));
+      final after = docOf(blocks);
+
+      expectSameGraph(
+        composer.composeIncremental(after,
+            previous: graph, changedFromDocPos: 1),
+        LayoutComposer().compose(after),
+      );
+    });
+
+    test('remover bloco no INÍCIO também', () {
+      final composer = LayoutComposer();
+      final before = longDoc(120);
+      final graph = composer.compose(before);
+
+      final blocks = [for (var i = 0; i < 120; i++) before.child(i)]
+        ..removeAt(0);
+      final after = docOf(blocks);
+
       expectSameGraph(
         composer.composeIncremental(after,
             previous: graph, changedFromDocPos: 1),
@@ -209,6 +241,28 @@ void main() {
 
       expect(identical(next.pages.first, firstPage), isTrue,
           reason: 'a página 0 tem de ser o MESMO objeto, não uma cópia igual');
+    });
+
+    test('convergência: editar no INÍCIO reusa o SUFIXO', () {
+      final composer = LayoutComposer();
+      final before = longDoc(400);
+      final graph = composer.compose(before);
+      final lastPageBefore = graph.pages.last;
+
+      // Edição que NÃO muda o tamanho: o sufixo tem de ser reusado sem nem
+      // precisar deslocar.
+      final blocks = [for (var i = 0; i < 400; i++) before.child(i)];
+      blocks[0] = paragraph(
+          'Parágrafo 0 com texto suficiente para ocupar espaço real '
+          'na página e forçar a composição a trabalhar de VERDADE.');
+      final after = docOf(blocks);
+
+      final next = composer.composeIncremental(after,
+          previous: graph, changedFromDocPos: 1);
+      expect(next.pages.length, graph.pages.length);
+      expect(identical(next.pages.last, lastPageBefore), isTrue,
+          reason: 'a última página tem de ser o MESMO objeto: converge e '
+              'reusa em vez de recompor as 400 páginas');
     });
 
     test('o PositionMap reusado continua respondendo', () {

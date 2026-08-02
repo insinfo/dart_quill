@@ -3911,8 +3911,21 @@ tabela de revisões própria).
    IME não remonta (destruiria o estado do IME). 10 testes VM, entre eles
    a garantia de que o mapa de posições resolve o caret na página fixada e
    que placeholder e página têm a MESMA altura, para o scroll não pular.
-   Pendências da fase: convergência de sufixo (edição no INÍCIO ainda
-   recompõe tudo), worker e cancelamento de jobs)*
+   A CONVERGÊNCIA DE SUFIXO fechou o pior caso: quando a composição nova
+   reencontra o estado de ENTRADA de uma página antiga (mesmo bloco, mesmo
+   offset ajustado pelo delta, mesmo carry de lista), o conteúdo dali para
+   frente é idêntico e só as POSIÇÕES mudaram — as páginas restantes são
+   reusadas com `shifted()`, e quando a edição não muda o tamanho elas são
+   o MESMO objeto, não uma cópia igual. Dois bugs no caminho, ambos do
+   mesmo tipo (a fronteira de página não nasce onde parecia): (a) com a
+   edição na primeira página não havia prefixo reusável e o código caía no
+   compose puro, sem passar o grafo anterior — justamente o caso em que a
+   convergência vale; (b) a tentativa de convergir só acontecia no topo da
+   iteração do bloco, mas a fronteira nasce DENTRO do bloco, quando
+   `closePage` dispara porque ele não coube. Medição em 4000 blocos / 149
+   páginas, editando a PRIMEIRA linha: 118 ms → **2 ms**, com 148 das 149
+   páginas reusadas por identidade. Pendências da fase: worker e
+   cancelamento de jobs)*
 
 ### TextShaper — escopo honesto
 

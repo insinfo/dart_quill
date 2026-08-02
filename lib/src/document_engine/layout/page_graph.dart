@@ -122,6 +122,14 @@ sealed class PageFragment {
 
   final bool continuesFromPreviousPage;
   final bool continuesOnNextPage;
+
+  /// O MESMO fragmento com as posições deslocadas.
+  ///
+  /// É o que torna a convergência de sufixo possível: quando a composição
+  /// nova reencontra o estado de uma página antiga, o conteúdo dali para
+  /// frente é idêntico e só as POSIÇÕES mudaram, pelo tamanho do que a
+  /// edição acrescentou ou removeu antes.
+  PageFragment shifted(int docPosDelta);
 }
 
 /// Fragmento de bloco textual (parágrafo, heading, item de lista...).
@@ -146,6 +154,21 @@ class BlockFragment extends PageFragment {
   final List<LineBox> lines;
   final int indentTwips;
   final LayoutAlign align;
+
+  @override
+  BlockFragment shifted(int docPosDelta) => BlockFragment(
+        nodeId: nodeId,
+        docPos: docPos + docPosDelta,
+        kind: kind,
+        lines: lines,
+        yTwips: yTwips,
+        heightTwips: heightTwips,
+        indentTwips: indentTwips,
+        align: align,
+        marker: marker,
+        continuesFromPreviousPage: continuesFromPreviousPage,
+        continuesOnNextPage: continuesOnNextPage,
+      );
 
   /// Marcador de lista ('1. ', '• ') quando o fragment abre o item.
   final String? marker;
@@ -191,6 +214,17 @@ class TableFragment extends PageFragment {
   });
 
   final List<TableRowBox> rows;
+
+  @override
+  TableFragment shifted(int docPosDelta) => TableFragment(
+        nodeId: nodeId,
+        docPos: docPos + docPosDelta,
+        rows: rows,
+        yTwips: yTwips,
+        heightTwips: heightTwips,
+        continuesFromPreviousPage: continuesFromPreviousPage,
+        continuesOnNextPage: continuesOnNextPage,
+      );
 }
 
 /// Uma página composta.
@@ -247,6 +281,36 @@ class PageLayout {
         fragments: fragments,
         signature: signature,
       );
+
+  /// A mesma página noutro índice e com as posições deslocadas — o reuso do
+  /// SUFIXO depois da convergência.
+  PageLayout shifted({
+    required int newIndex,
+    required int docPosDelta,
+    required int blockIndexDelta,
+  }) {
+    // Edição que não muda tamanho nem contagem: a página reusada é a
+    // MESMA, não uma cópia igual. Preservar a identidade importa — é o que
+    // permite provar em teste que houve reuso, e evita alocar 200 páginas
+    // para não mudar nada.
+    if (docPosDelta == 0 && blockIndexDelta == 0 && newIndex == index) {
+      return this;
+    }
+    return PageLayout(
+        index: newIndex,
+        setup: setup,
+        fragments: docPosDelta == 0
+            ? fragments
+            : [for (final f in fragments) f.shifted(docPosDelta)],
+        signature: PageSignature(
+          firstBlockIndex: signature.firstBlockIndex + blockIndexDelta,
+          firstBlockOffset: signature.firstBlockOffset + docPosDelta,
+          carryListOrdinal: signature.carryListOrdinal,
+          startsFreshBlock: signature.startsFreshBlock,
+          lastDocPos: signature.lastDocPos + docPosDelta,
+        ),
+      );
+  }
 }
 
 /// Mapeia posição do documento ↔ página (v1: granularidade de linha).
@@ -284,6 +348,13 @@ class PositionMapEntry {
   final int docPosStart;
   final int docPosEnd;
   final int pageIndex;
+
+  PositionMapEntry shifted({required int docPosDelta, required int pageDelta}) =>
+      PositionMapEntry(
+        docPosStart: docPosStart + docPosDelta,
+        docPosEnd: docPosEnd + docPosDelta,
+        pageIndex: pageIndex + pageDelta,
+      );
 }
 
 /// Avisos do layout (tabela não fragmentável, fonte ausente...).
@@ -298,10 +369,19 @@ class PageGraph {
     required this.positionMap,
     required this.diagnostics,
     required this.quality,
+    this.docSize = 0,
+    this.blockCount = 0,
   });
 
   final List<PageLayout> pages;
   final PositionMap positionMap;
   final LayoutDiagnostics diagnostics;
   final LayoutQuality quality;
+
+  /// Tamanho e contagem de blocos do documento que gerou este grafo.
+  ///
+  /// A recomposição incremental compara com o documento novo para saber
+  /// QUANTO deslocar o sufixo reusado.
+  final int docSize;
+  final int blockCount;
 }

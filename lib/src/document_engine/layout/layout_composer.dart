@@ -75,7 +75,13 @@ class LayoutComposer {
       }
       resumeAt = p;
     }
-    if (resumeAt == 0) return _composeFrom(doc);
+    if (resumeAt == 0) {
+      // Nenhum prefixo reusável — é o caso da edição na PRIMEIRA página.
+      // Ainda assim passamos o grafo anterior: é justamente aqui que a
+      // convergência de sufixo vale, porque é ela (e não o prefixo) que
+      // impede recompor as 200 páginas por causa da primeira linha.
+      return _composeFrom(doc, convergeAgainst: previous);
+    }
 
     final signature = previous.pages[resumeAt].signature;
     return _composeFrom(
@@ -87,6 +93,8 @@ class LayoutComposer {
       startBlockIndex: signature.firstBlockIndex,
       startOffset: signature.firstBlockOffset,
       startListOrdinal: signature.carryListOrdinal,
+      convergeAgainst: previous,
+      convergeFromPage: resumeAt,
     );
   }
 
@@ -97,6 +105,8 @@ class LayoutComposer {
     int startBlockIndex = 0,
     int startOffset = 0,
     int startListOrdinal = 0,
+    PageGraph? convergeAgainst,
+    int convergeFromPage = 0,
   }) {
     final diagnostics = LayoutDiagnostics();
     final pages = <PageLayout>[...reusedPages];
@@ -129,6 +139,32 @@ class LayoutComposer {
       cursorTwips = 0;
     }
 
+    // Convergência de SUFIXO: quando a composição nova reencontra o estado
+    // de entrada de uma página antiga, tudo dali para frente é o mesmo
+    // conteúdo — só as posições mudaram, pelo tamanho do que a edição
+    // acrescentou ou removeu ANTES. Sem isto, editar a primeira linha de um
+    // documento de 200 páginas recomporia as 200.
+    final blockIndexDelta =
+        convergeAgainst == null ? 0 : doc.childCount - convergeAgainst.blockCount;
+    final docPosDelta =
+        convergeAgainst == null ? 0 : doc.content.size - convergeAgainst.docSize;
+    var converged = false;
+
+    /// Existe página antiga com este mesmo estado de entrada?
+    int? _oldPageMatching(int blockIndex, int blockOffset, int ordinal) {
+      final old = convergeAgainst;
+      if (old == null) return null;
+      for (var m = convergeFromPage; m < old.pages.length; m++) {
+        final sig = old.pages[m].signature;
+        if (!sig.startsFreshBlock) continue;
+        if (sig.firstBlockIndex + blockIndexDelta != blockIndex) continue;
+        if (sig.firstBlockOffset + docPosDelta != blockOffset) continue;
+        if (sig.carryListOrdinal != ordinal) continue;
+        return m;
+      }
+      return null;
+    }
+
     var listOrdinal = startListOrdinal;
 
     // O estado de entrada de uma página só é conhecido quando o PRIMEIRO
@@ -142,8 +178,36 @@ class LayoutComposer {
       pageStartListOrdinal = ordinalBefore;
     }
 
+    /// Tenta convergir numa FRONTEIRA de página, com o próximo bloco a
+    /// entrar sendo [blockIndex]. Só vale com a página vazia: com
+    /// fragmentos pendentes, a página em construção não é comparável.
+    bool tryConverge(int blockIndex, int blockOffset, int ordinal) {
+      if (currentFragments.isNotEmpty) return false;
+      final match = _oldPageMatching(blockIndex, blockOffset, ordinal);
+      if (match == null) return false;
+      final old = convergeAgainst!;
+      final pageDelta = pages.length - match;
+      for (var m = match; m < old.pages.length; m++) {
+        pages.add(old.pages[m].shifted(
+          newIndex: pages.length,
+          docPosDelta: docPosDelta,
+          blockIndexDelta: blockIndexDelta,
+        ));
+      }
+      for (final entry in old.positionMap.entries) {
+        if (entry.pageIndex < match) continue;
+        mapEntries.add(
+            entry.shifted(docPosDelta: docPosDelta, pageDelta: pageDelta));
+      }
+      converged = true;
+      return true;
+    }
+
     var offset = startOffset;
     for (var index = startBlockIndex; index < doc.childCount; index++) {
+      if (index > startBlockIndex && tryConverge(index, offset, listOrdinal)) {
+        break;
+      }
       final block = doc.child(index);
       final blockOffset = offset;
       // ANTES da atualização de numeração: retomar neste bloco tem de
@@ -176,6 +240,9 @@ class LayoutComposer {
                   .add('linha de tabela mais alta que a página');
             } else {
               closePage();
+              if (i == 0 && tryConverge(index, blockOffset, ordinalBefore)) {
+                break;
+              }
               continue;
             }
           }
@@ -199,6 +266,7 @@ class LayoutComposer {
           firstOfTable = false;
           i += take;
         }
+        if (converged) break;
         continue;
       }
 
@@ -239,6 +307,12 @@ class LayoutComposer {
                 .add('linha mais alta que a página no nó ${block.type.name}');
           } else {
             closePage();
+            // A fronteira de página nasce AQUI quando o bloco inteiro não
+            // cabe no que sobrou: é o ponto em que a página nova começa
+            // num bloco fresco, e portanto o ponto de convergência.
+            if (i == 0 && tryConverge(index, blockOffset, ordinalBefore)) {
+              break;
+            }
             continue;
           }
         }
@@ -266,6 +340,7 @@ class LayoutComposer {
         firstLineOfBlock = false;
         i += take;
       }
+      if (converged) break;
       if (lines.isEmpty) {
         // Bloco vazio: uma linha em branco na altura da fonte base.
         final blank = _lineHeightTwips(baseFontFamily, baseFontSizePt);
@@ -291,7 +366,8 @@ class LayoutComposer {
       }
     }
 
-    if (currentFragments.isNotEmpty || pages.length == reusedPages.length) {
+    if (!converged &&
+        (currentFragments.isNotEmpty || pages.length == reusedPages.length)) {
       closePage();
     }
 
@@ -300,6 +376,8 @@ class LayoutComposer {
       positionMap: PositionMap(mapEntries),
       diagnostics: diagnostics,
       quality: quality,
+      docSize: doc.content.size,
+      blockCount: doc.childCount,
     );
   }
 
