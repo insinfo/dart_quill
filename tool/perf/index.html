@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>dart_quill — bancada de desempenho</title>
+  <link rel="stylesheet" href="/packages/dart_quill/assets/quill.snow.css">
+  <link rel="stylesheet" href="/packages/dart_quill/assets/quill-table-better.css">
+  <script defer src="bench_main.dart.js"></script>
+</head>
+<body>
+  <h1>Bancada</h1>
+  <p>Os cenários são disparados pelo harness (tool/perf/run_bench.dart).</p>
+  <script type="module">
+    // --- WebAssembly (WasmGC) -------------------------------------------
+    window.loadWasm = async () => {
+      const t0 = performance.now();
+      const { compileStreaming } = await import('./bench_parse.mjs');
+      const compiled = await compileStreaming(fetch('./bench_parse.wasm'));
+      const instance = await compiled.instantiate({});
+      const startupMs = performance.now() - t0;
+      instance.invokeMain();
+      return startupMs;
+    };
+
+    // --- Worker (Dart compilado para JS, rodando fora da main thread) ----
+    window.startWorker = () => new Promise((resolve) => {
+      const worker = new Worker('worker_parse.js');
+      worker.onmessage = (e) => {
+        if (e.data === 'ready') resolve(worker);
+      };
+      window.__worker = worker;
+    });
+
+    window.workerParse = (buffer, mode) => new Promise((resolve) => {
+      const worker = window.__worker;
+      worker.onmessage = (e) => resolve(e.data);
+      // Transferível: os bytes MUDAM de dono, sem cópia.
+      worker.postMessage({ buffer, mode }, [buffer]);
+    });
+
+    // --- Sonda de travamento --------------------------------------------
+    // Conta frames: se a main thread congela, o contador para. É a medida
+    // que interessa ao usuário — não o tempo total, e sim se a página responde.
+    window.startFrameProbe = () => {
+      window.__frames = 0;
+      window.__maxGapMs = 0;
+      let last = performance.now();
+      const tick = () => {
+        const now = performance.now();
+        const gap = now - last;
+        if (gap > window.__maxGapMs) window.__maxGapMs = gap;
+        last = now;
+        window.__frames++;
+        window.__raf = requestAnimationFrame(tick);
+      };
+      window.__raf = requestAnimationFrame(tick);
+    };
+    window.stopFrameProbe = () => {
+      cancelAnimationFrame(window.__raf);
+      return JSON.stringify({
+        frames: window.__frames,
+        maxGapMs: Math.round(window.__maxGapMs),
+      });
+    };
+  </script>
+</body>
+</html>

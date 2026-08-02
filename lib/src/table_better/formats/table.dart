@@ -175,12 +175,14 @@ bool _enforceRequiredContainerUnchecked(
   final prevBlot = blot.prev;
   if (prevBlot is ParentBlot && satisfied(prevBlot)) {
     prevBlot.appendChild(blot);
-    final sibling = blot.prev;
-    if (sibling != null) {
-      sibling.optimize(mutations, context);
-    } else {
-      blot.optimize(mutations, context);
-    }
+    // Só o blot que ACABOU de se mover é reotimizado. Reotimizar o irmão
+    // anterior significa varrer uma subárvore que cresce a cada célula
+    // adicionada: era o custo O(n²) que fazia um DOCX de 140 páginas levar
+    // minutos (800 células = 4,5 s; 3.650 células = mais de 2 min). O que o
+    // irmão precisava — fundir-se com o recém-chegado — continua acontecendo
+    // na convergência do optimize do pai, que já roda até o estado parar de
+    // mudar.
+    blot.optimize(mutations, context);
     return true;
   }
   final wrapper = wrapBlot(blot, wrapperName);
