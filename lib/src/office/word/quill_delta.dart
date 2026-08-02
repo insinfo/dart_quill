@@ -104,6 +104,16 @@ class QuillDeltaConverter {
               }
             }
             tableIndex++;
+            // A âncora `table-temporary` abre cada tabela, como o plugin faz
+            // SEMPRE (é ela que delimita uma tabela da seguinte). Sem a
+            // âncora, o conversor Delta→HTML não tem onde fechar: todas as
+            // células do documento caíam numa única <table> — o ETP, que tem
+            // três tabelas, virava uma só com as 18 linhas.
+            insertNewline(<String, dynamic>{
+              'table-temporary': <String, dynamic>{
+                'data-class': 'ql-table-better',
+              },
+            });
             final List<ITr> trList = element.trList ?? const <ITr>[];
             final int columnCount = element.colgroup?.length ??
                 trList.fold<int>(0, (int max, ITr tr) {

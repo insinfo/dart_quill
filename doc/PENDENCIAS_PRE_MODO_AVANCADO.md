@@ -210,6 +210,22 @@ ngdart, todos com teste que reproduz a condição:
 - tamanho do Word chegava como px (`13px`) e não casava com nenhuma lista
   de tamanhos padrão — agora chega em pontos, com o valor original.
 
+## Ciclo exportar HTML → importar de volta: fechado (2026-08-01)
+
+Três causas distintas, todas corrigidas e travadas em
+`test/unit/table_better/html_roundtrip_test.dart` e
+`paste_cell_id_test.dart`:
+
+1. o eco `table: 1` do matcher core de `<tr>` rebaixado a formato quando o
+   vencedor da linha era um container criava a estrutura de tabela CORE
+   dentro da do plugin — as duas se desfaziam mutuamente até o optimize
+   estourar (`Maximum optimize iterations exceeded`). O `createBlock` agora
+   escolhe por semântica, independente da ordem das chaves;
+2. o importador de DOCX não emitia a âncora `table-temporary` — sem ela o
+   Delta→HTML não fecha tabela e as três do ETP viravam uma;
+3. `table-cell-block` sem `staticFormats` fazia toda célula colada chegar com
+   cellId `true` e fundir-se numa só.
+
 ## Achados abertos, com diagnóstico pronto
 
 - **Espaçamento de parágrafo e tamanho do marcador** divergem do Word. Raiz
@@ -220,8 +236,9 @@ ngdart, todos com teste que reproduz a condição:
   fundo é mapear a numeração do Word para listas de verdade do Quill
   (`list` + `indent`), o que também resolve o recuo; títulos numerados
   continuam com número literal por não caberem como item de lista.
-- **DOCX grande trava o navegador.** O TR de 140 páginas (10.968 ops, 22
-  tabelas) hidrata na VM em minutos. É custo de hidratação, não erro; o
-  perfil ainda não foi levantado.
+- **DOCX grande**: resolvido no essencial — dois O(n²) corrigidos, TR de 143 s
+  para 1,4 s na VM e 9,8 s no browser (doc/PERF_ABERTURA_DOCX_GRANDE.md). O
+  resto do caminho: `Scroll.build()` sobre HTML grande ainda custa 24 s no
+  browser (provável terceiro padrão superlinear, mesmo tipo dos anteriores).
 
 Atualizar esta tabela a cada item fechado.

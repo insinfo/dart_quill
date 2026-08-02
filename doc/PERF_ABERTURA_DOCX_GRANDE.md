@@ -151,8 +151,26 @@ linear.
 | 5. WebAssembly: só o parse | 606 ms | — | 616 ms |
 
 O navegador continua bem mais lento que a VM (9,1 s contra 1,4 s) — é a
-diferença entre o JIT da VM e o JavaScript compilado. Os cenários 2 e 4 (via
-`innerHTML`) seguem falhando com `Maximum optimize iterations exceeded`.
+diferença entre o JIT da VM e o JavaScript compilado.
+
+### O caminho via HTML, depois de corrigido
+
+A não-convergência foi eliminada (três causas, ver
+`test/unit/table_better/html_roundtrip_test.dart`) e o ciclo
+DOCX → Delta → HTML → editor fecha com as tabelas corretas. Medido de novo:
+
+| Cenário | total | detalhe |
+|---|---:|---|
+| 2. main: parse + HTML + `innerHTML` + build | 24,8 s | `innerHTML` nativo: **54 ms**; `Scroll.build()`: **24,1 s** |
+| 4. worker → HTML + `innerHTML` + build | 26,4 s | build na main thread domina |
+
+O parser nativo confirma a teoria (54-118 ms para 1,4 MB de HTML), mas o
+`Scroll.build()` — a travessia que converte o DOM pronto em blots — custa
+24 s e anula o ganho. **Hoje a arquitetura vencedora é worker→Delta +
+`setContents`: 10,3 s com a interface viva (maior travada 40 ms).** O caminho
+via HTML só vence se o `Scroll.build()` for otimizado; é provável que haja
+outro padrão superlinear ali, o mesmo tipo já corrigido duas vezes no
+optimize.
 
 ## Recomendação
 

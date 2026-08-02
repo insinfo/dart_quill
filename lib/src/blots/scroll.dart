@@ -552,27 +552,53 @@ class Scroll extends ScrollBlot {
       [Blot? refBlot, Delta? contents]) {
     String? blockName;
     final formats = <String, dynamic>{};
-    // Chaves de bloco preteridas pela última. Dois blots de LINHA conflitam
-    // (`{list, header}`: o upstream fica só com um) e estas são descartadas;
-    // mas quando o vencedor é um CONTAINER — a `table-cell` do table-better —
-    // eles compõem, e a preterida precisa ser aplicada. Era assim que o
-    // `table-cell-block` (o cellId vindo do Delta) sumia: sem ele o merge de
-    // células não reconhece dois parágrafos da MESMA célula do Word e a linha
-    // ganha uma coluna a mais.
-    final supersededBlockKeys = <String>[];
+    // Uma linha pode nomear VÁRIOS blots de bloco. A regra é semântica, não
+    // posicional, porque a ordem das chaves varia entre produtores (o
+    // clipboard emite `{table, table-cell, table-cell-block}`; um Delta
+    // gravado emite `{table-cell-block, table-cell}`) e não pode mudar o
+    // resultado:
+    //
+    // * a linha NASCE como o último blot de bloco SIMPLES (o cellBlock, um
+    //   header...) — nunca como um container: um container vazio tem
+    //   comprimento 0, o `formatAt` seguinte não pega em nada e o id da
+    //   célula se perdia (o merge compara cellIds: célula com dois parágrafos
+    //   virava duas colunas);
+    // * chaves de CONTAINER (a `table-cell`) são rebaixadas a formato e
+    //   aplicadas depois do conteúdo — é o caminho de `format('table-cell')`
+    //   do plugin, que embrulha a linha na cadeia row/cell preservando o
+    //   data-row;
+    // * as demais chaves de bloco simples preteridas são DESCARTADAS, como no
+    //   upstream (`{list, header}` fica só com um). Isso inclui o eco
+    //   `table: 1` que o matcher core de `<tr>` adiciona por cima dos
+    //   formatos do table-better: rebaixá-lo criava a estrutura de tabela
+    //   CORE dentro da do plugin, e as duas se desfaziam mutuamente até o
+    //   optimize estourar o limite de iterações.
+    final blockKeys = <String>[];
     attributes.forEach((name, value) {
       if (query(name, Scope.BLOCK_BLOT) != null) {
-        // A ÚLTIMA chave de bloco vence, como no upstream (scroll.ts:383-390)
-        // — fazer a primeira vencer colapsa a tabela numa linha só, porque a
-        // linha passaria a nascer como cellBlock e o `table-cell` seguinte a
-        // embrulharia numa TableRow sem data-row (o split de TableRow por
-        // data-row ainda não existe, G1.10).
-        if (blockName != null) supersededBlockKeys.add(blockName!);
-        blockName = name;
+        blockKeys.add(name);
       } else {
         formats[name] = value;
       }
     });
+    if (blockKeys.length == 1) {
+      blockName = blockKeys.single;
+    } else if (blockKeys.length > 1) {
+      final containerByKey = <String, bool>{
+        for (final key in blockKeys)
+          key: create(key, attributes[key]) is ContainerBlot,
+      };
+      blockName = blockKeys.lastWhere(
+        (key) => !containerByKey[key]!,
+        orElse: () => blockKeys.last,
+      );
+      for (final key in blockKeys) {
+        if (key == blockName) continue;
+        if (containerByKey[key]!) {
+          formats[key] = attributes[key];
+        }
+      }
+    }
 
     // Parity scroll.ts:120-124 — the block blot is created WITH its value
     // (`create('list', 'bullet')`). Creating it bare produced an `<li>` with
@@ -587,9 +613,6 @@ class Scroll extends ScrollBlot {
     final parent = block as ParentBlot;
     var pending = contents;
     if (pending != null && parent.length() == 0) {
-      for (final key in supersededBlockKeys) {
-        formats[key] = attributes[key];
-      }
       insertInlineContents(parent, 0, pending);
       pending = null;
     }
