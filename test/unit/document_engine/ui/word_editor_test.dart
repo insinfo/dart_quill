@@ -10,6 +10,7 @@
 @TestOn('vm')
 library;
 
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:test/test.dart';
@@ -82,13 +83,21 @@ void main() {
       expect(count('.dq-office-page'), greaterThan(0));
     });
 
-    test('o CSS vem injetado pelo componente, escopado em dq-office', () {
+    test('o CSS é ASSET do pacote, não string embutida', () {
       mount();
-      final style = host.querySelector('style[data-dq-office-ui]');
-      expect(style, isNotNull);
-      expect(style!.textContent, contains('.dq-office-ribbon'));
-      expect(style.textContent, isNot(contains('.ql-')),
+      // Nenhum <style> injetado: o consumidor inclui (ou substitui) os
+      // stylesheets de lib/assets, como faz com os temas do Quill.
+      expect(host.querySelector('style'), isNull);
+
+      final css = File('lib/assets/office_word_editor.css').readAsStringSync();
+      expect(css, contains('.dq-office-ribbon'));
+      expect(css, isNot(contains('.ql-')),
           reason: 'nenhuma regra pode alcançar o Quill simples');
+
+      final icons = File('lib/assets/office_word_icons.css').readAsStringSync();
+      expect(icons, contains('.dq-icon-bold'));
+      expect(icons, contains('CC BY-SA 4.0'),
+          reason: 'os ícones ONLYOFFICE exigem a atribuição na própria folha');
     });
 
     test('a barra de status mostra a página corrente e o total', () {
@@ -481,6 +490,214 @@ void main() {
         .getAttribute('style');
     expect(widthAfter, isNot(widthBefore),
         reason: 'régua na escala antiga com página na nova era o bug');
+  });
+
+  group('title bar opcional', () {
+    test('desligada por padrão — a aplicação hospedeira tem a sua', () {
+      mount();
+      expect(count('.dq-office-titlebar'), 0);
+    });
+
+    test('ligada quando pedida', () {
+      editor = OfficeWordEditor.mount(
+        host: host,
+        adapter: adapter,
+        document: docOf(5),
+        schema: schema,
+        options: const OfficeWordEditorOptions(showTitleBar: true),
+      );
+      expect(count('.dq-office-titlebar'), 1);
+    });
+  });
+
+  group('régua: marcadores de recuo', () {
+    void caretAt(int position) {
+      const map = OfficeDomPositionMap();
+      final pages = host.querySelector('.dq-office-pages')!;
+      final p = map.domPositionFor(pages, position)!;
+      adapter.setSelectionByNodes(p.node, p.offset, p.node, p.offset);
+    }
+
+    test('a régua vive DENTRO do canvas, com canto e marcadores', () {
+      mount();
+      final canvas = host.querySelector('.dq-office-canvas')!;
+      expect(canvas.querySelectorAll('.dq-office-ruler').length, 1,
+          reason: 'a régua acompanha a área do documento, como no Word');
+      expect(count('.dq-office-ruler-corner'), 1);
+      expect(count('.dq-office-indent-first'), 1);
+      expect(count('.dq-office-indent-left'), 1);
+      expect(count('.dq-office-indent-right'), 1);
+    });
+
+    test('arrastar o recuo esquerdo aplica a transação no parágrafo', () {
+      final editor = mount(blocks: 5);
+      caretAt(1);
+      editor.view.syncSelectionFromDom();
+
+      final marker = host.querySelector('.dq-office-indent-left')!;
+      (marker as FakeDomElement).dispatchEvent(
+          'pointerdown',
+          FakeDomMouseEvent(
+              type: 'pointerdown', target: marker, clientX: 100));
+      final canvas = host.querySelector('.dq-office-canvas')!;
+      (canvas as FakeDomElement).dispatchEvent(
+          'pointerup',
+          FakeDomMouseEvent(type: 'pointerup', target: canvas, clientX: 176));
+
+      // 76px / (96/72/20) px por twip = 1140 twips (~2 cm).
+      final style = editor.state.doc.child(0).attrs['style'] as Map;
+      expect(style['indentTwips'], closeTo(1140, 20));
+      // E o LAYOUT honra: o fragmento sai recuado na tela e no PDF.
+      expect(
+          editor.pageGraph.pages.first.fragments
+              .whereType<BlockFragment>()
+              .first
+              .indentTwips,
+          closeTo(1140, 20));
+    });
+
+    test('recuo de primeira linha desloca só a primeira LINHA', () {
+      final editor = mount(blocks: 5);
+      caretAt(1);
+      editor.view.syncSelectionFromDom();
+
+      final marker = host.querySelector('.dq-office-indent-first')!;
+      (marker as FakeDomElement).dispatchEvent(
+          'pointerdown',
+          FakeDomMouseEvent(
+              type: 'pointerdown', target: marker, clientX: 100));
+      final canvas = host.querySelector('.dq-office-canvas')!;
+      (canvas as FakeDomElement).dispatchEvent(
+          'pointerup',
+          FakeDomMouseEvent(type: 'pointerup', target: canvas, clientX: 138));
+
+      final block = editor.pageGraph.pages.first.fragments
+          .whereType<BlockFragment>()
+          .first;
+      expect(block.lines.first.indentTwips, greaterThan(400),
+          reason: 'primeira linha deslocada');
+      if (block.lines.length > 1) {
+        expect(block.lines[1].indentTwips, 0,
+            reason: 'as demais linhas ficam na base do bloco');
+      }
+    });
+  });
+
+  group('aba contextual Tabela', () {
+    DomElement tab(String text) {
+      for (final t in host.querySelectorAll('.dq-office-ribbon-tab')) {
+        if (t.textContent == text) return t;
+      }
+      throw StateError('aba não encontrada');
+    }
+
+    DomElement byTitle(String title) {
+      for (final b in host.querySelectorAll('.dq-office-btn')) {
+        if ((b.getAttribute('title') ?? '') == title) return b;
+      }
+      throw StateError('botão não encontrado: ' + title);
+    }
+
+    void click(DomElement el) => (el as FakeDomElement)
+        .dispatchEvent('click', FakeDomMouseEvent(type: 'click', target: el));
+
+    int caretIntoTable(OfficeWordEditor editor) {
+      var offset = 0;
+      for (var i = 0; i < editor.state.doc.childCount; i++) {
+        final child = editor.state.doc.child(i);
+        if (child.type.name == 'table') {
+          final pos = offset + 4; // table>row>cell>paragraph>texto
+          editor.view.dispatch(editor.state.tr
+            ..setSelection(TextSelection.create(editor.state.doc, pos)));
+          return pos;
+        }
+        offset += child.nodeSize;
+      }
+      throw StateError('tabela não encontrada');
+    }
+
+    OfficeWordEditor mountWithTable() {
+      final editor = mount(blocks: 3);
+      click(tab('Inserir'));
+      click(byTitle('Inserir tabela 3×3'));
+      return editor;
+    }
+
+    PMNode tableOf(OfficeWordEditor editor) {
+      for (var i = 0; i < editor.state.doc.childCount; i++) {
+        if (editor.state.doc.child(i).type.name == 'table') {
+          return editor.state.doc.child(i);
+        }
+      }
+      throw StateError('tabela não encontrada');
+    }
+
+    test('a aba aparece com a seleção NA tabela e some fora', () {
+      final editor = mountWithTable();
+      final tableTab = tab('Tabela');
+      // Inserir deixa a seleção DENTRO da tabela — a aba já aparece, como
+      // no Word.
+      expect(tableTab.classes.contains('dq-office-ribbon-tab-hidden'), isFalse);
+
+      // Fora = DEPOIS da tabela (ela foi inserida no início do documento,
+      // então pos 1 fica dentro dela).
+      var outside = 0;
+      for (var i = 0; i < editor.state.doc.childCount; i++) {
+        outside += editor.state.doc.child(i).nodeSize;
+        if (editor.state.doc.child(i).type.name == 'table') break;
+      }
+      editor.view.dispatch(editor.state.tr
+        ..setSelection(TextSelection.create(editor.state.doc, outside + 1)));
+      expect(tableTab.classes.contains('dq-office-ribbon-tab-hidden'), isTrue,
+          reason: 'fora da tabela, a aba contextual some');
+
+      caretIntoTable(editor);
+      expect(tableTab.classes.contains('dq-office-ribbon-tab-hidden'), isFalse,
+          reason: 'a shell é contextual: seleção na tabela mostra a aba');
+    });
+
+    test('inserir linha abaixo', () {
+      final editor = mountWithTable();
+      caretIntoTable(editor);
+      click(tab('Tabela'));
+      click(byTitle('Inserir linha abaixo'));
+      expect(tableOf(editor).childCount, 4);
+    });
+
+    test('inserir coluna à direita em TODAS as linhas', () {
+      final editor = mountWithTable();
+      caretIntoTable(editor);
+      click(tab('Tabela'));
+      click(byTitle('Inserir coluna à direita'));
+      final table = tableOf(editor);
+      for (var r = 0; r < table.childCount; r++) {
+        expect(table.child(r).childCount, 4,
+            reason: 'coluna entra em cada linha, não só na corrente');
+      }
+    });
+
+    test('excluir linha e coluna', () {
+      final editor = mountWithTable();
+      caretIntoTable(editor);
+      click(tab('Tabela'));
+      click(byTitle('Excluir linha'));
+      expect(tableOf(editor).childCount, 2);
+      caretIntoTable(editor);
+      click(byTitle('Excluir coluna'));
+      expect(tableOf(editor).child(0).childCount, 2);
+    });
+
+    test('excluir a tabela esconde a aba', () {
+      final editor = mountWithTable();
+      caretIntoTable(editor);
+      click(tab('Tabela'));
+      click(byTitle('Excluir tabela'));
+      for (var i = 0; i < editor.state.doc.childCount; i++) {
+        expect(editor.state.doc.child(i).type.name, isNot('table'));
+      }
+      expect(tab('Tabela').classes.contains('dq-office-ribbon-tab-hidden'),
+          isTrue);
+    });
   });
 
   test('dispose devolve o host vazio', () {

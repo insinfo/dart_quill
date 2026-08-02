@@ -1,0 +1,80 @@
+/*
+ * dart_quill — fonte de icones da ribbon do OfficeWordEditor.
+ * GERADO por tool/build_icon_font.dart — nao edite a mao.
+ *
+ * Asset OPCIONAL e substituivel: o componente so referencia classes
+ * `dq-icon-*`; troque este stylesheet (e/ou a fonte em fonts/) por outro
+ * que defina as mesmas classes e nada no codigo muda.
+ *
+ *   <link rel="stylesheet"
+ *         href="packages/dart_quill/assets/office_word_icons.css">
+ *
+ * Fonte gerada com svgtofont a partir dos SVGs oficiais do ONLYOFFICE
+ * (https://github.com/ONLYOFFICE/web-apps), cujos icones de GUI sao
+ * licenciados sob Creative Commons Attribution-ShareAlike 4.0
+ * International (CC BY-SA 4.0). Este arquivo e a fonte derivada permanecem
+ * sob CC BY-SA 4.0; veja THIRD_PARTY.md.
+ */
+
+@font-face {
+  font-family: 'dq-office-icons';
+  src: url('fonts/dq-office-icons.woff2') format('woff2'),
+       url('fonts/dq-office-icons.woff') format('woff'),
+       url('fonts/dq-office-icons.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+.dq-icon {
+  display: inline-block;
+  font-family: 'dq-office-icons' !important;
+  font-style: normal;
+  font-weight: normal;
+  font-size: 20px;
+  line-height: 1;
+  vertical-align: middle;
+  speak: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Com a fonte carregada, o texto-fallback dos botoes some. */
+.dq-office-btn:has(.dq-icon) .dq-office-btn-text { display: none; }
+.dq-icon-addcell:before { content: "\ea01"; }
+.dq-icon-align-center:before { content: "\ea02"; }
+.dq-icon-align-just:before { content: "\ea03"; }
+.dq-icon-align-left:before { content: "\ea04"; }
+.dq-icon-align-right:before { content: "\ea05"; }
+.dq-icon-bold:before { content: "\ea06"; }
+.dq-icon-columns:before { content: "\ea07"; }
+.dq-icon-copy:before { content: "\ea08"; }
+.dq-icon-cut:before { content: "\ea09"; }
+.dq-icon-decoffset:before { content: "\ea0a"; }
+.dq-icon-delcell:before { content: "\ea0b"; }
+.dq-icon-download:before { content: "\ea0c"; }
+.dq-icon-incoffset:before { content: "\ea0d"; }
+.dq-icon-insertimage:before { content: "\ea0e"; }
+.dq-icon-insertshape:before { content: "\ea0f"; }
+.dq-icon-inserttable:before { content: "\ea10"; }
+.dq-icon-italic:before { content: "\ea11"; }
+.dq-icon-menu-header:before { content: "\ea12"; }
+.dq-icon-merge-cells:before { content: "\ea13"; }
+.dq-icon-multilevels:before { content: "\ea14"; }
+.dq-icon-numbering:before { content: "\ea15"; }
+.dq-icon-pagebreak:before { content: "\ea16"; }
+.dq-icon-pagemargins:before { content: "\ea17"; }
+.dq-icon-pageorient:before { content: "\ea18"; }
+.dq-icon-pagesize:before { content: "\ea19"; }
+.dq-icon-paste:before { content: "\ea1a"; }
+.dq-icon-print:before { content: "\ea1b"; }
+.dq-icon-redo:before { content: "\ea1c"; }
+.dq-icon-rows-and-columns:before { content: "\ea1d"; }
+.dq-icon-save:before { content: "\ea1e"; }
+.dq-icon-setmarkers:before { content: "\ea1f"; }
+.dq-icon-strikeout:before { content: "\ea20"; }
+.dq-icon-subscript:before { content: "\ea21"; }
+.dq-icon-superscript:before { content: "\ea22"; }
+.dq-icon-text:before { content: "\ea23"; }
+.dq-icon-underline:before { content: "\ea24"; }
+.dq-icon-undo:before { content: "\ea25"; }

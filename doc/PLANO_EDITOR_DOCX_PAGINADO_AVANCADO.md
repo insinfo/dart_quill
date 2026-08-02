@@ -2554,6 +2554,48 @@ componente segue sem `package:web` e testável em VM, e o teste prova que
 o DOCX baixado REABRE pelo importador com o mesmo texto. Pendências
 declaradas: drag de recuos na régua e galeria de tamanhos de tabela.
 
+**[ENTREGUE 2026-08-02 — componentização, assets e régua funcional.]**
+A rodada seguinte atacou quatro exigências do mantenedor de uma vez:
+
+1. **UI como mini-framework** — o monólito virou orquestrador fino
+   (`ui/word_editor.dart`) sobre uma interface (`ui/controller.dart`:
+   `OfficeWordController` + `OfficeDomKit`) e componentes próprios:
+   `ribbon.dart` + `tabs/{home,insert,layout,file,table}_tab.dart`,
+   `rulers.dart`, `title_bar.dart`, `status_bar.dart`, com as ações como
+   funções puras (`ribbon_actions.dart`, `table_ops.dart`) testáveis sem
+   chrome. Title bar ficou opcional e **desligada por padrão**
+   (`showTitleBar`) — a aplicação hospedeira tem a sua.
+2. **CSS como ASSET do pacote, nunca string** — `lib/assets/
+   office_word_editor.css` e `office_word_icons.css`, incluídos via
+   `packages/dart_quill/assets/...` (o exemplo e o teste de browser
+   carregam os mesmos `<link>` que uma aplicação real usaria). Quem quiser
+   tema próprio troca o stylesheet; o código não muda.
+3. **Fonte de ícones dos SVGs oficiais do ONLYOFFICE** (CC BY-SA 4.0,
+   licença dos ícones — distinta do código AGPL, que segue fora):
+   `tool/build_icon_font.dart` reproduz a pipeline (seleção dos 37 SVGs →
+   `svgtofont` → `lib/assets/fonts/dq-office-icons.{woff2,woff,ttf}` +
+   CSS com os codepoints). O contrato é a classe `dq-icon-*` com fallback
+   de texto (`:has` esconde o rótulo quando há ícone) — iconografia
+   substituível sem tocar no código. Atribuição no cabeçalho do CSS, em
+   `THIRD_PARTY.md` e no `NOTICE`.
+4. **Régua no padrão ONLYOFFICE e RECUOS DE VERDADE** — a régua vive
+   dentro do canvas (sticky, canto "L", banda clara na área útil, ticks de
+   0,25/0,5 cm, números a partir da margem) e os marcadores de recuo
+   (primeira linha/esquerda/direita) são ARRASTÁVEIS: o drag vira
+   transação `applyBlockStyle` com os clamps do Word. O motor ganhou os
+   recuos de bloco (`LineBox.indentTwips` para primeira linha/hanging,
+   `BlockFragment.rightIndentTwips`), honrados nos DOIS renderizadores —
+   DOM e PDF quebram linha na mesma largura. A ribbon ganhou a **ABA
+   CONTEXTUAL Tabela** (só aparece com a seleção dentro de tabela, como a
+   shell bar contextual da referência): inserir/excluir linha e coluna e
+   excluir tabela via `table_ops.dart`.
+
+Suítes: 34 testes de UI em VM + 4 em Chrome real (que agora carregam os
+assets de verdade — o alinhamento régua/página é medido com o CSS do
+pacote) + 71 de layout. Pendências seguintes: galeria de tamanhos de
+tabela, drag de margens na régua, mini-UIs contextuais de imagem/forma/
+caixa de texto (dependem do pipeline de embeds no composer).
+
 ---|---|
 | digitar/apagar/Enter sobre páginas | o laço `beforeinput → modelo → PageGraph → projeção` |
 | barra de ferramentas | usa `runCommand`, o MESMO caminho dos atalhos — a UI não tem rota própria para mudar o documento |

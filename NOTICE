@@ -15,7 +15,14 @@ Resumo:
   Port em Dart dos módulos model, transform, state, history e commands,
   incluindo casos de teste derivados das suítes upstream.
 
-Nenhum código, bundle ou ativo de projetos AGPL (ONLYOFFICE/DocumentServer,
-iText) ou proprietários (capturas do Word Online) está incluído neste
-pacote; tais fontes foram usadas somente como comparação conceitual durante
-auditorias, conforme registrado em doc/PLANO_EDITOR_DOCX_PAGINADO_AVANCADO.md.
+- Ícones de GUI do ONLYOFFICE (https://github.com/ONLYOFFICE/web-apps) —
+  CC BY-SA 4.0. A fonte de ícones dq-office-icons (lib/assets/fonts/ e
+  lib/assets/office_word_icons.css) é derivada dos SVGs oficiais da ribbon
+  e permanece sob CC BY-SA 4.0.
+
+Nenhum CÓDIGO, bundle ou outro ativo de projetos AGPL
+(ONLYOFFICE/DocumentServer — dos quais somente os ícones CC BY-SA 4.0 acima
+foram incorporados —, iText) ou proprietários (capturas do Word Online) está
+incluído neste pacote; tais fontes foram usadas somente como comparação
+conceitual durante auditorias, conforme registrado em
+doc/PLANO_EDITOR_DOCX_PAGINADO_AVANCADO.md.

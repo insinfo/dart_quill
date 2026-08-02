@@ -4,6 +4,9 @@ library office_word_editor_test;
 /// O componente Word completo em Chrome REAL: chrome montado pela
 /// biblioteca, clique de verdade na ribbon, zoom mudando a escala da
 /// projeção — o que o consumidor obtém com uma chamada.
+import 'dart:async';
+import 'dart:js_interop';
+
 import 'package:dart_quill/dart_quill_office.dart';
 import 'package:dart_quill/src/platform/dom.dart';
 import 'package:dart_quill/src/platform/platform.dart';
@@ -16,6 +19,28 @@ void main() {
 
   late DomElement host;
   OfficeWordEditor? editor;
+
+  setUpAll(() async {
+    // Como numa aplicação real: o chrome vem dos ASSETS do pacote. O
+    // servidor do `dart test` serve `packages/...` na raiz da suíte.
+    for (final href in [
+      'packages/dart_quill/assets/office_word_editor.css',
+      'packages/dart_quill/assets/office_word_icons.css',
+    ]) {
+      final link = web.document.createElement('link') as web.HTMLLinkElement
+        ..rel = 'stylesheet'
+        ..href = href;
+      final loaded = Completer<void>();
+      link.addEventListener(
+          'load', ((web.Event _) => loaded.complete()).toJS);
+      link.addEventListener(
+          'error',
+          ((web.Event _) => loaded
+              .completeError(StateError('falhou ao carregar $href'))).toJS);
+      web.document.head!.append(link);
+      await loaded.future;
+    }
+  });
 
   setUp(() {
     host = adapter.document.createElement('div');

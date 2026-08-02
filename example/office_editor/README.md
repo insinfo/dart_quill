@@ -2,8 +2,19 @@
 
 A aplicação faz **uma chamada** e recebe a experiência completa — ribbon,
 régua, páginas com cabeçalho/rodapé, barra de status e zoom. Todo o chrome
-e o CSS vêm da biblioteca, escopados em `dq-office-*`; nada aqui toca o
-Quill simples, e os dois podem coexistir na mesma página.
+vem da biblioteca, escopado em `dq-office-*`; nada aqui toca o Quill
+simples, e os dois podem coexistir na mesma página.
+
+O visual são **assets do pacote** — dois `<link>` no `index.html`, ambos
+substituíveis por tema/iconografia próprios (as classes `dq-icon-*` são o
+contrato; a fonte de ícones deriva dos SVGs do ONLYOFFICE, CC BY-SA 4.0):
+
+```html
+<link rel="stylesheet"
+      href="packages/dart_quill/assets/office_word_editor.css">
+<link rel="stylesheet"
+      href="packages/dart_quill/assets/office_word_icons.css">
+```
 
 ```dart
 OfficeWordEditor.mount(

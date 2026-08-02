@@ -1,0 +1,492 @@
+/*
+ * dart_quill — OfficeWordEditor (modo avancado estilo Word).
+ *
+ * Folha de estilo do componente, servida como asset do pacote:
+ *
+ *   <link rel="stylesheet"
+ *         href="packages/dart_quill/assets/office_word_editor.css">
+ *
+ * Todas as regras sao escopadas em `dq-office-*`: nada aqui alcanca
+ * o editor Quill simples, seus temas ou a aplicacao hospedeira — os dois
+ * editores coexistem na mesma pagina.
+ */
+
+.dq-office-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 400px;
+  font: 13px/1.4 "Segoe UI", system-ui, sans-serif;
+  color: #242424;
+  background: #f8f8f7;
+}
+
+.dq-office-app * {
+  box-sizing: border-box;
+}
+
+/* title bar */
+.dq-office-titlebar {
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  color: #fff;
+  background: #185abd;
+}
+
+.dq-office-brand {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+.dq-office-brand-mark {
+  width: 22px;
+  display: grid;
+  gap: 2px;
+  transform: rotate(-2deg);
+}
+
+.dq-office-brand-mark i {
+  display: block;
+  height: 4px;
+  border-radius: 8px;
+  background: currentColor;
+}
+
+.dq-office-brand-mark i:nth-child(1) {
+  width: 15px;
+  margin-left: 2px;
+}
+
+.dq-office-brand-mark i:nth-child(2) {
+  width: 20px;
+}
+
+.dq-office-brand-mark i:nth-child(3) {
+  width: 13px;
+  margin-left: 4px;
+}
+
+.dq-office-doc-title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dq-office-titlebar-actions {
+  flex: 0 0 auto;
+  min-width: 80px;
+}
+
+/* abas */
+.dq-office-ribbon {
+  background: #fff;
+  border-bottom: 1px solid #d6d6d6;
+}
+
+.dq-office-ribbon-tabs {
+  display: flex;
+  align-items: stretch;
+  height: 30px;
+  padding: 0 7px;
+  background: #f7f9fb;
+  border-bottom: 1px solid #d6d6d6;
+}
+
+.dq-office-ribbon-tab {
+  border: 0;
+  padding: 0 12px;
+  background: transparent;
+  color: #202020;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dq-office-ribbon-tab-active {
+  color: #185abd;
+  background: #fff;
+  box-shadow: inset 0 -2px #185abd;
+  font-weight: 600;
+}
+
+.dq-office-ribbon-tab-disabled {
+  color: #9a9a9a;
+  cursor: default;
+}
+
+/* ribbon: grupos de duas linhas, rotulo embaixo (padrao Word) */
+.dq-office-ribbon-content {
+  display: flex;
+  align-items: stretch;
+  height: 92px;
+  padding: 5px 7px 15px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.dq-office-ribbon-group {
+  position: relative;
+  flex: 0 0 auto;
+  height: 72px;
+  padding: 0 9px 14px;
+  border-right: 1px solid #e1e1e1;
+}
+
+.dq-office-ribbon-group::after {
+  content: attr(data-group-label);
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 0;
+  height: 13px;
+  overflow: hidden;
+  color: #616161;
+  text-align: center;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  line-height: 13px;
+}
+
+.dq-office-ribbon-rows {
+  height: 62px;
+  display: grid;
+  grid-template-rows: repeat(auto-fit, 30px);
+  align-content: center;
+  gap: 2px;
+}
+
+.dq-office-ribbon-row {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dq-office-ribbon-compact {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 40px;
+  padding: 4px 10px;
+}
+
+.dq-office-ribbon-sep {
+  width: 1px;
+  height: 24px;
+  margin: 0 5px;
+  background: #d6d6d6;
+}
+
+/* controles */
+.dq-office-btn {
+  min-width: 29px;
+  height: 29px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: #252525;
+  display: grid;
+  place-items: center;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dq-office-btn:hover {
+  background: #e5f1fb;
+}
+
+.dq-office-btn:active {
+  background: #dce9f8;
+}
+
+.dq-office-btn-active {
+  color: #185abd;
+  background: #dce9f8;
+}
+
+.dq-office-b {
+  font-weight: 700;
+}
+
+.dq-office-i {
+  font-style: italic;
+}
+
+.dq-office-u {
+  text-decoration: underline;
+}
+
+.dq-office-s {
+  text-decoration: line-through;
+}
+
+.dq-office-select {
+  height: 26px;
+  border: 1px solid #c8c8c8;
+  border-radius: 2px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+.dq-office-select:hover {
+  background: #f5f9fd;
+}
+
+/* regua horizontal DENTRO do canvas: sticky no topo, centro com a largura
+   da pagina e a mesma centralizacao — alinham por construcao e rolam
+   juntas, inclusive no zoom. */
+.dq-office-ruler-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: #e9eef2;
+  margin: -26px 0 8px;
+  padding: 2px 0;
+}
+
+.dq-office-ruler {
+  height: 22px;
+  user-select: none;
+}
+
+.dq-office-ruler-center {
+  position: relative;
+  height: 22px;
+  margin: 0 auto;
+}
+
+.dq-office-ruler-corner {
+  position: absolute;
+  left: -30px;
+  top: 0;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #c4c9cd;
+  background: #fff;
+  color: #555;
+  font: 11px/20px Georgia, serif;
+  text-align: center;
+}
+
+.dq-office-indent {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  transform: translateX(-50%);
+  cursor: ew-resize;
+  z-index: 5;
+  background-repeat: no-repeat;
+  background-position: center;
+  touch-action: none;
+}
+
+.dq-office-indent-first {
+  top: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9'%3E%3Cpath d='M0.5 0.5H8.5V3.5L4.5 8.5L0.5 3.5Z' fill='%23fff' stroke='%23555'/%3E%3C/svg%3E");
+}
+
+.dq-office-indent-left {
+  top: 13px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9'%3E%3Cpath d='M4.5 0.5L8.5 3V4.5H8.5V8.5H0.5V4.5H0.5V3Z' fill='%23fff' stroke='%23555'/%3E%3C/svg%3E");
+}
+
+.dq-office-indent-right {
+  top: 13px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M4.5 0.5L8.5 3V5.5H0.5V3Z' fill='%23fff' stroke='%23555'/%3E%3C/svg%3E");
+}
+
+.dq-office-indent:hover {
+  filter: drop-shadow(0 0 2px #185abd);
+}
+
+.dq-office-ribbon-tab-contextual {
+  color: #a34700;
+}
+
+.dq-office-ribbon-tab-hidden {
+  display: none;
+}
+
+.dq-office-ruler-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 4px;
+  bottom: 5px;
+  background: #d9dee3;
+}
+
+.dq-office-ruler-content {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: #fff;
+}
+
+.dq-office-ruler-number {
+  position: absolute;
+  top: 11px;
+  transform: translate(-50%, -50%);
+  font: 9px/1 Arial, sans-serif;
+  color: #555;
+}
+
+.dq-office-ruler-tick {
+  position: absolute;
+  top: 11px;
+  width: 1px;
+  height: 3px;
+  transform: translate(-50%, -50%);
+  background: #555;
+}
+
+.dq-office-ruler-tick-half {
+  height: 5px;
+}
+
+/* canvas e pagina */
+.dq-office-canvas {
+  position: relative;
+  flex: 1;
+  overflow: auto;
+  padding: 26px 0 46px;
+  background: #e9eef2;
+}
+
+.dq-office-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+}
+
+.dq-office-page {
+  background: #fff;
+  box-shadow: 0 12px 38px rgba(30, 28, 25, .10), 0 1px 3px rgba(30, 28, 25, .08);
+}
+
+.dq-office-page-placeholder {
+  background: repeating-linear-gradient(45deg,
+      #dfe4e8, #dfe4e8 10px, #d7dce0 10px, #d7dce0 20px);
+}
+
+.dq-office-page-content:focus {
+  outline: none;
+}
+
+.dq-office-marker {
+  color: #333;
+  user-select: none;
+}
+
+.dq-office-header,
+.dq-office-footer {
+  color: #5a6b76;
+  font-size: 11px;
+  user-select: none;
+}
+
+/* regua vertical: encostada a esquerda da pagina centrada, mesmo desenho */
+.dq-office-vruler-slot {
+  position: absolute;
+  top: 26px;
+  left: 50%;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dq-office-vruler {
+  user-select: none;
+}
+
+.dq-office-vruler-track {
+  position: relative;
+  width: 22px;
+}
+
+.dq-office-vruler-track::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  right: 5px;
+  background: #d9dee3;
+}
+
+.dq-office-vruler-content {
+  position: absolute;
+  left: 4px;
+  right: 5px;
+  background: #fff;
+}
+
+.dq-office-vruler-number {
+  position: absolute;
+  left: 11px;
+  transform: translate(-50%, -50%);
+  font: 9px/1 Arial, sans-serif;
+  color: #555;
+}
+
+.dq-office-vruler-tick {
+  position: absolute;
+  left: 11px;
+  width: 3px;
+  height: 1px;
+  transform: translate(-50%, -50%);
+  background: #555;
+}
+
+.dq-office-vruler-tick-half {
+  width: 5px;
+}
+
+/* barra de status */
+.dq-office-statusbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #185abd;
+  color: #fff;
+  padding: 3px 12px;
+  font-size: 12px;
+}
+
+.dq-office-status-spacer {
+  flex: 1;
+}
+
+.dq-office-statusbar .dq-office-select {
+  height: 22px;
+  font-size: 11.5px;
+  color: #242424;
+}
+
+/* flow: superficie continua, sem chrome de pagina */
+.dq-office-app-flow .dq-office-pages {
+  gap: 0;
+}
+
+.dq-office-app-flow .dq-office-page {
+  box-shadow: none;
+}

@@ -39,15 +39,30 @@ codecs Office (`lib/src/document_engine/office/`), a view/entrada
 (`lib/src/document_engine/ui/`) foram escritos neste repositório. A camada
 de extensões é INSPIRADA no conceito do Tiptap (MIT), sem código portado.
 
-## Fontes examinadas apenas em auditoria — NADA incorporado
+## Ativos gráficos incorporados
 
-Conforme o §16 do plano: ONLYOFFICE/EuroOffice DocumentServer (AGPL-3.0),
-iText (AGPL-3.0/comercial), LibreOffice (licença mista), capturas do Word
-Online (proprietário). Dessas fontes não há código, tradução de código,
-bundle ou ativo neste repositório. PDFBox/FontBox, pdf.js e Apache POI
-(Apache-2.0) foram autorizados como referência com atribuição, mas até esta
-data nenhum código deles foi incorporado; se vier a ser, este inventário e o
-NOTICE devem ser atualizados ANTES do merge.
+| Componente | Upstream | Licença | Onde neste repositório |
+|---|---|---|---|
+| Ícones de GUI do ONLYOFFICE (SVGs da ribbon) | <https://github.com/ONLYOFFICE/web-apps> (commit `1c8ca9987876bada73c0bde21367da09c0e1ed83`) | CC BY-SA 4.0 | fonte de ícones `lib/assets/fonts/dq-office-icons.*` e `lib/assets/office_word_icons.css`, gerados por `tool/build_icon_font.dart` |
+
+Os **ícones** de interface do ONLYOFFICE são licenciados pela upstream sob
+Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0) —
+licença distinta da do código (AGPL-3.0), que segue NÃO incorporado (ver
+abaixo). A fonte `dq-office-icons` é obra derivada desses SVGs e permanece
+sob CC BY-SA 4.0, com atribuição no cabeçalho do CSS. O asset é opcional e
+substituível: o componente só referencia classes `dq-icon-*`, e quem
+preferir outra iconografia troca o stylesheet sem tocar no código.
+
+## Fontes examinadas apenas em auditoria — nenhum CÓDIGO incorporado
+
+Conforme o §16 do plano: ONLYOFFICE/EuroOffice DocumentServer (AGPL-3.0 —
+código; apenas os ícones CC BY-SA 4.0 acima foram incorporados), iText
+(AGPL-3.0/comercial), LibreOffice (licença mista), capturas do Word Online
+(proprietário). Dessas fontes não há código, tradução de código ou bundle
+neste repositório. PDFBox/FontBox, pdf.js e Apache POI (Apache-2.0) foram
+autorizados como referência com atribuição, mas até esta data nenhum código
+deles foi incorporado; se vier a ser, este inventário e o NOTICE devem ser
+atualizados ANTES do merge.
 
 ## Dependências de runtime (pub.dev)
 
