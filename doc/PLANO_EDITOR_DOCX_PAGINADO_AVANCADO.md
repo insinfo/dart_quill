@@ -3831,6 +3831,29 @@ tabela de revisões própria).
    seções, headers/footers, source map (`OfficeSourceAnchor`), partes
    opacas, writer patch-based. Gate: DOCX → Snapshot → DOCX sem alteração
    semântica.
+   *(INICIADA 2026-08-02 — `office/docx_codec.dart` entrega a METADE
+   PRESERVADORA do gate. O contrato não é "abre o Word", é não perder
+   nada: um DOCX tem dezenas de partes que o editor não entende (temas,
+   custom XML, assinaturas, extensões de fabricante) e o usuário nunca
+   autorizou descartá-las só porque abriu o arquivo. O importador cataloga
+   TODAS as entradas do pacote antes de interpretar qualquer coisa —
+   partes XML como texto, binárias como asset base64 DEDUPLICADO por
+   SHA-256 (o mesmo logotipo repetido ocupa um lugar só) — e deriva a
+   árvore editável do corpo, com `OfficeSourceAnchor` por bloco. Bloco que
+   ainda não sabemos representar (tabela, por ora) continua vivo na parte
+   opaca E gera entrada no relatório: perda silenciosa é o que este projeto
+   não aceita. O exportador reconstrói o `.docx` a partir do JSON, SEM os
+   bytes originais — é o que permite guardar o documento no banco sem
+   guardar o arquivo. 10 testes sobre o corpus ETP REAL: todas as partes
+   catalogadas, conteúdo IDÊNTICO no round-trip parte a parte,
+   reconstrução só a partir do JSON serializado, o pacote gerado reabre no
+   leitor com o mesmo documento, e snapshot→docx→snapshot é ponto fixo.
+   NÃO se promete identidade byte a byte do ZIP (compressão, ordem e
+   timestamps podem diferir); o gate é identidade do CONTEÚDO de cada
+   parte, que é o que preserva formatação e dados. Pendências da fase:
+   writer PATCH-BASED do corpo (hoje o corpo volta pela parte original,
+   então editar a árvore ainda não se reflete no `.docx`), styles/numbering
+   semânticos, seções múltiplas e headers/footers como regiões.)*
 5. **Layout determinístico e PDF** — StyleResolver, shaping latino, line
    breaking, page composer, fragmentação, PageGraph, PdfWriter dirigido
    pelo PageGraph. Gate: editor e PDF usam o MESMO PageGraph.
