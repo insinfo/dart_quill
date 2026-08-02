@@ -3900,8 +3900,18 @@ tabela de revisões própria).
    misturam. Gates provados no corpus ETP real: sem edição o
    `word/document.xml` volta BYTE A BYTE; editar um parágrafo não
    reescreve os outros; a edição sobrevive a reabrir; a contagem de
-   `<w:tbl>` é preservada. Pendências da fase: styles/numbering
-   semânticos, seções múltiplas e headers/footers como regiões.)*
+   `<w:tbl>` é preservada. A GEOMETRIA DA SEÇÃO entrou em seguida: o `sectPr` do documento
+   (tamanho de página, margens, orientação, titlePg) chega ao snapshot em
+   TWIPS e `OfficeDocxCodec.pageSetupOf` alimenta o composer e o
+   `OfficePdfService.fromSnapshot`. Sem isso o editor paginava tudo em A4
+   com margens padrão: um despacho em ofício ou paisagem quebraria nas
+   linhas erradas — na tela E no PDF, porque os dois consomem o mesmo
+   grafo, e o erro só apareceria depois de assinado. Medido no corpus ETP:
+   ele é A4 como o default, mas com margens de 2,5 cm em vez de 2 cm, então
+   a ÁREA ÚTIL difere (14002 vs 14570 twips) e a contagem de páginas muda —
+   é o que o teste trava. Pendências da fase: styles/numbering semânticos,
+   MÚLTIPLAS seções (hoje a primeira governa o documento) e
+   headers/footers como regiões editáveis.)*
 5. **Layout determinístico e PDF** — StyleResolver, shaping latino, line
    breaking, page composer, fragmentação, PageGraph, PdfWriter dirigido
    pelo PageGraph. Gate: editor e PDF usam o MESMO PageGraph.

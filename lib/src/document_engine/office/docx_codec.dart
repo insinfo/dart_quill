@@ -31,6 +31,7 @@ import '../../office/document/docx/model.dart';
 import '../../office/document/docx/reader.dart';
 import '../../office/document/docx/writer.dart';
 import '../../office/document/zip/zip_archive.dart';
+import '../layout/page_graph.dart';
 import '../model/index.dart';
 import 'ids.dart';
 import 'quill_codec.dart' show OfficeCompatibilityReport;
@@ -185,6 +186,10 @@ class OfficeDocxCodec {
         resources: OfficeResourcesSnapshot(
           opaqueParts: parts,
           assets: assets,
+          sections: [
+            if (docx.document.section != null)
+              _sectionToJson(docx.document.section!),
+          ],
         ),
       ),
       report: report,
@@ -291,6 +296,44 @@ class OfficeDocxCodec {
       footersByType: docx.footersByType,
       fidelityNotes: docx.fidelityNotes,
     ));
+  }
+
+  /// Geometria da seção, em TWIPS — as unidades canônicas do plano, sem
+  /// passar por pixel em lugar nenhum.
+  static Map<String, dynamic> _sectionToJson(WpSectionProperties section) => {
+        'pageWidthTwips': section.pageWidthTwips,
+        'pageHeightTwips': section.pageHeightTwips,
+        'orientation': section.orientation,
+        'marginTopTwips': section.marginTopTwips,
+        'marginRightTwips': section.marginRightTwips,
+        'marginBottomTwips': section.marginBottomTwips,
+        'marginLeftTwips': section.marginLeftTwips,
+        'titlePage': section.titlePage,
+      };
+
+  /// A configuração de página do documento IMPORTADO.
+  ///
+  /// Sem isto o editor pagina tudo em A4 retrato com margens padrão, e um
+  /// documento em ofício ou paisagem quebraria nas linhas erradas — na tela
+  /// E no PDF, porque os dois consomem o mesmo grafo. O default só entra
+  /// quando o DOCX realmente não declara a medida.
+  static PageSetupTwips pageSetupOf(OfficeDocumentSnapshot snapshot) {
+    const fallback = PageSetupTwips();
+    if (snapshot.resources.sections.isEmpty) return fallback;
+    final section = snapshot.resources.sections.first;
+    int value(String key, int byDefault) {
+      final raw = section[key];
+      return raw is num && raw > 0 ? raw.toInt() : byDefault;
+    }
+
+    return PageSetupTwips(
+      widthTwips: value('pageWidthTwips', fallback.widthTwips),
+      heightTwips: value('pageHeightTwips', fallback.heightTwips),
+      marginTopTwips: value('marginTopTwips', fallback.marginTopTwips),
+      marginRightTwips: value('marginRightTwips', fallback.marginRightTwips),
+      marginBottomTwips: value('marginBottomTwips', fallback.marginBottomTwips),
+      marginLeftTwips: value('marginLeftTwips', fallback.marginLeftTwips),
+    );
   }
 
   Map<String, OfficeSourceAnchor> _anchorsOf(OfficeDocumentSnapshot snapshot) {

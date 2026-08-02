@@ -249,6 +249,61 @@ void main() {
     });
   });
 
+  group('geometria da seção', () {
+    test('a página do DOCX chega ao snapshot em twips', () {
+      if (!hasCorpus) return;
+      final imported = OfficeDocxCodec().import(corpus());
+      expect(imported.snapshot.resources.sections, isNotEmpty);
+
+      final setup = OfficeDocxCodec.pageSetupOf(imported.snapshot);
+      expect(setup.widthTwips, greaterThan(0));
+      expect(setup.heightTwips, greaterThan(setup.widthTwips),
+          reason: 'o corpus é retrato');
+      expect(setup.contentWidthTwips, lessThan(setup.widthTwips),
+          reason: 'as margens do documento têm de entrar');
+    });
+
+    test('o documento pagina com a geometria DELE, não com A4 padrão', () {
+      if (!hasCorpus) return;
+      final imported = OfficeDocxCodec().import(corpus());
+      final doc = PMNode.fromJSON(schema, imported.snapshot.body);
+
+      final setup = OfficeDocxCodec.pageSetupOf(imported.snapshot);
+      final own = LayoutComposer(setup: setup).compose(doc);
+      final defaulted = LayoutComposer().compose(doc);
+
+      // O corpus é A4 como o default, mas com margens de 2,5 cm em vez de
+      // 2 cm: a ÁREA ÚTIL difere, e é ela que decide onde a página quebra.
+      expect(setup.contentHeightTwips,
+          isNot(const PageSetupTwips().contentHeightTwips));
+      expect(own.pages.length, isNot(defaulted.pages.length),
+          reason: 'paginar com a margem errada muda a contagem de páginas');
+    });
+
+    test('o PDF do snapshot usa a mesma geometria', () {
+      if (!hasCorpus) return;
+      final imported = OfficeDocxCodec().import(corpus());
+      final setup = OfficeDocxCodec.pageSetupOf(imported.snapshot);
+      final expected = LayoutComposer(setup: setup)
+          .compose(PMNode.fromJSON(schema, imported.snapshot.body));
+
+      final pdf = OfficePdfService().fromSnapshot(imported.snapshot);
+      expect(pdf.pageCount, expected.pages.length,
+          reason: 'o PDF assinado tem de sair no papel do documento');
+    });
+
+    test('sem seção declarada, cai no default sem explodir', () {
+      final snapshot = OfficeDocumentSnapshot(
+          documentId: 'x',
+          body: schema
+              .node('doc', null,
+                  Fragment.from([schema.node('paragraph', null, Fragment.empty)]))
+              .toJSON() as Map<String, dynamic>);
+      final setup = OfficeDocxCodec.pageSetupOf(snapshot);
+      expect(setup.widthTwips, const PageSetupTwips().widthTwips);
+    });
+  });
+
   test('o corpus de teste existe', () {
     expect(hasCorpus, isTrue,
         reason: 'sem corpus real o round-trip não prova nada');

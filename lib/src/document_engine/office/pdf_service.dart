@@ -30,6 +30,7 @@ import '../layout/layout_composer.dart';
 import '../layout/page_graph.dart';
 import '../layout/pdf_renderer.dart';
 import '../model/index.dart';
+import 'docx_codec.dart';
 import 'quill_codec.dart';
 import 'schema.dart';
 import 'snapshot.dart';
@@ -84,8 +85,21 @@ class OfficePdfService {
       fromSnapshot(OfficeDocumentSnapshot.fromJson(
           jsonDecode(json) as Map<String, dynamic>));
 
-  OfficePdfResult fromSnapshot(OfficeDocumentSnapshot snapshot) =>
-      fromDocument(PMNode.fromJSON(schema, snapshot.body));
+  /// Do snapshot, USANDO a geometria de página que veio com o documento.
+  ///
+  /// Um despacho em ofício ou paisagem tem de sair no papel certo. Ignorar
+  /// a seção e paginar tudo em A4 produziria um PDF assinado que não
+  /// corresponde ao documento — e o erro só apareceria depois de assinado.
+  OfficePdfResult fromSnapshot(OfficeDocumentSnapshot snapshot) {
+    final graph = LayoutComposer(
+      setup: OfficeDocxCodec.pageSetupOf(snapshot),
+      quality: quality,
+      baseFontFamily: baseFontFamily,
+      baseFontSizePt: baseFontSizePt,
+      fonts: fonts,
+    ).compose(PMNode.fromJSON(schema, snapshot.body));
+    return fromPageGraph(graph);
+  }
 
   /// A partir de um Delta Quill do banco — o caso do SALI hoje, antes de o
   /// documento ser promovido para o formato Office.
