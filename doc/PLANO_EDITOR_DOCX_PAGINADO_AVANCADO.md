@@ -2452,3 +2452,1048 @@ Com essa arquitetura, o usuário pode importar DOCX no browser, armazenar Office
 - `D:\libreoffice\core-master\sw\source\writerfilter\`
 - `D:\libreoffice\core-master\sw\source\filter\ww8\`
 - `D:\libreoffice\core-master\sw\source\core\layout\`
+
+
+
+C:\MyDartProjects\dart_quill\doc\PLANO_EDITOR_DOCX_PAGINADO_AVANCADO.md então qual o melhor caminho para implementar um editor robusto igual ao word em puro dart com importação de delta opcional, e exportação de PDF em puro dart de alta performace para arquivos word de 200 paginas em puro dart sem depedencias seria portar o prosemirror e tiptape e salvar o banco de dados um json do prosemiro ou um json hibrido enter promirroe e opes delta ? acho que o ideal é: O melhor caminho é:
+
+Portar seletivamente o núcleo do ProseMirror C:\MyDartProjects\docx_rendering C:\MyDartProjects\docx_rendering\referencias para Dart.
+Criar uma camada de extensões inspirada no Tiptap, mas não portar o Tiptap inteiro.
+Usar como modelo canônico uma árvore própria, tipada e versionada, semelhante ao JSON do ProseMirror.
+Manter o Delta do Quill apenas como formato de importação, exportação e compatibilidade.
+Não armazenar simultaneamente uma árvore ProseMirror e um Delta representando o mesmo conteúdo.
+Criar um motor de layout/paginação próprio, separado do editor.
+Fazer o editor visual e o gerador de PDF consumirem exatamente o mesmo resultado de layout.
+
+A arquitetura central deveria ser:
+
+DOCX / Delta Quill
+        ↓
+OfficeDocumentSession
+        ↓
+OfficeDocument tipado e imutável
+        ↓
+Transactions / Steps / Mapping
+        ↓
+StyleResolver
+        ↓
+TextShaper + LayoutComposer
+        ↓
+PageGraph
+        ├── Renderer HTML editável
+        └── PdfWriter Dart
+
+Seu plano anexado já está muito bem direcionado ao separar o Quill simples do editor Office, usar uma árvore durante a edição, preservar OOXML, implementar paginação incremental e executar trabalho pesado em Worker. A principal alteração que eu faria é no formato canônico de persistência: o OfficeDeltaSnapshot não deveria ser a representação principal do documento, mas um codec de compatibilidade opcional.
+
+1. Portar ProseMirror: sim
+
+O núcleo do ProseMirror é exatamente a parte que vale portar porque fornece:
+
+árvore hierárquica validada por esquema;
+nós e marks imutáveis;
+transações;
+steps estruturais;
+mapeamento de posições;
+seleções;
+histórico;
+plugins;
+atualização incremental da view;
+reconciliação com contenteditable.
+
+O ProseMirror usa um documento persistente e imutável e aplica as mudanças por transações, compartilhando estruturalmente as partes não alteradas da árvore. Isso é uma base muito melhor para tabelas, seções, campos, comentários e outras estruturas Word-like do que um modelo linear.
+
+Eu portaria estes módulos ou seus equivalentes:
+
+prosemirror-model
+prosemirror-transform
+prosemirror-state
+prosemirror-view
+prosemirror-history
+prosemirror-commands
+prosemirror-keymap
+prosemirror-inputrules
+prosemirror-tables
+prosemirror-gapcursor
+prosemirror-dropcursor
+
+Mas eles deveriam ficar internos:
+
+lib/src/document_engine/model/
+lib/src/document_engine/transform/
+lib/src/document_engine/state/
+lib/src/document_engine/view/
+
+A API pública não deveria expor classes chamadas ProseMirrorNode, PMTransaction ou TiptapExtension. Use nomes seus:
+
+OfficeNode
+OfficeSchema
+OfficeTransaction
+OfficeStep
+OfficeMapping
+OfficeSelection
+OfficePlugin
+
+Isso permitirá modificar estruturas internas no futuro sem ficar preso à API JavaScript original.
+
+2. Portar Tiptap inteiro: não
+
+O Tiptap não é outro motor documental. Ele é principalmente uma camada de ergonomia sobre o ProseMirror:
+
+Tiptap
+├── ExtensionManager
+├── comandos encadeáveis
+├── configuração declarativa
+├── Node extensions
+├── Mark extensions
+├── atalhos
+├── parse/render HTML
+└── ProseMirror por baixo
+
+A própria documentação confirma que Tiptap é construído sobre os pacotes model, state, view, transform, history, commands e demais componentes do ProseMirror. O núcleo aberto do Tiptap é MIT.
+
+Em Dart, é melhor implementar uma API idiomática equivalente:
+
+abstract interface class OfficeExtension {
+  String get name;
+
+  List<OfficeNodeSpec> get nodes;
+  List<OfficeMarkSpec> get marks;
+  List<OfficeCommand> get commands;
+  List<OfficePlugin> get plugins;
+  List<OfficeShortcut> get shortcuts;
+}
+
+E então:
+
+final editor = OfficeEditor(
+  extensions: [
+    DocumentExtension(),
+    ParagraphExtension(),
+    TextExtension(),
+    HeadingExtension(),
+    TableExtension(),
+    SectionExtension(),
+    PageBreakExtension(),
+    HeaderFooterExtension(),
+    FieldExtension(),
+  ],
+);
+
+Isso aproveita o melhor conceito do Tiptap sem carregar toda a compatibilidade histórica, APIs JavaScript, React/Vue e abstrações que não fazem sentido em Dart.
+
+Não portar Tiptap Pages ou Tiptap Conversion
+
+O Tiptap Pages atual é um pacote Pro, distribuído por registry privado, disponível no plano Team e ainda marcado como beta. A própria documentação reconhece uma limitação grave: blocos não fragmentáveis maiores que a página podem entrar em um ciclo infinito de layout.
+
+A exportação DOCX do Tiptap também é Pro e declara expressamente que:
+
+não oferece round-trip idêntico;
+não busca paridade pixel-perfect com o Word;
+a paginação mostrada no editor não determina automaticamente a paginação do DOCX exportado.
+
+Portanto:
+
+Componente	Decisão
+ProseMirror model/state/transform/view	Portar
+ProseMirror history/commands/tables	Portar
+Tiptap ExtensionManager	Reimplementar em Dart
+Extensões Tiptap abertas úteis	Portar seletivamente após auditoria
+Tiptap Pages	Não portar
+Tiptap Conversion	Não portar
+UI/ribbon do Tiptap	Criar uma própria
+3. Não use um JSON híbrido ProseMirror + Delta como duas fontes de verdade
+
+Esse seria o maior erro arquitetural.
+
+Imagine armazenar:
+
+{
+  "prosemirror": {
+    "type": "doc",
+    "content": []
+  },
+  "delta": {
+    "ops": []
+  }
+}
+
+Depois de cada edição, seria necessário garantir que:
+
+árvore ProseMirror
+       =
+Delta Quill
+       =
+DOM
+       =
+OOXML preservado
+
+Em algum momento eles divergiriam:
+
+uma tabela teria sido atualizada na árvore, mas não no Delta;
+uma seção existiria no modelo Office, mas não no Delta;
+um atributo customizado seria mantido no Delta, mas removido da árvore;
+um field seria reconstruído diferentemente;
+o hash de revisão dependeria de qual representação fosse escolhida.
+
+Isso criaria duas versões concorrentes do mesmo documento.
+
+O Delta deve ficar na fronteira
+
+O Delta continua muito útil para:
+
+abrir documentos existentes do SALI;
+importar texto formatado do Quill;
+exportar documentos que ainda cabem no perfil Quill;
+interoperar com seu dart_quill;
+transportar alterações simples;
+preservar custom ops desconhecidos de aplicações existentes.
+
+Mas o próprio desenho do Delta diz que seus atributos e embeds não possuem significado estrutural intrínseco: quem atribui o significado é a aplicação. Ele é compacto, canônico e excelente como representação linear, mas não valida semanticamente que uma célula esteja dentro de uma linha ou que uma seção contenha blocos válidos.
+
+O fluxo correto é:
+
+Delta Quill
+    ↓ importação
+OfficeDocument
+    ↓ edição
+OfficeDocument
+    ↓ análise de compatibilidade
+Delta Quill, somente quando a conversão for lossless
+
+E nunca:
+
+OfficeDocument + Delta continuamente sincronizados
+4. Apenas JSON puro do ProseMirror também não é suficiente
+
+O JSON normal do ProseMirror é adequado para o conteúdo semântico visível:
+
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "Conteúdo"
+        }
+      ]
+    }
+  ]
+}
+
+O próprio Tiptap recomenda JSON como formato de persistência porque é mais flexível e mais simples de processar que HTML.
+
+Mas um DOCX não contém apenas a árvore visível do corpo. OOXML possui:
+
+Open Packaging Conventions;
+várias partes XML;
+relationships;
+content types;
+corpo principal;
+estilos;
+numeração;
+configurações;
+temas;
+cabeçalhos;
+rodapés;
+notas;
+comentários;
+imagens;
+fontes incorporadas;
+objetos;
+partes desconhecidas;
+mecanismos de compatibilidade e extensibilidade.
+
+A ECMA-376 divide a especificação em fundamentos/markup, OPC, compatibilidade/extensibilidade e recursos de migração. WordprocessingML também distingue a história principal do documento de outras partes e regiões.
+
+Portanto, o melhor formato persistente é um envelope Office versionado contendo várias árvores ProseMirror-like e recursos Office.
+
+5. Formato canônico recomendado: OfficeDocumentSnapshot
+
+Eu usaria algo nesta linha:
+
+{
+  "format": "dart-office-document",
+  "formatVersion": 1,
+  "schemaVersion": 1,
+  "revision": 42,
+  "documentId": "b6f7d6c9-...",
+  "roots": {
+    "body": {
+      "type": "doc",
+      "content": []
+    },
+    "headers": {
+      "section-1:default": {
+        "type": "doc",
+        "content": []
+      },
+      "section-1:first": {
+        "type": "doc",
+        "content": []
+      }
+    },
+    "footers": {},
+    "footnotes": {},
+    "endnotes": {},
+    "comments": {},
+    "textBoxes": {}
+  },
+  "resources": {
+    "sections": [],
+    "styles": {},
+    "numbering": {},
+    "theme": {},
+    "settings": {},
+    "relationships": [],
+    "assets": [],
+    "opaqueParts": []
+  },
+  "sourceMap": {
+    "nodes": {}
+  },
+  "interop": {
+    "sourceFormat": "docx",
+    "quillProfile": null,
+    "opaqueQuillOperations": []
+  }
+}
+Cada raiz continua sendo ProseMirror-like
+
+Por exemplo:
+
+{
+  "type": "section",
+  "attrs": {
+    "id": "section-1",
+    "pageWidthTwips": 11906,
+    "pageHeightTwips": 16838,
+    "marginTopTwips": 1440,
+    "marginRightTwips": 1440,
+    "marginBottomTwips": 1440,
+    "marginLeftTwips": 1440,
+    "orientation": "portrait"
+  },
+  "content": [
+    {
+      "type": "heading",
+      "attrs": {
+        "level": 1,
+        "styleId": "Titulo1",
+        "keepWithNext": true
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Relatório"
+        }
+      ]
+    }
+  ]
+}
+Recursos não textuais ficam referenciados
+{
+  "type": "image",
+  "attrs": {
+    "assetId": "sha256:d55c...",
+    "widthEmu": 1828800,
+    "heightEmu": 914400,
+    "altText": "Brasão"
+  }
+}
+
+O JSON não precisa carregar a imagem em base64. Ele guarda a referência ao asset.
+
+6. Onde entra o seu OfficeDeltaSnapshot
+
+A ideia do OfficeDeltaSnapshot do seu plano não é inválida. Ela é tecnicamente possível porque um insert Delta aceita objetos arbitrários.
+
+O problema é que, depois de criar operações como:
+
+{
+  "insert": {
+    "office-part": {
+      "uri": "/word/styles.xml",
+      "data": "..."
+    }
+  }
+}
+
+e determinar que:
+
+essas operações não entram no espaço de seleção;
+não podem ser enviadas ao Quill;
+não podem passar por compose;
+não podem passar por diff;
+não podem passar por transform;
+não possuem comprimento editorial real;
+precisam ser indexadas e remontadas em árvore;
+
+você já não está mais utilizando o Delta como modelo de edição. Está usando {"ops":[]} como um contêiner genérico de registros.
+
+Isso pode ser mantido para compatibilidade:
+
+OfficeDocumentSnapshot
+        ↓ OfficeDeltaCodec
+{"ops":[office-manifest, office-part, ...]}
+
+Mas não deveria ser a representação canônica dentro do editor.
+
+Minha classificação seria:
+
+sealed class DocumentPayload {}
+
+final class QuillDeltaDocument extends DocumentPayload {
+  final Delta delta;
+}
+
+final class OfficeDocumentSnapshot extends DocumentPayload {
+  final Map<String, OfficeRootSnapshot> roots;
+  final OfficeResourcesSnapshot resources;
+}
+
+final class OfficeDeltaEnvelope extends DocumentPayload {
+  final List<OfficeEnvelopeOperation> operations;
+}
+
+O OfficeDeltaEnvelope seria apenas:
+
+um formato de intercâmbio;
+uma ponte para sistemas que exigem {"ops":[]};
+uma possível migração de banco;
+nunca a estrutura usada pelo hot path do editor.
+7. Persistência recomendada no PostgreSQL
+
+Para documentos de 200 páginas, não colocaria todas as imagens, fontes e partes binárias em base64 dentro de uma única coluna jsonb.
+
+Base64 aumenta o tamanho bruto para aproximadamente 4/3 dos bytes originais. Além disso, jsonb não preserva whitespace nem ordem das chaves dos objetos, então ele não deve ser usado como fonte de uma serialização byte a byte canônica. O hash deve ser calculado pelo seu codec Dart canônico e persistido separadamente.
+
+Uma estrutura mais eficiente seria:
+
+CREATE TABLE editor_documento (
+    id uuid PRIMARY KEY,
+    titulo text NOT NULL,
+    revisao_atual bigint NOT NULL DEFAULT 0,
+    criado_em timestamptz NOT NULL DEFAULT now(),
+    atualizado_em timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE editor_documento_revisao (
+    documento_id uuid NOT NULL REFERENCES editor_documento(id),
+    revisao bigint NOT NULL,
+    formato text NOT NULL,
+    schema_version integer NOT NULL,
+    snapshot jsonb NOT NULL,
+    content_hash bytea NOT NULL,
+    texto_puro text NOT NULL DEFAULT '',
+    criado_em timestamptz NOT NULL DEFAULT now(),
+
+    PRIMARY KEY (documento_id, revisao)
+);
+
+CREATE TABLE editor_documento_asset (
+    hash bytea PRIMARY KEY,
+    media_type text NOT NULL,
+    tamanho bigint NOT NULL,
+    conteudo bytea NOT NULL
+);
+
+CREATE TABLE editor_documento_asset_ref (
+    documento_id uuid NOT NULL,
+    revisao bigint NOT NULL,
+    asset_hash bytea NOT NULL REFERENCES editor_documento_asset(hash),
+
+    PRIMARY KEY (documento_id, revisao, asset_hash)
+);
+
+CREATE TABLE editor_documento_parte (
+    documento_id uuid NOT NULL,
+    revisao bigint NOT NULL,
+    uri text NOT NULL,
+    content_type text NOT NULL,
+    modo text NOT NULL,
+    content_hash bytea NOT NULL,
+    conteudo bytea,
+
+    PRIMARY KEY (documento_id, revisao, uri)
+);
+
+O snapshot jsonb conteria:
+
+árvores;
+metadados;
+IDs;
+referências;
+estilos semanticamente modelados;
+source maps;
+hashes de assets e partes.
+
+As tabelas asset e parte conteriam:
+
+imagens;
+fontes;
+XML preservado;
+embeddings;
+partes opacas;
+objetos binários.
+
+Isso oferece:
+
+deduplicação por SHA-256;
+carregamento preguiçoso;
+snapshots menores;
+menos materialização de base64;
+assets compartilhados entre revisões;
+possibilidade de carregar primeiro texto e primeiras páginas.
+
+Para autosave, acrescente opcionalmente:
+
+CREATE TABLE editor_documento_step (
+    documento_id uuid NOT NULL,
+    sequencia bigint NOT NULL,
+    revisao_base bigint NOT NULL,
+    step jsonb NOT NULL,
+    criado_em timestamptz NOT NULL DEFAULT now(),
+
+    PRIMARY KEY (documento_id, sequencia)
+);
+
+Nesse caso:
+
+steps pequenos durante a edição
+        ↓
+checkpoint periódico
+        ↓
+novo OfficeDocumentSnapshot
+
+Os steps devem ser seus OfficeStep, não operações Delta.
+
+8. Para 200 páginas, ProseMirror sozinho não resolve desempenho
+
+O mantenedor do ProseMirror afirma explicitamente que ele não oferece virtualização. Em documentos muito grandes, o gargalo observado tende a ser o layout e o tratamento de edição do navegador, não necessariamente o modelo ProseMirror. A solução passa por não renderizar todo o conteúdo ao mesmo tempo.
+
+Portanto, apenas portar ProseMirror e colocar 200 páginas completas dentro de um único DOM não basta.
+
+O motor precisa de três modelos separados
+1. Modelo semântico
+   OfficeDocument
+
+2. Modelo de layout
+   PageGraph / LineBox / BlockFragment
+
+3. Projeção DOM
+   somente páginas próximas do viewport
+Modelo semântico
+section
+├── paragraph
+├── paragraph
+├── table
+└── paragraph
+Modelo de layout
+Page 1
+├── Paragraph A / linhas 1–8
+├── Paragraph B / linhas 1–4
+└── Table / linhas 1–5
+
+Page 2
+├── Table / linhas 6–20
+└── Paragraph C
+
+O parágrafo e a tabela continuam sendo nós únicos no documento. Apenas produzem vários fragments de layout.
+
+Essa separação é exatamente a direção adotada pelo projeto Premirror: ProseMirror permanece como fonte de verdade, o layout é um modelo determinístico derivado, e a recomposição incremental é considerada necessária para desempenho. O projeto também separa explicitamente PageLayout, BlockFragment, LineBox e o mapeamento entre posição no documento e posição na página.
+
+Outro editor atual, o SuperDoc, também declara uma arquitetura baseada em OOXML, paginação real, seções e headers/footers, construída sobre ProseMirror. Ele serve como validação externa do caminho arquitetural, mas não como código a ser incorporado, pois sua edição aberta usa AGPLv3 ou licença comercial.
+
+9. Um único paginador, com dois níveis de qualidade
+
+Seu plano propõe fast e fidelity. Eu manteria os dois modos, mas não criaria dois paginadores independentes.
+
+Usaria:
+
+enum LayoutQuality {
+  draft,
+  fidelity,
+}
+
+Com um único:
+
+LayoutComposer
+PageGraph
+PositionMap
+MeasurementCache
+FragmentModel
+
+E políticas diferentes:
+
+Aspecto	draft	fidelity
+Texto e linhas	completo	completo
+Quebras manuais	completo	completo
+Margens e seções	completo	completo
+Widow/orphan	simplificado	completo
+Keep-next/keep-lines	simplificado	completo
+Tabelas	aproximação estável	fragmentação completa
+Footnotes	reserva aproximada	ciclo até convergir
+Objetos flutuantes	bounding box simples	wrapping detalhado
+Campos PAGE/NUMPAGES	atualização posterior	atualização convergente
+Repaginação fora da tela	baixa prioridade	completa em background
+
+Isso garante que trocar de modo não altere:
+
+documento;
+seleção;
+IDs;
+snapshot;
+source map;
+exportação.
+
+Apenas o PageGraph é refinado.
+
+10. Algoritmo incremental recomendado
+
+Após uma edição:
+
+Transação altera nó P348
+        ↓
+Localiza primeira página afetada
+        ↓
+Invalida métricas de P348
+        ↓
+Recompõe a partir daquela página
+        ↓
+Compara assinatura da página nova com a antiga
+        ↓
+Continua até o estado de saída convergir
+        ↓
+Reutiliza todas as páginas restantes
+
+Uma assinatura pode conter:
+
+final class PageSignature {
+  final int pageIndex;
+  final String sectionId;
+  final int firstPosition;
+  final int lastPosition;
+  final int carryStateHash;
+  final int fragmentsHash;
+  final int headerFooterVariantHash;
+}
+
+A estratégia de desempenho do Premirror recomenda exatamente recomposição por regiões invalidadas, cache de runs e métricas tipográficas, e separação entre atualização urgente de edição e reflow não urgente.
+
+Regras para 200 páginas
+nunca recalcular o documento inteiro a cada tecla;
+nunca criar uma instância de editor por página;
+montar somente viewport ±2 ou ±3 páginas;
+manter montadas as páginas da seleção e composição IME;
+medir texto em lotes;
+manter cache por nodeId + estilo + largura + fontEpoch;
+usar twips, half-points e EMU internamente;
+usar pixels somente na view;
+cancelar jobs de layout obsoletos;
+executar ZIP, XML, fontes, compressão e paginação pura em Worker;
+manter DOM e seleção no main thread.
+11. Exportação de PDF: não exporte a partir do DOM
+
+A arquitetura errada seria:
+
+DOM paginado
+    ↓
+window.print()
+    ↓
+PDF
+
+Isso torna a saída dependente de:
+
+browser;
+CSS de impressão;
+fontes carregadas;
+diferenças de layout;
+fragmentação CSS;
+comportamento de impressão.
+
+A arquitetura correta é:
+
+OfficeDocument
+        ↓
+StyleResolver
+        ↓
+TextShaper
+        ↓
+LayoutComposer
+        ↓
+PageGraph
+        ├── DOMRenderer
+        └── PdfRenderer
+
+O editor e o PDF devem consumir o mesmo:
+
+final class PageGraph {
+  final List<PageLayout> pages;
+  final PositionMap positionMap;
+  final LayoutDiagnostics diagnostics;
+}
+
+Assim:
+
+a linha que aparece na página 18 do editor
+=
+a linha escrita na página 18 do PDF
+PdfWriter necessário
+
+Em Dart puro, você precisará implementar:
+
+PDF object writer
+xref table ou xref stream
+catalog
+page tree
+content streams
+Flate compression
+font embedding
+font subsetting
+ToUnicode CMaps
+image resources
+resource deduplication
+links e destinations
+metadata
+outlines/bookmarks
+
+A especificação central atual é ISO 32000-2:2020, e a cópia atualmente disponibilizada pela PDF Association já inclui a terceira coleção de erratas, atualizada em junho de 2026.
+
+Eu começaria produzindo um subconjunto conservador e altamente compatível de PDF, mesmo que formalmente próximo de PDF 1.7, e adicionaria recursos de PDF 2.0 somente quando necessários.
+
+Escrita página a página
+abstract interface class PdfOutputSink {
+  void add(List<int> bytes);
+  Future<void> close();
+}
+
+O fluxo seria:
+
+PageLayout 1 → content stream → sink
+PageLayout 2 → content stream → sink
+...
+PageLayout 200 → content stream → sink
+xref → trailer → finalização
+
+Isso evita manter centenas de objetos intermediários pesados.
+
+12. O verdadeiro ponto difícil: fontes e shaping
+
+Um parser TTF que leia somente cmap e hmtx não é suficiente para um editor Word-like.
+
+OpenType possui tabelas específicas para:
+
+GSUB: substituição de glyphs, ligaturas e formas contextuais;
+GPOS: posicionamento preciso, kerning, marcas e escrita complexa;
+GDEF;
+BASE;
+JSTF;
+variações tipográficas.
+
+A documentação oficial mostra que GSUB é necessária para ligaturas e formas contextuais, enquanto GPOS controla posicionamento preciso e ajustes por idioma e script.
+
+Para PDF profissional, você precisará de um TextShaper:
+
+abstract interface class TextShaper {
+  ShapedRun shape({
+    required String text,
+    required FontFace font,
+    required double size,
+    required TextDirection direction,
+    required String language,
+    required Set<OpenTypeFeature> features,
+  });
+}
+
+Resultado:
+
+final class ShapedRun {
+  final List<int> glyphIds;
+  final List<int> clusters;
+  final List<int> advances;
+  final List<int> offsetX;
+  final List<int> offsetY;
+}
+Caminho de implementação realista
+Primeira etapa
+
+Foco em documentos PT-BR e alfabetos latinos:
+
+cmap;
+glyph advances;
+kerning;
+ligaturas latinas;
+combining marks básicos;
+quebra de linha Unicode;
+fontes TrueType/OpenType não variáveis;
+subset de glyphs;
+ToUnicode.
+Etapa posterior
+GSUB completo;
+GPOS completo;
+bidi;
+árabe;
+devanágari;
+CJK;
+fontes variáveis;
+hifenização por idioma;
+fallback de fontes;
+color fonts.
+
+Sem esse motor, a exportação ainda pode ser boa para documentos administrativos em português, mas não deve ser anunciada como equivalente universal ao Word.
+
+13. Dart compilado para JavaScript e Wasm
+
+Todo o source pode continuar sendo Dart.
+
+O Dart atualmente oferece compilação WebAssembly no canal estável, embora ainda existam restrições relacionadas a WasmGC, compatibilidade de navegadores e interop. Portanto, o sistema deve manter fallback para JavaScript compilado do próprio Dart.
+
+Estrutura:
+
+office_editor_main.dart
+    → JavaScript ou Wasm para UI
+
+office_worker_main.dart
+    → JavaScript ou Wasm para computação
+
+Worker:
+
+ZIP/deflate
+XML/OPC
+DOCX parsing
+source maps
+font parsing
+font subsetting
+hashes
+layout puro
+PDF compression
+
+Main thread:
+
+contenteditable
+selection
+IME
+clipboard
+DOM measurement
+FontFace
+aplicação do PageGraph
+
+Não presuma que Wasm será mais rápido. Para XML pequeno e muita comunicação com o DOM, JavaScript compilado pode ser melhor. Para deflate, parsing de fontes e composição pura, Wasm pode ganhar. O backend deve ser selecionado por benchmark:
+
+enum ComputeBackend {
+  auto,
+  wasmWorker,
+  jsWorker,
+  cooperativeMainThread,
+}
+14. Importação DOCX preservadora
+
+O importador não deve simplesmente fazer:
+
+DOCX → árvore → descartar XML original
+
+O correto é:
+
+DOCX
+├── pacote OPC
+├── partes conhecidas
+├── partes desconhecidas
+├── relationships
+├── assets
+└── árvore semântica + source anchors
+
+Cada nó editável recebe um vínculo:
+
+final class OfficeSourceAnchor {
+  final String partUri;
+  final String nodeId;
+  final int tokenStart;
+  final int tokenEnd;
+  final String rawHash;
+}
+
+No save:
+
+nós não alterados reutilizam XML original;
+nós alterados são regenerados;
+elementos desconhecidos adjacentes são preservados;
+partes não relacionadas mantêm o mesmo hash;
+relações são alteradas somente quando necessário.
+
+Isso é mais importante para round-trip do que escolher entre JSON ProseMirror e Delta.
+
+15. Compatibilidade com os Deltas existentes do SALI
+
+Mantenha dois entrypoints:
+
+dart_quill.dart
+dart_quill_office.dart
+
+E dois tipos explícitos:
+
+final class QuillDeltaDocument {
+  final Delta delta;
+}
+
+final class OfficeDocumentSnapshot {
+  final Map<String, OfficeRoot> roots;
+  final OfficeResources resources;
+}
+
+Fluxo inicial:
+
+sw_despacho.delta
+      ↓
+QuillDeltaDocument
+      ├── abre no Quill simples
+      └── pode ser promovido ao OfficeEditor
+
+Enquanto o documento possuir apenas recursos representáveis no Quill:
+
+OfficeEditor → exportQuillDelta(lossless: true)
+
+Quando o usuário adicionar:
+
+seção;
+header/footer;
+nota;
+field;
+tabela Office;
+margem persistente;
+quebra de seção;
+estilos não representáveis;
+
+o documento é promovido:
+
+QuillDeltaDocument
+        ↓
+OfficeDocumentSnapshot
+
+Depois disso, o Delta simples armazenado pode continuar sendo uma projeção para visualização ou compatibilidade, mas nunca pode substituir o snapshot Office.
+
+A coluna antiga poderia permanecer:
+
+sw_despacho.delta
+
+E ser acrescentada:
+
+sw_despacho.office_snapshot
+
+Ou, preferencialmente, uma tabela de revisões própria. Isso preserva o SALI existente sem contaminar o Quill simples com blots invisíveis de armazenamento.
+
+16. Roadmap recomendado
+Fase 1 — núcleo documental
+portar model;
+portar transform;
+portar state;
+implementar schema;
+implementar JSON versionado;
+portar tests upstream;
+criar IDs estáveis;
+criar steps e mapping.
+
+Gate:
+
+árvore + transações + undo sem DOM
+Fase 2 — editor flow
+portar view;
+contenteditable;
+seleção;
+beforeinput;
+IME;
+clipboard;
+histórico;
+tabelas básicas;
+extensão Dart semelhante ao Tiptap.
+
+Gate:
+
+editor contínuo robusto
+Fase 3 — Delta
+QuillDeltaImporter;
+QuillDeltaExporter;
+compatibility report;
+custom op opaco;
+alternância Quill↔Office;
+testes com todos os Deltas SALI.
+
+Gate:
+
+Delta básico abre e volta sem perda
+Fase 4 — DOCX e snapshot Office
+ZIP/OPC;
+WordprocessingML;
+styles;
+numbering;
+seções;
+headers/footers;
+assets;
+source map;
+partes opacas;
+writer patch-based.
+
+Gate:
+
+DOCX → Snapshot → DOCX sem alteração semântica
+Fase 5 — layout determinístico e PDF
+style resolver;
+shaping latino;
+line breaking;
+page composer;
+fragmentação;
+PageGraph;
+PdfWriter;
+fontes incorporadas;
+imagens;
+links;
+bookmarks.
+
+Gate:
+
+editor e PDF usam o mesmo PageGraph
+Fase 6 — recursos Word
+tabelas divididas;
+repeat header;
+cantSplit;
+widow/orphan;
+keep-next;
+footnotes;
+fields;
+TOC;
+headers/footers first/even;
+múltiplas seções;
+desenhos ancorados.
+Fase 7 — 200 páginas
+invalidação incremental;
+page signatures;
+cache tipográfico;
+virtualização;
+worker JS/Wasm;
+lazy assets;
+cancelamento de jobs;
+instrumentação de performance;
+corpus de 150–250 páginas.
+Decisão final
+Pergunta	Resposta
+Portar ProseMirror para Dart?	Sim, seletivamente e com os testes upstream
+Portar Tiptap inteiro?	Não
+Criar uma camada de extensões parecida com Tiptap?	Sim
+Portar Tiptap Pages?	Não
+Salvar somente JSON ProseMirror puro?	Não, é insuficiente para round-trip DOCX
+Salvar JSON ProseMirror + Delta duplicado?	Não
+Salvar um snapshot Office com árvores ProseMirror-like e recursos OOXML?	Sim, é o caminho recomendado
+Manter OfficeDeltaSnapshot?	Somente como codec/envelope de compatibilidade
+Usar Delta como modelo interno de edição Office?	Não
+Suportar importação/exportação Delta opcional?	Sim
+Gerar PDF a partir do DOM?	Não
+Gerar PDF a partir do mesmo PageGraph do editor?	Sim
+É possível em source 100% Dart?	Sim
+“Sem dependências” garante desempenho?	Não; o layout, shaping e virtualização é que determinam o desempenho
+200 páginas são viáveis?	Sim, com layout incremental, virtualização e escopo tipográfico definido
+
+A formulação arquitetural mais segura é:
+
+ProseMirror-like para editar, OfficeDocumentSnapshot para persistir, Delta para interoperar, OOXML para importar/exportar e PageGraph para paginar e gerar PDF. certo? acho que este é o melhor caminho
+Show less

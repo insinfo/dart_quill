@@ -347,6 +347,11 @@ class Scroll extends ScrollBlot {
     for (final record in filtered) {
       final blot = find(record.target, bubble: true).key;
       if (blot == null) continue;
+      // Edição NATIVA (digitação) muda o texto sem passar pelos setters do
+      // modelo: o record é o único aviso, então a invalidação do cache de
+      // comprimento acontece aqui.
+      final owner = blot is ParentBlot ? blot : blot.parent;
+      owner?.invalidateLengthCache();
       mutationsMap.putIfAbsent(blot, () => []).add(record);
     }
     final targets = mutationsMap.keys.toList()
@@ -388,8 +393,10 @@ class Scroll extends ScrollBlot {
 
   /// Parity scroll.ts:139-210 — the canonical delta→blots insertion path.
   void insertContents(int index, Delta delta) {
+    final dbgTot = Stopwatch()..start();
     final renderBlocks =
         deltaToRenderBlocks(delta.concat(Delta()..insert('\n')));
+    final dbgRender = dbgTot.elapsedMilliseconds;
     if (renderBlocks.isEmpty) return;
     final last = renderBlocks.removeLast();
 

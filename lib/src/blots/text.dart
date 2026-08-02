@@ -16,6 +16,13 @@ class TextBlot extends LeafBlot {
 
   DomText get textNode => domNode as DomText;
 
+  /// Todo write de texto passa por aqui: o comprimento da cadeia de pais
+  /// está cacheado e uma escrita que não invalidasse corromperia índices.
+  void _setData(String value) {
+    textNode.data = value;
+    parent?.invalidateLengthCache();
+  }
+
   @override
   String get blotName => TextBlot.kBlotName;
 
@@ -55,7 +62,7 @@ class TextBlot extends LeafBlot {
     }
     final following = next;
     if (following is TextBlot && identical(following.prev, this)) {
-      textNode.data = textNode.data + following.textNode.data;
+      _setData(textNode.data + following.textNode.data);
       following.remove();
     }
   }
@@ -77,7 +84,7 @@ class TextBlot extends LeafBlot {
       parentBlot.insertBefore(embed, ref);
       return;
     }
-    textNode.data = data.substring(0, index) + value + data.substring(index);
+    _setData(data.substring(0, index) + value + data.substring(index));
   }
 
   @override
@@ -86,7 +93,7 @@ class TextBlot extends LeafBlot {
     if (index < 0 || index + length > data.length) {
       throw RangeError.range(index, index, data.length, 'index');
     }
-    textNode.data = data.replaceRange(index, index + length, '');
+    _setData(data.replaceRange(index, index + length, ''));
   }
 
   // Parity: parchment's TextBlot has NO `formatAt` — the base
@@ -108,7 +115,7 @@ class TextBlot extends LeafBlot {
     final left = textNode.data.substring(0, clamped);
     final right = textNode.data.substring(clamped);
 
-    textNode.data = left;
+    _setData(left);
     final newNode = domBindings.adapter.document.createTextNode(right);
     final newBlot = TextBlot(newNode);
     parent?.insertBefore(newBlot, next);

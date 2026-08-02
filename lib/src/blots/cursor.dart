@@ -22,7 +22,17 @@ class Cursor extends EmbedBlot {
   static const int kScope = Scope.INLINE_BLOT;
 
   final DomText _textNode;
-  int _savedLength = 0;
+  int _savedLengthField = 0;
+
+  int get _savedLength => _savedLengthField;
+
+  // O comprimento do cursor entra na soma do bloco: mudar sem invalidar a
+  // cadeia de pais deixaria o cache de length() dos ancestrais mentindo.
+  set _savedLength(int value) {
+    if (_savedLengthField == value) return;
+    _savedLengthField = value;
+    parent?.invalidateLengthCache();
+  }
 
   /// Hook the Selection layer sets so [restore] can bail out during IME
   /// composition (cursor.ts:76 checks `selection.composing`).

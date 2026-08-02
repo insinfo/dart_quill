@@ -1,5 +1,6 @@
 import '../../blots/scroll.dart';
 import '../../delta/delta.dart';
+import '../../modules/clipboard.dart' show tableRowIndexCache;
 import '../../platform/dom.dart';
 import '../formats/table.dart';
 import 'utils.dart' as utils;
@@ -56,8 +57,7 @@ Delta matchTableBetterRow(DomNode node, Delta delta, Scroll scroll) {
   final compactHtml = (node.innerHTML ?? '').replaceAll(RegExp(r'\s'), '');
   if (compactHtml.isEmpty) return Delta();
 
-  final rows = table.querySelectorAll('tr');
-  final row = rows.indexOf(node) + 1;
+  final row = tableRowIndexCache.rowIndexOf(table, node);
   if (row <= 0) return delta;
   final blotName = node.querySelectorAll('th').isNotEmpty
       ? TableTh.kBlotName
@@ -82,18 +82,20 @@ Delta matchTableBetterCell(DomNode node, Delta delta, Scroll scroll) {
   final rowNode = _parentElement(node);
   if (table == null || rowNode == null) return delta;
 
-  final rows = table.querySelectorAll('tr');
-  final cells = rowNode.querySelectorAll(tagName.toLowerCase());
   // TS: `node.getAttribute('data-row') || rows.indexOf(...) + 1` — a string
   // when the cell carries its id (internal copy), a NUMBER when computed for
-  // an external table. The type reaches the Delta, so it must match.
+  // an external table. The type reaches the Delta, so it must match. Os
+  // scans são preguiçosos e cacheados: rodam por CÉLULA, e refazer o
+  // querySelectorAll da tabela toda por célula era O(n²) na colagem.
   final rowAttr = node.getAttribute('data-row');
-  final dynamic row =
-      (rowAttr != null && rowAttr.isNotEmpty) ? rowAttr : rows.indexOf(rowNode) + 1;
+  final dynamic row = (rowAttr != null && rowAttr.isNotEmpty)
+      ? rowAttr
+      : tableRowIndexCache.rowIndexOf(table, rowNode);
   final firstElement = node.childNodes.whereType<DomElement>().firstOrNull;
   final cellAttr = firstElement?.getAttribute('data-cell');
-  final dynamic cellId =
-      (cellAttr != null && cellAttr.isNotEmpty) ? cellAttr : cells.indexOf(node) + 1;
+  final dynamic cellId = (cellAttr != null && cellAttr.isNotEmpty)
+      ? cellAttr
+      : rowNode.querySelectorAll(tagName.toLowerCase()).indexOf(node) + 1;
 
   var result = delta;
   if (result.length == 0) {

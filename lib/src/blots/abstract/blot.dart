@@ -410,10 +410,141 @@ abstract class Blot {
   }
 }
 
+/// Filhos de um ParentBlot como LISTA ENCADEADA sobre os ponteiros
+/// `prev`/`next` que os blots já carregam — a estrutura do parchment
+/// original (LinkedList). O port materializava um `List<Blot>` espelho, e
+/// remover um filho era `indexOf` (scan O(n)) + `removeAt` (shift O(n));
+/// as fusões de container do optimize numa tabela de 2000 linhas somavam
+/// 225 MILHÕES de passos de lista — era o quadrático do setContents.
+///
+/// Iteração é AO VIVO sobre os ponteiros: quem muta durante a travessia
+/// continua precisando de `List<Blot>.from(children)` primeiro, como antes.
+class LinkedBlotList extends Iterable<Blot> {
+  Blot? head;
+  Blot? tail;
+  int _length = 0;
+
+  @override
+  int get length => _length;
+
+  @override
+  bool get isEmpty => _length == 0;
+
+  @override
+  bool get isNotEmpty => _length != 0;
+
+  @override
+  Blot get first {
+    final h = head;
+    if (h == null) throw StateError('No element');
+    return h;
+  }
+
+  @override
+  Blot get last {
+    final t = tail;
+    if (t == null) throw StateError('No element');
+    return t;
+  }
+
+  @override
+  Iterator<Blot> get iterator => _LinkedBlotIterator(head);
+
+  Blot operator [](int index) {
+    if (index < 0 || index >= _length) {
+      throw RangeError.range(index, 0, _length - 1, 'index');
+    }
+    var node = head!;
+    for (var i = 0; i < index; i++) {
+      node = node.next!;
+    }
+    return node;
+  }
+
+  int indexOf(Blot blot) {
+    var i = 0;
+    for (var node = head; node != null; node = node.next) {
+      if (identical(node, blot)) return i;
+      i++;
+    }
+    return -1;
+  }
+
+  /// Emenda [blot] antes de [ref] (ou no fim, com ref null) em O(1).
+  void insertBefore(Blot blot, Blot? ref) {
+    final previous = ref == null ? tail : ref.prev;
+    blot.prev = previous;
+    blot.next = ref;
+    if (previous != null) {
+      previous.next = blot;
+    } else {
+      head = blot;
+    }
+    if (ref != null) {
+      ref.prev = blot;
+    } else {
+      tail = blot;
+    }
+    _length++;
+  }
+
+  /// Desemenda [blot] em O(1). O chamador garante que ele pertence a ESTA
+  /// lista (checagem por `parent`).
+  void remove(Blot blot) {
+    final previous = blot.prev;
+    final following = blot.next;
+    if (previous != null) {
+      previous.next = following;
+    } else {
+      head = following;
+    }
+    if (following != null) {
+      following.prev = previous;
+    } else {
+      tail = previous;
+    }
+    blot.prev = null;
+    blot.next = null;
+    _length--;
+  }
+
+  void clear() {
+    var node = head;
+    while (node != null) {
+      final following = node.next;
+      node.prev = null;
+      node.next = null;
+      node = following;
+    }
+    head = null;
+    tail = null;
+    _length = 0;
+  }
+}
+
+class _LinkedBlotIterator implements Iterator<Blot> {
+  _LinkedBlotIterator(this._next);
+
+  Blot? _next;
+  Blot? _current;
+
+  @override
+  Blot get current => _current!;
+
+  @override
+  bool moveNext() {
+    final node = _next;
+    if (node == null) return false;
+    _current = node;
+    _next = node.next;
+    return true;
+  }
+}
+
 abstract class ParentBlot extends Blot {
   ParentBlot(DomElement domNode) : super(domNode);
 
-  final List<Blot> children = [];
+  final LinkedBlotList children = LinkedBlotList();
 
   /// Optional UI node (e.g. `.ql-ui` marker element prepended by list blots).
   DomElement? uiNode;
@@ -423,8 +554,26 @@ abstract class ParentBlot extends Blot {
   Blot? get firstChild => children.isNotEmpty ? children.first : null;
   Blot? get lastChild => children.isNotEmpty ? children.last : null;
 
+  /// Cache do comprimento da subárvore (perf): `length()` recursivo era
+  /// recomputado do zero a CADA consulta, e o applyDelta desce da raiz uma
+  /// vez por op — um setContents de tabela grande virava O(n²) só em somas.
+  /// Toda mutação invalida a cadeia de pais via [invalidateLengthCache];
+  /// os funis são insertBefore/removeChild (estrutural), os setters de
+  /// texto/cursor (folhas) e o Scroll.update (edição nativa reconciliada).
+  int? _cachedLength;
+
+  void invalidateLengthCache() {
+    ParentBlot? current = this;
+    // Para no primeiro ancestral já invalidado: uma rajada de mutações no
+    // mesmo ramo custa O(profundidade) uma vez, não por mutação.
+    while (current != null && current._cachedLength != null) {
+      current._cachedLength = null;
+      current = current.parent;
+    }
+  }
+
   @override
-  int length() =>
+  int length() => _cachedLength ??=
       children.fold<int>(0, (length, child) => length + child.length());
 
   @override
@@ -546,11 +695,10 @@ abstract class ParentBlot extends Blot {
     }
 
     var offset = 0;
-    for (var i = 0; i < children.length; i++) {
-      final child = children[i];
+    for (var child = children.head; child != null; child = child.next) {
       final childLength = child.length();
       final end = offset + childLength;
-      final isLast = i == children.length - 1;
+      final isLast = child.next == null;
       if (index < end || isLast) {
         child.insertAt(index - offset, value, def);
         return;
@@ -632,22 +780,10 @@ abstract class ParentBlot extends Blot {
       throw ArgumentError('Reference blot is not a child of this parent');
     }
 
-    final targetIndex = ref != null ? children.indexOf(ref) : children.length;
-    if (targetIndex == -1) {
-      throw ArgumentError('Reference blot is not managed by this parent');
-    }
-
     blot.parent?.removeChild(blot);
 
-    final previous = targetIndex > 0 ? children[targetIndex - 1] : null;
-    final next =
-        ref ?? (targetIndex < children.length ? children[targetIndex] : null);
-
     blot.parent = this;
-    blot.prev = previous;
-    blot.next = next;
-    previous?.next = blot;
-    next?.prev = blot;
+    children.insertBefore(blot, ref);
 
     if (ref != null) {
       element.insertBefore(blot.domNode, ref.domNode);
@@ -655,29 +791,21 @@ abstract class ParentBlot extends Blot {
       element.append(blot.domNode);
     }
 
-    children.insert(targetIndex, blot);
-
+    invalidateLengthCache();
     scrollOrNull?.treeVersion++;
     blot.attach();
   }
 
   void removeChild(Blot child) {
-    final index = children.indexOf(child);
-    if (index == -1) return;
+    if (!identical(child.parent, this)) return;
 
-    final previous = child.prev;
-    final next = child.next;
-    previous?.next = next;
-    next?.prev = previous;
+    children.remove(child);
 
-    children.removeAt(index);
-
+    invalidateLengthCache();
     scrollOrNull?.treeVersion++;
     child.detach();
 
     child.parent = null;
-    child.prev = null;
-    child.next = null;
     child.domNode.remove();
   }
 
@@ -742,27 +870,21 @@ abstract class ParentBlot extends Blot {
     // Blots whose nodes were removed from the DOM detach from the model
     // (without touching the DOM again).
     for (final orphan in byNode.values) {
-      final index = children.indexOf(orphan);
-      if (index != -1) {
-        children.removeAt(index);
+      if (identical(orphan.parent, this)) {
+        children.remove(orphan);
       }
       orphan.parent = null;
       orphan.prev = null;
       orphan.next = null;
     }
 
-    // Relink in DOM order.
-    children
-      ..clear()
-      ..addAll(desired);
-    Blot? previous;
-    for (final child in children) {
+    // Relink in DOM order — a lista encadeada mantém os ponteiros.
+    children.clear();
+    for (final child in desired) {
       child.parent = this;
-      child.prev = previous;
-      previous?.next = child;
-      previous = child;
+      children.insertBefore(child, null);
     }
-    previous?.next = null;
+    invalidateLengthCache();
   }
 
   /// Parity `ParentBlot.unwrap()` (parent.ts:327-332): dissolve this parent,
@@ -919,11 +1041,9 @@ abstract class ParentBlot extends Blot {
   /// one, and the delete that was meant to replace the embed missed it.
   MapEntry<Blot?, int> childAtIndex(int index, {bool inclusive = false}) {
     var remaining = index;
-    final list = children;
-    for (var i = 0; i < list.length; i++) {
-      final child = list[i];
+    for (var child = children.head; child != null; child = child.next) {
       final childLength = child.length();
-      final next = i + 1 < list.length ? list[i + 1] : null;
+      final next = child.next;
       if (remaining < childLength ||
           (inclusive &&
               remaining == childLength &&

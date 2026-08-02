@@ -237,3 +237,37 @@ dart run tool/perf/run_bench.dart          # SKIP_SLOW=1 pula o cenário de 6 mi
 
 O `tr.docx` da bancada não é versionado (vem de `resources/`, que está no
 `.gitignore`); copie o arquivo para `tool/perf/tr.docx` antes de rodar.
+
+
+## Rodada 2 (2026-08-02): o caminho HTML→editor
+
+A sonda: tabela de N linhas × 4 colunas via `clipboard.convert(html)` +
+`setContents`, em VM/fake DOM, N dobrando. Antes: convert 6.9s e setContents
+6.9s em N=2000 — ambos quadráticos. Quatro causas, todas medidas com
+contadores antes do conserto:
+
+1. **`traverse` do clipboard acumulava com `fold`+`concat`** — `concat`
+   clona o prefixo acumulado (`Delta.from(this)`) a cada filho; um `<tbody>`
+   com 2000 `<tr>` = O(n²) cópias de ops. Agora a junção é in-place
+   (`push` na fronteira + `addAll`).
+2. **`matchTable` (core e table-better) refazia `querySelectorAll('tr')`
+   + `indexOf` para CADA linha/célula** — O(n²) que o browser esconde no
+   C++ do seletor e a VM não. Cache de índice por tabela
+   (`TableRowIndexCache`), um scan por tabela. Convert: 6.9s → 0.15s (45×).
+3. **`ParentBlot.length()` recomputava a subárvore a cada consulta** —
+   cache com invalidação por empurrão na cadeia de pais (funis:
+   insertBefore/removeChild, setters de texto/cursor, Scroll.update para
+   edição nativa).
+4. **`children` era um `List<Blot>` espelho dos ponteiros prev/next** —
+   remover um filho era `indexOf` (scan) + `removeAt` (shift); as fusões de
+   container do optimize somavam 225 MILHÕES de passos de lista em N=2000
+   (contado: `removeShift=118M`, `removeScan=107M`). Trocado por
+   `LinkedBlotList` sobre os ponteiros que os blots já têm — a estrutura do
+   parchment original (LinkedList). O fake DOM ganhou o mesmo tratamento
+   (`_firstChild`/`_lastChild` encadeados).
+
+Depois: setContents N=2000 2.9s → 1.0s; N=4000 7.2s → 4.9s. Resta UM
+superlinear menor no caminho VM (visível só acima de N≈2000; o browser não
+paga os custos de fake DOM). Também medido e descartado: `Lists.render`/
+`getFirstLine` do conversor Delta→HTML são lineares no corpus real e em
+sintéticos de 32k itens — o receio do audit (H7) não se materializa.

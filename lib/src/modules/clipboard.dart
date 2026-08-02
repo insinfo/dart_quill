@@ -535,7 +535,13 @@ Delta traverse(
   if (node.nodeType == DomNode.ELEMENT_NODE) {
     final element = node as DomElement;
     final children = element.childNodes;
-    return children.fold<Delta>(Delta(), (delta, child) {
+    // Acumulação IN-PLACE, não fold+concat: `concat` clona o prefixo
+    // acumulado inteiro (`Delta.from(this)`) a cada filho, e um `<tbody>`
+    // com milhares de `<tr>` virava O(n²) em cópias de ops — era o grosso
+    // dos 4s de convert numa tabela de 2000 linhas. O childDelta continua
+    // existindo por filho (os matchers precisam dele); só a junção muda.
+    final result = Delta();
+    for (final child in children) {
       var childDelta =
           traverse(scroll, child, elementMatchers, textMatchers, nodeMatches);
       if (child.nodeType == DomNode.ELEMENT_NODE) {
@@ -551,8 +557,17 @@ Delta traverse(
           );
         }
       }
-      return delta.concat(childDelta);
-    });
+      final childOps = childDelta.operations;
+      if (childOps.isNotEmpty) {
+        // `push` funde a fronteira (mesma semântica do concat); o resto
+        // entra por referência, sem recopiar o acumulado.
+        result.push(childOps.first);
+        if (childOps.length > 1) {
+          result.operations.addAll(childOps.sublist(1));
+        }
+      }
+    }
+    return result;
   }
 
   return Delta();
@@ -997,14 +1012,39 @@ Delta matchTable(DomNode node, Delta delta, Scroll scroll) {
     return delta;
   }
 
-  final rows = table.querySelectorAll('tr');
-  final rowIndex = rows.indexOf(node) + 1;
+  final rowIndex = tableRowIndexCache.rowIndexOf(table, node);
   if (rowIndex <= 0) {
     return delta;
   }
 
   return applyFormat(delta, 'table', rowIndex, scroll);
 }
+
+/// Cache do índice de linha por tabela, compartilhado pelos matchers de
+/// clipboard (core e table-better).
+///
+/// O upstream refaz `querySelectorAll('tr') + indexOf` para CADA `<tr>` —
+/// O(n²) que o browser esconde no C++ do seletor e a VM não: uma colagem de
+/// tabela com 2000 linhas gastava segundos só nesses scans. O cache guarda a
+/// última tabela vista (os matchers visitam as linhas em sequência), então o
+/// scan acontece uma vez por tabela.
+class TableRowIndexCache {
+  DomElement? _table;
+  Map<DomNode, int>? _index;
+
+  int rowIndexOf(DomElement table, DomNode row) {
+    if (_table != table) {
+      _table = table;
+      final rows = table.querySelectorAll('tr');
+      _index = <DomNode, int>{
+        for (var i = 0; i < rows.length; i++) rows[i]: i + 1,
+      };
+    }
+    return _index![row] ?? 0;
+  }
+}
+
+final TableRowIndexCache tableRowIndexCache = TableRowIndexCache();
 
 Delta matchText(DomNode node, Delta delta, Scroll scroll) {
   var text = node.textContent ?? '';

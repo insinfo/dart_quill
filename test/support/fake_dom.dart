@@ -384,10 +384,19 @@ class FakeDomNode implements DomNode {
   @override
   FakeDomNode? nextSibling;
 
-  final List<FakeDomNode> _children = [];
+  // Filhos como LISTA ENCADEADA sobre previousSibling/nextSibling (que os
+  // nós já mantêm), como um DOM de verdade: o List espelho fazia indexOf +
+  // removeAt com shift, e o dreno das fusões de container do editor virava
+  // O(n²) — só no fake DOM, escondendo que o browser (C++) não paga isso.
+  FakeDomNode? _firstChild;
+  FakeDomNode? _lastChild;
   final String? _tagName;
 
-  Iterable<FakeDomNode> get internalChildren => _children;
+  Iterable<FakeDomNode> get internalChildren sync* {
+    for (var node = _firstChild; node != null; node = node.nextSibling) {
+      yield node;
+    }
+  }
 
   String? get rawTagName => _tagName;
 
@@ -410,13 +419,14 @@ class FakeDomNode implements DomNode {
   }
 
   @override
-  List<DomNode> get childNodes => List.unmodifiable(_children);
+  List<DomNode> get childNodes =>
+      List<DomNode>.unmodifiable(internalChildren);
 
   @override
-  DomNode? get firstChild => _children.isEmpty ? null : _children.first;
+  DomNode? get firstChild => _firstChild;
 
   @override
-  DomNode? get lastChild => _children.isEmpty ? null : _children.last;
+  DomNode? get lastChild => _lastChild;
 
   @override
   void append(DomNode node) {
@@ -429,34 +439,33 @@ class FakeDomNode implements DomNode {
     fake.parentNode?.removeChild(fake);
     fake.parentNode = this;
 
-    if (referenceNode == null) {
-      if (_children.isNotEmpty) {
-        final last = _children.last;
+    final ref = referenceNode as FakeDomNode?;
+    if (ref == null || !identical(ref.parentNode, this)) {
+      // append (ref ausente ou estranho, como no DOM real)
+      final last = _lastChild;
+      fake.previousSibling = last;
+      fake.nextSibling = null;
+      if (last != null) {
         last.nextSibling = fake;
-        fake.previousSibling = last;
-      }
-      _children.add(fake);
-    } else {
-      final ref = referenceNode as FakeDomNode;
-      final index = _children.indexOf(ref);
-      if (index == -1) {
-        _children.add(fake);
       } else {
-        final prev = ref.previousSibling;
-        if (prev != null) {
-          prev.nextSibling = fake;
-          fake.previousSibling = prev;
-        }
-        fake.nextSibling = ref;
-        ref.previousSibling = fake;
-        _children.insert(index, fake);
+        _firstChild = fake;
+      }
+      _lastChild = fake;
+    } else {
+      final prev = ref.previousSibling;
+      fake.previousSibling = prev;
+      fake.nextSibling = ref;
+      ref.previousSibling = fake;
+      if (prev != null) {
+        prev.nextSibling = fake;
+      } else {
+        _firstChild = fake;
       }
     }
   }
 
   void replaceChild(FakeDomNode existing, DomNode replacement) {
-    final index = _children.indexOf(existing);
-    if (index == -1) return;
+    if (!identical(existing.parentNode, this)) return;
     final fakeReplacement = replacement as FakeDomNode;
     fakeReplacement.parentNode?.removeChild(fakeReplacement);
     fakeReplacement.parentNode = this;
@@ -466,27 +475,32 @@ class FakeDomNode implements DomNode {
     fakeReplacement.nextSibling = next;
     if (prev != null) {
       prev.nextSibling = fakeReplacement;
+    } else {
+      _firstChild = fakeReplacement;
     }
     if (next != null) {
       next.previousSibling = fakeReplacement;
+    } else {
+      _lastChild = fakeReplacement;
     }
-    _children[index] = fakeReplacement;
     existing.parentNode = null;
     existing.previousSibling = null;
     existing.nextSibling = null;
   }
 
   void removeChild(FakeDomNode child) {
-    final index = _children.indexOf(child);
-    if (index == -1) return;
-    _children.removeAt(index);
+    if (!identical(child.parentNode, this)) return;
     final prev = child.previousSibling;
     final next = child.nextSibling;
     if (prev != null) {
       prev.nextSibling = next;
+    } else {
+      _firstChild = next;
     }
     if (next != null) {
       next.previousSibling = prev;
+    } else {
+      _lastChild = prev;
     }
     child.parentNode = null;
     child.previousSibling = null;
