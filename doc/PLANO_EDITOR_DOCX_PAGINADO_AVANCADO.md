@@ -5,6 +5,8 @@
 **Status:** decisão arquitetural e plano de execução; ainda não é uma implementação  
 **Escopo auditado:** `dart_quill`, `docx_rendering`, `docx_rendering/resources`, `docx_rendering/resources/word.example`, LibreOffice `core-master` e EuroOffice/ONLYOFFICE DocumentServer.
 
+se nesessario veja as referencias D:\EuroOfficeNative\DocumentServer D:\libreoffice\core-master C:\MyDartProjects\itext\referencias\itext-dotnet-develop  C:\MyDartProjects\pdfbox_dart\referencias\pdfbox-java  C:\MyDartProjects\pdfbox_dart\referencias\pdfbox-java\fontbox\src C:\MyDartProjects\pdf.js\referencia\pdf.js-master C:\MyDartProjects\poe\referencias\poi C:\MyDartProjects\canvas-editor-port\referencias C:\MyDartProjects\canvas-editor-port\resources\word.example C:\MyDartProjects\canvas-editor-port\resources\google-docs
+
 ---
 
 ## 0. Resposta direta
@@ -2260,6 +2262,10 @@ Há um bloqueio de release: nem `dart_quill` nem `docx_rendering` possuíam `LIC
 | Word Online capture | proprietário | observação privada na auditoria; não copiar/distribuir |
 | ONLYOFFICE/EuroOffice engine | AGPL-3.0 + avisos/ativos adicionais | source examinado na auditoria; não copiar/traduzir |
 | LibreOffice | repositório de licença mista; verificar header/third-party por arquivo | source examinado na auditoria; não copiar neste plano |
+| iText (`itext-dotnet`) | **AGPL-3.0 ou comercial** | **mesma categoria do ONLYOFFICE**: comparação conceitual apenas; não copiar nem traduzir expressão |
+| PDFBox/FontBox | Apache-2.0 | reutilização permitida com atribuição no NOTICE — inclui a implementação de GSUB, útil para as ligaturas do TextShaper |
+| pdf.js | Apache-2.0 | reutilização permitida com atribuição no NOTICE |
+| Apache POI | Apache-2.0 | reutilização permitida com atribuição no NOTICE (referência OOXML da Fase 4) |
 
 Ações obrigatórias:
 
@@ -3619,7 +3625,21 @@ tabela de revisões própria).
    no stream PDF daquela página — 13 testes VM + 5 em Chrome REAL
    (geometria medida por getBoundingClientRect, `isContentEditable`,
    seleção nativa enxergando o texto projetado, placeholder com a mesma
-   altura da página, zero classe `ql-` na projeção). Pendências da fase:
+   altura da página, zero classe `ql-` na projeção). Passo 1 da ordem do §7.9 CUMPRIDO em seguida:
+   `layout/dom_position_map.dart` — posição modelo↔DOM robusta ANTES de
+   seleção/IME/virtualização. O mapa não guarda estado: LÊ as âncoras da
+   projeção (`data-doc-pos`, `data-char-start/end`) e as combina com o
+   texto dos runs, então reprojetar não invalida nada. Invariante travado
+   por teste: round-trip `modelPositionAt(domPositionFor(p)) == p` para
+   TODA posição, inclusive atravessando runs com marcas. O marcador de
+   lista não conta como texto do documento (é projeção do layout), e uma
+   posição em página NÃO montada devolve null — o contrato da janela é o
+   chamador montar e tentar de novo. 12 testes VM + 5 em Chrome REAL
+   contra a SELEÇÃO NATIVA, pela mesma ponte de plataforma que o editor
+   usará (`getNativeSelectionRange`/`setSelectionByNodes`/
+   `caretRangeFromPoint`): escrever posição do modelo vira caret nativo,
+   ler o caret nativo devolve a posição do modelo, e o clique (hit-test
+   por coordenada) resolve para a posição certa. Pendências da fase:
    beforeinput/IME/clipboard, reconciliação DOM→modelo e a camada de
    extensões)*
 3. **Delta** — importer/exporter + compatibility report + custom op opaco +
