@@ -3606,7 +3606,15 @@ tabela de revisões própria).
    camada de extensões Dart. Gate: editor contínuo robusto.
 3. **Delta** — importer/exporter + compatibility report + custom op opaco +
    alternância Quill↔Office + testes com todos os Deltas SALI. Gate: Delta
-   básico abre e volta sem perda.
+   básico abre e volta sem perda. *(GATE CUMPRIDO 2026-08-02:
+   `officeQuillSchema()` + `importQuillDelta`/`exportQuillDelta` em
+   `office/quill_codec.dart`; importação é função TOTAL com rotas de escape
+   — `extra` nos blocos, marca `opaqueAttrs`, nós `opaque`/`opaqueInline` —
+   cada uso gera entrada no `OfficeCompatibilityReport`; os 4 Deltas reais
+   do SALI (incl. termo de referência de 2 MB com 5134 linhas de célula)
+   fazem round-trip ponto fixo e o snapshot tem hash determinístico.
+   Pendências da fase: alternância viva Quill↔Office na UI e a promoção de
+   formato quando recursos Office entram)*
 4. **DOCX e snapshot Office** — OPC, WordprocessingML, styles, numbering,
    seções, headers/footers, source map (`OfficeSourceAnchor`), partes
    opacas, writer patch-based. Gate: DOCX → Snapshot → DOCX sem alteração
