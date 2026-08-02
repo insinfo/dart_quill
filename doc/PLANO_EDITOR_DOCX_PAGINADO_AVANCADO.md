@@ -17,7 +17,7 @@ Porém, não é correto tratar isso como uma nova opção visual do Quill atual.
 
 1. **Manter o Quill simples como superfície/default compatível**, com Delta como formato canônico, mesmo entrypoint, CSS e comportamento Quill 2.0.3. Correções de paridade, lifecycle e profiles opcionais por instância são permitidas, mas o engine Office nunca entra nesse caminho.
 2. Criar um **engine avançado independente**, interno ao pacote, aproveitando seletivamente o port ProseMirror/Tiptap de `docx_rendering`.
-3. Tornar o formato persistente do modo avançado um **OfficeDeltaSnapshot versionado, insert-only, autocontido e formado por uma única lista de ops**: texto/linhas, regiões, metadados, partes OOXML e assets.
+3. **[REVISADO 2026-08-02]** Tornar o formato persistente do modo avançado um **OfficeDocumentSnapshot**: envelope Office versionado com árvores ProseMirror-like por raiz (body, headers, footers, notas, comentários) e recursos OOXML referenciados (styles, numbering, sections, assets por hash, partes opacas). O `OfficeDeltaSnapshot` (lista única de ops) fica **rebaixado a codec/envelope de compatibilidade** para sistemas que exigem `{"ops":[]}` — nunca é a representação canônica nem o hot path do editor. Racional: depois de excluir os ops estruturais do espaço de seleção, de compose/diff/transform e de dar a eles comprimento editorial zero, o que sobra não é um Delta — é um contêiner genérico de registros com a ergonomia errada para uma árvore.
 4. Usar o `contenteditable` como projeção de edição e entrada de texto, nunca como fonte canônica do documento.
 5. Durante a importação, converter o pacote DOCX em `OfficeDeltaSnapshot` sem descartar partes; ao exportar, reconstruir/editar as partes por nós, preservando XML e conteúdo não compreendido.
 6. Disponibilizar visualização e edição sobre a mesma sessão/layout, com `readOnly` como estado do editor, evitando dois paginadores incompatíveis.
@@ -3497,3 +3497,128 @@ A formulação arquitetural mais segura é:
 
 ProseMirror-like para editar, OfficeDocumentSnapshot para persistir, Delta para interoperar, OOXML para importar/exportar e PageGraph para paginar e gerar PDF. certo? acho que este é o melhor caminho
 Show less
+
+
+---
+
+## Arquitetura consolidada (2026-08-02)
+
+Decisão fechada com o mantenedor. A formulação: **ProseMirror-like para
+editar, OfficeDocumentSnapshot para persistir, Delta para interoperar, OOXML
+para importar/exportar e PageGraph para paginar e gerar PDF.**
+
+```
+DOCX / Delta Quill
+        ↓
+OfficeDocumentSession
+        ↓
+OfficeDocument tipado e imutável (árvore com schema)
+        ↓
+Transactions / Steps / Mapping
+        ↓
+StyleResolver
+        ↓
+TextShaper + LayoutComposer
+        ↓
+PageGraph
+        ├── Renderer HTML editável (DOM = projeção, nunca fonte de verdade)
+        └── PdfWriter Dart (a MESMA linha da página 18 do editor sai na
+            página 18 do PDF)
+```
+
+### Decisões binárias
+
+| Pergunta | Resposta |
+|---|---|
+| Portar ProseMirror para Dart? | Sim, seletivamente, com os testes upstream |
+| Portar Tiptap inteiro? | Não — reimplementar a camada de extensões em Dart idiomático |
+| Portar Tiptap Pages / Conversion (Pro)? | Não |
+| JSON ProseMirror puro como persistência? | Não — insuficiente para round-trip DOCX |
+| JSON híbrido ProseMirror + Delta duplicado? | **Não — duas fontes de verdade divergem** |
+| OfficeDocumentSnapshot (árvores + recursos OOXML)? | **Sim — canônico** |
+| OfficeDeltaSnapshot? | Só como codec/envelope de compatibilidade |
+| Delta como modelo interno de edição Office? | Não — Delta fica na fronteira (import/export/interop) |
+| PDF a partir do DOM (`window.print`)? | Não |
+| PDF a partir do mesmo PageGraph do editor? | Sim |
+| Dois paginadores (fast/fidelity)? | Não — UM paginador, dois níveis de qualidade (`LayoutQuality.draft`/`fidelity`) sobre o mesmo PageGraph/PositionMap |
+
+### O que o repositório JÁ tem que o plano reaproveita
+
+- **Núcleo ProseMirror em Dart** (`docx_rendering/lib/src/prosemirror`):
+  model/transform/state/test_builder/schema_list DOM-free, 15k linhas, 334
+  testes derivados do upstream — **vendorizado em
+  `lib/src/document_engine/` em 2026-08-02** (Fase 1 iniciada). `view/`
+  fica para a Fase 2 (depende de DOM real; reusar `platform/dom.dart` e as
+  lições de contenteditable do G11: identidade de wrapper, seleção nativa,
+  MutationObserver).
+- **PdfWriter Dart** do item 11 está em grande parte PRONTO neste repo:
+  writer + xref + Flate + TrueType parser + subsetting + CID/Identity-H +
+  /ToUnicode + imagens + links + SVG (P1–P17). Falta dirigi-lo pelo
+  PageGraph em vez do exportador linear, e o TextShaper.
+- **Pilha OPC/OOXML** (`lib/src/office/`): ZIP, XML, DOCX parse/write — a
+  base do importador preservador (Fase 4).
+- **Infra de Worker JS** validada nos benchmarks de abertura de DOCX
+  grande (worker→Delta+setContents; WASM medido e mais lento que dart2js
+  para este workload — decidir backend por benchmark, `ComputeBackend`).
+
+### Nomes públicos
+
+A API pública não expõe nomes ProseMirror/Tiptap: `OfficeNode`,
+`OfficeSchema`, `OfficeTransaction`, `OfficeStep`, `OfficeMapping`,
+`OfficeSelection`, `OfficePlugin`, `OfficeExtension`. Internamente
+(`lib/src/document_engine/`) os nomes do port são mantidos enquanto a
+fachada não estabiliza — desacopla a evolução interna da API JS original.
+
+### Persistência (PostgreSQL)
+
+`snapshot jsonb` com árvores/metadados/referências + tabelas separadas de
+`asset` (SHA-256, dedup, lazy) e `parte` (XML preservado/opaco) + revisões +
+opcionalmente `step` para autosave (steps são OfficeStep, não ops Delta).
+O hash canônico é calculado pelo codec Dart, NUNCA pelos bytes do jsonb
+(jsonb não preserva ordem de chaves nem whitespace).
+
+### Compatibilidade SALI
+
+Dois entrypoints (`dart_quill.dart`, `dart_quill_office.dart`) e dois tipos
+explícitos (`QuillDeltaDocument`, `OfficeDocumentSnapshot`). Um Delta do
+banco abre no Quill simples E pode ser promovido ao OfficeEditor; enquanto o
+documento couber no perfil Quill, `exportQuillDelta(lossless: true)` volta
+sem perda. Recursos Office (seção, header/footer, nota, field…) promovem o
+formato e bloqueiam retorno silenciosamente lossy. A coluna antiga
+(`sw_despacho.delta`) permanece; o snapshot Office entra ao lado (ou em
+tabela de revisões própria).
+
+### Roadmap por fases (gates)
+
+1. **Núcleo documental** — model/transform/state + schema + JSON versionado
+   + IDs estáveis. Gate: árvore + transações + undo SEM DOM.
+   *(iniciada: vendorização com 334 testes verdes)*
+2. **Editor flow** — view/contenteditable/seleção/IME/clipboard/histórico +
+   camada de extensões Dart. Gate: editor contínuo robusto.
+3. **Delta** — importer/exporter + compatibility report + custom op opaco +
+   alternância Quill↔Office + testes com todos os Deltas SALI. Gate: Delta
+   básico abre e volta sem perda.
+4. **DOCX e snapshot Office** — OPC, WordprocessingML, styles, numbering,
+   seções, headers/footers, source map (`OfficeSourceAnchor`), partes
+   opacas, writer patch-based. Gate: DOCX → Snapshot → DOCX sem alteração
+   semântica.
+5. **Layout determinístico e PDF** — StyleResolver, shaping latino, line
+   breaking, page composer, fragmentação, PageGraph, PdfWriter dirigido
+   pelo PageGraph. Gate: editor e PDF usam o MESMO PageGraph.
+6. **Recursos Word** — tabelas divididas, repeat header, cantSplit,
+   widow/orphan, keep-next, footnotes, fields, TOC, seções múltiplas.
+7. **200 páginas** — invalidação incremental por PageSignature, cache
+   tipográfico por (nodeId, estilo, largura, fontEpoch), virtualização
+   (viewport ±2-3 páginas), worker, lazy assets, cancelamento de jobs,
+   corpus de 150–250 páginas. Regras: nunca recalcular tudo por tecla;
+   nunca um editor por página; twips/half-points/EMU internamente, pixel só
+   na view.
+
+### TextShaper — escopo honesto
+
+Etapa 1 (PT-BR/latino): cmap, advances, kerning, ligaturas latinas,
+combining marks básicos, quebra de linha Unicode, subset, ToUnicode — sobre
+o parser TrueType já existente. Etapa 2: GSUB/GPOS completos, bidi, árabe,
+índico, CJK, fontes variáveis, hifenização, fallback. Sem a etapa 2, a
+exportação é ótima para documento administrativo em português e NÃO deve
+ser anunciada como paridade universal com o Word.

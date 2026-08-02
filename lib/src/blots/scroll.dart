@@ -393,10 +393,8 @@ class Scroll extends ScrollBlot {
 
   /// Parity scroll.ts:139-210 — the canonical delta→blots insertion path.
   void insertContents(int index, Delta delta) {
-    final dbgTot = Stopwatch()..start();
     final renderBlocks =
         deltaToRenderBlocks(delta.concat(Delta()..insert('\n')));
-    final dbgRender = dbgTot.elapsedMilliseconds;
     if (renderBlocks.isEmpty) return;
     final last = renderBlocks.removeLast();
 
