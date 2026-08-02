@@ -235,6 +235,13 @@ abstract class DomKeyboardEvent extends DomEvent {
   bool get ctrlKey;
   bool get metaKey;
   bool get shiftKey;
+
+  /// True enquanto uma composição IME está em curso.
+  ///
+  /// Um `keydown` de composição chega com a tecla física (e keyCode 229 em
+  /// vários browsers); tratá-lo como atalho dispararia comandos no meio de
+  /// uma palavra sendo composta.
+  bool get isComposing;
 }
 
 /// DOM data transfer abstraction.

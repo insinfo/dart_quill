@@ -13,6 +13,11 @@ class _TestKeyboardEvent implements DomKeyboardEvent {
 
   @override
   final String key;
+
+  // O teclado do Quill simples não distingue composição; o modo Office sim
+  // (é o que impede um atalho de agir no meio de uma palavra sendo composta).
+  @override
+  bool get isComposing => false;
   @override
   final bool shiftKey;
   @override

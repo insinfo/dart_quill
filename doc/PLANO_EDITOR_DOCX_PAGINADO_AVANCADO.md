@@ -3660,8 +3660,30 @@ tabela de revisões própria).
    ancorada, sem a qual um documento novo não aceitava digitação.
    LIMITAÇÃO honesta: `dispatch` recompõe o grafo INTEIRO a cada
    transação — correto e determinístico, mas O(documento); a invalidação
-   incremental por PageSignature é a Fase 7. Pendências da fase: IME,
-   clipboard, reconciliação DOM→modelo e a camada de extensões)*
+   incremental por PageSignature é a Fase 7. A CAMADA DE EXTENSÕES entrou em seguida
+   (`view/extension.dart`): Tiptap-INSPIRADA, não portada — o Tiptap é
+   ergonomia sobre o ProseMirror, e portá-lo traria compatibilidade
+   histórica de JS, adaptadores de React/Vue e abstrações sem sentido em
+   Dart. O que vale é o conceito: `OfficeExtension` declara comandos
+   nomeados, atalhos e plugins; `OfficeExtensionSet` resolve o conjunto
+   com a regra "extensão POSTERIOR ganha", para a aplicação trocar um
+   atalho embutido sem reconstruir a lista base. Embutidas:
+   `OfficeHistoryExtension` (undo/redo + o plugin de histórico),
+   `OfficeBaseKeymapExtension` (selectAll/selectParentNode/join/lift — o
+   que depende da ESTRUTURA e o beforeinput não sabe fazer) e
+   `OfficeMarksExtension` (negrito/itálico/sublinhado/tachado). `Mod` casa
+   com Ctrl OU Meta de propósito: farejar plataforma erra (iPad, teclado
+   externo, emulação) e o custo é um atalho a mais, nunca um errado.
+   Achado que valeu o exercício: os comandos agem em `state.selection` e
+   NADA puxava a seleção nativa para o modelo — mover o cursor não gera
+   transação, então o negrito cairia na posição que o modelo guardou da
+   última edição, em silêncio. `syncSelectionFromDom()` fecha isso antes
+   de todo comando (só a seleção muda, então não reprojeta). Também subiu
+   `isComposing` para `DomKeyboardEvent`: um keydown de composição carrega
+   a tecla física (keyCode 229 em vários browsers) e dispararia atalho no
+   meio de uma palavra. 24 testes VM + 2 em Chrome REAL (Ctrl+B sobre
+   seleção nativa, Ctrl+Z desfazendo com a projeção acompanhando).
+   Pendências da fase: IME, clipboard e reconciliação DOM→modelo)*
 3. **Delta** — importer/exporter + compatibility report + custom op opaco +
    alternância Quill↔Office + testes com todos os Deltas SALI. Gate: Delta
    básico abre e volta sem perda. *(GATE CUMPRIDO 2026-08-02:

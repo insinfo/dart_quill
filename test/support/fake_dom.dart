@@ -1165,6 +1165,9 @@ class FakeDomMouseEvent extends FakeDomEvent implements DomMouseEvent {
 }
 
 class FakeDomKeyboardEvent extends FakeDomEvent implements DomKeyboardEvent {
+  @override
+  final bool isComposing;
+
   FakeDomKeyboardEvent({
     required String type,
     DomNode? target,
@@ -1174,6 +1177,7 @@ class FakeDomKeyboardEvent extends FakeDomEvent implements DomKeyboardEvent {
     this.ctrlKey = false,
     this.metaKey = false,
     this.shiftKey = false,
+    this.isComposing = false,
   }) : super(type, target);
 
   @override

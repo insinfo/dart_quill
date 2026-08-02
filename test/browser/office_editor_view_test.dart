@@ -86,6 +86,27 @@ void main() {
       view.state.doc.textBetween(0, view.state.doc.content.size,
           blockSeparator: ' ');
 
+  /// Editor com as extensões padrão (histórico, keymap, marcas).
+  OfficeEditorView mountWithExtensions(PMNode doc) => view =
+      OfficeEditorView.withExtensions(
+          host: host,
+          doc: doc,
+          adapter: adapter,
+          extensions: officeDefaultExtensions(schema));
+
+  /// Dispara um keydown REAL na superfície focada.
+  void pressKey(String key, {bool ctrl = false, bool shift = false}) {
+    focusSurface().dispatchEvent(web.KeyboardEvent(
+        'keydown',
+        web.KeyboardEventInit(
+          key: key,
+          ctrlKey: ctrl,
+          shiftKey: shift,
+          bubbles: true,
+          cancelable: true,
+        )));
+  }
+
   test('digitar insere no modelo e a projeção acompanha', () {
     final view = mount(docOf([paragraph('alpha')]));
     caretAt(view, 1 + 5); // fim de "alpha"
@@ -165,6 +186,33 @@ void main() {
     expect(hostElement.textContent, contains('inicial acrescentado'));
     expect(view.pageGraph.pages.length, greaterThanOrEqualTo(pagesBefore),
         reason: 'o grafo foi recomposto a partir do novo estado');
+  });
+
+  test('Ctrl+B do teclado REAL aplica negrito na seleção nativa', () {
+    final view = mountWithExtensions(docOf([paragraph('texto')]));
+    const map = OfficeDomPositionMap();
+    final from = map.domPositionFor(host, 1)!;
+    final to = map.domPositionFor(host, 1 + 5)!;
+    focusSurface();
+    adapter.setSelectionByNodes(from.node, from.offset, to.node, to.offset);
+
+    pressKey('b', ctrl: true);
+
+    expect(view.state.doc.child(0).firstChild?.marks.map((m) => m.type.name),
+        contains('bold'),
+        reason: 'a seleção NATIVA precisa chegar ao comando');
+  });
+
+  test('Ctrl+Z do teclado REAL desfaz e a projeção acompanha', () {
+    final view = mountWithExtensions(docOf([paragraph('abc')]));
+    caretAt(view, 1 + 3);
+    sendInput('insertText', data: 'XYZ');
+    expect(hostElement.textContent, contains('abcXYZ'));
+
+    pressKey('z', ctrl: true);
+
+    expect(docText(view), 'abc');
+    expect(hostElement.textContent, isNot(contains('XYZ')));
   });
 
   test('dispose solta o listener: digitar depois não muda mais nada', () {

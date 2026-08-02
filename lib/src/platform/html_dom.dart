@@ -532,6 +532,10 @@ class HtmlDomMouseEvent extends HtmlDomEvent implements DomMouseEvent {
 }
 
 class HtmlDomKeyboardEvent extends HtmlDomEvent implements DomKeyboardEvent {
+  @override
+  bool get isComposing => nativeEvent.isA<web.KeyboardEvent>() &&
+      (nativeEvent as web.KeyboardEvent).isComposing;
+
   HtmlDomKeyboardEvent(super.nativeEvent);
 
   web.KeyboardEvent get _keyboardEvent => nativeEvent as web.KeyboardEvent;

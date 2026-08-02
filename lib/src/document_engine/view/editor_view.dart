@@ -29,6 +29,7 @@ import '../layout/layout_composer.dart';
 import '../layout/page_graph.dart';
 import '../model/index.dart';
 import '../state/index.dart';
+import 'extension.dart';
 
 /// Um `inputType` que a view reconhece e roteia pelo modelo.
 enum OfficeInputAction {
@@ -46,22 +47,55 @@ class OfficeEditorView {
     required DomAdapter adapter,
     LayoutComposer? composer,
     PageGraphDomRenderer? renderer,
+    List<OfficeExtension> extensions = const [],
     this.onStateChange,
   })  : _state = state,
         _adapter = adapter,
         _composer = composer ?? LayoutComposer(),
+        _extensions = OfficeExtensionSet(extensions),
         _renderer = renderer ??
             PageGraphDomRenderer(document: adapter.document, editable: true) {
     _beforeInput = _handleBeforeInput;
+    _keyDown = _handleKeyDown;
     host.addEventListener('beforeinput', _beforeInput);
+    host.addEventListener('keydown', _keyDown);
     _compose();
     _project();
+  }
+
+  /// Monta um editor a partir do DOCUMENTO, instalando os plugins que as
+  /// extensões pedem.
+  ///
+  /// É a forma correta quando há extensões: um plugin (o histórico, por
+  /// exemplo) precisa existir no `EditorState` desde a criação — instalar
+  /// depois deixaria o undo sem as transações já aplicadas.
+  factory OfficeEditorView.withExtensions({
+    required DomElement host,
+    required PMNode doc,
+    required DomAdapter adapter,
+    required List<OfficeExtension> extensions,
+    LayoutComposer? composer,
+    PageGraphDomRenderer? renderer,
+    void Function(EditorState state)? onStateChange,
+  }) {
+    final set = OfficeExtensionSet(extensions);
+    return OfficeEditorView(
+      host: host,
+      state: EditorState.create(
+          EditorStateConfig(doc: doc, plugins: set.plugins)),
+      adapter: adapter,
+      composer: composer,
+      renderer: renderer,
+      extensions: extensions,
+      onStateChange: onStateChange,
+    );
   }
 
   final DomElement host;
   final DomAdapter _adapter;
   final LayoutComposer _composer;
   final PageGraphDomRenderer _renderer;
+  final OfficeExtensionSet _extensions;
   final OfficeDomPositionMap _positions = const OfficeDomPositionMap();
 
   /// Notificação de mudança de estado (a aplicação persiste a partir daqui).
@@ -70,10 +104,47 @@ class OfficeEditorView {
   EditorState _state;
   late PageGraph _pageGraph;
   late DomEventListener _beforeInput;
+  late DomEventListener _keyDown;
   bool _disposed = false;
 
   EditorState get state => _state;
   PageGraph get pageGraph => _pageGraph;
+  OfficeExtensionSet get extensions => _extensions;
+
+  /// Roda um comando nomeado de extensão (o caminho da UI: botão de negrito,
+  /// item de menu, barra de ferramentas).
+  ///
+  /// Devolve false quando o comando não existe OU não se aplica ao estado
+  /// atual — a UI usa isso para desabilitar o botão em vez de fingir que a
+  /// ação funcionou.
+  bool runCommand(String name) {
+    if (_disposed) return false;
+    final command = _extensions.command(name);
+    if (command == null) return false;
+    syncSelectionFromDom();
+    return command(_state, dispatch);
+  }
+
+  /// Puxa a seleção NATIVA para o modelo.
+  ///
+  /// Sem isto um comando agiria na seleção que o modelo guardou da última
+  /// transação, não em onde o usuário está agora: o caminho do
+  /// `beforeinput` lê a seleção nativa explicitamente, mas um comando
+  /// (negrito, atalho, botão da barra) usa `state.selection`. Mover o
+  /// cursor não gera transação — então, sem esta sincronização, o negrito
+  /// cairia na posição errada em silêncio.
+  ///
+  /// Só a SELEÇÃO muda, nunca o documento; por isso não reprojeta.
+  bool syncSelectionFromDom() {
+    if (_disposed) return false;
+    final range = readNativeSelection();
+    if (range == null) return false;
+    final current = _state.selection;
+    if (current.from == range.from && current.to == range.to) return false;
+    _state = _state.apply(_state.tr
+      ..setSelection(TextSelection.create(_state.doc, range.from, range.to)));
+    return true;
+  }
 
   /// Aplica uma transação: novo estado → recompõe → reprojeta → restaura a
   /// seleção. É o ÚNICO caminho de mudança; a UI, os comandos e a entrada
@@ -110,6 +181,7 @@ class OfficeEditorView {
     if (_disposed) return;
     _disposed = true;
     host.removeEventListener('beforeinput', _beforeInput);
+    host.removeEventListener('keydown', _keyDown);
   }
 
   // -- laço -----------------------------------------------------------------
@@ -132,6 +204,28 @@ class OfficeEditorView {
   }
 
   // -- entrada --------------------------------------------------------------
+
+  /// Atalhos das extensões. Só cancela o evento quando um comando REALMENTE
+  /// tratou a tecla — cancelar o que não se tratou quebraria navegação,
+  /// atalhos do browser e acessibilidade.
+  void _handleKeyDown(DomEvent event) {
+    if (_disposed || event is! DomKeyboardEvent) return;
+    // Durante composição IME o keydown carrega a tecla física (keyCode 229
+    // em vários browsers): disparar atalho aqui agiria no meio de uma
+    // palavra sendo composta.
+    if (event.isComposing) return;
+    syncSelectionFromDom();
+    final handled = _extensions.handleKey(
+      key: event.key,
+      ctrl: event.ctrlKey,
+      meta: event.metaKey,
+      shift: event.shiftKey,
+      alt: event.altKey,
+      state: _state,
+      dispatch: dispatch,
+    );
+    if (handled) event.preventDefault();
+  }
 
   void _handleBeforeInput(DomEvent event) {
     if (_disposed || event is! DomInputEvent) return;

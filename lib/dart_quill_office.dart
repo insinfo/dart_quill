@@ -34,3 +34,4 @@ export 'src/document_engine/office/snapshot.dart';
 export 'src/document_engine/state/index.dart';
 export 'src/document_engine/transform/index.dart' hide lift, setBlockType;
 export 'src/document_engine/view/editor_view.dart';
+export 'src/document_engine/view/extension.dart';
