@@ -37,11 +37,24 @@ class TableClipboard extends Clipboard {
     if (_truthy(activeFormats['table-cell-block']) ||
         _truthy(activeFormats['table-th-block'])) {
       final result = Delta();
+      // W8: upstream devolve Delta() quando o colado contém uma TABELA
+      // (aninhamento não existe no dialeto) — perdendo o paste INTEIRO em
+      // silêncio. Aqui a tabela é ACHATADA: as âncoras estruturais somem e
+      // cada linha de célula vira uma linha de texto na célula de destino.
+      final hasNestedTable = delta.operations.any((op) =>
+          _truthy((op.attributes ?? const <String, dynamic>{})
+              ['table-temporary']));
       for (final op in delta.operations) {
-        final attributes = op.attributes ?? const <String, dynamic>{};
-        // External copied tables or table contents copied within an editor.
-        if (_truthy(attributes['table-temporary'])) {
-          return Delta();
+        var attributes = op.attributes ?? const <String, dynamic>{};
+        if (hasNestedTable) {
+          if (_truthy(attributes['table-temporary']) ||
+              _truthy(attributes['table-col'])) {
+            continue; // âncoras da tabela achatada: nem o '\n' fica
+          }
+          if (attributes.keys.any((key) => key.startsWith('table-'))) {
+            attributes = Map<String, dynamic>.of(attributes)
+              ..removeWhere((key, _) => key.startsWith('table-'));
+          }
         }
         // Process externally pasted lists or headers or text. The TS
         // condition (`!cellBlock || !thBlock`) is true for every op — no op

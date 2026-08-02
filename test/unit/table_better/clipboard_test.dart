@@ -93,7 +93,10 @@ void main() {
     );
   });
 
-  test('does not nest a copied table inside an active cell', () {
+  test('a copied table pasted inside a cell is FLATTENED, not dropped', () {
+    // Upstream devolve Delta() — o paste inteiro sumia em silêncio (W8).
+    // Achatamos: as âncoras estruturais somem e o texto das células vira
+    // linhas na célula de destino, com o contexto dela.
     final quill = createTestQuill();
     final clipboard = TableClipboard(quill, const ClipboardOptions());
     final delta = clipboard.getTableDelta(
@@ -104,6 +107,18 @@ void main() {
       },
     );
 
-    expect(delta.isEmpty, isTrue);
+    expect(delta.isEmpty, isFalse,
+        reason: 'o texto da tabela colada não pode ser perdido');
+    final text = delta.operations
+        .map((op) => op.data is String ? op.data as String : '')
+        .join();
+    expect(text, contains('nested'));
+    for (final op in delta.operations) {
+      final attributes = op.attributes ?? const <String, dynamic>{};
+      expect(attributes['table-temporary'], isNull,
+          reason: 'a âncora da tabela achatada não pode sobrar');
+      expect(attributes['table-cell-block'], anyOf(isNull, 'cell-1'),
+          reason: 'as linhas se re-alojam na célula de destino');
+    }
   });
 }

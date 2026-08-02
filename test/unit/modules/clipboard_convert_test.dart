@@ -30,6 +30,20 @@ void main() {
       return quill.clipboard;
     }
 
+    test('positive text-indent becomes a leading tab (parity W5)', () {
+      // clipboard.ts:603-607: o Word grava a primeira linha recuada como
+      // text-indent ("0.5in"); sem o ramo o recuo sumia no paste.
+      final delta = _clipboard()
+          .convert(html: '<p style="text-indent: 0.5in">recuado</p>');
+      expectDelta(delta, Delta()..insert('	recuado'));
+    });
+
+    test('negative text-indent adds nothing', () {
+      final delta = _clipboard()
+          .convert(html: '<p style="text-indent: -0.5in">solto</p>');
+      expectDelta(delta, Delta()..insert('solto'));
+    });
+
     test('text with adjacent spaces', () {
       final delta = _clipboard().convert(text: 'simple  text');
       expectDelta(delta, Delta()..insert('simple  text'));

@@ -947,6 +947,17 @@ Delta matchStyles(DomNode node, Delta delta, Scroll scroll) {
       } else if (prop == 'vertical-align' && value == 'sub') {
         formats['script'] = 'sub';
       }
+      else if (prop == 'text-indent') {
+        // Parity clipboard.ts:603-607: a positive text-indent (e.g. "0.5in",
+        // como o Word grava a primeira linha recuada) becomes a leading tab.
+        final number =
+            double.tryParse(RegExp(r'^-?[\d.]+').firstMatch(value)?.group(0) ??
+                    '') ??
+                0;
+        if (number > 0) {
+          delta = (Delta()..insert('\t')).concat(delta);
+        }
+      }
       // color/background/font/size/align/direction are intentionally absent:
       // parity clipboard.ts:579-608 leaves them to `matchAttributor`, which
       // resolves them through the registered attributors (and therefore

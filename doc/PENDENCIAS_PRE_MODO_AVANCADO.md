@@ -202,7 +202,12 @@ conversores.
 | P18 — imagem fim-a-fim no PDF | **coberto** (`pdf_image_test.dart`: data URL, URL+resources, falha auditada, dimensionamento, dedup de XObject) — e o teste achou um bug real: o separador de linha era prefixado no VALUE do embed, quebrando o decode de qualquer imagem que abrisse linha não-primeira |
 | P19 — os 4 deltas reais só assertavam "abre" | **coberto**: cada fixture agora pina faixa de páginas, palavras extraíveis, grades de tabela desenhadas e a lista fechada de warnings tolerados |
 | P20 — corpus DOCX+PDF sem teste de comparação | **coberto** (`pdf_corpus_test.dart` + `test/assets/pdf/etp_reference.pdf`, o PDF que o Word imprimiu do mesmo DOCX): páginas na faixa da referência, ≥98% do vocabulário do DOCX chega ao nosso PDF, tabelas desenhadas, zero perda não auditada |
-| H4–H7, W3–W10 | pendentes |
+| W3/W4/W6/W7 — normalizador estendido do Word | **corrigido** (`normalizers/word_paste.dart`, porte do `sali_word_paste.js`): numeração literal preservada (item isolado ou grupo que não começa em "1."), tipo de lista pelo texto do marcador, gate largo (Outlook Web/`class="Mso"` sem `xmlns:w`), negrito por classe do `<style>`, `margin-bottom` ≥ 4pt vira `<p><br></p>`; roda ANTES do `normalizeMsWord` |
+| W5 — `text-indent` → tab (paridade clipboard.ts:603) | **corrigido** em `matchStyles` |
+| W8 — tabela colada dentro de célula era descartada INTEIRA | **corrigido**: achatada — âncoras somem, cada linha de célula vira linha de texto na célula de destino (o teste de paridade antigo pinava a perda; repinado no novo comportamento) |
+| W9 — exceção num normalizador quebrava o paste | **corrigido**: try/catch por normalizador no pipeline |
+| W10 — zero fixtures de HTML real do Word | **coberto**: `test/assets/html/word_paste_sample.html` (estrutura real de clipboard do Word: `mso-list` + `Ignore`, `<style>` com classes) + 10 casos em `word_paste_normalizer_test.dart` |
+| H4–H7 | pendentes |
 
 Testes que travam o corrigido: `html_table_rows_test.dart`,
 `html_table_cells_test.dart`, `cell_text_hydration_test.dart`,
