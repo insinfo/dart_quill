@@ -22,6 +22,8 @@ class PageSetupTwips {
     this.marginRightTwips = 1134,
     this.marginBottomTwips = 1134,
     this.marginLeftTwips = 1134,
+    this.headerDistanceTwips = 709, // 1,25 cm da borda
+    this.footerDistanceTwips = 709,
   });
 
   final int widthTwips;
@@ -30,6 +32,11 @@ class PageSetupTwips {
   final int marginRightTwips;
   final int marginBottomTwips;
   final int marginLeftTwips;
+
+  /// Distância do cabeçalho/rodapé até a BORDA da página, não até a margem.
+  /// É como o Word mede (`w:headerReference` + `w:pgMar/@header`).
+  final int headerDistanceTwips;
+  final int footerDistanceTwips;
 
   int get contentWidthTwips => widthTwips - marginLeftTwips - marginRightTwips;
   int get contentHeightTwips =>
@@ -267,6 +274,8 @@ class PageLayout {
     required this.setup,
     required this.fragments,
     required this.signature,
+    this.header = const [],
+    this.footer = const [],
   });
 
   final int index;
@@ -274,12 +283,26 @@ class PageLayout {
   final List<PageFragment> fragments;
   final PageSignature signature;
 
+  /// Cabeçalho e rodapé desta página.
+  ///
+  /// São fragmentos INERTES: a mesma região aparece em todas as páginas, e
+  /// tratá-los como conteúdo editável criaria N edições concorrentes do
+  /// MESMO nó (§7.4 do plano). A edição de header/footer é uma região
+  /// autoritativa própria, não estas cópias.
+  ///
+  /// Ficam FORA do `positionMap`: uma posição do documento nunca aponta
+  /// para eles, então o caret não pode cair aqui por engano.
+  final List<BlockFragment> header;
+  final List<BlockFragment> footer;
+
   /// A mesma página com outro índice (reuso ao recompor incrementalmente).
   PageLayout withIndex(int newIndex) => PageLayout(
         index: newIndex,
         setup: setup,
         fragments: fragments,
         signature: signature,
+        header: header,
+        footer: footer,
       );
 
   /// A mesma página noutro índice e com as posições deslocadas — o reuso do
@@ -299,6 +322,8 @@ class PageLayout {
     return PageLayout(
         index: newIndex,
         setup: setup,
+        header: header,
+        footer: footer,
         fragments: docPosDelta == 0
             ? fragments
             : [for (final f in fragments) f.shifted(docPosDelta)],

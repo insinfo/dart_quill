@@ -3909,9 +3909,26 @@ tabela de revisões própria).
    grafo, e o erro só apareceria depois de assinado. Medido no corpus ETP:
    ele é A4 como o default, mas com margens de 2,5 cm em vez de 2 cm, então
    a ÁREA ÚTIL difere (14002 vs 14570 twips) e a contagem de páginas muda —
-   é o que o teste trava. Pendências da fase: styles/numbering semânticos,
-   MÚLTIPLAS seções (hoje a primeira governa o documento) e
-   headers/footers como regiões editáveis.)*
+   é o que o teste trava. CABEÇALHO E RODAPÉ entraram como REGIÕES: árvores próprias do snapshot
+   (`headers`/`footers` por variante), compostas nos boxes de margem e
+   desenhadas nas DUAS saídas. Três decisões que o §7.4 exige e que estão
+   materializadas: (a) os fragmentos são INERTES — `contenteditable=false`
+   e `aria-hidden` —, porque a mesma região em N páginas viraria N edições
+   concorrentes do MESMO nó, e um leitor de tela ouviria o timbre 200
+   vezes; (b) ficam FORA do `positionMap`, com `docPos: -1` declarando que
+   não correspondem a posição alguma do documento, senão o caret cairia
+   neles por sorteio; (c) a distância é medida da BORDA da página, como o
+   Word faz (`w:pgMar/@header`), não da margem do corpo. Campos `{PAGE}` e
+   `{NUMPAGES}` são resolvidos POR PÁGINA — e só nesse caso a região é
+   recomposta por página: sem campo, a MESMA lista é reusada em todas
+   (recompor conteúdo idêntico 200 vezes seria desperdício puro), e com
+   campo medir o placeholder e desenhar outro texto desalinharia. As
+   fontes das regiões entram no subset do PDF: uma fonte usada só no
+   timbre precisa estar embutida, senão o cabeçalho sai em branco. 10
+   testes VM + 1 em Chrome (região em todas as páginas, inerte, com a
+   numeração certa por página) + 2 sobre o corpus. Pendências da fase:
+   styles/numbering semânticos, MÚLTIPLAS seções (hoje a primeira governa
+   o documento) e a região AUTORITATIVA para editar o cabeçalho.)*
 5. **Layout determinístico e PDF** — StyleResolver, shaping latino, line
    breaking, page composer, fragmentação, PageGraph, PdfWriter dirigido
    pelo PageGraph. Gate: editor e PDF usam o MESMO PageGraph.

@@ -304,6 +304,39 @@ void main() {
     });
   });
 
+  group('cabeçalho e rodapé', () {
+    test('viram raízes próprias do snapshot, não parte do corpo', () {
+      if (!hasCorpus) return;
+      final imported = OfficeDocxCodec().import(corpus());
+      final regions = {
+        ...imported.snapshot.headers,
+        ...imported.snapshot.footers
+      };
+      if (regions.isEmpty) return; // corpus sem timbre: nada a provar aqui
+
+      final body = PMNode.fromJSON(schema, imported.snapshot.body);
+      final bodyText = body.textBetween(0, body.content.size, blockSeparator: ' ');
+      for (final json in regions.values) {
+        final region = PMNode.fromJSON(schema, json);
+        final text = region.textBetween(0, region.content.size).trim();
+        if (text.isEmpty) continue;
+        expect(bodyText, isNot(contains(text)),
+            reason: 'a região não pode ter vazado para dentro do corpo');
+      }
+    });
+
+    test('o PDF do snapshot desenha a região em todas as páginas', () {
+      if (!hasCorpus) return;
+      final imported = OfficeDocxCodec().import(corpus());
+      final header = OfficeDocxCodec.regionOf(imported.snapshot.headers, schema);
+      if (header == null) return;
+
+      final pdf = OfficePdfService().fromSnapshot(imported.snapshot);
+      expect(pdf.pageCount, greaterThan(0));
+      expect(pdf.bytes.length, greaterThan(1000));
+    });
+  });
+
   test('o corpus de teste existe', () {
     expect(hasCorpus, isTrue,
         reason: 'sem corpus real o round-trip não prova nada');

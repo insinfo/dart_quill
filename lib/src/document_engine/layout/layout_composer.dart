@@ -35,6 +35,8 @@ class LayoutComposer {
     this.baseFontFamily = 'Arial',
     this.baseFontSizePt = 12,
     LayoutFontSet? fonts,
+    this.header,
+    this.footer,
   }) : fonts = fonts ?? LayoutFontSet(const []);
 
   final PageSetupTwips setup;
@@ -45,6 +47,18 @@ class LayoutComposer {
   /// Faces embutidas: quando presentes, a medição usa a hmtx REAL da face —
   /// a mesma que o renderer embute — e as duas saídas quebram igual.
   final LayoutFontSet fonts;
+
+  /// Regiões de cabeçalho/rodapé — árvores próprias, não parte do corpo.
+  ///
+  /// Elas repetem em todas as páginas, então NÃO entram no `positionMap`:
+  /// uma posição do documento apontaria para N lugares, e o caret cairia
+  /// num deles por sorteio.
+  final PMNode? header;
+  final PMNode? footer;
+
+  /// Campos substituídos por página. `PAGE` é o número da página atual e
+  /// `NUMPAGES` o total — os dois únicos que praticamente todo ofício usa.
+  static final RegExp _pageField = RegExp(r'\{(PAGE|NUMPAGES)\}');
 
   /// Recuo por nível de lista, em twips (21,6 pt como o exportador linear).
   static const int _listIndentTwips = 432;
@@ -372,13 +386,113 @@ class LayoutComposer {
     }
 
     return PageGraph(
-      pages: pages,
+      pages: _withHeadersAndFooters(pages, diagnostics),
       positionMap: PositionMap(mapEntries),
       diagnostics: diagnostics,
       quality: quality,
       docSize: doc.content.size,
       blockCount: doc.childCount,
     );
+  }
+
+  /// Compõe cabeçalho e rodapé de cada página.
+  ///
+  /// Quando a região NÃO tem campo de página, ela é composta UMA vez e a
+  /// mesma lista é reusada em todas as páginas — é conteúdo idêntico, e
+  /// recompor 200 vezes seria desperdício puro. Com campo, o texto muda por
+  /// página e a composição precisa acontecer por página; regiões de
+  /// cabeçalho são pequenas, então o custo é aceitável e a alternativa
+  /// (medir com o placeholder e desenhar outro texto) desalinharia.
+  List<PageLayout> _withHeadersAndFooters(
+      List<PageLayout> pages, LayoutDiagnostics diagnostics) {
+    if (header == null && footer == null) return pages;
+    if (pages.isEmpty) return pages;
+
+    final total = pages.length;
+    final headerHasField = _hasPageField(header);
+    final footerHasField = _hasPageField(footer);
+
+    final sharedHeader = headerHasField
+        ? null
+        : _composeRegion(header, diagnostics, 0, total);
+    final sharedFooter = footerHasField
+        ? null
+        : _composeRegion(footer, diagnostics, 0, total);
+
+    return [
+      for (final page in pages)
+        PageLayout(
+          index: page.index,
+          setup: page.setup,
+          fragments: page.fragments,
+          signature: page.signature,
+          header: sharedHeader ??
+              _composeRegion(header, diagnostics, page.index, total),
+          footer: sharedFooter ??
+              _composeRegion(footer, diagnostics, page.index, total),
+        )
+    ];
+  }
+
+  static bool _hasPageField(PMNode? region) {
+    if (region == null) return false;
+    return _pageField.hasMatch(region.textBetween(0, region.content.size));
+  }
+
+  /// Uma região empilhada a partir do topo do seu box, com os campos de
+  /// página já resolvidos para ESTA página.
+  List<BlockFragment> _composeRegion(
+    PMNode? region,
+    LayoutDiagnostics diagnostics,
+    int pageIndex,
+    int totalPages,
+  ) {
+    if (region == null) return const [];
+    final resolved = _resolveFields(region, pageIndex + 1, totalPages);
+    final fragments = <BlockFragment>[];
+    var y = 0;
+    for (var i = 0; i < resolved.childCount; i++) {
+      final block = resolved.child(i);
+      final style = _blockStyleOf(block, 0);
+      final lines = _breakLines(block, setup.contentWidthTwips - style.indentTwips,
+          style, diagnostics);
+      final height = lines.fold<int>(0, (sum, line) => sum + line.heightTwips);
+      fragments.add(BlockFragment(
+        nodeId: officeNodeId(block),
+        // Fora do espaço de posições do corpo: -1 declara que este fragmento
+        // não corresponde a nenhuma posição do documento.
+        docPos: -1,
+        kind: block.type.name,
+        lines: lines,
+        yTwips: y,
+        heightTwips: height,
+        indentTwips: style.indentTwips,
+        align: style.align,
+      ));
+      y += height;
+    }
+    return fragments;
+  }
+
+  /// Substitui `{PAGE}`/`{NUMPAGES}` pelos valores desta página.
+  PMNode _resolveFields(PMNode region, int pageNumber, int totalPages) {
+    if (!_hasPageField(region)) return region;
+    String replace(String text) => text.replaceAllMapped(
+        _pageField,
+        (match) =>
+            match.group(1) == 'PAGE' ? '$pageNumber' : '$totalPages');
+
+    PMNode mapNode(PMNode node) {
+      if (node.isText) {
+        return node.type.schema.text(replace(node.text ?? ''), node.marks);
+      }
+      final children = <PMNode>[
+        for (var i = 0; i < node.childCount; i++) mapNode(node.child(i))
+      ];
+      return node.copy(Fragment.from(children));
+    }
+
+    return mapNode(region);
   }
 
   static bool _continuesFrom(PageFragment fragment) => switch (fragment) {

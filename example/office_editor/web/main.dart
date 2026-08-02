@@ -71,12 +71,29 @@ PMNode _sampleDocument(int blocks) {
 
 // -- montagem -----------------------------------------------------------------
 
+/// Timbre e numeração de página — regiões PRÓPRIAS, não parte do corpo.
+///
+/// Elas repetem em todas as páginas e são inertes na projeção: a mesma
+/// região aparecendo N vezes não pode virar N edições concorrentes do mesmo
+/// nó.
+PMNode _region(String text) => schema.node(
+    'doc',
+    null,
+    Fragment.from([
+      schema.node('paragraph', {'align': 'center'},
+          Fragment.from([schema.text(text)]))
+    ]));
+
 void _mount(PMNode doc, {required bool virtualize}) {
   view = OfficeEditorView.withExtensions(
     host: host,
     doc: doc,
     adapter: adapter,
     extensions: officeDefaultExtensions(schema),
+    composer: LayoutComposer(
+      header: _region('PREFEITURA MUNICIPAL — Secretaria de Administração'),
+      footer: _region('Página {PAGE} de {NUMPAGES}'),
+    ),
     virtualization: virtualize ? const OfficeVirtualization(radius: 3) : null,
     scrollContainer: adapter.document.querySelector('#scroller'),
     onStateChange: (_) => _refreshStats(),

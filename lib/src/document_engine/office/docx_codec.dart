@@ -178,6 +178,8 @@ class OfficeDocxCodec {
       snapshot: OfficeDocumentSnapshot(
         documentId: documentId,
         body: doc.toJSON() as Map<String, dynamic>,
+        headers: _regionsOf(docx.headersByType, report),
+        footers: _regionsOf(docx.footersByType, report),
         sourceMap: {
           'mainPart': docx.mainPartName,
           'nodes': [for (final a in anchors) a.toJson()],
@@ -296,6 +298,38 @@ class OfficeDocxCodec {
       footersByType: docx.footersByType,
       fidelityNotes: docx.fidelityNotes,
     ));
+  }
+
+  /// Cabeçalhos/rodapés viram RAÍZES próprias do snapshot, indexadas pela
+  /// variante (`default`/`first`/`even`) — não são parte do corpo.
+  ///
+  /// Manter separado importa: eles repetem em todas as páginas, então
+  /// misturá-los ao corpo faria uma posição do documento apontar para N
+  /// lugares.
+  Map<String, Map<String, dynamic>> _regionsOf(
+      Map<String, WpHeaderFooter> byType, OfficeCompatibilityReport report) {
+    final result = <String, Map<String, dynamic>>{};
+    byType.forEach((variant, region) {
+      final blocks = <PMNode>[];
+      var ordinal = 0;
+      for (final block in region.blocks) {
+        final node = _blockToNode(block, report, '$variant-$ordinal');
+        ordinal++;
+        if (node != null) blocks.add(node);
+      }
+      if (blocks.isEmpty) return;
+      result[variant] =
+          schema.node('doc', null, Fragment.from(blocks)).toJSON()
+              as Map<String, dynamic>;
+    });
+    return result;
+  }
+
+  /// A região `default` do snapshot como árvore, pronta para o composer.
+  static PMNode? regionOf(
+      Map<String, Map<String, dynamic>> regions, Schema schema) {
+    final json = regions['default'] ?? regions.values.firstOrNull;
+    return json == null ? null : PMNode.fromJSON(schema, json);
   }
 
   /// Geometria da seção, em TWIPS — as unidades canônicas do plano, sem

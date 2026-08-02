@@ -57,6 +57,10 @@ class PageGraphPdfRenderer {
     }
 
     for (final page in graph.pages) {
+      // As regiões contam para o subset: uma fonte usada só no timbre
+      // precisa estar embutida, senão o cabeçalho sai em branco.
+      page.header.forEach(collect);
+      page.footer.forEach(collect);
       for (final fragment in page.fragments) {
         switch (fragment) {
           case BlockFragment():
@@ -114,6 +118,32 @@ class PageGraphPdfRenderer {
             _renderTable(writer, builder, fragment,
                 contentX: contentX,
                 top: contentTop + _twipsToPt(fragment.yTwips));
+        }
+      }
+
+      // Cabeçalho e rodapé são medidos a partir da BORDA da página, como no
+      // Word — não a partir da margem do corpo.
+      final regionHeight = page.footer
+          .fold<int>(0, (sum, fragment) => sum + fragment.heightTwips);
+      for (final (fragments, top) in [
+        (page.header, _twipsToPt(setup.headerDistanceTwips)),
+        (
+          page.footer,
+          _twipsToPt(setup.heightTwips -
+              setup.footerDistanceTwips -
+              regionHeight)
+        ),
+      ]) {
+        for (final fragment in fragments) {
+          _renderBlock(
+            writer,
+            builder,
+            fragment,
+            x: contentX + _twipsToPt(fragment.indentTwips),
+            top: top + _twipsToPt(fragment.yTwips),
+            available: contentWidth - _twipsToPt(fragment.indentTwips),
+            withMarker: false,
+          );
         }
       }
 

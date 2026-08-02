@@ -112,6 +112,46 @@ void main() {
         reason: 'o arquivo não pode divergir do que o usuário viu');
   });
 
+  test('cabeçalho e rodapé aparecem em TODAS as páginas, e inertes', () {
+    final header = schema.node(
+        'doc',
+        null,
+        Fragment.from([
+          schema.node('paragraph', null,
+              Fragment.from([schema.text('PREFEITURA MUNICIPAL')]))
+        ]));
+    final footer = schema.node(
+        'doc',
+        null,
+        Fragment.from([
+          schema.node('paragraph', null,
+              Fragment.from([schema.text('Página {PAGE} de {NUMPAGES}')]))
+        ]));
+
+    final graph = LayoutComposer(header: header, footer: footer)
+        .compose(sample(300));
+    PageGraphDomRenderer(document: adapter.document, editable: true)
+        .render(graph, host);
+
+    final headers = web.document.querySelectorAll('.dq-office-header');
+    expect(headers.length, graph.pages.length);
+    expect(web.document.querySelectorAll('.dq-office-footer').length,
+        graph.pages.length);
+
+    // Inertes: a mesma região em N páginas não pode virar N edições
+    // concorrentes do mesmo nó.
+    final first = headers.item(0)! as web.HTMLElement;
+    expect(first.isContentEditable, isFalse);
+    expect(first.getAttribute('aria-hidden'), 'true');
+
+    // E a numeração é a da página, não a mesma repetida.
+    final footers = web.document.querySelectorAll('.dq-office-footer');
+    expect((footers.item(0)! as web.HTMLElement).textContent,
+        contains('Página 1 de ${graph.pages.length}'));
+    expect((footers.item(1)! as web.HTMLElement).textContent,
+        contains('Página 2 de ${graph.pages.length}'));
+  });
+
   test('importar Delta pelo diálogo abre no modo avançado', () {
     final raw = r'{"ops":[{"insert":"Despacho"},'
         r'{"insert":"\n","attributes":{"header":1}},'

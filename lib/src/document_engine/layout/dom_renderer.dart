@@ -151,6 +151,17 @@ class PageGraphDomRenderer {
         'height:${_n(_px(setup.contentHeightTwips))}px;');
     pageElement.append(content);
 
+    // Cabeçalho e rodapé ficam FORA do content box, nos boxes de margem, e
+    // são explicitamente NÃO editáveis: a mesma região aparece em todas as
+    // páginas, e deixar editar aqui criaria N edições concorrentes do mesmo
+    // nó. A edição acontece numa região autoritativa própria.
+    if (page.header.isNotEmpty) {
+      pageElement.append(_renderRegion(page.header, page.setup, isHeader: true));
+    }
+    if (page.footer.isNotEmpty) {
+      pageElement.append(_renderRegion(page.footer, page.setup, isHeader: false));
+    }
+
     for (final fragment in page.fragments) {
       switch (fragment) {
         case BlockFragment():
@@ -161,6 +172,38 @@ class PageGraphDomRenderer {
       }
     }
     return pageElement;
+  }
+
+  DomElement _renderRegion(
+    List<BlockFragment> fragments,
+    PageSetupTwips setup, {
+    required bool isHeader,
+  }) {
+    final element = document.createElement('div');
+    element.classes.add('$officeCssPrefix-${isHeader ? 'header' : 'footer'}');
+    element.setAttribute('contenteditable', 'false');
+    // Projeção repetida: fora da árvore de acessibilidade, como o marcador
+    // de lista. Um leitor de tela não deve ouvir o timbre 200 vezes.
+    element.setAttribute('aria-hidden', 'true');
+
+    final height =
+        fragments.fold<int>(0, (sum, f) => sum + f.heightTwips);
+    final top = isHeader
+        ? setup.headerDistanceTwips
+        : setup.heightTwips - setup.footerDistanceTwips - height;
+    element.setAttribute(
+        'style',
+        'position:absolute;'
+        'left:${_n(_px(setup.marginLeftTwips))}px;'
+        'top:${_n(_px(top))}px;'
+        'width:${_n(_px(setup.contentWidthTwips))}px;'
+        'height:${_n(_px(height))}px;');
+
+    for (final fragment in fragments) {
+      element.append(_renderBlock(fragment,
+          availableTwips: setup.contentWidthTwips, withMarker: false));
+    }
+    return element;
   }
 
   DomElement _renderTable(TableFragment fragment) {

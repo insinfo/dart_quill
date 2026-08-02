@@ -97,6 +97,9 @@ class OfficePdfService {
       baseFontFamily: baseFontFamily,
       baseFontSizePt: baseFontSizePt,
       fonts: fonts,
+      // O timbre e a numeração de página fazem parte do documento assinado.
+      header: OfficeDocxCodec.regionOf(snapshot.headers, schema),
+      footer: OfficeDocxCodec.regionOf(snapshot.footers, schema),
     ).compose(PMNode.fromJSON(schema, snapshot.body));
     return fromPageGraph(graph);
   }
