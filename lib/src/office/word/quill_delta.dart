@@ -322,13 +322,36 @@ class QuillDeltaConverter {
         if (separator.isNotEmpty) {
           main.add(IElement(value: separator, rowFlex: rowFlex));
         }
+        // 'checked'/'unchecked' são a checklist do Quill: viajam como lista
+        // não ordenada com o estado no extension, e o exportador desenha a
+        // caixa em vez do bullet.
+        final bool isChecklist = list == 'checked' || list == 'unchecked';
+        final Map<String, dynamic> extension = <String, dynamic>{
+          ...?indentExtension(),
+          if (isChecklist) 'checklist': list,
+        };
         main.add(IElement(
           value: '',
           type: ElementType.list,
           listType: list == 'ordered' ? ListType.ordered : ListType.unordered,
           rowFlex: rowFlex,
           valueList: List<IElement>.from(line),
-        )..extension = indentExtension());
+        )..extension = extension.isEmpty ? null : extension);
+      } else if ((lineAttributes['blockquote'] == true ||
+              lineAttributes.containsKey('code-block')) &&
+          line.isNotEmpty) {
+        if (separator.isNotEmpty) {
+          main.add(IElement(value: separator, rowFlex: rowFlex));
+        }
+        final bool isCode = lineAttributes.containsKey('code-block');
+        main.add(IElement(
+          value: '',
+          type: ElementType.block,
+          rowFlex: rowFlex,
+          valueList: List<IElement>.from(line),
+        )..extension = <String, dynamic>{
+            if (isCode) 'codeBlock': true else 'blockquote': true,
+          });
       } else {
         if (line.isEmpty) {
           if (separator.isNotEmpty) {

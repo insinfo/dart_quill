@@ -193,7 +193,10 @@ conversores.
 | P6 — page setup do Delta (`page-orientation`/`page-margin`) | **corrigido** (`readPdfPageSetup` + `pageSetupOptions`, faixa 0,5–5 cm) |
 | P7 — sanitizer/perfil assinado | **corrigido** (`sanitizeOpsForPdf` + `PdfSanitizePolicy.sali`) |
 | W1/W2 — fonte e tamanho descartados pela whitelist | **corrigido** (configurável) |
-| H4–H7, W3–W10, P10–P15, P18–P20 | pendentes |
+| P10 — blockquote/code-block/checklist no PDF | **corrigido** (barra cinza, Courier + fundo, caixa vetorial — ☑/☐ não existem no WinAnsi) |
+| P11 — `line-height` no PDF | **sem payload real**: nenhum plugin do SALI grava `line-height` (grep em todos os fixtures e plugins; só existe `height` de célula) — nada a implementar |
+| P15 — justificado da última linha | **satisfeito por construção**: este exportador nunca estica a última linha; a heurística de ≤48 chars do SALI só existia porque o `pdf_plus` esticava |
+| H4–H7, W3–W10, P12–P14, P18–P20 | pendentes |
 
 Testes que travam o corrigido: `html_table_rows_test.dart`,
 `html_table_cells_test.dart`, `cell_text_hydration_test.dart`,

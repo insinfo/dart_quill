@@ -344,11 +344,23 @@ class _ParagraphBlock extends _Block {
     this.indent = 0,
     this.spacingBefore = 0,
     this.spacingAfter = 0,
+    this.checklist,
+    this.quote = false,
+    this.code = false,
   });
 
   final List<_Run> runs;
   final _Align align;
   final int? headerLevel;
+
+  /// 'checked' | 'unchecked': o marcador vira uma caixa vetorial.
+  final String? checklist;
+
+  /// Citação: barra vertical cinza + recuo.
+  final bool quote;
+
+  /// Bloco de código: Courier sobre fundo cinza-claro.
+  final bool code;
 
   /// List marker text ("1. " / bullet), drawn left of the first line.
   final String? marker;
@@ -580,14 +592,37 @@ class _PdfLayoutEngine {
           flushIfNotEmpty();
           final bool ordered = element.listType == ListType.ordered;
           listOrdinal = ordered ? listOrdinal + 1 : 0;
+          final String? checklist = _extensionValue(element, 'checklist');
           blocks.add(_ParagraphBlock(
             runs: _collectInline(element.valueList ?? const <IElement>[],
                 defaultSize: options.baseFontSize),
             align: _alignOf(element.rowFlex),
-            marker: ordered ? '$listOrdinal. ' : '• ',
+            // A checklist não tem marcador de TEXTO (☑/☐ não existem no
+            // WinAnsi e virariam ?): a caixa é desenhada em vetor no slot.
+            marker: checklist != null
+                ? null
+                : (ordered ? '$listOrdinal. ' : '• '),
+            checklist: checklist,
             // Um recuo por nível: uma lista aninhada saía toda alinhada no
             // mesmo ponto, e os níveis viravam indistinguíveis.
             indent: _listIndent * (1 + _indentLevelOf(element)),
+          ));
+          skipNextNewline = true;
+          continue;
+        case ElementType.block:
+          flushIfNotEmpty();
+          final bool isCode = _extensionValue(element, 'codeBlock') != null;
+          final bool isQuote = _extensionValue(element, 'blockquote') != null;
+          blocks.add(_ParagraphBlock(
+            runs: _collectInline(element.valueList ?? const <IElement>[],
+                defaultSize: options.baseFontSize,
+                defaultFamily: isCode ? 'Courier New' : null),
+            align: _alignOf(element.rowFlex),
+            indent: 14,
+            quote: isQuote,
+            code: isCode,
+            spacingBefore: 4,
+            spacingAfter: 4,
           ));
           skipNextNewline = true;
           continue;
@@ -678,6 +713,7 @@ class _PdfLayoutEngine {
     List<IElement> children, {
     required double defaultSize,
     bool defaultBold = false,
+    String? defaultFamily,
     String? link,
   }) {
     final List<_Run> runs = <_Run>[];
@@ -686,6 +722,7 @@ class _PdfLayoutEngine {
         runs.addAll(_collectInline(child.valueList ?? const <IElement>[],
             defaultSize: defaultSize,
             defaultBold: defaultBold,
+            defaultFamily: defaultFamily,
             link: child.url));
         continue;
       }
@@ -701,7 +738,7 @@ class _PdfLayoutEngine {
       final String text = child.value.replaceAll('\n', ' ');
       if (text.isEmpty) continue;
       runs.add(_textRun(child, text, defaultSize,
-          defaultBold: defaultBold, link: link));
+          defaultBold: defaultBold, defaultFamily: defaultFamily, link: link));
     }
     return runs;
   }
@@ -711,6 +748,7 @@ class _PdfLayoutEngine {
     String text,
     double defaultSize, {
     bool defaultBold = false,
+    String? defaultFamily,
     String? link,
   }) {
     double size = element.size != null ? element.size! * _pxToPt : defaultSize;
@@ -725,7 +763,7 @@ class _PdfLayoutEngine {
     final bool linked = link != null && link.isNotEmpty;
     return _Run(
       text: text,
-      family: element.font ?? options.fontFamily,
+      family: element.font ?? defaultFamily ?? options.fontFamily,
       size: size,
       bold: element.bold ?? defaultBold,
       italic: element.italic ?? false,
@@ -1045,6 +1083,38 @@ class _PdfLayoutEngine {
     for (int i = 0; i < lines.length; i++) {
       final _Line line = lines[i];
       _ensureSpace(line.height);
+      // Fundo e barra são desenhados POR LINHA, não por bloco: linhas
+      // contíguas empilham sem fresta e cada pedaço sobrevive à quebra de
+      // página do _ensureSpace logo acima.
+      if (paragraph.code) {
+        _sink.builder.fillRect(_contentX + paragraph.indent - 4,
+            _cursorY - (i == 0 ? 2 : 0),
+            available + 8,
+            line.height + (i == 0 ? 2 : 0) + (i == lines.length - 1 ? 2 : 0),
+            '#F0F0F0');
+      }
+      if (paragraph.quote) {
+        _sink.builder.fillRect(
+            _contentX + paragraph.indent - 10, _cursorY, 3, line.height,
+            '#CCCCCC');
+      }
+      if (i == 0 && paragraph.checklist != null) {
+        // ☑/☐ não existem no WinAnsi; a caixa é vetorial no slot do
+        // marcador, alinhada pela base do texto.
+        final double side = line.ascent * 0.72;
+        final double boxX = _contentX + paragraph.indent - side - 6;
+        final double boxY = _cursorY + line.ascent - side;
+        _sink.builder
+            .strokeRect(boxX, boxY, side, side, color: '#444444', widthPx: 0.9);
+        if (paragraph.checklist == 'checked') {
+          _sink.builder.strokeLine(boxX + side * 0.22, boxY + side * 0.55,
+              boxX + side * 0.42, boxY + side * 0.78,
+              color: '#444444', widthPx: 1.1);
+          _sink.builder.strokeLine(boxX + side * 0.42, boxY + side * 0.78,
+              boxX + side * 0.82, boxY + side * 0.24,
+              color: '#444444', widthPx: 1.1);
+        }
+      }
       if (i == 0 && paragraph.marker != null) {
         final _Run markerRun = paragraph.runs.isNotEmpty
             ? paragraph.runs.first
@@ -1213,6 +1283,17 @@ class _PdfLayoutEngine {
 
   /// Recuo de um nível de lista, em pontos.
   static const double _listIndent = 21.6;
+
+  /// Valor string de uma chave do `extension` da linha, ou null.
+  static String? _extensionValue(IElement element, String key) {
+    final dynamic extension = element.extension;
+    if (extension is Map) {
+      final dynamic value = extension[key];
+      if (value is String) return value;
+      if (value == true) return 'true';
+    }
+    return null;
+  }
 
   /// Nível de indentação que o conversor anexou à linha (`indent` do Delta).
   static int _indentLevelOf(IElement element) {
