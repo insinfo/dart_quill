@@ -519,6 +519,44 @@ class LayoutComposer {
   // -- Estilo de bloco -------------------------------------------------------
 
   _BlockStyle _blockStyleOf(PMNode block, int listOrdinal) {
+    final resolved = _resolvedStyleOf(block, listOrdinal);
+    if (resolved != null) return resolved;
+    return _heuristicStyleOf(block, listOrdinal);
+  }
+
+  /// A apresentação que veio RESOLVIDA da importação (`attrs['style']`).
+  ///
+  /// Quando existe, ela manda: é a cascata real do documento
+  /// (docDefaults → basedOn → estilo → formatação direta), não um palpite.
+  /// A heurística por nível de heading continua como fallback para
+  /// documentos que nunca passaram por um importador — Delta do Quill, por
+  /// exemplo, onde `header: 1` é tudo que se sabe.
+  _BlockStyle? _resolvedStyleOf(PMNode block, int listOrdinal) {
+    final raw = block.attrs['style'];
+    if (raw is! Map) return null;
+    final sizePt = raw['sizePt'];
+    if (sizePt is! num || sizePt <= 0) return null;
+
+    final heuristic = _heuristicStyleOf(block, listOrdinal);
+    return _BlockStyle(
+      align: switch (raw['align'] ?? block.attrs['align']) {
+        'center' => LayoutAlign.center,
+        'right' => LayoutAlign.right,
+        'justify' => LayoutAlign.justify,
+        'left' => LayoutAlign.left,
+        _ => heuristic.align,
+      },
+      baseSizePt: sizePt.toDouble(),
+      bold: raw['bold'] is bool ? raw['bold'] as bool : heuristic.bold,
+      indentTwips: raw['indentTwips'] is num
+          ? (raw['indentTwips'] as num).toInt()
+          : heuristic.indentTwips,
+      marker: heuristic.marker,
+      family: raw['family'] is String ? raw['family'] as String : heuristic.family,
+    );
+  }
+
+  _BlockStyle _heuristicStyleOf(PMNode block, int listOrdinal) {
     final align = switch (block.attrs['align']) {
       'center' => LayoutAlign.center,
       'right' => LayoutAlign.right,

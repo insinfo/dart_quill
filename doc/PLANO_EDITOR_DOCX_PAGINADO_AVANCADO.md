@@ -3926,9 +3926,26 @@ tabela de revisões própria).
    fontes das regiões entram no subset do PDF: uma fonte usada só no
    timbre precisa estar embutida, senão o cabeçalho sai em branco. 10
    testes VM + 1 em Chrome (região em todas as páginas, inerte, com a
-   numeração certa por página) + 2 sobre o corpus. Pendências da fase:
-   styles/numbering semânticos, MÚLTIPLAS seções (hoje a primeira governa
-   o documento) e a região AUTORITATIVA para editar o cabeçalho.)*
+   numeração certa por página) + 2 sobre o corpus. A CASCATA DE ESTILOS entrou em seguida: a importação resolve
+   `docDefaults → cadeia basedOn → estilo → formatação direta` (a ordem é
+   normativa na ECMA-376) e grava a apresentação RESOLVIDA no atributo
+   `style` do bloco, que o composer honra. Antes disso o tamanho vinha de
+   uma escala fixa por nível de heading: um documento cujo "Título 1" tem
+   14 pt sairia com 24 — na tela E no PDF, porque os dois consomem o mesmo
+   grafo. `style` é deliberadamente diferente de `extra`: `extra` preserva
+   o que não sabemos ler, `style` é consumido pelo LAYOUT, e resolver uma
+   vez na importação evita reinterpretar a cascata a cada recomposição. A
+   cadeia `basedOn` é percorrida da RAIZ para a folha (na ordem inversa o
+   estilo base sobrescreveria o derivado) e tem limite de profundidade,
+   porque `basedOn` cíclico existe em documento real e travaria a
+   importação. A heurística por nível continua como FALLBACK, e isso não é
+   dívida: um Delta do Quill nunca passou por importador de DOCX e só sabe
+   `header: 1`. O achatamento é só de APRESENTAÇÃO — a definição original
+   segue intacta nas partes preservadas, então salvar não substitui o
+   estilo pelo resolvido. 8 testes. Pendências da fase: numbering
+   (numeração multinível vinda de `numbering.xml`), MÚLTIPLAS seções (hoje
+   a primeira governa o documento) e a região AUTORITATIVA para editar o
+   cabeçalho.)*
 5. **Layout determinístico e PDF** — StyleResolver, shaping latino, line
    breaking, page composer, fragmentação, PageGraph, PdfWriter dirigido
    pelo PageGraph. Gate: editor e PDF usam o MESMO PageGraph.

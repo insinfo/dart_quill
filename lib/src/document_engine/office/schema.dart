@@ -20,6 +20,16 @@ import 'ids.dart';
 AttributeSpec _id() => AttributeSpec(defaultValue: null, hasDefault: true);
 AttributeSpec _opt() => AttributeSpec(defaultValue: null, hasDefault: true);
 
+/// `style` carrega a apresentação JÁ RESOLVIDA do bloco —
+/// `{'sizePt': 14.0, 'bold': true, 'family': 'Arial', 'spaceBeforeTwips': …}`.
+///
+/// É diferente de `extra`, que preserva atributos que não sabemos ler:
+/// `style` é consumido pelo LAYOUT. Ele existe porque a cascata do Word
+/// (docDefaults → basedOn → estilo → formatação direta) precisa ser
+/// resolvida uma vez, na importação, e não reinterpretada a cada
+/// recomposição. Sem ele o composer usaria uma escala fixa por nível de
+/// heading, e um documento cujo "Título 1" tem 14 pt sairia com 24.
+
 /// Constrói o schema do perfil Quill.
 Schema officeQuillSchema() {
   return Schema(SchemaSpec(
@@ -34,6 +44,7 @@ Schema officeQuillSchema() {
           'indent': _opt(),
           'direction': _opt(),
           // Atributos de linha não mapeados (mapa), preservados verbatim.
+          'style': _opt(),
           'extra': _opt(),
         },
       ),
@@ -45,6 +56,7 @@ Schema officeQuillSchema() {
           officeIdAttribute: _id(),
           'level': AttributeSpec(defaultValue: 1),
           'align': _opt(),
+          'style': _opt(),
           'extra': _opt(),
         },
       ),
@@ -63,6 +75,7 @@ Schema officeQuillSchema() {
         attrs: {
           officeIdAttribute: _id(),
           'language': _opt(),
+          'style': _opt(),
           'extra': _opt(),
         },
       ),
@@ -77,6 +90,7 @@ Schema officeQuillSchema() {
           'kind': AttributeSpec(defaultValue: 'bullet'),
           'indent': _opt(),
           'align': _opt(),
+          'style': _opt(),
           'extra': _opt(),
         },
       ),
@@ -118,6 +132,7 @@ Schema officeQuillSchema() {
           'src': AttributeSpec(),
           'width': _opt(),
           'height': _opt(),
+          'style': _opt(),
           'extra': _opt(),
         },
       ),

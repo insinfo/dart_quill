@@ -29,6 +29,7 @@ import 'dart:typed_data';
 
 import '../../office/document/docx/model.dart';
 import '../../office/document/docx/reader.dart';
+import '../../office/document/docx/styles.dart';
 import '../../office/document/docx/writer.dart';
 import '../../office/document/zip/zip_archive.dart';
 import '../layout/page_graph.dart';
@@ -106,9 +107,13 @@ class OfficeDocxCodec {
 
   final Schema schema;
 
+  /// Folha de estilos do documento sendo importado, para a cascata.
+  WpStyleSheet? _styles;
+
   /// Importa o pacote inteiro, preservando o que não sabemos ler.
   OfficeDocxImport import(Uint8List bytes, {String documentId = 'docx'}) {
     final docx = DocxReader.read(bytes);
+    _styles = docx.styles;
     final report = OfficeCompatibilityReport();
     final anchors = <OfficeSourceAnchor>[];
 
@@ -432,6 +437,80 @@ class OfficeDocxCodec {
     }
   }
 
+  /// Resolve a apresentação do parágrafo pela cascata do Word.
+  ///
+  /// A ordem é normativa (ECMA-376): docDefaults, depois a cadeia
+  /// `basedOn` do estilo — da RAIZ para a folha, senão o estilo base
+  /// sobrescreveria o derivado —, depois a formatação DIRETA, que sempre
+  /// ganha. Achatar isso num palpite por nome de estilo faria um "Título 1"
+  /// de 14 pt sair com 24.
+  ///
+  /// O resultado é só APRESENTAÇÃO: a definição original continua intacta
+  /// nas partes preservadas, então salvar não substitui o estilo pelo
+  /// achatado.
+  Map<String, dynamic>? _resolvePresentation(WpParagraph paragraph) {
+    final styles = _styles;
+    if (styles == null) return null;
+
+    var size = styles.docDefaultsRun?.sizeHalfPoints;
+    var bold = styles.docDefaultsRun?.bold;
+    var family = styles.docDefaultsRun?.fontAscii;
+    String? align = styles.docDefaultsParagraph?.jc;
+    int? indent = styles.docDefaultsParagraph?.indent?.leftTwips;
+
+    for (final style in _styleChain(paragraph.properties?.styleId, styles)) {
+      size = style.runProperties?.sizeHalfPoints ?? size;
+      bold = style.runProperties?.bold ?? bold;
+      family = style.runProperties?.fontAscii ?? family;
+      align = style.paragraphProperties?.jc ?? align;
+      indent = style.paragraphProperties?.indent?.leftTwips ?? indent;
+    }
+
+    // Formatação direta do parágrafo e do primeiro run: ganha de tudo.
+    final direct = paragraph.properties;
+    align = direct?.jc ?? align;
+    indent = direct?.indent?.leftTwips ?? indent;
+    final firstRun = paragraph.inlines.whereType<WpRun>().firstOrNull;
+    size = firstRun?.properties?.sizeHalfPoints ?? size;
+    bold = firstRun?.properties?.bold ?? bold;
+    family = firstRun?.properties?.fontAscii ?? family;
+
+    if (size == null) return null;
+    return {
+      'sizePt': size / 2.0, // half-points são a unidade canônica do OOXML
+      if (bold != null) 'bold': bold,
+      if (family != null) 'family': family,
+      if (align != null) 'align': _alignOf(align),
+      if (indent != null) 'indentTwips': indent,
+    };
+  }
+
+  /// A cadeia `basedOn`, da RAIZ para a folha.
+  ///
+  /// Percorrer na ordem errada faria o estilo base sobrescrever o derivado.
+  /// O limite de profundidade não é zelo: `basedOn` cíclico existe em
+  /// documentos reais e travaria a importação.
+  static List<WpStyle> _styleChain(String? styleId, WpStyleSheet styles) {
+    final chain = <WpStyle>[];
+    final seen = <String>{};
+    var current = styleId;
+    while (current != null && seen.add(current) && chain.length < 16) {
+      final style = styles.byId[current];
+      if (style == null) break;
+      chain.add(style);
+      current = style.basedOn;
+    }
+    return chain.reversed.toList();
+  }
+
+  static String? _alignOf(String value) => switch (value) {
+        'center' => 'center',
+        'right' || 'end' => 'right',
+        'both' || 'justify' => 'justify',
+        'left' || 'start' => 'left',
+        _ => null,
+      };
+
   PMNode _paragraphToNode(WpParagraph paragraph, String nodeId) {
     final inline = <PMNode>[];
     for (final child in paragraph.inlines) {
@@ -442,11 +521,16 @@ class OfficeDocxCodec {
     }
     final style = paragraph.properties?.styleId;
     final level = _headingLevelOf(style);
+    final presentation = _resolvePresentation(paragraph);
     if (level != null) {
-      return schema.node('heading', {officeIdAttribute: nodeId, 'level': level},
+      return schema.node(
+          'heading',
+          {officeIdAttribute: nodeId, 'level': level, 'style': presentation},
           Fragment.from(inline));
     }
-    return schema.node('paragraph', {officeIdAttribute: nodeId},
+    return schema.node(
+        'paragraph',
+        {officeIdAttribute: nodeId, 'style': presentation},
         Fragment.from(inline));
   }
 
