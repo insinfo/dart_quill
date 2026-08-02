@@ -26,11 +26,10 @@
 /// Known limitations:
 /// - text is emitted with WinAnsi (cp1252) encoding; codepoints outside it
 ///   are approximated or replaced by '?';
-/// - bold width is estimated from the regular metrics (x1.05);
-/// - table cells ignore `rowspan` (cells are laid out sequentially) and
-///   nested tables inside cells are skipped;
-/// - list indentation levels (`indent` attribute) are not represented by
-///   the element converter and therefore render at a single level.
+/// - bold width is estimated from the regular metrics (x1.05) unless an
+///   embedded face provides real metrics;
+/// - nested tables render inside their cell without pagination (the outer
+///   cell grows to fit them).
 library;
 
 import 'dart:convert';
@@ -208,6 +207,20 @@ PdfExportResult deltaToPdfWithReport(
   return PdfExportResult(bytes, List<String>.unmodifiable(engine.warnings));
 }
 
+/// Renderiza direto do modelo office ([IElement]), sem passar por um Delta.
+///
+/// É o caminho para documentos que o Delta não expressa — uma tabela
+/// ANINHADA numa célula, por exemplo, só existe no modelo (importação de
+/// DOCX); o dialeto do quill-table-better é plano.
+PdfExportResult elementsToPdfWithReport(
+  List<IElement> elements, {
+  PdfExportOptions options = const PdfExportOptions(),
+}) {
+  final _PdfLayoutEngine engine = _PdfLayoutEngine(options);
+  final Uint8List bytes = engine.render(elements);
+  return PdfExportResult(bytes, List<String>.unmodifiable(engine.warnings));
+}
+
 // ---------------------------------------------------------------------------
 // Internal layout model.
 // ---------------------------------------------------------------------------
@@ -293,6 +306,14 @@ class _TableCellBox {
   final double width;
   final List<_Block> blocks;
   final double contentHeight;
+}
+
+/// Caixas e alturas de linha de uma tabela, prontas para desenhar.
+class _TableGrid {
+  _TableGrid(this.boxes, this.rowHeights);
+
+  final List<_TableCellBox> boxes;
+  final List<double> rowHeights;
 }
 
 /// Trecho de página ocupado por uma tabela: mapeia o espaço-y da tabela
@@ -1183,83 +1204,12 @@ class _PdfLayoutEngine {
   void _renderTable(IElement table) {
     final List<ITr> rows = table.trList ?? const <ITr>[];
     if (rows.isEmpty) return;
-    final List<double> columnWidths = _columnWidths(table);
+    final List<double> columnWidths = _columnWidths(table, _contentWidth);
     if (columnWidths.isEmpty) return;
 
-    // x de cada coluna, acumulado uma vez.
-    final List<double> columnX = <double>[];
-    var acc = _contentX;
-    for (final double w in columnWidths) {
-      columnX.add(acc);
-      acc += w;
-    }
-
-    // --- grade de ocupação -------------------------------------------------
-    // Uma célula com rowspan ocupa a MESMA coluna nas linhas seguintes, e as
-    // células dessas linhas têm de pular por cima dela. Sem isso as colunas
-    // escorregam para a esquerda a cada linha e a célula mesclada é desenhada
-    // com a altura de uma linha só — era assim que a tabela de TCO saía
-    // achatada no PDF.
-    final List<_TableCellBox> boxes = <_TableCellBox>[];
-    final List<int> occupied = List<int>.filled(columnWidths.length, 0);
-    for (int r = 0; r < rows.length; r++) {
-      int column = 0;
-      for (final ITd td in rows[r].tdList) {
-        while (column < occupied.length && occupied[column] > 0) {
-          column++;
-        }
-        if (column >= columnWidths.length) break;
-        final int colspan = td.colspan < 1 ? 1 : td.colspan;
-        final int rowspan = td.rowspan < 1 ? 1 : td.rowspan;
-        double width = 0;
-        for (int c = column; c < column + colspan && c < columnWidths.length; c++) {
-          width += columnWidths[c];
-          if (rowspan > 1) occupied[c] = rowspan;
-        }
-        if (width <= 0) width = 36;
-        final List<_Block> blocks = _buildBlocks(td.value);
-        boxes.add(_TableCellBox(
-          td: td,
-          row: r,
-          rowspan: rowspan,
-          x: columnX[column],
-          width: width,
-          blocks: blocks,
-          contentHeight:
-              _measureBlocks(blocks, width - 2 * _cellPadding) + 2 * _cellPadding,
-        ));
-        column += colspan;
-      }
-      for (int c = 0; c < occupied.length; c++) {
-        if (occupied[c] > 0) occupied[c]--;
-      }
-    }
-
-    // --- alturas das linhas ------------------------------------------------
-    final List<double> rowHeights = <double>[];
-    for (final ITr tr in rows) {
-      final double declared = tr.height * _pxToPt;
-      rowHeights.add(declared < 16 ? 16 : declared);
-    }
-    for (final _TableCellBox box in boxes) {
-      if (box.rowspan == 1 && box.contentHeight > rowHeights[box.row]) {
-        rowHeights[box.row] = box.contentHeight;
-      }
-    }
-    // Uma célula mesclada só força crescimento se as linhas que ela cobre não
-    // couberem: a sobra vai para a última delas, como faz o Word.
-    for (final _TableCellBox box in boxes) {
-      if (box.rowspan == 1) continue;
-      final int last =
-          (box.row + box.rowspan - 1).clamp(0, rowHeights.length - 1);
-      double span = 0;
-      for (int r = box.row; r <= last; r++) {
-        span += rowHeights[r];
-      }
-      if (box.contentHeight > span) {
-        rowHeights[last] += box.contentHeight - span;
-      }
-    }
+    final _TableGrid grid = _tableGrid(table, columnWidths, _contentX);
+    final List<_TableCellBox> boxes = grid.boxes;
+    final List<double> rowHeights = grid.rowHeights;
 
     // --- desenho -----------------------------------------------------------
     // A tabela vive num espaço próprio de y (0 = topo da tabela) mapeado em
@@ -1422,9 +1372,130 @@ class _PdfLayoutEngine {
     return 0;
   }
 
+  /// Grade de ocupação de uma tabela: caixas de célula posicionadas e as
+  /// alturas finais das linhas. Compartilhada entre a tabela de topo e a
+  /// tabela ANINHADA numa célula.
+  ///
+  /// Uma célula com rowspan ocupa a MESMA coluna nas linhas seguintes, e as
+  /// células dessas linhas têm de pular por cima dela. Sem isso as colunas
+  /// escorregam para a esquerda a cada linha e a célula mesclada é desenhada
+  /// com a altura de uma linha só — era assim que a tabela de TCO saía
+  /// achatada no PDF.
+  _TableGrid _tableGrid(
+      IElement table, List<double> columnWidths, double originX) {
+    final List<ITr> rows = table.trList ?? const <ITr>[];
+    final List<double> columnX = <double>[];
+    var acc = originX;
+    for (final double w in columnWidths) {
+      columnX.add(acc);
+      acc += w;
+    }
+
+    final List<_TableCellBox> boxes = <_TableCellBox>[];
+    final List<int> occupied = List<int>.filled(columnWidths.length, 0);
+    for (int r = 0; r < rows.length; r++) {
+      int column = 0;
+      for (final ITd td in rows[r].tdList) {
+        while (column < occupied.length && occupied[column] > 0) {
+          column++;
+        }
+        if (column >= columnWidths.length) break;
+        final int colspan = td.colspan < 1 ? 1 : td.colspan;
+        final int rowspan = td.rowspan < 1 ? 1 : td.rowspan;
+        double width = 0;
+        for (int c = column;
+            c < column + colspan && c < columnWidths.length;
+            c++) {
+          width += columnWidths[c];
+          if (rowspan > 1) occupied[c] = rowspan;
+        }
+        if (width <= 0) width = 36;
+        final List<_Block> blocks = _buildBlocks(td.value);
+        boxes.add(_TableCellBox(
+          td: td,
+          row: r,
+          rowspan: rowspan,
+          x: columnX[column],
+          width: width,
+          blocks: blocks,
+          contentHeight: _measureBlocks(blocks, width - 2 * _cellPadding) +
+              2 * _cellPadding,
+        ));
+        column += colspan;
+      }
+      for (int c = 0; c < occupied.length; c++) {
+        if (occupied[c] > 0) occupied[c]--;
+      }
+    }
+
+    final List<double> rowHeights = <double>[];
+    for (final ITr tr in rows) {
+      final double declared = tr.height * _pxToPt;
+      rowHeights.add(declared < 16 ? 16 : declared);
+    }
+    for (final _TableCellBox box in boxes) {
+      if (box.rowspan == 1 && box.contentHeight > rowHeights[box.row]) {
+        rowHeights[box.row] = box.contentHeight;
+      }
+    }
+    // Uma célula mesclada só força crescimento se as linhas que ela cobre não
+    // couberem: a sobra vai para a última delas, como faz o Word.
+    for (final _TableCellBox box in boxes) {
+      if (box.rowspan == 1) continue;
+      final int last =
+          (box.row + box.rowspan - 1).clamp(0, rowHeights.length - 1);
+      double span = 0;
+      for (int r = box.row; r <= last; r++) {
+        span += rowHeights[r];
+      }
+      if (box.contentHeight > span) {
+        rowHeights[last] += box.contentHeight - span;
+      }
+    }
+    return _TableGrid(boxes, rowHeights);
+  }
+
+  /// Altura total de uma tabela aninhada num espaço de [width] pt.
+  double _measureNestedTable(IElement table, double width) {
+    final List<double> widths = _columnWidths(table, width);
+    if (widths.isEmpty) return 0;
+    final _TableGrid grid = _tableGrid(table, widths, 0);
+    return grid.rowHeights.fold(0, (double sum, double h) => sum + h);
+  }
+
+  /// Desenha uma tabela aninhada dentro da caixa de uma célula, sem
+  /// paginação (P13): dentro de uma célula a tabela é atômica — a célula
+  /// externa já cresceu para caber nela via [_measureNestedTable].
+  void _drawNestedTableAt(
+      _PageSink sink, IElement table, double x, double top, double width) {
+    final List<double> widths = _columnWidths(table, width);
+    if (widths.isEmpty) return;
+    final _TableGrid grid = _tableGrid(table, widths, x);
+    final List<double> rowY =
+        List<double>.filled(grid.rowHeights.length + 1, 0);
+    for (int r = 0; r < grid.rowHeights.length; r++) {
+      rowY[r + 1] = rowY[r] + grid.rowHeights[r];
+    }
+    final String borderColor = table.borderColor ?? '#000000';
+    final double borderWidth = table.borderWidth ?? 0.75;
+    for (final _TableCellBox box in grid.boxes) {
+      final int last = (box.row + box.rowspan).clamp(0, grid.rowHeights.length);
+      final double boxTop = top + rowY[box.row];
+      final double height = rowY[last] - rowY[box.row];
+      if (box.td.backgroundColor != null) {
+        sink.builder
+            .fillRect(box.x, boxTop, box.width, height, box.td.backgroundColor!);
+      }
+      sink.builder.strokeRect(box.x, boxTop, box.width, height,
+          color: borderColor, widthPx: borderWidth);
+      _drawBlocksAt(sink, box.blocks, box.x + _cellPadding,
+          boxTop + _cellPadding, box.width - 2 * _cellPadding);
+    }
+  }
+
   /// Column widths in points, scaled down proportionally when the table is
   /// wider than the content box.
-  List<double> _columnWidths(IElement table) {
+  List<double> _columnWidths(IElement table, double maxWidth) {
     final List<IColgroup> colgroup = table.colgroup ?? const <IColgroup>[];
     List<double> widths =
         colgroup.map((IColgroup col) => col.width * _pxToPt).toList();
@@ -1438,7 +1509,7 @@ class _PdfLayoutEngine {
         if (cols > columns) columns = cols;
       }
       if (columns == 0) return const <double>[];
-      widths = List<double>.filled(columns, _contentWidth / columns);
+      widths = List<double>.filled(columns, maxWidth / columns);
     }
     // Largura percentual vinda da âncora (`width:100.0%` do Word): o
     // conversor não conhece a página, então o percentual resolve aqui,
@@ -1450,13 +1521,13 @@ class _PdfLayoutEngine {
         rawPercent is num ? rawPercent.toDouble() : null;
     double total = widths.fold(0, (double sum, double w) => sum + w);
     if (percent != null && percent > 0 && total > 0) {
-      final double target = _contentWidth * (percent.clamp(1, 100) / 100);
+      final double target = maxWidth * (percent.clamp(1, 100) / 100);
       final double factor = target / total;
       widths = widths.map((double w) => w * factor).toList();
       total = target;
     }
-    if (total > _contentWidth && total > 0) {
-      final double factor = _contentWidth / total;
+    if (total > maxWidth && total > 0) {
+      final double factor = maxWidth / total;
       widths = widths.map((double w) => w * factor).toList();
     }
     return widths;
@@ -1466,9 +1537,13 @@ class _PdfLayoutEngine {
   double _measureBlocks(List<_Block> blocks, double width) {
     double height = 0;
     for (final _Block block in blocks) {
+      if (block is _TableBlock) {
+        height += _measureNestedTable(block.element, width) + 4;
+        continue;
+      }
       if (block is! _ParagraphBlock) {
         warnings.add('conteúdo não suportado dentro de célula de tabela '
-            '(tabela aninhada ou desenho) foi pulado');
+            '(desenho) foi pulado');
         continue;
       }
       final List<_Line> lines = _breakLines(block.runs, width - block.indent);
@@ -1494,6 +1569,11 @@ class _PdfLayoutEngine {
   ) {
     double y = top;
     for (final _Block block in blocks) {
+      if (block is _TableBlock) {
+        _drawNestedTableAt(sink, block.element, x, y, width);
+        y += _measureNestedTable(block.element, width) + 4;
+        continue;
+      }
       if (block is! _ParagraphBlock) continue;
       final double available = width - block.indent;
       final List<_Line> lines = _breakLines(block.runs, available);

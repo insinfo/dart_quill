@@ -198,7 +198,8 @@ conversores.
 | P15 — justificado da última linha | **satisfeito por construção**: este exportador nunca estica a última linha; a heurística de ≤48 chars do SALI só existia porque o `pdf_plus` esticava |
 | P12 — cascata de larguras de tabela | **corrigido**: `table-col` > largura das células > padrão, com reescala pela âncora `table-temporary` (px/pt no conversor; `%` resolve no exportador sobre a área útil) — tabela colada do Word não tem NENHUM `table-col` |
 | P14 — tabela e linha maiores que a página | **corrigido** (e mais grave do que o auditado: as páginas eram serializadas na quebra, então uma tabela multi-página desenhava TUDO na última página, sobreposto, com as anteriores em branco; agora a tabela mapeia em bandas por página e cada célula desenha segmento a segmento; uma linha mais alta que a página flui, com a moldura redesenhada em cada segmento; limitação: a partição do conteúdo é por BLOCO — um parágrafo único mais alto que a página ainda corta, com aviso) |
-| H4–H7, W3–W10, P13, P18–P20 | pendentes |
+| P13 — tabela aninhada no PDF | **corrigido**: desenha dentro da célula (a externa cresce para caber), sem paginação interna — atômica na célula; o Delta plano do quill-table-better não expressa aninhamento, então o caminho entra pelo modelo office via `elementsToPdfWithReport` (nova API pública, importação de DOCX) |
+| H4–H7, W3–W10, P18–P20 | pendentes |
 
 Testes que travam o corrigido: `html_table_rows_test.dart`,
 `html_table_cells_test.dart`, `cell_text_hydration_test.dart`,

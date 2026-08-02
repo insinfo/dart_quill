@@ -30,6 +30,7 @@ export 'src/converters/pdf/pdf_exporter.dart'
     show
         deltaToPdf,
         deltaToPdfWithReport,
+        elementsToPdfWithReport,
         PdfExportOptions,
         PdfExportResult,
         PdfFontFace;
