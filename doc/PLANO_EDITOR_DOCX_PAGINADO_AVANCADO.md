@@ -3639,9 +3639,29 @@ tabela de revisões própria).
    usará (`getNativeSelectionRange`/`setSelectionByNodes`/
    `caretRangeFromPoint`): escrever posição do modelo vira caret nativo,
    ler o caret nativo devolve a posição do modelo, e o clique (hit-test
-   por coordenada) resolve para a posição certa. Pendências da fase:
-   beforeinput/IME/clipboard, reconciliação DOM→modelo e a camada de
-   extensões)*
+   por coordenada) resolve para a posição certa. O LAÇO DE EDIÇÃO fechou em seguida
+   (`view/editor_view.dart`, `OfficeEditorView`): beforeinput → posição
+   (PositionMap) → OfficeTransaction → novo estado → PageGraph recomposto →
+   projeção → seleção restaurada. Decisão estrutural: **o browser nunca
+   muta a projeção** — todo `beforeinput` é cancelado e a mudança entra
+   pelo modelo, inclusive nos `inputType` que ainda não sabemos tratar
+   (deixar o browser editar um DOM cuja verdade mora em outro lugar
+   corrompe o mapeamento em silêncio; cancelar e não fazer nada é perda
+   VISÍVEL, não corrompe). Suportados: insertText, insertParagraph
+   (split), deleteContentBackward/Forward e as variantes de palavra/linha.
+   IME é IGNORADO explicitamente enquanto não houver reconciliação —
+   fingir suporte corromperia CJK/acentos mortos. 16 testes VM + 8 em
+   Chrome REAL (InputEvent de verdade na superfície focada, com
+   `defaultPrevented` conferido). Dois achados registrados: (a)
+   `execCommand` NÃO emite `beforeinput` neste Chrome headless — devolve
+   `true` e não dispara nada, então um teste montado sobre ele mediria o
+   vazio; (b) bloco VAZIO não tinha alvo de caret na projeção (o composer
+   emite fragment sem linhas) — o renderer passou a emitir uma linha vazia
+   ancorada, sem a qual um documento novo não aceitava digitação.
+   LIMITAÇÃO honesta: `dispatch` recompõe o grafo INTEIRO a cada
+   transação — correto e determinístico, mas O(documento); a invalidação
+   incremental por PageSignature é a Fase 7. Pendências da fase: IME,
+   clipboard, reconciliação DOM→modelo e a camada de extensões)*
 3. **Delta** — importer/exporter + compatibility report + custom op opaco +
    alternância Quill↔Office + testes com todos os Deltas SALI. Gate: Delta
    básico abre e volta sem perda. *(GATE CUMPRIDO 2026-08-02:

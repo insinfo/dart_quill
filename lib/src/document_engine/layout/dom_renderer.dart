@@ -210,6 +210,26 @@ class PageGraphDomRenderer {
       element.append(marker);
     }
 
+    // Bloco VAZIO ainda precisa de uma linha na projeção: é onde o caret
+    // pousa num parágrafo em branco — o estado inicial de um documento novo
+    // e o resultado de todo Enter. Sem este alvo, o mapa de posições não
+    // tem âncora e o editor não consegue nem começar a digitar.
+    if (fragment.lines.isEmpty) {
+      final empty = document.createElement('div');
+      empty.classes.add('$officeCssPrefix-line');
+      empty.classes.add('$officeCssPrefix-line-empty');
+      empty.setAttribute('data-char-start', '0');
+      empty.setAttribute('data-char-end', '0');
+      empty.setAttribute(
+          'style',
+          'position:absolute;left:0;right:0;top:0;'
+          'height:${_n(_px(fragment.heightTwips))}px;'
+          'line-height:${_n(_px(fragment.heightTwips))}px;'
+          'white-space:pre;');
+      element.append(empty);
+      return element;
+    }
+
     var y = 0;
     for (final line in fragment.lines) {
       final lineElement = document.createElement('div');

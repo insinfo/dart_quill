@@ -348,6 +348,10 @@ class HtmlDomInputEvent extends HtmlDomEvent implements DomInputEvent {
   HtmlDomInputEvent(super.nativeEvent);
 
   @override
+  bool get isComposing => nativeEvent.isA<web.InputEvent>() &&
+      (nativeEvent as web.InputEvent).isComposing;
+
+  @override
   String? get inputType {
     if (!nativeEvent.isA<web.InputEvent>()) {
       return null;

@@ -192,6 +192,15 @@ abstract class DomInputEvent extends DomEvent {
   String? get data;
   DomDataTransfer? get dataTransfer;
   List<DomNativeRange> getTargetRanges();
+
+  /// True enquanto uma composição IME está em curso.
+  ///
+  /// Na interface (e não só no evento concreto do browser) porque qualquer
+  /// pipeline de entrada precisa distinguir composição de digitação: um
+  /// `beforeinput` de composição não é cancelável de forma confiável, então
+  /// tratá-lo como digitação normal corrompe o documento em CJK, acentos
+  /// mortos e autocorreção de mobile.
+  bool get isComposing;
 }
 
 /// DOM clipboard event abstraction.

@@ -1196,6 +1196,7 @@ class FakeDomInputEvent extends FakeDomEvent implements DomInputEvent {
     DomNode? target,
     this.inputType,
     this.data,
+    this.isComposing = false,
     DomDataTransfer? dataTransfer,
     List<DomNativeRange> targetRanges = const [],
   })  : _dataTransfer = dataTransfer,
@@ -1204,6 +1205,9 @@ class FakeDomInputEvent extends FakeDomEvent implements DomInputEvent {
 
   @override
   final String? inputType;
+
+  @override
+  final bool isComposing;
 
   @override
   final String? data;
