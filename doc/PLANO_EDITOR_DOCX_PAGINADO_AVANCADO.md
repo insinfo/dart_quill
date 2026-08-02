@@ -2543,9 +2543,16 @@ DE PÁGINA manual (Ctrl+Enter do Word: split no cursor + atributo
 nó, então o PDF pagina igual e o undo desfaz split e marca numa transação
 só) e INSERIR TABELA 3×3 (células nascem com parágrafo vazio — o alvo de
 caret que a projeção de bloco vazio garante). Grupo Parágrafo ganhou
-listas com marcadores/numeração com o toggle do Word. Pendências
-declaradas: drag de recuos na régua, galeria de tamanhos de tabela e a
-aba Arquivo.
+listas com marcadores/numeração com o toggle do Word. A ABA ARQUIVO fechou em
+seguida: Exportar PDF (as mesmas páginas da tela, sem segunda composição)
+e Exportar DOCX (`OfficeDocxCodec.exportDocument` monta o pacote do zero
+via `DocxReader.createEmpty` para documento nascido no editor; a variante
+preservadora `exportEdited` continua sendo o caminho de DOCX importado).
+O download passa pela ABSTRAÇÃO de DOM (`DomAdapter.downloadBytes`): no
+browser vira Blob + `<a download>`, no fake registra a intenção — o
+componente segue sem `package:web` e testável em VM, e o teste prova que
+o DOCX baixado REABRE pelo importador com o mesmo texto. Pendências
+declaradas: drag de recuos na régua e galeria de tamanhos de tabela.
 
 ---|---|
 | digitar/apagar/Enter sobre páginas | o laço `beforeinput → modelo → PageGraph → projeção` |

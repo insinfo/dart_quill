@@ -304,6 +304,15 @@ abstract class DomAdapter {
   /// how a drop lands where the pointer is instead of at the old selection.
   /// Adapters without layout return null.
   DomNativeRange? caretRangeFromPoint(num x, num y);
+
+  /// Entrega [bytes] ao usuário como um download de arquivo.
+  ///
+  /// Na plataforma web isso cria um Blob e dispara o clique num `<a
+  /// download>`; num adaptador sem browser (testes, VM) a implementação
+  /// apenas registra a intenção. Está na abstração porque a aba Arquivo do
+  /// editor Word precisa exportar PDF/DOCX sem que o COMPONENTE dependa de
+  /// `package:web` — o componente roda nos testes de VM como qualquer outro.
+  void downloadBytes(String filename, String mimeType, List<int> bytes);
   void setSelectionRange(DomElement root, int index, int length);
   void setSelectionByNodes(
       DomNode startNode, int startOffset, DomNode endNode, int endOffset);

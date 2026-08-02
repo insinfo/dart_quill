@@ -454,6 +454,34 @@ class OfficeDocxCodec {
     );
   }
 
+  /// Exporta um `.docx` de um documento CRIADO NO EDITOR — sem pacote de
+  /// origem para preservar.
+  ///
+  /// É o caminho da aba Arquivo para documento novo: parte do pacote mínimo
+  /// (`DocxFile.createEmpty`) e serializa cada bloco da árvore. Quando o
+  /// documento veio de um DOCX importado, o caminho certo continua sendo
+  /// [exportEdited], que preserva o que não foi tocado.
+  Uint8List exportDocument(PMNode doc) {
+    final empty = DocxReader.createEmpty();
+    final blocks = <WpBlock>[
+      for (var i = 0; i < doc.childCount; i++)
+        if (doc.child(i).isTextblock) _nodeToParagraph(doc.child(i))
+    ];
+    return DocxWriter.write(DocxFile(
+      package: empty.package,
+      document: WpDocumentModel(body: blocks, section: empty.document.section),
+      styles: empty.styles,
+      numbering: empty.numbering,
+      settings: empty.settings,
+      mainPartName: empty.mainPartName,
+      documentBodyPrefix: empty.documentBodyPrefix,
+      documentBodySuffix: empty.documentBodySuffix,
+      headersByType: empty.headersByType,
+      footersByType: empty.footersByType,
+      fidelityNotes: const [],
+    ));
+  }
+
   // -- corpo -----------------------------------------------------------------
 
   /// Um bloco Word vira nó editável, ou `null` quando ainda não sabemos

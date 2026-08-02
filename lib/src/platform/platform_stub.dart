@@ -40,6 +40,9 @@ class _StubDomAdapter implements DomAdapter {
   DomNativeRange? caretRangeFromPoint(num x, num y) => null;
 
   @override
+  void downloadBytes(String filename, String mimeType, List<int> bytes) {}
+
+  @override
   void setSelectionRange(DomElement root, int index, int length) {}
 
   @override

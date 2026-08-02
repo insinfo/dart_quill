@@ -78,6 +78,10 @@ class _LayoutAdapter implements DomAdapter {
   DomNativeRange? getNativeSelectionRange() => inner.getNativeSelectionRange();
 
   @override
+  void downloadBytes(String filename, String mimeType, List<int> bytes) =>
+      inner.downloadBytes(filename, mimeType, bytes);
+
+  @override
   DomNativeRange? caretRangeFromPoint(num x, num y) =>
       inner.caretRangeFromPoint(x, y);
 

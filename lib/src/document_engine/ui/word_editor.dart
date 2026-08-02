@@ -37,6 +37,7 @@ import '../layout/dom_renderer.dart';
 import '../layout/layout_composer.dart';
 import '../layout/page_graph.dart';
 import '../model/index.dart';
+import '../office/docx_codec.dart';
 import '../office/pdf_service.dart';
 import '../office/schema.dart';
 import '../state/index.dart';
@@ -223,6 +224,15 @@ class OfficeWordEditor {
   Uint8List exportPdf() =>
       OfficePdfService(title: options.title).fromPageGraph(_view.pageGraph).bytes;
 
+  /// O DOCX do documento atual.
+  ///
+  /// Para documento criado no editor, monta o pacote do zero
+  /// (`exportDocument`). A variante preservadora para DOCX importado
+  /// (`exportEdited`, com âncoras) é papel da camada de sessão — o
+  /// componente não guarda o snapshot de origem.
+  Uint8List exportDocx() => OfficeDocxCodec(schema: _schema)
+      .exportDocument(_view.state.doc);
+
   /// Troca a escala da projeção. Só a borda twips→px muda: grafo, mapa de
   /// posições e PDF ficam idênticos — e o histórico de undo sobrevive,
   /// porque o `EditorState` é reaproveitado.
@@ -312,7 +322,7 @@ class OfficeWordEditor {
     if (full) {
       final tabs = _el('div', 'dq-office-ribbon-tabs');
       for (final (key, label, enabled) in [
-        ('file', 'Arquivo', false),
+        ('file', 'Arquivo', true),
         ('home', 'Página Inicial', true),
         ('insert', 'Inserir', true),
         ('layout', 'Layout', true),
@@ -369,6 +379,7 @@ class OfficeWordEditor {
     final groups = switch (key) {
       'layout' => _layoutGroups(),
       'insert' => _insertGroups(),
+      'file' => _fileGroups(),
       _ => _homeGroups(),
     };
     for (final group in groups) {
@@ -429,6 +440,33 @@ class OfficeWordEditor {
             'Normal',
             _applyNamedStyle,
           ),
+        ]),
+      ]),
+    ];
+  }
+
+  /// Arquivo — exportação. Os serviços já existiam (PDF do MESMO grafo da
+  /// tela; DOCX pelo codec); a aba é a UI deles. O download passa pela
+  /// ABSTRAÇÃO de DOM (`adapter.downloadBytes`), então o componente
+  /// continua sem dependência de `package:web` e testável em VM.
+  List<DomElement> _fileGroups() {
+    _markButtons.clear();
+    _styleSelect = null;
+    return [
+      _group('Exportar', [
+        _row([
+          _button('PDF', 'Exportar PDF — as mesmas páginas da tela', () {
+            adapter.downloadBytes(
+                '${options.title}.pdf', 'application/pdf', exportPdf());
+          }),
+          _button('DOCX', 'Exportar DOCX', () {
+            adapter.downloadBytes(
+              '${options.title}.docx',
+              'application/vnd.openxmlformats-officedocument'
+                  '.wordprocessingml.document',
+              exportDocx(),
+            );
+          }),
         ]),
       ]),
     ];

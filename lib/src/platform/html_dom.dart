@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:js_interop';
+import 'dart:typed_data';
 import 'dart:js_interop_unsafe';
 
 import 'package:web/web.dart' as web;
@@ -710,6 +711,20 @@ class HtmlDomAdapter implements DomAdapter {
       endContainer: _wrapNode(range.endContainer),
       endOffset: range.endOffset,
     );
+  }
+
+  @override
+  void downloadBytes(String filename, String mimeType, List<int> bytes) {
+    final blob = web.Blob(
+        [Uint8List.fromList(bytes).toJS].toJS,
+        web.BlobPropertyBag(type: mimeType));
+    final url = web.URL.createObjectURL(blob);
+    final anchor =
+        web.document.createElement('a') as web.HTMLAnchorElement
+          ..href = url
+          ..download = filename;
+    anchor.click();
+    web.URL.revokeObjectURL(url);
   }
 
   @override

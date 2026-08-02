@@ -32,6 +32,16 @@ class FakeDomAdapter implements DomAdapter {
     nativeSelectionRange = null;
   }
 
+  /// Downloads registrados pelo adaptador fake — o teste inspeciona a
+  /// intenção (nome, tipo, bytes) sem precisar de browser.
+  final List<({String filename, String mimeType, List<int> bytes})> downloads =
+      [];
+
+  @override
+  void downloadBytes(String filename, String mimeType, List<int> bytes) {
+    downloads.add((filename: filename, mimeType: mimeType, bytes: bytes));
+  }
+
   @override
   DomMutationObserver createMutationObserver(
     void Function(List<DomMutationRecord> records, DomMutationObserver observer)

@@ -10,6 +10,8 @@
 @TestOn('vm')
 library;
 
+import 'dart:typed_data';
+
 import 'package:test/test.dart';
 
 import 'package:dart_quill/dart_quill_office.dart';
@@ -272,11 +274,18 @@ void main() {
           reason: 'o conteúdo fica intacto');
     });
 
-    test('Arquivo e Inserir ficam desabilitadas, não clicáveis', () {
+    test('as quatro abas estão habilitadas e clicáveis', () {
       mount();
-      final file = tabByText('Arquivo');
-      expect(file.classes.contains('dq-office-ribbon-tab-disabled'), isTrue);
-      expect(file.getAttribute('disabled'), isNotNull);
+      for (final label in const [
+        'Arquivo',
+        'Página Inicial',
+        'Inserir',
+        'Layout'
+      ]) {
+        final tab = tabByText(label);
+        expect(tab.classes.contains('dq-office-ribbon-tab-disabled'), isFalse,
+            reason: '$label ganhou conteúdo funcional');
+      }
     });
   });
 
@@ -401,6 +410,63 @@ void main() {
       expect(count('.dq-office-table'), greaterThan(0));
       expect(count('.dq-office-table-cell'), 9,
           reason: '3×3 células projetadas');
+    });
+  });
+
+  group('aba Arquivo', () {
+    DomElement tab(String text) {
+      for (final t in host.querySelectorAll('.dq-office-ribbon-tab')) {
+        if (t.textContent == text) return t;
+      }
+      throw StateError('aba não encontrada');
+    }
+
+    DomElement button(String text) {
+      for (final b in host.querySelectorAll('.dq-office-btn')) {
+        if (b.textContent == text) return b;
+      }
+      throw StateError('botão não encontrado');
+    }
+
+    void click(DomElement el) => (el as FakeDomElement)
+        .dispatchEvent('click', FakeDomMouseEvent(type: 'click', target: el));
+
+    test('Exportar PDF baixa as MESMAS páginas da tela', () {
+      final editor = mount(blocks: 120);
+      final fake = adapter as FakeDomAdapter;
+      fake.downloads.clear();
+
+      click(tab('Arquivo'));
+      click(button('PDF'));
+
+      expect(fake.downloads, hasLength(1));
+      final download = fake.downloads.single;
+      expect(download.filename, endsWith('.pdf'));
+      expect(String.fromCharCodes(download.bytes.take(5)), '%PDF-');
+      expect(OfficePdfService().fromPageGraph(editor.pageGraph).pageCount,
+          editor.pageGraph.pages.length);
+    });
+
+    test('Exportar DOCX gera um pacote que REABRE com o mesmo texto', () {
+      final editor = mount(blocks: 5);
+      final fake = adapter as FakeDomAdapter;
+      fake.downloads.clear();
+
+      click(tab('Arquivo'));
+      click(button('DOCX'));
+
+      final download = fake.downloads.single;
+      expect(download.filename, endsWith('.docx'));
+      expect(download.bytes[0], 0x50, reason: 'assinatura ZIP (PK)');
+      expect(download.bytes[1], 0x4B);
+
+      // A prova que importa: reabrir pelo NOSSO importador devolve o texto.
+      final reopened = OfficeDocxCodec(schema: schema)
+          .import(Uint8List.fromList(download.bytes));
+      final doc = PMNode.fromJSON(schema, reopened.snapshot.body);
+      expect(doc.textBetween(0, doc.content.size, blockSeparator: ' '),
+          contains('Parágrafo 0'));
+      expect(doc.childCount, editor.state.doc.childCount);
     });
   });
 
