@@ -3942,10 +3942,26 @@ tabela de revisões própria).
    dívida: um Delta do Quill nunca passou por importador de DOCX e só sabe
    `header: 1`. O achatamento é só de APRESENTAÇÃO — a definição original
    segue intacta nas partes preservadas, então salvar não substitui o
-   estilo pelo resolvido. 8 testes. Pendências da fase: numbering
-   (numeração multinível vinda de `numbering.xml`), MÚLTIPLAS seções (hoje
-   a primeira governa o documento) e a região AUTORITATIVA para editar o
-   cabeçalho.)*
+   estilo pelo resolvido. 8 testes. A NUMERAÇÃO MULTINÍVEL entrou em seguida (`office/numbering.dart`):
+   num DOCX, "1.1 Objeto" NÃO tem o "1.1" no texto — o Word o calcula de
+   `numbering.xml` —, então sem resolver isso todo documento
+   administrativo importado perdia a numeração das seções, e o PDF
+   assinado saía sem ela. `OfficeNumberingCounter` é STATEFUL de propósito:
+   numeração do Word é sequencial e um parágrafo isolado não tem rótulo
+   definido. O comportamento que decide a correção é o REINÍCIO dos níveis
+   profundos quando um superior avança — sem ele sairia "1.1, 1.2, 2.3" em
+   vez de "2.1", que é o erro clássico. Também tratados: `numId = 0` como
+   REMOÇÃO da numeração herdada (não como lista zero), overrides de
+   `w:lvlOverride` ganhando do `abstractNum`, contadores independentes por
+   lista, `start` diferente de 1, bullets, e os formatos romano/letra no
+   esquema do Word (que REPETE a letra: 27 → "AA", não base 26 posicional).
+   Formato desconhecido cai em decimal em vez de sumir: rótulo errado é
+   visível e corrigível, rótulo ausente parece conteúdo que nunca existiu.
+   O rótulo vira MARCADOR (`style.marker` → `BlockFragment.marker`), nunca
+   texto do documento — se virasse texto, editar o parágrafo o corromperia
+   e salvar gravaria o número literal por cima da numeração automática. 12
+   testes. Pendências da fase: MÚLTIPLAS seções (hoje a primeira governa o
+   documento) e a região AUTORITATIVA para editar o cabeçalho.)*
 5. **Layout determinístico e PDF** — StyleResolver, shaping latino, line
    breaking, page composer, fragmentação, PageGraph, PdfWriter dirigido
    pelo PageGraph. Gate: editor e PDF usam o MESMO PageGraph.

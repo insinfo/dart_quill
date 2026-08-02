@@ -30,6 +30,7 @@ import 'dart:typed_data';
 import '../../office/document/docx/model.dart';
 import '../../office/document/docx/reader.dart';
 import '../../office/document/docx/styles.dart';
+import 'numbering.dart';
 import '../../office/document/docx/writer.dart';
 import '../../office/document/zip/zip_archive.dart';
 import '../layout/page_graph.dart';
@@ -110,10 +111,15 @@ class OfficeDocxCodec {
   /// Folha de estilos do documento sendo importado, para a cascata.
   WpStyleSheet? _styles;
 
+  /// Contador de numeração. É STATEFUL e percorre o corpo na ordem: o
+  /// rótulo de um parágrafo depende de tudo que veio antes dele.
+  OfficeNumberingCounter? _counter;
+
   /// Importa o pacote inteiro, preservando o que não sabemos ler.
   OfficeDocxImport import(Uint8List bytes, {String documentId = 'docx'}) {
     final docx = DocxReader.read(bytes);
     _styles = docx.styles;
+    _counter = OfficeNumberingCounter(docx.numbering);
     final report = OfficeCompatibilityReport();
     final anchors = <OfficeSourceAnchor>[];
 
@@ -519,18 +525,24 @@ class OfficeDocxCodec {
       if (text.isEmpty) continue;
       inline.add(schema.text(text, _marksOf(child.properties)));
     }
-    final style = paragraph.properties?.styleId;
-    final level = _headingLevelOf(style);
+    final level = _headingLevelOf(paragraph.properties?.styleId);
     final presentation = _resolvePresentation(paragraph);
+    // O rótulo é PROJEÇÃO: vai para `style.marker`, não para o texto. Se
+    // virasse texto, editar o parágrafo o corromperia e salvar gravaria o
+    // número literal por cima da numeração automática do Word.
+    final label = _counter?.labelFor(paragraph);
+    final resolved = label == null || label.isEmpty
+        ? presentation
+        : {...?presentation, 'marker': label};
     if (level != null) {
       return schema.node(
           'heading',
-          {officeIdAttribute: nodeId, 'level': level, 'style': presentation},
+          {officeIdAttribute: nodeId, 'level': level, 'style': resolved},
           Fragment.from(inline));
     }
     return schema.node(
         'paragraph',
-        {officeIdAttribute: nodeId, 'style': presentation},
+        {officeIdAttribute: nodeId, 'style': resolved},
         Fragment.from(inline));
   }
 

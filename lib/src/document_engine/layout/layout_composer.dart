@@ -551,7 +551,9 @@ class LayoutComposer {
       indentTwips: raw['indentTwips'] is num
           ? (raw['indentTwips'] as num).toInt()
           : heuristic.indentTwips,
-      marker: heuristic.marker,
+      // O rótulo de numeração resolvido do `numbering.xml` ganha do
+      // marcador heurístico: ele é o que o Word desenharia.
+      marker: raw['marker'] is String ? raw['marker'] as String : heuristic.marker,
       family: raw['family'] is String ? raw['family'] as String : heuristic.family,
     );
   }
