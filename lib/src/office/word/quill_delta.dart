@@ -380,6 +380,16 @@ class QuillDeltaConverter {
     /// Fecha a linha corrente: linhas de tabela (quill-table-better) são
     /// acumuladas no [_TableAccumulator]; as demais viram parágrafos.
     void endLine(Map<String, dynamic> lineAttributes) {
+      // A âncora abre a PRÓXIMA tabela: fecha a anterior e guarda os
+      // atributos — o style dela carrega a largura total da tabela colada do
+      // Word (px/pt ou %), a única fonte de verdade quando não há table-col.
+      final Object? tableTemporary = lineAttributes['table-temporary'];
+      if (tableTemporary is Map) {
+        flushTable();
+        table.setAnchor(tableTemporary.cast<String, dynamic>());
+        flushLine(lineAttributes);
+        return;
+      }
       final Object? tableCol = lineAttributes['table-col'];
       if (tableCol is Map) {
         table.addColumn(_toDouble(tableCol['width']));
@@ -640,6 +650,35 @@ class _TableAccumulator {
 
   bool get isEmpty => _columnWidths.isEmpty && _rows.isEmpty;
 
+  Map<String, dynamic>? _anchorAttributes;
+
+  void setAnchor(Map<String, dynamic> attributes) {
+    _anchorAttributes = attributes;
+  }
+
+  /// Largura total declarada no style da âncora, em px — ou null.
+  double? get _anchorWidthPx {
+    final Match? match = _anchorWidthMatch;
+    if (match == null || match.group(2) == '%') return null;
+    final double value = double.parse(match.group(1)!);
+    return match.group(2) == 'pt' ? value / 0.75 : value;
+  }
+
+  /// Largura total declarada como percentual da área útil — ou null.
+  double? get _anchorWidthPercent {
+    final Match? match = _anchorWidthMatch;
+    if (match == null || match.group(2) != '%') return null;
+    return double.parse(match.group(1)!);
+  }
+
+  Match? get _anchorWidthMatch {
+    final Object? style = _anchorAttributes?['style'];
+    if (style is! String) return null;
+    return RegExp(r'(?:^|[;\s])width\s*:\s*([\d.]+)\s*(px|pt|%)',
+            caseSensitive: false)
+        .firstMatch(style);
+  }
+
   void addColumn(double? width) {
     _columnWidths.add(width);
   }
@@ -677,13 +716,37 @@ class _TableAccumulator {
         if (cols > columnCount) columnCount = cols;
       }
     }
-    final List<IColgroup> colgroup = <IColgroup>[
+    // Cascata de larguras (P12): `table-col` explícito > largura das
+    // células > padrão. Uma tabela colada do Word não tem NENHUM `table-col`
+    // — as larguras reais moram nas células e no style da âncora.
+    final List<double?> fromCells = List<double?>.filled(columnCount, null);
+    for (final _RowAccumulator row in _rows.values) {
+      int column = 0;
+      for (final _CellAccumulator cell in row.cells.values) {
+        if (column >= columnCount) break;
+        if (cell.colspan == 1 && cell.width != null) {
+          fromCells[column] ??= cell.width;
+        }
+        column += cell.colspan;
+      }
+    }
+    List<double> widths = <double>[
       for (int c = 0; c < columnCount; c++)
-        IColgroup(
-          width: c < _columnWidths.length
-              ? _columnWidths[c] ?? defaultColumnWidth
-              : defaultColumnWidth,
-        ),
+        c < _columnWidths.length && _columnWidths[c] != null
+            ? _columnWidths[c]!
+            : fromCells[c] ?? defaultColumnWidth,
+    ];
+    // Reescala pela âncora: o Word declara a largura TOTAL da tabela no
+    // style dela, e as células podem somar outra coisa (padding/bordas do
+    // Word entram na conta). A soma das colunas obedece a âncora.
+    final double? anchorWidth = _anchorWidthPx;
+    final double sum = widths.fold(0, (double s, double w) => s + w);
+    if (anchorWidth != null && sum > 0) {
+      final double factor = anchorWidth / sum;
+      widths = widths.map((double w) => w * factor).toList();
+    }
+    final List<IColgroup> colgroup = <IColgroup>[
+      for (final double width in widths) IColgroup(width: width),
     ];
 
     final List<ITr> trList = <ITr>[];
@@ -718,18 +781,24 @@ class _TableAccumulator {
       ));
     }
 
+    // A largura em % não se resolve aqui (o conversor não conhece a página):
+    // viaja no extension e o exportador a aplica sobre a área útil.
+    final double? anchorPercent = _anchorWidthPercent;
     return IElement(
       type: ElementType.table,
       value: '',
       colgroup: colgroup,
       trList: trList,
       borderType: TableBorder.all,
-    );
+    )..extension = anchorPercent != null
+        ? <String, dynamic>{'tableWidthPercent': anchorPercent}
+        : null;
   }
 
   void reset() {
     _columnWidths.clear();
     _rows.clear();
+    _anchorAttributes = null;
   }
 
   static int? _parseInt(Object? value) {

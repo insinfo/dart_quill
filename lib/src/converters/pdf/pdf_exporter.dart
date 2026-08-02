@@ -1324,7 +1324,21 @@ class _PdfLayoutEngine {
       if (columns == 0) return const <double>[];
       widths = List<double>.filled(columns, _contentWidth / columns);
     }
-    final double total = widths.fold(0, (double sum, double w) => sum + w);
+    // Largura percentual vinda da âncora (`width:100.0%` do Word): o
+    // conversor não conhece a página, então o percentual resolve aqui,
+    // sobre a área útil — para cima ou para baixo.
+    final dynamic extension = table.extension;
+    final Object? rawPercent =
+        extension is Map ? extension['tableWidthPercent'] : null;
+    final double? percent =
+        rawPercent is num ? rawPercent.toDouble() : null;
+    double total = widths.fold(0, (double sum, double w) => sum + w);
+    if (percent != null && percent > 0 && total > 0) {
+      final double target = _contentWidth * (percent.clamp(1, 100) / 100);
+      final double factor = target / total;
+      widths = widths.map((double w) => w * factor).toList();
+      total = target;
+    }
     if (total > _contentWidth && total > 0) {
       final double factor = _contentWidth / total;
       widths = widths.map((double w) => w * factor).toList();
