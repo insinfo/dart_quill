@@ -17,6 +17,9 @@ import 'package:dart_quill/dart_quill_office.dart';
 import 'package:dart_quill/src/office/document/zip/zip_archive.dart';
 
 void main() {
+  // UMA instância: officeQuillSchema() devolve um Schema NOVO a cada
+  // chamada, e nós de schemas diferentes não se misturam.
+  final schema = officeQuillSchema();
   final etpPath = 'test/assets/docx/etp_corpus.docx';
   final hasCorpus = File(etpPath).existsSync();
 
@@ -58,7 +61,7 @@ void main() {
     test('o corpo vira árvore editável com texto real', () {
       if (!hasCorpus) return;
       final imported = OfficeDocxCodec().import(corpus());
-      final doc = PMNode.fromJSON(officeQuillSchema(), imported.snapshot.body);
+      final doc = PMNode.fromJSON(schema, imported.snapshot.body);
       expect(doc.childCount, greaterThan(10));
       final text = doc.textBetween(0, doc.content.size, blockSeparator: ' ');
       expect(text.trim(), isNotEmpty);
@@ -67,7 +70,7 @@ void main() {
     test('cada bloco importado tem âncora para a origem', () {
       if (!hasCorpus) return;
       final imported = OfficeDocxCodec().import(corpus());
-      final doc = PMNode.fromJSON(officeQuillSchema(), imported.snapshot.body);
+      final doc = PMNode.fromJSON(schema, imported.snapshot.body);
       expect(imported.anchors.length, doc.childCount);
       for (final anchor in imported.anchors) {
         expect(anchor.partUri, isNotEmpty);
@@ -123,9 +126,9 @@ void main() {
 
       final second = codec.import(rebuilt);
       final firstDoc =
-          PMNode.fromJSON(officeQuillSchema(), codec.import(bytes).snapshot.body);
+          PMNode.fromJSON(schema, codec.import(bytes).snapshot.body);
       final secondDoc =
-          PMNode.fromJSON(officeQuillSchema(), second.snapshot.body);
+          PMNode.fromJSON(schema, second.snapshot.body);
       expect(secondDoc.childCount, firstDoc.childCount,
           reason: 'reabrir o que geramos tem de dar o mesmo documento');
     });
@@ -141,6 +144,108 @@ void main() {
               {'uri': p['uri'], 'data': p['data'], 'assetId': p['assetId']}
           ]);
       expect(partsKey(second), partsKey(first));
+    });
+  });
+
+  group('writer patch-based', () {
+    PMNode bodyOf(OfficeDocumentSnapshot snapshot) =>
+        PMNode.fromJSON(schema, snapshot.body);
+
+    test('sem edição, o corpo volta byte a byte', () {
+      if (!hasCorpus) return;
+      final bytes = corpus();
+      final codec = OfficeDocxCodec();
+      final imported = codec.import(bytes);
+
+      final rebuilt = codec.exportEdited(imported.snapshot, bodyOf(imported.snapshot));
+      final before = partsOf(bytes)['word/document.xml']!;
+      final after = partsOf(rebuilt)['word/document.xml']!;
+      expect(after, before,
+          reason: 'não tocar em nada não pode reescrever o documento');
+    });
+
+    test('editar UM parágrafo não reescreve os outros', () {
+      if (!hasCorpus) return;
+      final bytes = corpus();
+      final codec = OfficeDocxCodec();
+      final imported = codec.import(bytes);
+      final doc = bodyOf(imported.snapshot);
+
+      // Troca o texto do primeiro bloco; todos os demais ficam idênticos.
+      final blocks = [for (var i = 0; i < doc.childCount; i++) doc.child(i)];
+      blocks[0] = schema.node(blocks[0].type.name, blocks[0].attrs,
+          Fragment.from([schema.text('TEXTO EDITADO')]));
+      final edited = schema.node('doc', null, Fragment.from(blocks));
+
+      final xml = utf8.decode(
+          partsOf(codec.exportEdited(imported.snapshot, edited))['word/document.xml']!);
+
+      expect(xml, contains('TEXTO EDITADO'));
+      // Um parágrafo mais adiante tem de continuar com o XML de origem.
+      final untouched = doc.child(doc.childCount - 1).textContent;
+      if (untouched.trim().isNotEmpty) {
+        expect(xml, contains(untouched.trim().split(' ').first));
+      }
+    });
+
+    test('a edição sobrevive a reabrir o arquivo', () {
+      if (!hasCorpus) return;
+      final codec = OfficeDocxCodec();
+      final imported = codec.import(corpus());
+      final doc = bodyOf(imported.snapshot);
+      final blocks = [for (var i = 0; i < doc.childCount; i++) doc.child(i)];
+      blocks[0] = schema.node('paragraph', null,
+          Fragment.from([schema.text('MARCADOR UNICO 12345')]));
+      final edited = schema.node('doc', null, Fragment.from(blocks));
+
+      final reopened =
+          codec.import(codec.exportEdited(imported.snapshot, edited));
+      final text = bodyOf(reopened.snapshot)
+          .textBetween(0, bodyOf(reopened.snapshot).content.size,
+              blockSeparator: ' ');
+      expect(text, contains('MARCADOR UNICO 12345'));
+    });
+
+    test('aplicar negrito conta como edição (assinatura vê as marcas)', () {
+      if (!hasCorpus) return;
+      final codec = OfficeDocxCodec();
+      final imported = codec.import(corpus());
+      final doc = bodyOf(imported.snapshot);
+
+      final first = doc.child(0);
+      if (first.childCount == 0) return;
+      final bold = schema.marks['bold']!.create();
+      final blocks = [for (var i = 0; i < doc.childCount; i++) doc.child(i)];
+      blocks[0] = schema.node(
+          first.type.name,
+          first.attrs,
+          Fragment.from([
+            schema.text(first.textContent, [bold])
+          ]));
+      final edited = schema.node('doc', null, Fragment.from(blocks));
+
+      final before = OfficeDocxCodec.nodeSignature(first);
+      final after = OfficeDocxCodec.nodeSignature(blocks[0]);
+      expect(after, isNot(before),
+          reason: 'formatação sem mudar texto ainda é edição');
+
+      final xml = utf8.decode(
+          partsOf(codec.exportEdited(imported.snapshot, edited))['word/document.xml']!);
+      expect(xml, contains('<w:b/>'));
+    });
+
+    test('blocos opacos (tabelas) não somem ao salvar editado', () {
+      if (!hasCorpus) return;
+      final codec = OfficeDocxCodec();
+      final imported = codec.import(corpus());
+      final doc = bodyOf(imported.snapshot);
+
+      final xml = utf8.decode(
+          partsOf(codec.exportEdited(imported.snapshot, doc))['word/document.xml']!);
+      final originalXml = utf8.decode(partsOf(corpus())['word/document.xml']!);
+      expect('<w:tbl'.allMatches(xml).length,
+          '<w:tbl'.allMatches(originalXml).length,
+          reason: 'tabela preservada opaca não pode desaparecer no save');
     });
   });
 

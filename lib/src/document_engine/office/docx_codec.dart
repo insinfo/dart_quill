@@ -29,6 +29,7 @@ import 'dart:typed_data';
 
 import '../../office/document/docx/model.dart';
 import '../../office/document/docx/reader.dart';
+import '../../office/document/docx/writer.dart';
 import '../../office/document/zip/zip_archive.dart';
 import '../model/index.dart';
 import 'ids.dart';
@@ -148,17 +149,20 @@ class OfficeDocxCodec {
     final blocks = <PMNode>[];
     var ordinal = 0;
     for (final block in docx.document.body) {
-      final node = _blockToNode(block, report);
+      // O ID é atribuído AQUI, não depois: é ele que liga o nó à sua origem
+      // no XML. Sem id, nenhuma âncora casa no save e o writer regenera o
+      // documento inteiro — anulando justamente a preservação.
+      final nodeId = 'b$ordinal';
+      final node = _blockToNode(block, report, nodeId);
       if (node == null) {
         ordinal++;
         continue;
       }
-      final nodeId = officeNodeId(node) ?? 'b$ordinal';
       anchors.add(OfficeSourceAnchor(
         partUri: docx.mainPartName,
         nodeId: nodeId,
         ordinal: ordinal,
-        rawHash: sha256Hex(utf8.encode(_signatureOf(block))),
+        rawHash: nodeSignature(node),
       ));
       blocks.add(node);
       ordinal++;
@@ -216,14 +220,129 @@ class OfficeDocxCodec {
     return archive.encode();
   }
 
+  /// Exporta o `.docx` refletindo as EDIÇÕES da árvore.
+  ///
+  /// A estratégia é a que preserva: um bloco cuja assinatura não mudou volta
+  /// com o XML ORIGINAL, byte a byte — inclusive as propriedades que o nosso
+  /// modelo nem representa (bookmarks, proofing, campos, atributos de
+  /// fabricante). Só o que o usuário realmente tocou é regenerado.
+  ///
+  /// Sem isso, salvar um documento de 500 parágrafos depois de corrigir uma
+  /// vírgula reescreveria os 500 e destruiria tudo que não modelamos.
+  Uint8List exportEdited(OfficeDocumentSnapshot snapshot, PMNode doc) {
+    // O pacote reconstruído é a base: todas as outras partes vêm dele
+    // intocadas. Reabrir é o que devolve os blocos com o XML de origem.
+    final docx = DocxReader.read(export(snapshot));
+    final anchors = _anchorsOf(snapshot);
+    final original = docx.document.body;
+
+    // Reconstrução por ORDINAL. Anexar os blocos opacos no fim seria
+    // catastrófico e silencioso: as tabelas migrariam para o final do
+    // documento. Eles têm de voltar ENTRE os parágrafos, onde estavam.
+    final claimed = {for (final a in anchors.values) a.ordinal};
+    final blocks = <WpBlock>[];
+    var nextOriginal = 0;
+
+    void emitOpaqueUpTo(int limit) {
+      while (nextOriginal < limit) {
+        if (!claimed.contains(nextOriginal)) {
+          blocks.add(original[nextOriginal]);
+        }
+        nextOriginal++;
+      }
+    }
+
+    for (var i = 0; i < doc.childCount; i++) {
+      final node = doc.child(i);
+      final nodeId = officeNodeId(node);
+      final anchor = nodeId == null ? null : anchors[nodeId];
+
+      if (anchor == null || anchor.ordinal >= original.length) {
+        // Nó NOVO: entra exatamente onde a árvore o colocou.
+        blocks.add(_nodeToParagraph(node));
+        continue;
+      }
+
+      emitOpaqueUpTo(anchor.ordinal);
+      blocks.add(anchor.rawHash == nodeSignature(node)
+          // Intocado: o XML original volta verbatim, com tudo que o nosso
+          // modelo nem representa (bookmarks, proofing, campos, extensões).
+          ? original[anchor.ordinal]
+          // Editado: `sourceXml: null` faz o writer serializar do modelo.
+          : _nodeToParagraph(node));
+      nextOriginal = anchor.ordinal + 1;
+    }
+
+    // Cauda: o que sobrou de opaco depois do último nó ancorado. Um bloco
+    // cujo ordinal ESTÁ em `claimed` mas cujo nó sumiu da árvore foi
+    // apagado pelo usuário e não volta.
+    emitOpaqueUpTo(original.length);
+
+    return DocxWriter.write(DocxFile(
+      package: docx.package,
+      document: WpDocumentModel(body: blocks, section: docx.document.section),
+      styles: docx.styles,
+      numbering: docx.numbering,
+      settings: docx.settings,
+      mainPartName: docx.mainPartName,
+      documentBodyPrefix: docx.documentBodyPrefix,
+      documentBodySuffix: docx.documentBodySuffix,
+      headersByType: docx.headersByType,
+      footersByType: docx.footersByType,
+      fidelityNotes: docx.fidelityNotes,
+    ));
+  }
+
+  Map<String, OfficeSourceAnchor> _anchorsOf(OfficeDocumentSnapshot snapshot) {
+    final raw = snapshot.sourceMap['nodes'];
+    if (raw is! List) return const {};
+    final result = <String, OfficeSourceAnchor>{};
+    for (final entry in raw) {
+      final anchor = OfficeSourceAnchor.fromJson(entry as Map<String, dynamic>);
+      result[anchor.nodeId] = anchor;
+    }
+    return result;
+  }
+
+  /// Nó editado vira parágrafo Word SEM `sourceXml`, para o writer
+  /// serializá-lo a partir do modelo.
+  WpParagraph _nodeToParagraph(PMNode node) {
+    final inlines = <WpInline>[];
+    for (var i = 0; i < node.childCount; i++) {
+      final child = node.child(i);
+      final text = child.text;
+      if (text == null || text.isEmpty) continue;
+      final names = child.marks.map((m) => m.type.name).toSet();
+      inlines.add(WpRun(
+        properties: WpRunProperties(
+          bold: names.contains('bold') ? true : null,
+          italic: names.contains('italic') ? true : null,
+          strike: names.contains('strike') ? true : null,
+          underline: names.contains('underline') ? 'single' : null,
+        ),
+        content: [WpText(text)],
+      ));
+    }
+    final level = node.attrs['level'];
+    return WpParagraph(
+      properties: WpParagraphProperties(
+        styleId: node.type.name == 'heading' && level != null
+            ? 'Heading$level'
+            : null,
+      ),
+      inlines: inlines,
+    );
+  }
+
   // -- corpo -----------------------------------------------------------------
 
   /// Um bloco Word vira nó editável, ou `null` quando ainda não sabemos
   /// representá-lo — e nesse caso ele continua vivo nas partes opacas.
-  PMNode? _blockToNode(WpBlock block, OfficeCompatibilityReport report) {
+  PMNode? _blockToNode(
+      WpBlock block, OfficeCompatibilityReport report, String nodeId) {
     switch (block) {
       case WpParagraph():
-        return _paragraphToNode(block);
+        return _paragraphToNode(block, nodeId);
       case WpTable():
         report.add('docx-table-opaque',
             'tabela preservada na parte original; a edição semântica entra '
@@ -236,7 +355,7 @@ class OfficeDocxCodec {
     }
   }
 
-  PMNode _paragraphToNode(WpParagraph paragraph) {
+  PMNode _paragraphToNode(WpParagraph paragraph, String nodeId) {
     final inline = <PMNode>[];
     for (final child in paragraph.inlines) {
       if (child is! WpRun) continue;
@@ -247,10 +366,11 @@ class OfficeDocxCodec {
     final style = paragraph.properties?.styleId;
     final level = _headingLevelOf(style);
     if (level != null) {
-      return schema.node(
-          'heading', {'level': level}, Fragment.from(inline));
+      return schema.node('heading', {officeIdAttribute: nodeId, 'level': level},
+          Fragment.from(inline));
     }
-    return schema.node('paragraph', null, Fragment.from(inline));
+    return schema.node('paragraph', {officeIdAttribute: nodeId},
+        Fragment.from(inline));
   }
 
   List<Mark> _marksOf(WpRunProperties? properties) {
@@ -288,12 +408,29 @@ class OfficeDocxCodec {
     return level;
   }
 
-  /// Assinatura estável do bloco de origem, para detectar divergência.
-  static String _signatureOf(WpBlock block) => switch (block) {
-        WpParagraph(:final properties, :final inlines) =>
-          'p|${properties?.styleId}|${inlines.length}|'
-              '${inlines.whereType<WpRun>().map((r) => r.text).join()}',
-        WpTable(:final rows) => 'tbl|${rows.length}',
-        _ => block.runtimeType.toString(),
-      };
+  /// Assinatura de um nó da árvore — a chave que decide entre reusar o XML
+  /// original e regenerá-lo.
+  ///
+  /// É calculada SEMPRE a partir do nó, nunca do bloco Word, nos dois
+  /// lados da comparação. Se cada ponta computasse a sua, a igualdade
+  /// passaria a depender de dois mapeamentos concordarem, e a divergência
+  /// apareceria como "o Word perdeu minha formatação" em vez de como bug.
+  ///
+  /// Inclui as MARCAS: aplicar negrito sem mudar o texto é uma edição, e
+  /// uma assinatura só de texto a deixaria passar despercebida.
+  static String nodeSignature(PMNode node) {
+    final buffer = StringBuffer()
+      ..write(node.type.name)
+      ..write('|')
+      ..write(node.attrs['level'] ?? '');
+    for (var i = 0; i < node.childCount; i++) {
+      final child = node.child(i);
+      buffer
+        ..write('|')
+        ..write(child.marks.map((m) => m.type.name).join(','))
+        ..write(':')
+        ..write(child.text ?? '');
+    }
+    return sha256Hex(utf8.encode(buffer.toString()));
+  }
 }

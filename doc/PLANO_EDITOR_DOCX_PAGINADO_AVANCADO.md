@@ -3850,9 +3850,27 @@ tabela de revisões própria).
    leitor com o mesmo documento, e snapshot→docx→snapshot é ponto fixo.
    NÃO se promete identidade byte a byte do ZIP (compressão, ordem e
    timestamps podem diferir); o gate é identidade do CONTEÚDO de cada
-   parte, que é o que preserva formatação e dados. Pendências da fase:
-   writer PATCH-BASED do corpo (hoje o corpo volta pela parte original,
-   então editar a árvore ainda não se reflete no `.docx`), styles/numbering
+   parte, que é o que preserva formatação e dados. O WRITER PATCH-BASED entrou em seguida (`exportEdited`): um bloco cuja
+   assinatura não mudou volta com o XML ORIGINAL verbatim — inclusive as
+   propriedades que o modelo nem representa (bookmarks, proofing, campos,
+   atributos de fabricante) — e só o que o usuário tocou é regenerado. Sem
+   isso, salvar depois de corrigir uma vírgula reescreveria os 441
+   parágrafos do corpus e destruiria tudo que não modelamos. A assinatura
+   é calculada SEMPRE a partir do NÓ, nos dois lados da comparação: se
+   cada ponta computasse a sua, a igualdade dependeria de dois mapeamentos
+   concordarem e a divergência apareceria como "o Word perdeu minha
+   formatação" em vez de como bug. Ela inclui as MARCAS, então aplicar
+   negrito sem mudar o texto conta como edição. TRÊS bugs reais achados
+   pelos testes: (a) os nós importados vinham SEM id, então nenhuma âncora
+   casava no save e o writer regenerava o documento inteiro — anulando a
+   preservação inteira em silêncio; (b) os blocos opacos eram ANEXADOS no
+   fim em vez de intercalados por ordinal, o que fazia as tabelas migrarem
+   para o final do documento; (c) no teste, `officeQuillSchema()` devolve
+   uma instância NOVA a cada chamada e nós de schemas diferentes não se
+   misturam. Gates provados no corpus ETP real: sem edição o
+   `word/document.xml` volta BYTE A BYTE; editar um parágrafo não
+   reescreve os outros; a edição sobrevive a reabrir; a contagem de
+   `<w:tbl>` é preservada. Pendências da fase: styles/numbering
    semânticos, seções múltiplas e headers/footers como regiões.)*
 5. **Layout determinístico e PDF** — StyleResolver, shaping latino, line
    breaking, page composer, fragmentação, PageGraph, PdfWriter dirigido
