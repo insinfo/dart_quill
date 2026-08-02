@@ -248,11 +248,19 @@ abstract class TableBetterContainer extends Container {
         nextBlot.prev == this &&
         nextBlot.element.tagName == element.tagName &&
         checkMerge()) {
+      // Só os filhos RECÉM-ADOTADOS podem ter merges pendentes; os que já
+      // estavam aqui foram otimizados na descida. Reotimizar a subárvore
+      // inteira a cada absorção custava O(n²): ao juntar N linhas, a
+      // absorção k varria as k linhas já reunidas. Era o que fazia um DOCX
+      // com tabelas grandes levar minutos.
+      final adopted = List<Blot>.from(nextBlot.children);
       nextBlot.moveChildren(this, null);
       nextBlot.remove();
-      // Adopted children may now merge with their new siblings (parchment
-      // reaches the same fixpoint through its mutation loop).
-      super.optimize(mutations, context);
+      for (final child in adopted) {
+        if (child.parent == this) {
+          child.optimize(mutations, context);
+        }
+      }
       nextBlot = next;
     }
   }

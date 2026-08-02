@@ -8,10 +8,15 @@ Puppeteer, mesma máquina e mesmo arquivo em todos os cenários.
 
 ## Resumo
 
-O travamento **não** é falta de paralelismo. É um algoritmo **quadrático** na
-hidratação de tabelas. Nem Worker nem WebAssembly resolvem o problema, porque
-99,9% do tempo está na metade que constrói o DOM — e nem Worker nem WASM têm
-DOM.
+O travamento **não** era falta de paralelismo. Eram dois algoritmos
+**quadráticos** na hidratação de tabelas. Nem Worker nem WebAssembly
+resolveriam o problema, porque 99,9% do tempo estava na metade que constrói o
+DOM — e nem Worker nem WASM têm DOM.
+
+Corrigidos os dois pontos, o mesmo arquivo abre em **1,4 s na VM** (era 143 s,
+**105×**) e em **9,8 s no navegador** (era 377 s, **38×**). O que sobra já é
+trabalho legítimo de construção de DOM, e aí sim um Worker faz sentido — para
+manter a interface viva durante alguns segundos, não para consertar minutos.
 
 ## O experimento
 
@@ -117,14 +122,48 @@ O `enforce` vinha todo de `ParentBlot.optimize` (24k → 93k → 362k), e o
 `Scroll.optimize` sendo constante provou que a explosão estava DENTRO de uma
 passada — não na convergência.
 
+## Segundo ponto quadrático — o que dominava o documento real
+
+No laço de fusão de irmãos de `TableBetterContainer.optimize`: a cada irmão
+absorvido ele chamava `super.optimize(...)`, reotimizando a subárvore
+INTEIRA — que cresce a cada absorção. Ao reunir N linhas, a absorção k varria
+as k linhas já reunidas: O(n²). Agora só os filhos **recém-adotados** são
+reotimizados; os que já estavam ali foram otimizados na descida.
+
+Efeito medido no documento real, em fatias:
+
+| Fatia | antes | depois | `enforce` antes → depois |
+|---:|---:|---:|---|
+| 2.000 ops | 425 ms | 275 ms | 91.022 → 25.646 |
+| 4.000 ops | 397 ms | 254 ms | 110.442 → 42.812 |
+| 6.000 ops | 3.177 ms | **477 ms** | 765.939 → **94.248** |
+| 10.968 ops (TR completo, VM) | 143.108 ms | **1.356 ms** | — |
+
+O `enforce` passou a crescer proporcionalmente ao tamanho — a curva ficou
+linear.
+
+## Depois das correções (mesma bancada, mesmo arquivo)
+
+| Cenário | parse | materialização | total |
+|---|---:|---:|---:|
+| 1. main thread: `parse + setContents` | 622 ms | **9.104 ms** | 9,8 s |
+| 3. worker → Delta, main faz `setContents` | 503 ms (worker) | 9.261 ms | 9,9 s |
+| 5. WebAssembly: só o parse | 606 ms | — | 616 ms |
+
+O navegador continua bem mais lento que a VM (9,1 s contra 1,4 s) — é a
+diferença entre o JIT da VM e o JavaScript compilado. Os cenários 2 e 4 (via
+`innerHTML`) seguem falhando com `Maximum optimize iterations exceeded`.
+
 ## Recomendação
 
-1. **Corrigir o quadrático** na hidratação de tabelas. É a única mudança que
-   transforma 10 minutos em segundos. Com custo linear, as 3.650 células do TR
-   custariam ~1-2 s e nenhuma das arquiteturas abaixo seria necessária.
-2. **Depois disso**, se ainda houver 1-2 s de trabalho, um Worker para o parse
-   é barato e mantém a UI responsiva — mas é otimização de acabamento, não
-   solução.
+1. ~~Corrigir o quadrático~~ **feito**: os dois pontos acima levaram o TR de
+   143 s para 1,4 s na VM e de 377 s para 9,8 s no navegador. Era, como
+   previsto, a única mudança capaz de transformar minutos em segundos.
+2. **Agora sim um Worker faz sentido**, mas com escopo modesto: ele tira do
+   caminho os ~600 ms de parse e mantém a interface viva. Os ~9 s restantes
+   são construção de DOM e continuam na main thread — o próximo ganho real
+   está em cortá-los (fatiar a hidratação em blocos com `requestIdleCallback`,
+   ou fazer o `innerHTML` funcionar).
 3. **WebAssembly não se justifica** para este trabalho: mede-se mais lento que
    o JS compilado, custa 88 ms de startup e um segundo artefato de build.
 4. **O caminho `innerHTML` + parser nativo** continua promissor (o navegador
