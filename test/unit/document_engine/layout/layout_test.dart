@@ -228,8 +228,11 @@ void main() {
       expect(raw, contains('/FontFile2'),
           reason: 'o programa da fonte (subset) tem de estar embutido');
       final streams = PdfReader(pdf).decodedStreams.join('\n');
-      expect(RegExp(r'<[0-9a-f]+> Tj').hasMatch(streams), isTrue,
-          reason: 'o texto sai como string hex CID: $streams');
+      expect(
+          RegExp(r'<[0-9a-f]+> Tj').hasMatch(streams) ||
+              RegExp(r'\[<[0-9a-f]+>').hasMatch(streams),
+          isTrue,
+          reason: 'o texto sai como string hex CID (Tj ou TJ): $streams');
 
       // Sem a face, a medição muda: a largura da linha difere entre os
       // dois grafos — prova de que a hmtx REAL foi usada na medição.
@@ -245,6 +248,39 @@ void main() {
               .widthTwips;
       expect(lineWith, isNot(lineWithout),
           reason: 'métrica da Inter difere da Arial embarcada');
+    });
+
+    test('kerning GPOS: medição ajustada e array TJ no PDF', () {
+      final bytes = File('test/assets/fonts/Inter-Regular.ttf')
+          .readAsBytesSync();
+      final face = LayoutFontFace('Inter', bytes);
+      // Um par sabidamente kernado em latino: a soma dos avanços difere da
+      // medição com kerning aplicado.
+      const sample = 'AVALIAÇÃO To Ta AV';
+      var sumOfAdvances = 0.0;
+      for (final rune in sample.runes) {
+        sumOfAdvances += face.font.advanceWidthOfChar(rune);
+      }
+      final measured = face.measureWidthPt(sample, 1000) ;
+      expect(measured, isNot(closeTo(sumOfAdvances, 0.5)),
+          reason: 'o kerning GPOS tem de ajustar a medição '
+              '(soma=$sumOfAdvances medido=$measured)');
+      expect(measured, lessThan(sumOfAdvances),
+          reason: 'pares AV/To apertam, não alargam');
+
+      // E o PDF desenha com o array TJ carregando os ajustes.
+      final fonts = LayoutFontSet([face]);
+      final doc = docOf([
+        schema.node('paragraph', null, Fragment.from([
+          schema.text(sample,
+              [schema.marks['font']!.create({'value': 'Inter'})]),
+        ])),
+      ]);
+      final graph = LayoutComposer(fonts: fonts).compose(doc);
+      final pdf = PageGraphPdfRenderer(fonts: fonts).render(graph);
+      final streams = PdfReader(pdf).decodedStreams.join('\n');
+      expect(RegExp(r'\[<[0-9a-f]+> -?\d+ <').hasMatch(streams), isTrue,
+          reason: 'o TJ tem de carregar ajustes de kerning: $streams');
     });
 
     test('Delta real do SALI passa pelo grafo até o PDF', () {

@@ -14,6 +14,8 @@ library;
 
 import 'dart:typed_data';
 
+import 'gpos_kerning.dart';
+
 /// Falha ao interpretar o arquivo de fonte.
 class TrueTypeException implements Exception {
   TrueTypeException(this.message);
@@ -58,6 +60,28 @@ enum EmbeddingPermission {
 /// Uma fonte TrueType/OpenType já parseada.
 class TrueTypeFont {
   TrueTypeFont._(this._bytes, this._tables);
+
+  /// Kerning de pares via GPOS (PairPos, formatos 1 e 2) — a etapa 1 do
+  /// TextShaper. Fontes modernas não têm a tabela `kern` legada. Parse
+  /// preguiçoso; fonte sem GPOS/feature kern devolve sempre 0.
+  late final GposKerning _gposKerning = _tables.containsKey('GPOS')
+      ? GposKerning.parse(
+          ByteData.sublistView(_bytes), _tables['GPOS']!.offset)
+      : GposKerning.empty;
+
+  /// Ajuste de avanço (unidades da fonte) entre os GLIFOS [left] e [right].
+  int kerningBetweenGlyphs(int left, int right) =>
+      _gposKerning.kerningFor(left, right);
+
+  /// Ajuste de avanço entre dois CARACTERES, em milésimos de em (a mesma
+  /// escala de [advanceWidthOfChar]).
+  int kerningBetweenChars(int leftChar, int rightChar) {
+    if (_gposKerning.isEmpty) return 0;
+    final adjust =
+        _gposKerning.kerningFor(glyphIdFor(leftChar), glyphIdFor(rightChar));
+    if (adjust == 0) return 0;
+    return (adjust * 1000 / unitsPerEm).round();
+  }
 
   final Uint8List _bytes;
   final Map<String, _TableRecord> _tables;

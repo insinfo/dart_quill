@@ -3643,10 +3643,16 @@ tabela de revisões própria).
    COMPOSER mede pela hmtx REAL da face e o RENDERER embute a mesma face
    como CID/Identity-H com subset das runas do grafo, uma única autoridade
    nas duas saídas (testado com a Inter: Identity-H + FontFile2 + hex Tj no
-   stream, e a medição com face difere da métrica embarcada). Pendências da
-   fase: TextShaper etapa 1 (kerning/ligaturas latinas sobre a mesma
-   interface de medição) e o lado EDITOR do gate (DOMRenderer da Fase 2
-   consumindo o mesmo grafo))*
+   stream, e a medição com face difere da métrica embarcada). Kerning GPOS entregue em
+   seguida (TextShaper etapa 1, núcleo): parser de GPOS PairPos formatos
+   1 e 2 (coverage, class defs, lookups Extension resolvidos) em
+   `fonts/gpos_kerning.dart` — fontes modernas NÃO têm a tabela `kern`
+   legada; `TrueTypeFont.kerningBetweenChars` em milésimos de em; a
+   MEDIÇÃO do composer aplica os pares e o RENDERER emite array TJ com os
+   ajustes (`textCidTJ`) — validado na Inter (AV −68, To −78; medição do
+   sample 10013 vs soma de avanços 10456). Pendências da fase: ligaturas
+   latinas (GSUB, quando necessário) e o lado EDITOR do gate (DOMRenderer
+   da Fase 2 consumindo o mesmo grafo))*
 6. **Recursos Word** — tabelas divididas, repeat header, cantSplit,
    widow/orphan, keep-next, footnotes, fields, TOC, seções múltiplas.
 7. **200 páginas** — invalidação incremental por PageSignature, cache

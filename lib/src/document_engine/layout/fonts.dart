@@ -12,6 +12,18 @@ import 'dart:typed_data';
 
 import '../../office/document/fonts/truetype.dart';
 
+/// Codificador de texto→hex CID (o `encodeText` da fonte embutida).
+typedef EmbeddedCidFontEncoder = String Function(String text);
+
+/// Um pedaço do array TJ: a string hex e o ajuste (milésimos de em) que a
+/// SEGUE — 0 quando não há kerning depois.
+class ShapedPiece {
+  const ShapedPiece(this.hex, this.adjustThousandths);
+
+  final String hex;
+  final int adjustThousandths;
+}
+
 /// Uma face fornecida pela aplicação (o pacote não faz rede nem carrega
 /// arquivos: os bytes chegam de fora, como no exportador linear).
 class LayoutFontFace {
@@ -32,10 +44,39 @@ class LayoutFontFace {
 
   double measureWidthPt(String text, double sizePt) {
     var total = 0.0;
+    int? previous;
     for (final rune in text.runes) {
       total += font.advanceWidthOfChar(rune);
+      if (previous != null) {
+        total += font.kerningBetweenChars(previous, rune);
+      }
+      previous = rune;
     }
     return total * sizePt / 1000;
+  }
+
+  /// Shaping para o PDF: corre o texto acumulando runs e emitindo o ajuste
+  /// de kerning ENTRE eles — vira o array TJ (`[<hex> adj <hex>] TJ`).
+  /// O ajuste TJ é em milésimos de em e POSITIVO move para a ESQUERDA,
+  /// então o valor emitido é `-kern`.
+  List<ShapedPiece> shapeForTJ(String text, EmbeddedCidFontEncoder encode) {
+    final pieces = <ShapedPiece>[];
+    final runes = text.runes.toList();
+    final buffer = StringBuffer();
+    for (var i = 0; i < runes.length; i++) {
+      buffer.write(String.fromCharCode(runes[i]));
+      final next = i + 1 < runes.length ? runes[i + 1] : null;
+      final kern =
+          next == null ? 0 : font.kerningBetweenChars(runes[i], next);
+      if (kern != 0) {
+        pieces.add(ShapedPiece(encode(buffer.toString()), -kern));
+        buffer.clear();
+      }
+    }
+    if (buffer.isNotEmpty) {
+      pieces.add(ShapedPiece(encode(buffer.toString()), 0));
+    }
+    return pieces;
   }
 
   double ascentPt(double sizePt) =>

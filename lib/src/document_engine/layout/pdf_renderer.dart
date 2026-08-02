@@ -29,10 +29,12 @@ class PageGraphPdfRenderer {
 
   final Map<LayoutFontFace, EmbeddedCidFont> _embedded = {};
 
-  EmbeddedCidFont? _cidFor(ResolvedRunStyle style) {
+  (LayoutFontFace, EmbeddedCidFont)? _faceAndCidFor(ResolvedRunStyle style) {
     final face =
         fonts.faceFor(style.family, bold: style.bold, italic: style.italic);
-    return face == null ? null : _embedded[face];
+    if (face == null) return null;
+    final embedded = _embedded[face];
+    return embedded == null ? null : (face, embedded);
   }
 
   void _embedFonts(PdfWriter writer, PageGraph graph) {
@@ -181,12 +183,17 @@ class PageGraphPdfRenderer {
         final style = line.segments.isNotEmpty
             ? line.segments.first.style
             : const ResolvedRunStyle(family: 'Arial', sizePt: 12);
-        final cid = _cidFor(style);
-        if (cid != null) {
-          builder.textCid(
+        final pair = _faceAndCidFor(style);
+        if (pair != null) {
+          final (face, cid) = pair;
+          builder.textCidTJ(
             fontResource: cid.resourceName,
             sizePx: style.sizePt,
-            hexString: cid.encodeText(fragment.marker!),
+            pieces: [
+              for (final piece
+                  in face.shapeForTJ(fragment.marker!, cid.encodeText))
+                (piece.hex, piece.adjustThousandths)
+            ],
             x: x - style.sizePt * 1.4,
             baselineY: baseline,
             color: style.color,
@@ -208,12 +215,17 @@ class PageGraphPdfRenderer {
       for (final segment in line.segments) {
         final style = segment.style;
         if (segment.text.isNotEmpty) {
-          final cid = _cidFor(style);
-          if (cid != null) {
-            builder.textCid(
+          final pair = _faceAndCidFor(style);
+          if (pair != null) {
+            final (face, cid) = pair;
+            builder.textCidTJ(
               fontResource: cid.resourceName,
               sizePx: style.sizePt,
-              hexString: cid.encodeText(segment.text),
+              pieces: [
+                for (final piece
+                    in face.shapeForTJ(segment.text, cid.encodeText))
+                  (piece.hex, piece.adjustThousandths)
+              ],
               x: cursorX,
               baselineY: baseline,
               color: style.color,

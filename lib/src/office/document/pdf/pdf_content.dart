@@ -87,6 +87,36 @@ class PdfContentBuilder {
   /// fontes embutidas — [hexString] já vem com os delimitadores `<...>` de
   /// `EmbeddedCidFont.encodeText`. O `(...) Tj` de [text] só fala WinAnsi;
   /// sem este operador a fonte CID ficava pronta e inutilizável.
+  /// Texto CID com KERNING: array TJ com ajustes em milésimos de em entre
+  /// as strings hex (positivo move à esquerda — a convenção do PDF).
+  void textCidTJ({
+    required String fontResource,
+    required double sizePx,
+    required List<(String hex, int adjust)> pieces,
+    required double x,
+    required double baselineY,
+    String color = '#000000',
+  }) {
+    if (pieces.isEmpty) return;
+    _setFill(color);
+    final resource = fontResource.startsWith('/')
+        ? fontResource
+        : '/${'$fontResource'}';
+    _ops
+      ..writeln('BT')
+      ..writeln('$resource ${_n(sizePx * k)} Tf')
+      ..writeln('${_n(_x(x))} ${_n(_y(baselineY))} Td');
+    final array = StringBuffer('[');
+    for (final (hex, adjust) in pieces) {
+      array.write(hex);
+      if (adjust != 0) array.write(' $adjust ');
+    }
+    array.write('] TJ');
+    _ops
+      ..writeln(array)
+      ..writeln('ET');
+  }
+
   void textCid({
     required String fontResource,
     required double sizePx,
