@@ -2518,8 +2518,13 @@ chamada, com o modo escolhido por query string. Testes em VM
 preservando histórico, dispose limpo) e em Chrome real (geometria de ~794 px
 da página A4 com a régua acompanhando, clique real no botão de negrito
 sobre a seleção nativa, zoom mudando a largura real, digitação sob o
-chrome). Pendências declaradas: régua vertical, drag de recuos na régua,
-abas Inserir/Layout funcionais e realce de estado ativo nos botões.
+chrome). O polimento seguinte entregou o REALCE DE ESTADO ATIVO (o B acende
+quando a seleção está em negrito — no caret valem as `storedMarks`, que
+são o que a próxima digitação usará; em faixa vale `rangeHasMark` — e o
+select de Estilos reflete o bloco do cursor; leitura pura do estado: a UI
+reflete o modelo, nunca o contrário) e a RÉGUA VERTICAL (sticky no canvas,
+margens sombreadas, números por centímetro; só no modo word). Pendências
+declaradas: drag de recuos na régua e abas Inserir/Layout funcionais.
 
 ---|---|
 | digitar/apagar/Enter sobre páginas | o laço `beforeinput → modelo → PageGraph → projeção` |

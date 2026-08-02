@@ -169,6 +169,62 @@ void main() {
     });
   });
 
+  group('estado ativo', () {
+    test('o B acende quando a seleção está em negrito, e apaga fora', () {
+      final editor = mount(blocks: 3);
+      const map = OfficeDomPositionMap();
+      final pages = host.querySelector('.dq-office-pages')!;
+      final from = map.domPositionFor(pages, 1)!;
+      final to = map.domPositionFor(pages, 1 + 9)!;
+      adapter.setSelectionByNodes(from.node, from.offset, to.node, to.offset);
+
+      final bold = host.querySelector('.dq-office-b')!;
+      expect(bold.classes.contains('dq-office-btn-active'), isFalse);
+
+      editor.view.runCommand('bold');
+      expect(bold.classes.contains('dq-office-btn-active'), isTrue,
+          reason: 'a UI tem de refletir o modelo, como no Word');
+
+      editor.view.runCommand('bold'); // desliga
+      expect(bold.classes.contains('dq-office-btn-active'), isFalse);
+    });
+
+    test('o select de estilos reflete o bloco do cursor', () {
+      final editor = mount(blocks: 3);
+      const map = OfficeDomPositionMap();
+      final pages = host.querySelector('.dq-office-pages')!;
+      final position = map.domPositionFor(pages, 1)!;
+      adapter.setSelectionByNodes(
+          position.node, position.offset, position.node, position.offset);
+
+      editor.view.syncSelectionFromDom();
+      final select = host.querySelector('.dq-office-style')!;
+
+      // Vira Título 2 pela ribbon; o select acompanha.
+      final tr = editor.state.tr;
+      tr.setNodeMarkup(0, schema.nodes['heading'], {'level': 2});
+      editor.view.dispatch(tr);
+      expect(select.value, 'Título 2');
+    });
+  });
+
+  group('régua vertical', () {
+    test('existe no modo word, com números por centímetro', () {
+      mount();
+      expect(count('.dq-office-vruler'), 1);
+      expect(count('.dq-office-vruler-number'), greaterThan(10),
+          reason: 'A4 útil tem ~24 cm de altura numerada');
+    });
+
+    test('não existe nos modos flow e view', () {
+      mount(mode: OfficeWordMode.flow);
+      expect(count('.dq-office-vruler'), 0);
+      editor!.dispose();
+      mount(mode: OfficeWordMode.view);
+      expect(count('.dq-office-vruler'), 0);
+    });
+  });
+
   test('dispose devolve o host vazio', () {
     final editor = mount();
     editor.dispose();

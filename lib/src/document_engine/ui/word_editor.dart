@@ -114,6 +114,10 @@ class OfficeWordEditor {
   late DomElement _canvas;
   DomElement? _statusPage;
   DomElement? _statusWords;
+
+  /// Botões que refletem o estado da seleção (B aceso em negrito…).
+  final Map<String, DomElement> _markButtons = {};
+  DomElement? _styleSelect;
   double _zoom = 1.0;
   bool _disposed = false;
 
@@ -143,6 +147,11 @@ class OfficeWordEditor {
     }
 
     _canvas = _el('div', 'dq-office-canvas');
+    if (options.mode == OfficeWordMode.word) {
+      // A régua vertical é STICKY dentro do canvas: fica visível enquanto o
+      // documento rola, mostrando a escala da página como no Word.
+      _canvas.append(_buildVerticalRuler());
+    }
     _pagesHost = _el('div', 'dq-office-pages');
     _canvas.append(_pagesHost);
     host.append(_canvas);
@@ -265,14 +274,10 @@ class OfficeWordEditor {
           '12',
           (value) => _addMarkOverSelection('size', {'value': '${value}pt'}),
         ),
-      _button('B', 'Negrito (Ctrl+B)', () => _view.runCommand('bold'),
-          extraClass: 'dq-office-b'),
-      _button('I', 'Itálico (Ctrl+I)', () => _view.runCommand('italic'),
-          extraClass: 'dq-office-i'),
-      _button('U', 'Sublinhado (Ctrl+U)', () => _view.runCommand('underline'),
-          extraClass: 'dq-office-u'),
-      _button('S', 'Tachado', () => _view.runCommand('strike'),
-          extraClass: 'dq-office-s'),
+      _markButton('bold', 'B', 'Negrito (Ctrl+B)', 'dq-office-b'),
+      _markButton('italic', 'I', 'Itálico (Ctrl+I)', 'dq-office-i'),
+      _markButton('underline', 'U', 'Sublinhado (Ctrl+U)', 'dq-office-u'),
+      _markButton('strike', 'S', 'Tachado', 'dq-office-s'),
     ];
     content.append(_group('Fonte', fontControls));
 
@@ -284,14 +289,13 @@ class OfficeWordEditor {
         _button('▤', 'Justificar', () => _setAlign('justify')),
       ]));
 
-      content.append(_group('Estilos', [
-        _select(
-          'dq-office-style',
-          const ['Normal', 'Título 1', 'Título 2', 'Título 3'],
-          'Normal',
-          _applyNamedStyle,
-        ),
-      ]));
+      _styleSelect = _select(
+        'dq-office-style',
+        const ['Normal', 'Título 1', 'Título 2', 'Título 3'],
+        'Normal',
+        _applyNamedStyle,
+      );
+      content.append(_group('Estilos', [_styleSelect!]));
     }
 
     ribbon.append(content);
@@ -309,6 +313,14 @@ class OfficeWordEditor {
     caption.appendText(label);
     group.append(caption);
     return group;
+  }
+
+  DomElement _markButton(
+      String mark, String text, String title, String cssClass) {
+    final button =
+        _button(text, title, () => _view.runCommand(mark), extraClass: cssClass);
+    _markButtons[mark] = button;
+    return button;
   }
 
   DomElement _button(String text, String title, void Function() action,
@@ -420,6 +432,35 @@ class OfficeWordEditor {
     return ruler;
   }
 
+  DomElement _buildVerticalRuler() {
+    final setup = options.setup;
+    final pxPerTwip = 96 / 72 / 20 * _zoom;
+    double px(int twips) => twips * pxPerTwip;
+
+    final ruler = _el('div', 'dq-office-vruler');
+    final track = _el('div', 'dq-office-vruler-track');
+    track.setAttribute('style', 'height:${px(setup.heightTwips)}px;');
+
+    final content = _el('div', 'dq-office-vruler-content');
+    content.setAttribute(
+        'style',
+        'top:${px(setup.marginTopTwips)}px;'
+        'height:${px(setup.contentHeightTwips)}px;');
+    track.append(content);
+
+    const twipsPerCm = 567;
+    final usableCm = setup.contentHeightTwips ~/ twipsPerCm;
+    for (var cm = 1; cm <= usableCm; cm++) {
+      final mark = _el('span', 'dq-office-vruler-number');
+      mark.setAttribute(
+          'style', 'top:${px(setup.marginTopTwips + cm * twipsPerCm)}px;');
+      mark.appendText('$cm');
+      track.append(mark);
+    }
+    ruler.append(track);
+    return ruler;
+  }
+
   // -- barra de status --------------------------------------------------------
 
   DomElement _buildStatusBar() {
@@ -449,6 +490,46 @@ class OfficeWordEditor {
         graph.positionMap.pageOf(_view.state.selection.from) + 1;
     _setText(_statusPage!, 'Página $current de ${graph.pages.length}');
     _setText(_statusWords!, '${_view.state.doc.childCount} blocos');
+    _refreshRibbonState();
+  }
+
+  /// Acende os botões conforme a seleção — o B fica ativo quando o cursor
+  /// está em negrito, como no Word. É leitura pura do estado: a UI reflete
+  /// o modelo, nunca o contrário.
+  void _refreshRibbonState() {
+    if (_markButtons.isEmpty) return;
+    final state = _view.state;
+    final selection = state.selection;
+
+    bool activeFor(String name) {
+      final type = _schema.marks[name];
+      if (type == null) return false;
+      if (selection.empty) {
+        // No caret valem as storedMarks (o que a PRÓXIMA digitação usará),
+        // senão as marcas da posição.
+        final marks = state.storedMarks ?? selection.fromRes.marks();
+        return marks.any((mark) => mark.type == type);
+      }
+      return state.doc.rangeHasMark(selection.from, selection.to, type);
+    }
+
+    _markButtons.forEach((name, button) {
+      if (activeFor(name)) {
+        button.classes.add('dq-office-btn-active');
+      } else {
+        button.classes.remove('dq-office-btn-active');
+      }
+    });
+
+    final style = _styleSelect;
+    if (style != null) {
+      final block = selection.fromRes.parent;
+      final level =
+          block.type.name == 'heading' ? block.attrs['level'] : null;
+      style.value = level is int && level >= 1 && level <= 3
+          ? 'Título $level'
+          : 'Normal';
+    }
   }
 
   // -- infra ------------------------------------------------------------------
@@ -498,6 +579,7 @@ class OfficeWordEditor {
   background:transparent;border-radius:3px;cursor:pointer;font:inherit;font-size:14px;}
 .dq-office-btn:hover{background:#f0f6ff;border-color:#c7dcf8;}
 .dq-office-btn:active{background:#dbe9fb;}
+.dq-office-btn-active{background:#cfe4ff;border-color:#9dc3f0;}
 .dq-office-b{font-weight:700;}
 .dq-office-i{font-style:italic;}
 .dq-office-u{text-decoration:underline;}
@@ -512,8 +594,16 @@ class OfficeWordEditor {
 .dq-office-ruler-number{position:absolute;top:3px;transform:translateX(-50%);
   font-size:9.5px;color:#666;user-select:none;}
 .dq-office-ruler-tick{position:absolute;top:9px;width:1px;height:5px;background:#999;}
-.dq-office-canvas{flex:1;overflow:auto;padding:20px 0 40px;}
-.dq-office-pages{display:flex;flex-direction:column;align-items:center;gap:18px;}
+.dq-office-canvas{flex:1;overflow:auto;padding:20px 0 40px;
+  display:flex;align-items:flex-start;justify-content:center;gap:8px;}
+.dq-office-vruler{position:sticky;top:0;flex:0 0 auto;}
+.dq-office-vruler-track{position:relative;width:22px;background:#e8e6e4;
+  border-radius:2px;overflow:hidden;}
+.dq-office-vruler-content{position:absolute;left:0;right:0;background:#fff;}
+.dq-office-vruler-number{position:absolute;left:0;right:0;text-align:center;
+  transform:translateY(-50%);font-size:9px;color:#666;user-select:none;}
+.dq-office-pages{display:flex;flex-direction:column;align-items:center;gap:18px;
+  flex:0 0 auto;}
 .dq-office-page{background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25);}
 .dq-office-page-placeholder{background:repeating-linear-gradient(45deg,
   #e6e4e2,#e6e4e2 10px,#dedcda 10px,#dedcda 20px);}
