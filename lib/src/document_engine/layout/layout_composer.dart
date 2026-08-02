@@ -49,29 +49,108 @@ class LayoutComposer {
   /// Recuo por nível de lista, em twips (21,6 pt como o exportador linear).
   static const int _listIndentTwips = 432;
 
-  PageGraph compose(PMNode doc) {
+  PageGraph compose(PMNode doc) => _composeFrom(doc);
+
+  /// Recompõe REUSANDO o prefixo de páginas que a edição não pode ter
+  /// afetado.
+  ///
+  /// O ponto da Fase 7: digitar na página 180 de 200 não pode custar as 200.
+  /// Uma página só é ponto de retomada se COMEÇAR um bloco fresco — uma
+  /// página que continua um parágrafo não sabe quantas linhas dele já foram
+  /// consumidas, e recompor a partir dela duplicaria conteúdo.
+  ///
+  /// [changedFromDocPos] é a MENOR posição tocada pela transação. Tudo antes
+  /// dela é idêntico no documento novo e no antigo, inclusive as posições —
+  /// é o que torna o reuso do prefixo seguro sem remapear nada.
+  PageGraph composeIncremental(
+    PMNode doc, {
+    required PageGraph previous,
+    required int changedFromDocPos,
+  }) {
+    var resumeAt = 0;
+    for (var p = 1; p < previous.pages.length; p++) {
+      if (!previous.pages[p].signature.startsFreshBlock) continue;
+      if (previous.pages[p - 1].signature.lastDocPos >= changedFromDocPos) {
+        break;
+      }
+      resumeAt = p;
+    }
+    if (resumeAt == 0) return _composeFrom(doc);
+
+    final signature = previous.pages[resumeAt].signature;
+    return _composeFrom(
+      doc,
+      reusedPages: previous.pages.sublist(0, resumeAt),
+      reusedEntries: previous.positionMap.entries
+          .where((entry) => entry.pageIndex < resumeAt)
+          .toList(),
+      startBlockIndex: signature.firstBlockIndex,
+      startOffset: signature.firstBlockOffset,
+      startListOrdinal: signature.carryListOrdinal,
+    );
+  }
+
+  PageGraph _composeFrom(
+    PMNode doc, {
+    List<PageLayout> reusedPages = const [],
+    List<PositionMapEntry> reusedEntries = const [],
+    int startBlockIndex = 0,
+    int startOffset = 0,
+    int startListOrdinal = 0,
+  }) {
     final diagnostics = LayoutDiagnostics();
-    final pages = <PageLayout>[];
-    final mapEntries = <PositionMapEntry>[];
+    final pages = <PageLayout>[...reusedPages];
+    final mapEntries = <PositionMapEntry>[...reusedEntries];
 
     var currentFragments = <PageFragment>[];
     var cursorTwips = 0;
     final capacity = setup.contentHeightTwips;
 
+    // Estado de ENTRADA da página aberta (o que a assinatura registra).
+    var pageStartBlockIndex = startBlockIndex;
+    var pageStartOffset = startOffset;
+    var pageStartListOrdinal = startListOrdinal;
+
     void closePage() {
+      final first = currentFragments.isEmpty ? null : currentFragments.first;
       pages.add(PageLayout(
         index: pages.length,
         setup: setup,
         fragments: currentFragments,
+        signature: PageSignature(
+          firstBlockIndex: pageStartBlockIndex,
+          firstBlockOffset: pageStartOffset,
+          carryListOrdinal: pageStartListOrdinal,
+          startsFreshBlock: first == null || !_continuesFrom(first),
+          lastDocPos: _lastDocPosOf(currentFragments),
+        ),
       ));
       currentFragments = [];
       cursorTwips = 0;
     }
 
-    var listOrdinal = 0;
+    var listOrdinal = startListOrdinal;
 
-    doc.content.forEach((block, offset, index) {
+    // O estado de entrada de uma página só é conhecido quando o PRIMEIRO
+    // fragmento dela entra: uma página nova nasce no MEIO de um bloco
+    // (quando `closePage` dispara na quebra de linha), então capturar no
+    // topo da iteração registraria o bloco da página anterior.
+    void beginPage(int index, int blockOffset, int ordinalBefore) {
+      if (currentFragments.isNotEmpty) return;
+      pageStartBlockIndex = index;
+      pageStartOffset = blockOffset;
+      pageStartListOrdinal = ordinalBefore;
+    }
+
+    var offset = startOffset;
+    for (var index = startBlockIndex; index < doc.childCount; index++) {
+      final block = doc.child(index);
+      final blockOffset = offset;
+      // ANTES da atualização de numeração: retomar neste bloco tem de
+      // reproduzir o mesmo incremento, não contá-lo duas vezes.
+      final ordinalBefore = listOrdinal;
       final docPos = offset + 1;
+      offset += block.nodeSize;
       final kind = block.type.name;
 
       if (kind == 'table') {
@@ -101,6 +180,7 @@ class LayoutComposer {
             }
           }
           final slice = rows.sublist(i, i + take);
+          beginPage(index, blockOffset, ordinalBefore);
           currentFragments.add(TableFragment(
             nodeId: officeNodeId(block),
             docPos: docPos,
@@ -119,7 +199,7 @@ class LayoutComposer {
           firstOfTable = false;
           i += take;
         }
-        return;
+        continue;
       }
 
       // Estado da numeração de lista ordenada.
@@ -163,6 +243,7 @@ class LayoutComposer {
           }
         }
         final slice = lines.sublist(i, i + take);
+        beginPage(index, blockOffset, ordinalBefore);
         currentFragments.add(BlockFragment(
           nodeId: officeNodeId(block),
           docPos: docPos,
@@ -191,6 +272,7 @@ class LayoutComposer {
         if (cursorTwips + blank > capacity && currentFragments.isNotEmpty) {
           closePage();
         }
+        beginPage(index, blockOffset, ordinalBefore);
         currentFragments.add(BlockFragment(
           nodeId: officeNodeId(block),
           docPos: docPos,
@@ -207,9 +289,11 @@ class LayoutComposer {
         ));
         cursorTwips += blank;
       }
-    });
+    }
 
-    if (currentFragments.isNotEmpty || pages.isEmpty) closePage();
+    if (currentFragments.isNotEmpty || pages.length == reusedPages.length) {
+      closePage();
+    }
 
     return PageGraph(
       pages: pages,
@@ -217,6 +301,27 @@ class LayoutComposer {
       diagnostics: diagnostics,
       quality: quality,
     );
+  }
+
+  static bool _continuesFrom(PageFragment fragment) => switch (fragment) {
+        BlockFragment(:final continuesFromPreviousPage) =>
+          continuesFromPreviousPage,
+        TableFragment(:final continuesFromPreviousPage) =>
+          continuesFromPreviousPage,
+      };
+
+  static int _lastDocPosOf(List<PageFragment> fragments) {
+    var last = 0;
+    for (final fragment in fragments) {
+      final end = switch (fragment) {
+        BlockFragment(:final docPos, :final lines) => lines.isEmpty
+            ? docPos
+            : docPos + lines.last.charEnd,
+        TableFragment(:final docPos) => docPos,
+      };
+      if (end > last) last = end;
+    }
+    return last;
   }
 
   // -- Estilo de bloco -------------------------------------------------------
@@ -277,11 +382,32 @@ class LayoutComposer {
   FontMetrics _metricsFor(String family) =>
       FontRegistry.instance.lookup(family) ?? FontRegistry.instance.lookup(null)!;
 
+  /// Cache tipográfico: a MESMA palavra, no mesmo estilo, é medida uma vez.
+  ///
+  /// Medir domina a composição (uma medida por palavra por tentativa de
+  /// quebra) e o texto de um documento repete muito — artigos, preposições,
+  /// e as palavras que sobrevivem a uma edição. A chave inclui todo o
+  /// estilo que afeta o avanço; a face entra por família/peso/itálico, que
+  /// é como `faceFor` resolve.
+  final Map<String, double> _measureCache = {};
+
+  /// Quantas medições distintas o cache guarda. Diagnóstico — é o que
+  /// permite testar o cache sem cronômetro (comparar tempo de parede num
+  /// teste é instável e pisca na CI).
+  int get measurementCacheSize => _measureCache.length;
+
   double _measurePt(ResolvedRunStyle style, String text) {
+    final key = '${style.family} ${style.sizePt} '
+        '${style.bold ? 1 : 0}${style.italic ? 1 : 0} $text';
+    final cached = _measureCache[key];
+    if (cached != null) return cached;
     final face =
         fonts.faceFor(style.family, bold: style.bold, italic: style.italic);
-    if (face != null) return face.measureWidthPt(text, style.sizePt);
-    return _metricsFor(style.family).measureWidth(text, style.sizePt);
+    final width = face != null
+        ? face.measureWidthPt(text, style.sizePt)
+        : _metricsFor(style.family).measureWidth(text, style.sizePt);
+    _measureCache[key] = width;
+    return width;
   }
 
   ({double ascent, double descent}) _verticalPt(ResolvedRunStyle style) {

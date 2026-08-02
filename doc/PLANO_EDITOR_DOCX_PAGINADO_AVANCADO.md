@@ -3786,6 +3786,34 @@ tabela de revisões própria).
    corpus de 150–250 páginas. Regras: nunca recalcular tudo por tecla;
    nunca um editor por página; twips/half-points/EMU internamente, pixel só
    na view.
+   *(INICIADA 2026-08-02 — as DUAS peças que removiam o teto do editor:
+   **PageSignature** (`page_graph.dart`) guarda o estado de ENTRADA da
+   página (bloco inicial, offset, carry da numeração de lista) e o de
+   SAÍDA (última posição tocada), e `composeIncremental` reusa o prefixo
+   de páginas que a edição não pode ter afetado. Regra de correção: uma
+   página só é ponto de RETOMADA se começar um bloco fresco — retomar numa
+   página que continua um parágrafo duplicaria as linhas já consumidas.
+   O invariante travado por teste não é "ficou rápido", é
+   `composeIncremental == compose` página a página, fragmento a fragmento
+   (docPos, y, altura, charStart/charEnd), incluindo inserção e remoção de
+   bloco, tabela atravessando páginas e o carry de lista ordenada — um
+   paginador incremental que diverge do completo é PIOR que um lento,
+   porque quebraria o gate central (editor e PDF na mesma página).
+   **Cache tipográfico** em `_measurePt`, chaveado por
+   família/tamanho/peso/itálico + texto: medir domina a composição (uma
+   medida por palavra por tentativa de quebra) e o texto de um documento
+   repete muito. Testado estruturalmente por `measurementCacheSize` — a
+   segunda passada não acrescenta nenhuma entrada — e NÃO por cronômetro,
+   que pisca na CI. Bug real achado no caminho: a captura do estado de
+   entrada da página acontecia no topo da iteração do bloco, mas a página
+   nova nasce no MEIO de um bloco (quando `closePage` dispara na quebra de
+   linha), então todas as assinaturas diziam `firstBlockIndex = 0` e o
+   incremental recompunha tudo DE NOVO por cima do prefixo reusado
+   (páginas quase dobravam). Medição em documento de 4000 blocos / 149
+   páginas: composição completa 125 ms → incremental no fim **2 ms (62×)**;
+   o cache sozinho leva a completa a 55 ms. Pendências da fase:
+   convergência de sufixo (edição no INÍCIO ainda recompõe tudo),
+   virtualização com janela viva, worker e cancelamento de jobs)*
 
 ### TextShaper — escopo honesto
 

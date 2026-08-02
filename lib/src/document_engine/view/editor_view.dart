@@ -173,10 +173,10 @@ class OfficeEditorView {
     if (_disposed) return;
     _state = _state.apply(transaction);
     if (transaction.docChanged) {
-      // Recomposição TOTAL: correta e determinística, mas O(documento). A
-      // invalidação incremental por PageSignature é a Fase 7 — até lá isto
-      // é honesto para documentos de trabalho, não para 200 páginas.
-      _compose();
+      // Recomposição INCREMENTAL: as páginas antes da menor posição tocada
+      // pela transação são reusadas. Digitar na página 180 de 200 custa as
+      // páginas 180+, não as 200.
+      _composeAfter(transaction);
     }
     // Durante a composição a projeção pertence ao BROWSER: reconstruí-la
     // aqui destruiria os nós que o IME está usando para desenhar o
@@ -221,6 +221,34 @@ class OfficeEditorView {
   // -- laço -----------------------------------------------------------------
 
   void _compose() => _pageGraph = _composer.compose(_state.doc);
+
+  /// Recompõe a partir da menor posição que a transação tocou.
+  void _composeAfter(Transaction transaction) {
+    final changedFrom = _changedFrom(transaction);
+    if (changedFrom == null) {
+      _compose();
+      return;
+    }
+    _pageGraph = _composer.composeIncremental(
+      _state.doc,
+      previous: _pageGraph,
+      changedFromDocPos: changedFrom,
+    );
+  }
+
+  /// A MENOR posição tocada pela transação, no documento NOVO.
+  ///
+  /// Null quando a transação não declara faixas (nada a reusar com
+  /// segurança, então recompõe tudo).
+  static int? _changedFrom(Transaction transaction) {
+    int? smallest;
+    for (final map in transaction.mapping.maps) {
+      map.forEach((oldStart, oldEnd, newStart, newEnd) {
+        if (smallest == null || newStart < smallest!) smallest = newStart;
+      });
+    }
+    return smallest;
+  }
 
   void _project() => _renderer.render(_pageGraph, host);
 

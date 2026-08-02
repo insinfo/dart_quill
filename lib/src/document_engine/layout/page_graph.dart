@@ -194,16 +194,59 @@ class TableFragment extends PageFragment {
 }
 
 /// Uma página composta.
+/// Identidade de layout de uma página — o que permite REUSAR a página em
+/// vez de recompô-la.
+///
+/// Guarda o estado de ENTRADA da página (onde ela começa no documento e o
+/// que a numeração de lista carregava) e o de SAÍDA (onde ela termina).
+/// Recompor a partir de uma página só é correto se ela começar num bloco
+/// fresco: uma página que continua um parágrafo da anterior não conhece as
+/// linhas que já foram consumidas.
+class PageSignature {
+  const PageSignature({
+    required this.firstBlockIndex,
+    required this.firstBlockOffset,
+    required this.carryListOrdinal,
+    required this.startsFreshBlock,
+    required this.lastDocPos,
+  });
+
+  /// Índice do bloco (filho do doc) em que a página começa.
+  final int firstBlockIndex;
+
+  /// Offset desse bloco no documento — evita re-somar nodeSize do começo.
+  final int firstBlockOffset;
+
+  /// Estado da numeração de lista ao entrar na página.
+  final int carryListOrdinal;
+
+  /// A página começa um bloco NOVO (não é continuação de parágrafo/tabela)?
+  final bool startsFreshBlock;
+
+  /// Maior posição do documento tocada por esta página.
+  final int lastDocPos;
+}
+
 class PageLayout {
   const PageLayout({
     required this.index,
     required this.setup,
     required this.fragments,
+    required this.signature,
   });
 
   final int index;
   final PageSetupTwips setup;
   final List<PageFragment> fragments;
+  final PageSignature signature;
+
+  /// A mesma página com outro índice (reuso ao recompor incrementalmente).
+  PageLayout withIndex(int newIndex) => PageLayout(
+        index: newIndex,
+        setup: setup,
+        fragments: fragments,
+        signature: signature,
+      );
 }
 
 /// Mapeia posição do documento ↔ página (v1: granularidade de linha).
