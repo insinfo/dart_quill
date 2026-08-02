@@ -2486,6 +2486,36 @@ Com essa arquitetura, o usuário pode importar DOCX no browser, armazenar Office
 
 ---
 
+## 20.1 Exemplo executável do modo avançado
+
+`example/office_editor` demonstra o engine numa página só:
+
+```bash
+cd example/office_editor && dart pub get && dart run build_runner serve web:8080
+```
+
+O que ele torna VISÍVEL, e por que cada item está lá:
+
+| Na tela | O que prova |
+|---|---|
+| digitar/apagar/Enter sobre páginas | o laço `beforeinput → modelo → PageGraph → projeção` |
+| barra de ferramentas | usa `runCommand`, o MESMO caminho dos atalhos — a UI não tem rota própria para mudar o documento |
+| rodapé "montadas no DOM: N de M" | a virtualização é conferível, não uma promessa |
+| rodapé "última recomposição" | o custo real por tecla do layout incremental |
+| botão PDF | `fromPageGraph` do grafo QUE ESTÁ NA TELA — não há segunda paginação, então o arquivo não pode divergir |
+| importar Delta | a fronteira do §10: Delta entra, árvore Office sai, relatório de compatibilidade junto |
+| seletor de tamanho | 60 a 9000 blocos, para medir o comportamento em ~330 páginas |
+
+O CSS do exemplo só toca seletores `dq-office-*` — nenhuma regra do Quill
+simples é afetada, que é o isolamento exigido no §1.
+
+O fluxo do exemplo é coberto por `test/browser/office_example_flow_test.dart`
+em Chrome. Uma demo é a primeira coisa que alguém executa e a última que
+alguém testa: sem esse teste ela apodreceria em silêncio quando a API
+mudasse.
+
+---
+
 ## 21. Referências locais principais
 
 ### `dart_quill`
