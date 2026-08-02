@@ -1,0 +1,21 @@
+dart_quill
+Copyright (c) 2026 Isaque Neves
+
+Este pacote incorpora ports em Dart de software de terceiros. As licenças
+originais estão preservadas e o inventário completo, com origem, licença e
+localização de cada componente, está em THIRD_PARTY.md.
+
+Resumo:
+
+- Quill 2.0.3 (https://quilljs.com) — BSD 3-Clause.
+  Copyright (c) 2017-2024 Slab; (c) 2014 Jason Chen; (c) 2013 salesforce.com.
+- quill-table-better 1.2.3 (https://github.com/attoae/quill-table-better) — MIT.
+- ProseMirror (https://prosemirror.net) — MIT.
+  Copyright (C) 2015-2017 Marijn Haverbeke e outros.
+  Port em Dart dos módulos model, transform, state, history e commands,
+  incluindo casos de teste derivados das suítes upstream.
+
+Nenhum código, bundle ou ativo de projetos AGPL (ONLYOFFICE/DocumentServer,
+iText) ou proprietários (capturas do Word Online) está incluído neste
+pacote; tais fontes foram usadas somente como comparação conceitual durante
+auditorias, conforme registrado em doc/PLANO_EDITOR_DOCX_PAGINADO_AVANCADO.md.

@@ -280,6 +280,44 @@ void main() {
     });
   });
 
+  test('os botões de lista alternam o bloco como no Word', () {
+    final editor = mount(blocks: 3);
+    const map = OfficeDomPositionMap();
+    final pages = host.querySelector('.dq-office-pages')!;
+    final position = map.domPositionFor(pages, 1)!;
+    adapter.setSelectionByNodes(
+        position.node, position.offset, position.node, position.offset);
+
+    DomElement byTitle(String title) {
+      for (final b in host.querySelectorAll('.dq-office-btn')) {
+        if (b.getAttribute('title') == title) return b;
+      }
+      throw StateError('botão $title não encontrado');
+    }
+
+    void click(DomElement b) => (b as FakeDomElement)
+        .dispatchEvent('click', FakeDomMouseEvent(type: 'click', target: b));
+
+    click(byTitle('Lista com marcadores'));
+    expect(editor.state.doc.child(0).type.name, 'listItem');
+    expect(editor.state.doc.child(0).attrs['kind'], 'bullet');
+    // O marcador vem do layout, como projeção.
+    expect(
+        editor.pageGraph.pages.first.fragments
+            .whereType<BlockFragment>()
+            .first
+            .marker,
+        isNotNull);
+
+    // Mesmo tipo de novo: volta a parágrafo.
+    click(byTitle('Lista com marcadores'));
+    expect(editor.state.doc.child(0).type.name, 'paragraph');
+
+    // Numerada: troca o tipo direto.
+    click(byTitle('Lista numerada'));
+    expect(editor.state.doc.child(0).attrs['kind'], 'ordered');
+  });
+
   test('zoom reconstrói as réguas na nova escala', () {
     final editor = mount();
     final widthBefore = host

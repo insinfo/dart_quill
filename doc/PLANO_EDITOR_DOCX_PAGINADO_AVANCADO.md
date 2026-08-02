@@ -2332,8 +2332,16 @@ Há um bloqueio de release: nem `dart_quill` nem `docx_rendering` possuíam `LIC
 
 > **Atualização 2026-08-01:** o `dart_quill` agora possui `LICENSE` na raiz
 > (BSD-3-Clause com os copyrights do Quill — Slab, Jason Chen, salesforce.com —
-> mais a seção MIT do quill-table-better). Continuam pendentes o `NOTICE`, o
-> inventário `THIRD_PARTY` e o `LICENSE` do `docx_rendering`.
+> mais a seção MIT do quill-table-better).
+>
+> **Atualização 2026-08-02:** `NOTICE` e `THIRD_PARTY.md` criados na raiz —
+> o bloqueio de release deste repositório está resolvido. O inventário liga
+> cada port ao upstream/licença/caminho (Quill BSD-3, table-better MIT,
+> ProseMirror model/transform/state/history/commands MIT — com o texto MIT
+> reproduzido —, testes derivados, implementação própria, fontes de
+> auditoria com NADA incorporado, e a allowlist `web`/`html`). Permanece
+> pendente apenas o `LICENSE` do repositório `docx_rendering`, que é outro
+> projeto.
 
 | Origem | Licença observada | Uso permitido no plano |
 |---|---|---|

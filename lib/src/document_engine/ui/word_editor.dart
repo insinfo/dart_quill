@@ -406,6 +406,10 @@ class OfficeWordEditor {
       ]),
       _group('Parágrafo', [
         _row([
+          _button('•—', 'Lista com marcadores', () => _toggleList('bullet')),
+          _button('1—', 'Lista numerada', () => _toggleList('ordered')),
+        ]),
+        _row([
           _button('⯇', 'Alinhar à esquerda', () => _setAlign('left')),
           _button('☰', 'Centralizar', () => _setAlign('center')),
           _button('⯈', 'Alinhar à direita', () => _setAlign('right')),
@@ -529,6 +533,20 @@ class OfficeWordEditor {
       return false;
     });
     if (tr.docChanged) _view.dispatch(tr);
+  }
+
+  /// Alterna lista no bloco: parágrafo vira `listItem` do tipo pedido, o
+  /// mesmo tipo volta a parágrafo, e outro tipo troca o marcador — o
+  /// comportamento do Word.
+  void _toggleList(String kind) {
+    _view.syncSelectionFromDom();
+    final block = _view.state.selection.fromRes.parent;
+    final isSame =
+        block.type.name == 'listItem' && block.attrs['kind'] == kind;
+    final command = isSame
+        ? cmd.setBlockType(_schema.nodes['paragraph']!)
+        : cmd.setBlockType(_schema.nodes['listItem']!, {'kind': kind});
+    command(_view.state, _view.dispatch);
   }
 
   void _applyNamedStyle(String name) {
