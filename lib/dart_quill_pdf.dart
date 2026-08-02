@@ -27,4 +27,4 @@
 library dart_quill_pdf;
 
 export 'src/converters/pdf/pdf_exporter.dart'
-    show deltaToPdf, PdfExportOptions;
+    show deltaToPdf, deltaToPdfWithReport, PdfExportOptions, PdfExportResult;

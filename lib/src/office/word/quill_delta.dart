@@ -430,6 +430,19 @@ class QuillDeltaConverter {
             height: _toDouble(attributes['height']),
           ));
         }
+        // O cabeçalho institucional do SALI (o brasão): um embed de bloco com
+        // a URL da imagem — tipicamente um SVG. Antes caía no `continue` sem
+        // aviso e o brasão simplesmente sumia do PDF exportado.
+        final Object? headerImage = insert['headerImage'];
+        if (headerImage is String) {
+          line.add(IElement(
+            value: headerImage,
+            type: ElementType.image,
+            width: _toDouble(attributes['width']),
+            height: _toDouble(attributes['height']),
+          )..extension = const <String, dynamic>{'headerImage': true});
+          endLine(const <String, dynamic>{});
+        }
         continue;
       }
       if (insert is! String) continue;

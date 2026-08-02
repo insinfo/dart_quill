@@ -33,6 +33,7 @@
 ///   the element converter and therefore render at a single level.
 library;
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import '../../office/document/fonts/font_metrics.dart'
@@ -42,7 +43,9 @@ import '../../office/document/fonts/font_registry.dart'
 import '../../office/document/pdf/pdf_content.dart'
     show PdfContentBuilder, encodeWinAnsi, standardFontFor;
 import '../../office/document/pdf/pdf_image.dart'
-    show PdfImageData, decodeDataUrlImage;
+    show PdfImageData, decodeDataUrlImage, decodeImageBytes;
+import '../../office/document/pdf/svg/svg_renderer.dart'
+    show SvgPicture, SvgRenderResult, parseSvg, renderSvgToPdfOperators;
 import '../../office/document/pdf/pdf_writer.dart'
     show PdfWriter;
 import '../../office/editor/dataset/enum/element.dart'
@@ -90,6 +93,8 @@ class PdfExportOptions {
     this.baseFontSize = 12,
     this.fontFamily = 'Arial',
     this.title = 'Documento',
+    this.resources = const <String, Uint8List>{},
+    this.headerImageHeightPt = 45,
   })  : marginTop = marginTop ?? margin,
         marginBottom = marginBottom ?? margin,
         marginLeft = marginLeft ?? margin,
@@ -117,6 +122,31 @@ class PdfExportOptions {
 
   /// Document title written to the PDF `/Info` dictionary.
   final String title;
+
+  /// Bytes de recursos externos, indexados pela URL/source exata que aparece
+  /// no Delta (`image` e `headerImage`). O pacote não faz rede: quem exporta
+  /// resolve as URLs antes — no navegador com `fetch`, no servidor lendo do
+  /// disco — e entrega os bytes aqui. Um source ausente vira aviso em
+  /// [PdfExportResult.warnings], nunca perda silenciosa.
+  final Map<String, Uint8List> resources;
+
+  /// Altura, em pontos, do cabeçalho institucional (`headerImage`). O plugin
+  /// do SALI o desenha com 60px no editor; 45pt é o equivalente.
+  final double headerImageHeightPt;
+}
+
+/// O PDF gerado mais o que NÃO pôde ser desenhado.
+///
+/// `deltaToPdf` continua devolvendo só os bytes; quem precisa auditar perdas
+/// (imagem sem bytes, SVG com recurso não suportado, tabela aninhada pulada)
+/// usa [deltaToPdfWithReport].
+class PdfExportResult {
+  const PdfExportResult(this.bytes, this.warnings);
+
+  final Uint8List bytes;
+
+  /// Avisos de conteúdo não desenhado ou aproximado, um por ocorrência.
+  final List<String> warnings;
 }
 
 /// Converts a Quill [Delta] into the bytes of a paginated PDF document.
@@ -131,6 +161,21 @@ Uint8List deltaToPdf(
   final List<IElement> elements =
       QuillDeltaConverter.fromDelta(<String, dynamic>{'ops': delta.toJson()});
   return _PdfLayoutEngine(options).render(elements);
+}
+
+/// Igual a [deltaToPdf], devolvendo também os avisos de conteúdo que não pôde
+/// ser desenhado (imagem sem bytes em [PdfExportOptions.resources], SVG com
+/// recurso não suportado, tabela aninhada) — a alternativa auditável à perda
+/// silenciosa.
+PdfExportResult deltaToPdfWithReport(
+  Delta delta, {
+  PdfExportOptions options = const PdfExportOptions(),
+}) {
+  final List<IElement> elements =
+      QuillDeltaConverter.fromDelta(<String, dynamic>{'ops': delta.toJson()});
+  final _PdfLayoutEngine engine = _PdfLayoutEngine(options);
+  final Uint8List bytes = engine.render(elements);
+  return PdfExportResult(bytes, List<String>.unmodifiable(engine.warnings));
 }
 
 // ---------------------------------------------------------------------------
@@ -189,6 +234,16 @@ class _ImageRef {
 }
 
 /// A measured token of a line: a word, a whitespace stretch or an image.
+/// Um desenho vetorial (SVG) ocupando a própria linha — o cabeçalho
+/// institucional (`headerImage`) do SALI é o caso que motivou.
+class _SvgBlock extends _Block {
+  _SvgBlock(this.picture, {required this.widthPt, required this.heightPt});
+
+  final SvgPicture picture;
+  final double widthPt;
+  final double heightPt;
+}
+
 /// Uma célula já posicionada na grade da tabela.
 class _TableCellBox {
   _TableCellBox({
@@ -300,6 +355,11 @@ class _PdfLayoutEngine {
   final PdfExportOptions options;
   final PdfWriter _writer = PdfWriter();
   final Map<String, _ImageRef?> _imageCache = <String, _ImageRef?>{};
+  final Map<String, SvgPicture?> _svgCache = <String, SvgPicture?>{};
+
+  /// Conteúdo que não pôde ser desenhado ou foi aproximado, uma entrada por
+  /// ocorrência. Exposto por [deltaToPdfWithReport].
+  final List<String> warnings = <String>[];
 
   late _PageSink _sink;
   late double _cursorY;
@@ -319,10 +379,29 @@ class _PdfLayoutEngine {
         _renderParagraph(block);
       } else if (block is _TableBlock) {
         _renderTable(block.element);
+      } else if (block is _SvgBlock) {
+        _renderSvg(block);
       }
     }
     _flushPage();
     return _writer.build(title: options.title, producer: 'dart_quill');
+  }
+
+  void _renderSvg(_SvgBlock block) {
+    _ensureSpace(block.heightPt);
+    // O renderizador de SVG fala o espaço do PDF (origem embaixo, y é o TOPO
+    // do retângulo); o cursor deste motor é top-based com k = 1.
+    final SvgRenderResult drawn = renderSvgToPdfOperators(
+      block.picture,
+      x: _contentX,
+      y: options.pageHeight - _cursorY,
+      width: block.widthPt,
+      height: block.heightPt,
+    );
+    _sink.builder.rawOp(drawn.operators);
+    warnings.addAll(drawn.warnings);
+    _cursorY += block.heightPt + 6;
+    _pageHasContent = true;
   }
 
   _PageSink _newSink() =>
@@ -420,6 +499,27 @@ class _PdfLayoutEngine {
           listOrdinal = 0;
           continue;
         case ElementType.image:
+          final SvgPicture? svg = _svgFor(element);
+          if (svg != null) {
+            flushIfNotEmpty();
+            final bool isHeader = _isHeaderImage(element);
+            // O cabeçalho ocupa a largura útil na altura configurada; uma
+            // imagem SVG comum usa as dimensões do Delta (px -> pt) ou cai na
+            // proporção do viewBox sobre 120 pt de altura.
+            final double height = isHeader
+                ? options.headerImageHeightPt
+                : (element.height != null
+                    ? element.height! * _pxToPt
+                    : 120);
+            final double width = isHeader
+                ? _contentWidth
+                : (element.width != null
+                    ? element.width! * _pxToPt
+                    : _contentWidth);
+            blocks.add(_SvgBlock(svg, widthPt: width, heightPt: height));
+            skipNextNewline = true;
+            continue;
+          }
           final _ImageRef? image = _imageFor(element);
           if (image != null) {
             current.add(_Run(
@@ -1036,7 +1136,11 @@ class _PdfLayoutEngine {
   double _measureBlocks(List<_Block> blocks, double width) {
     double height = 0;
     for (final _Block block in blocks) {
-      if (block is! _ParagraphBlock) continue; // nested tables are skipped
+      if (block is! _ParagraphBlock) {
+        warnings.add('conteúdo não suportado dentro de célula de tabela '
+            '(tabela aninhada ou desenho) foi pulado');
+        continue;
+      }
       final List<_Line> lines = _breakLines(block.runs, width - block.indent);
       if (lines.isEmpty) {
         height += _emptyLineHeight;
@@ -1107,6 +1211,62 @@ class _PdfLayoutEngine {
 
   // -- Images ----------------------------------------------------------------
 
+  static bool _isHeaderImage(IElement element) {
+    final dynamic extension = element.extension;
+    return extension is Map && extension['headerImage'] == true;
+  }
+
+  /// O texto de um SVG para este source, vindo de um data URL ou dos bytes em
+  /// [PdfExportOptions.resources]; null quando o source não é SVG.
+  SvgPicture? _svgFor(IElement element) {
+    final String source = element.value;
+    if (_svgCache.containsKey(source)) return _svgCache[source];
+
+    String? text;
+    if (source.startsWith('data:image/svg')) {
+      final int comma = source.indexOf(',');
+      if (comma > 0) {
+        final String payload = source.substring(comma + 1);
+        text = source.contains(';base64')
+            ? utf8.decode(base64Decode(payload.trim()), allowMalformed: true)
+            : Uri.decodeComponent(payload);
+      }
+    } else {
+      final Uint8List? bytes = options.resources[source];
+      if (bytes != null) {
+        final String head =
+            utf8.decode(bytes.take(256).toList(), allowMalformed: true);
+        if (head.contains('<svg') || head.trimLeft().startsWith('<?xml')) {
+          text = utf8.decode(bytes, allowMalformed: true);
+        }
+      } else if (_looksLikeSvgUrl(source)) {
+        warnings.add('imagem SVG sem bytes em PdfExportOptions.resources, '
+            'não desenhada: $source');
+        _svgCache[source] = null;
+        return null;
+      }
+    }
+    if (text == null || !text.contains('<svg')) {
+      _svgCache[source] = null;
+      return null;
+    }
+    try {
+      final SvgPicture picture = parseSvg(text);
+      warnings.addAll(picture.warnings.map((w) => 'svg: $w ($source)'));
+      _svgCache[source] = picture;
+      return picture;
+    } on FormatException catch (error) {
+      warnings.add('svg inválido, não desenhado: $source ($error)');
+      _svgCache[source] = null;
+      return null;
+    }
+  }
+
+  static bool _looksLikeSvgUrl(String source) {
+    final String path = source.split('?').first.split('#').first.toLowerCase();
+    return path.endsWith('.svg');
+  }
+
   /// Decodes and registers the image of an image element; results (including
   /// failures) are cached by data URL so repeated images share one XObject.
   _ImageRef? _imageFor(IElement element) {
@@ -1115,8 +1275,14 @@ class _PdfLayoutEngine {
     if (_imageCache.containsKey(source)) {
       ref = _imageCache[source];
     } else {
-      final PdfImageData? decoded = decodeDataUrlImage(source);
+      PdfImageData? decoded = decodeDataUrlImage(source);
       if (decoded == null) {
+        final Uint8List? bytes = options.resources[source];
+        if (bytes != null) decoded = decodeImageBytes(bytes);
+      }
+      if (decoded == null) {
+        warnings.add('imagem sem bytes decodificáveis (data URL ou '
+            'PdfExportOptions.resources), não desenhada: $source');
         _imageCache[source] = null;
         return null;
       }

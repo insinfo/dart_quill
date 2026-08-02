@@ -229,11 +229,49 @@ class QuillEditorComponent implements AfterViewInit {
     );
   }
 
-  void exportPdf() {
+  Future<void> exportPdf() async {
     final quill = _quill;
     if (quill == null) return;
-    _download(pdf.deltaToPdf(quill.getContents()), 'documento.pdf',
-        'application/pdf');
+    _download(await _renderPdf(quill), 'documento.pdf', 'application/pdf');
+  }
+
+  /// Gera o PDF resolvendo antes os recursos externos (imagens e o
+  /// headerImage por URL): o pacote não faz rede, então a aplicação busca os
+  /// bytes com `fetch` e os entrega em `PdfExportOptions.resources`. Perdas
+  /// restantes aparecem em `warnings`, no console.
+  Future<Uint8List> _renderPdf(Quill quill) async {
+    final delta = quill.getContents();
+    final sources = <String>{};
+    for (final op in delta.toJson()) {
+      final insert = op['insert'];
+      if (insert is! Map) continue;
+      for (final key in const ['image', 'headerImage']) {
+        final source = insert[key];
+        if (source is String &&
+            (source.startsWith('http://') || source.startsWith('https://'))) {
+          sources.add(source);
+        }
+      }
+    }
+    final resources = <String, Uint8List>{};
+    for (final source in sources) {
+      try {
+        final response =
+            await web.window.fetch(source.toJS).toDart;
+        if (response.ok) {
+          final buffer = await response.arrayBuffer().toDart;
+          resources[source] = buffer.toDart.asUint8List();
+        }
+      } catch (_) {
+        // Sem os bytes o exportador registra o aviso; nada a fazer aqui.
+      }
+    }
+    final result = pdf.deltaToPdfWithReport(delta,
+        options: pdf.PdfExportOptions(resources: resources));
+    for (final warning in result.warnings) {
+      web.console.warn('pdf: $warning'.toJS);
+    }
+    return result.bytes;
   }
 
   // --- print ----------------------------------------------------------------
@@ -242,10 +280,10 @@ class QuillEditorComponent implements AfterViewInit {
   /// abrir aba e sem servidor. O iframe precisa ficar no DOM (um display:none
   /// impediria a impressão), então ele é dimensionado a zero e removido depois
   /// que a caixa de impressão fecha.
-  void print() {
+  Future<void> print() async {
     final quill = _quill;
     if (quill == null) return;
-    final bytes = pdf.deltaToPdf(quill.getContents());
+    final bytes = await _renderPdf(quill);
     final blob = web.Blob(
       [bytes.toJS].toJS,
       web.BlobPropertyBag(type: 'application/pdf'),

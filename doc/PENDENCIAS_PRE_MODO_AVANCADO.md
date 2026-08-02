@@ -185,8 +185,11 @@ conversores.
 | P5 — `rowspan` na tabela do PDF | **corrigido** (grade de ocupação) |
 | P8 — recuo por nível de lista no PDF | **corrigido** |
 | P17 — suíte de testes de tabela no PDF | **criada** |
+| P2/P3 — `headerImage` + SVG no PDF | **corrigido** (brasão real coberto por teste) |
+| P4 — imagens por URL no PDF | **corrigido** (`PdfExportOptions.resources`; a app resolve com fetch) |
+| P16 — canal de warnings no PDF | **corrigido** (`deltaToPdfWithReport`) |
 | W1/W2 — fonte e tamanho descartados pela whitelist | **corrigido** (configurável) |
-| H4–H7, W3–W10, P1–P4, P6/P7, P9–P16, P18–P20 | pendentes |
+| H4–H7, W3–W10, P1, P6/P7, P9–P15, P18–P20 | pendentes |
 
 Testes que travam o corrigido: `html_table_rows_test.dart`,
 `html_table_cells_test.dart`, `cell_text_hydration_test.dart`,
