@@ -3604,6 +3604,24 @@ tabela de revisões própria).
    range mapeado quando medição pedir)*
 2. **Editor flow** — view/contenteditable/seleção/IME/clipboard/histórico +
    camada de extensões Dart. Gate: editor contínuo robusto.
+   *(INICIADA 2026-08-02 — `layout/dom_renderer.dart`: o DOMRenderer é o
+   PAR do PdfRenderer e consome o MESMO PageGraph, também sem decidir
+   layout. Materializa três regras da arquitetura: o DOM é projeção (nada
+   é lido de volta dele), PIXEL só existe nesta borda (escala explícita
+   `pxPerPt`, padrão 96/72, sobre o grafo em twips) e todo seletor usa o
+   prefixo `dq-office-*` — o CSS Office nunca toca `.ql-editor`. Cada
+   elemento carrega as âncoras do PositionMap (`data-doc-pos`,
+   `data-node-id`, `data-char-start/end`) que serão a ponte de seleção e
+   hit-testing. Já nasce com a janela de páginas (`PageWindow`): fora dela
+   sai um placeholder da altura EXATA, para o scroll não pular quando a
+   virtualização da Fase 7 trocar a janela. **GATE TRIPLO PROVADO**: para
+   cada página, o texto que o grafo compôs aparece no DOM daquela página E
+   no stream PDF daquela página — 13 testes VM + 5 em Chrome REAL
+   (geometria medida por getBoundingClientRect, `isContentEditable`,
+   seleção nativa enxergando o texto projetado, placeholder com a mesma
+   altura da página, zero classe `ql-` na projeção). Pendências da fase:
+   beforeinput/IME/clipboard, reconciliação DOM→modelo e a camada de
+   extensões)*
 3. **Delta** — importer/exporter + compatibility report + custom op opaco +
    alternância Quill↔Office + testes com todos os Deltas SALI. Gate: Delta
    básico abre e volta sem perda. *(GATE CUMPRIDO 2026-08-02:

@@ -18,6 +18,7 @@ library;
 
 export 'src/document_engine/commands/index.dart';
 export 'src/document_engine/history/history.dart';
+export 'src/document_engine/layout/dom_renderer.dart';
 export 'src/document_engine/layout/fonts.dart';
 export 'src/document_engine/layout/layout_composer.dart';
 export 'src/document_engine/layout/page_graph.dart';
