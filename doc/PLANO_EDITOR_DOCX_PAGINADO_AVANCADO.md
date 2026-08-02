@@ -3898,9 +3898,21 @@ tabela de revisões própria).
    incremental recompunha tudo DE NOVO por cima do prefixo reusado
    (páginas quase dobravam). Medição em documento de 4000 blocos / 149
    páginas: composição completa 125 ms → incremental no fim **2 ms (62×)**;
-   o cache sozinho leva a completa a 55 ms. Pendências da fase:
-   convergência de sufixo (edição no INÍCIO ainda recompõe tudo),
-   virtualização com janela viva, worker e cancelamento de jobs)*
+   o cache sozinho leva a completa a 55 ms. A VIRTUALIZAÇÃO entrou em seguida, na ordem que o §7.9 exige (posição
+   modelo↔DOM, índice de página e placeholders exatos já existiam):
+   `OfficeVirtualization(radius: 3)` na view monta só a janela em volta da
+   página visível e reprojeta no scroll. Correção de desenho feita durante
+   a implementação: a primeira versão ESTICAVA a faixa até a seleção, o que
+   significa que um caret na página 0 com o viewport na 150 manteria 151
+   páginas montadas — a virtualização não serviria para nada. A seleção
+   passou a FIXAR a página (`PageWindow.pinned`), não a esticar o
+   intervalo. Scroll dentro da mesma página não reprojeta (reprojetar a
+   cada pixel seria pior que não virtualizar) e scroll durante composição
+   IME não remonta (destruiria o estado do IME). 10 testes VM, entre eles
+   a garantia de que o mapa de posições resolve o caret na página fixada e
+   que placeholder e página têm a MESMA altura, para o scroll não pular.
+   Pendências da fase: convergência de sufixo (edição no INÍCIO ainda
+   recompõe tudo), worker e cancelamento de jobs)*
 
 ### TextShaper — escopo honesto
 

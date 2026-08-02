@@ -33,6 +33,19 @@ import 'clipboard.dart';
 import 'extension.dart';
 import 'reconciler.dart';
 
+/// Política de virtualização: quantas páginas montar em volta da visível.
+///
+/// A ordem do §7.9 é deliberada — posição modelo↔DOM, índice de página e
+/// placeholders exatos vêm ANTES da janela. Virtualizar sem eles produz
+/// bugs de caret difíceis de reproduzir, porque a página onde o cursor
+/// está pode simplesmente não existir no DOM.
+class OfficeVirtualization {
+  const OfficeVirtualization({this.radius = 3});
+
+  /// Páginas montadas para cada lado da visível. O padrão ±3 é o do plano.
+  final int radius;
+}
+
 /// Um `inputType` que a view reconhece e roteia pelo modelo.
 enum OfficeInputAction {
   insertText,
@@ -50,8 +63,11 @@ class OfficeEditorView {
     LayoutComposer? composer,
     PageGraphDomRenderer? renderer,
     List<OfficeExtension> extensions = const [],
+    this.virtualization,
+    DomElement? scrollContainer,
     this.onStateChange,
   })  : _state = state,
+        _scrollContainer = scrollContainer,
         _adapter = adapter,
         _composer = composer ?? LayoutComposer(),
         _extensions = OfficeExtensionSet(extensions),
@@ -71,6 +87,10 @@ class OfficeEditorView {
     host.addEventListener('paste', _paste);
     host.addEventListener('compositionstart', _compositionStart);
     host.addEventListener('compositionend', _compositionEnd);
+    if (virtualization != null) {
+      _scroll = _handleScroll;
+      (_scrollContainer ?? host).addEventListener('scroll', _scroll!);
+    }
     _compose();
     _project();
   }
@@ -88,6 +108,8 @@ class OfficeEditorView {
     required List<OfficeExtension> extensions,
     LayoutComposer? composer,
     PageGraphDomRenderer? renderer,
+    OfficeVirtualization? virtualization,
+    DomElement? scrollContainer,
     void Function(EditorState state)? onStateChange,
   }) {
     final set = OfficeExtensionSet(extensions);
@@ -99,6 +121,8 @@ class OfficeEditorView {
       composer: composer,
       renderer: renderer,
       extensions: extensions,
+      virtualization: virtualization,
+      scrollContainer: scrollContainer,
       onStateChange: onStateChange,
     );
   }
@@ -108,6 +132,12 @@ class OfficeEditorView {
   final LayoutComposer _composer;
   final PageGraphDomRenderer _renderer;
   final OfficeExtensionSet _extensions;
+
+  /// Null monta o documento inteiro (o padrão, e o certo para documentos
+  /// pequenos: virtualizar tem custo próprio).
+  final OfficeVirtualization? virtualization;
+
+  final DomElement? _scrollContainer;
   final OfficeDomPositionMap _positions = const OfficeDomPositionMap();
 
   /// Notificação de mudança de estado (a aplicação persiste a partir daqui).
@@ -124,8 +154,10 @@ class OfficeEditorView {
   late DomEventListener _compositionEnd;
   final OfficeClipboard _clipboard = const OfficeClipboard();
   final OfficeDomReconciler _reconciler = const OfficeDomReconciler();
+  DomEventListener? _scroll;
   bool _disposed = false;
   bool _composing = false;
+  PageWindow? _window;
 
   EditorState get state => _state;
   PageGraph get pageGraph => _pageGraph;
@@ -212,7 +244,13 @@ class OfficeEditorView {
     host.removeEventListener('paste', _paste);
     host.removeEventListener('compositionstart', _compositionStart);
     host.removeEventListener('compositionend', _compositionEnd);
+    if (_scroll != null) {
+      (_scrollContainer ?? host).removeEventListener('scroll', _scroll!);
+    }
   }
+
+  /// A janela de páginas montada agora. Null quando tudo está montado.
+  PageWindow? get mountedWindow => _window;
 
   /// True enquanto uma composição IME está em curso. Enquanto for true, a
   /// projeção NÃO é reconstruída.
@@ -250,7 +288,61 @@ class OfficeEditorView {
     return smallest;
   }
 
-  void _project() => _renderer.render(_pageGraph, host);
+  void _project() {
+    _window = _computeWindow();
+    _renderer.render(_pageGraph, host, window: _window);
+  }
+
+  /// A janela em volta da página visível, mais as páginas FIXADAS.
+  ///
+  /// Nunca desmontar a página da seleção é o que impede o caret de sumir: o
+  /// mapa de posições devolve null em página desmontada, e o contrato é que
+  /// o chamador monte — aqui o chamador somos nós. Mas a seleção FIXA a
+  /// página, não estica a faixa: um caret na página 0 com o viewport na 150
+  /// manteria 151 páginas montadas, e a virtualização não serviria para
+  /// nada.
+  PageWindow? _computeWindow() {
+    final policy = virtualization;
+    if (policy == null) return null;
+    final total = _pageGraph.pages.length;
+    if (total == 0) return null;
+
+    final visible = _visiblePageIndex();
+    var first = visible - policy.radius;
+    var last = visible + policy.radius;
+    if (first < 0) first = 0;
+    if (last > total - 1) last = total - 1;
+
+    final pinned = <int>{};
+    for (final position in [_state.selection.from, _state.selection.to]) {
+      final page = _pageGraph.positionMap.pageOf(position);
+      if (page < first || page > last) pinned.add(page);
+    }
+    return PageWindow(firstPage: first, lastPage: last, pinned: pinned);
+  }
+
+  /// Qual página está no topo do viewport.
+  ///
+  /// Todas as páginas têm a mesma altura (a do setup), então a divisão
+  /// basta e não custa medir o DOM.
+  int _visiblePageIndex() {
+    final container = _scrollContainer ?? host;
+    final scrollTop = container.scrollTop;
+    if (scrollTop <= 0) return 0;
+    final pageHeightPx =
+        _pageGraph.pages.first.setup.heightTwips / 20.0 * _renderer.pxPerPt;
+    if (pageHeightPx <= 0) return 0;
+    return (scrollTop / pageHeightPx).floor();
+  }
+
+  void _handleScroll(DomEvent event) {
+    if (_disposed || _composing) return;
+    final next = _computeWindow();
+    if (next == null || next == _window) return;
+    _renderer.render(_pageGraph, host, window: next);
+    _window = next;
+    _writeSelection();
+  }
 
   /// Escreve a seleção do MODELO na seleção nativa. Uma posição em página
   /// não montada simplesmente não é escrita — a virtualização monta a

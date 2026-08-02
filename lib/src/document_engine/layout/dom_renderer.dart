@@ -29,13 +29,43 @@ const String officeCssPrefix = 'dq-office';
 
 /// Janela de páginas montadas (virtualização). `null` monta tudo.
 class PageWindow {
-  const PageWindow({required this.firstPage, required this.lastPage});
+  const PageWindow({
+    required this.firstPage,
+    required this.lastPage,
+    this.pinned = const {},
+  });
 
   final int firstPage;
   final int lastPage;
 
+  /// Páginas montadas FORA da faixa contígua — a seleção, a composição IME,
+  /// uma operação em curso.
+  ///
+  /// São fixadas, não esticam a faixa: um caret na página 0 com o viewport
+  /// na 150 manteria 151 páginas montadas se o intervalo fosse esticado, e
+  /// aí a virtualização não serviria para nada.
+  final Set<int> pinned;
+
   bool contains(int pageIndex) =>
-      pageIndex >= firstPage && pageIndex <= lastPage;
+      (pageIndex >= firstPage && pageIndex <= lastPage) ||
+      pinned.contains(pageIndex);
+
+  /// Igualdade ESTRUTURAL: a view compara a janela nova com a montada para
+  /// não reprojetar a cada pixel de scroll.
+  @override
+  bool operator ==(Object other) =>
+      other is PageWindow &&
+      other.firstPage == firstPage &&
+      other.lastPage == lastPage &&
+      other.pinned.length == pinned.length &&
+      other.pinned.containsAll(pinned);
+
+  @override
+  int get hashCode =>
+      Object.hash(firstPage, lastPage, Object.hashAllUnordered(pinned));
+
+  @override
+  String toString() => 'PageWindow($firstPage..$lastPage, pinned=$pinned)';
 }
 
 class PageGraphDomRenderer {
