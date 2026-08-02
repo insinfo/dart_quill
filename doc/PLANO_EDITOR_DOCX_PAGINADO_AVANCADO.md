@@ -3705,8 +3705,30 @@ tabela de revisões própria).
    dois ("antes  colado" com espaço duplo) — `_openSlice` abre as bordas
    quando todo o conteúdo é bloco de texto, e a primeira linha funde no
    bloco atual como no Word. 32 testes VM + 2 em Chrome REAL (DataTransfer
-   nativo no copiar e no colar). Pendências da fase: IME e reconciliação
-   DOM→modelo)*
+   nativo no copiar e no colar). IME + RECONCILIAÇÃO DOM→MODELO fecharam a
+   fase (`view/reconciler.dart`): a composição é a ÚNICA parte do editor em
+   que o browser escreve na projeção, porque `beforeinput` de composição
+   não é cancelável de forma confiável e o IME precisa dos próprios nós
+   para desenhar o candidato. Política: durante a composição NÃO
+   reprojetamos (reprojetar destrói o estado do IME no meio da palavra) e
+   o `beforeinput` passa; no `compositionend` lemos o bloco afetado e
+   reconstruímos a diferença como transação normal — o modelo volta a ser
+   a fonte de verdade e o histórico vê UMA edição, não uma por tecla
+   (testado: um Ctrl+Z desfaz 日本語 inteiro). O diff é por bloco, com
+   prefixo/sufixo comum, e nunca corta par substituto — a armadilha que já
+   mordeu o diff do Quill. BUG REAL que o teste pegou: o reconciliador
+   aceitava qualquer nó da seleção nativa, que é GLOBAL e pode estar
+   obsoleta ou pertencer a OUTRO editor da mesma página; como
+   `data-doc-pos` faz sentido em qualquer projeção, uma composição num
+   editor reescrevia o documento do outro — exatamente o requisito "Quill
+   simples e editor Office simultâneos" do §1. `reconcile` passou a
+   delimitar pelo host, com `==` de nó e nunca `identical` (wrapper novo a
+   cada acesso no adaptador web). 15 testes VM (incl. dois editores lado a
+   lado) + 1 em Chrome REAL com CompositionEvent nativo. **GATE "editor
+   contínuo robusto" CUMPRIDO** para o caminho Chromium: digitação,
+   apagar, Enter, seleção nativa, atalhos, undo/redo, clipboard e IME.
+   Pendências reais: matriz Firefox/Safari/mobile (§8.2) e a virtualização
+   da Fase 7)*
 3. **Delta** — importer/exporter + compatibility report + custom op opaco +
    alternância Quill↔Office + testes com todos os Deltas SALI. Gate: Delta
    básico abre e volta sem perda. *(GATE CUMPRIDO 2026-08-02:

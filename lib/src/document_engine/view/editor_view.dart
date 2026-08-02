@@ -31,6 +31,7 @@ import '../model/index.dart';
 import '../state/index.dart';
 import 'clipboard.dart';
 import 'extension.dart';
+import 'reconciler.dart';
 
 /// Um `inputType` que a view reconhece e roteia pelo modelo.
 enum OfficeInputAction {
@@ -61,11 +62,15 @@ class OfficeEditorView {
     _copy = _handleCopy;
     _cut = _handleCut;
     _paste = _handlePaste;
+    _compositionStart = _handleCompositionStart;
+    _compositionEnd = _handleCompositionEnd;
     host.addEventListener('beforeinput', _beforeInput);
     host.addEventListener('keydown', _keyDown);
     host.addEventListener('copy', _copy);
     host.addEventListener('cut', _cut);
     host.addEventListener('paste', _paste);
+    host.addEventListener('compositionstart', _compositionStart);
+    host.addEventListener('compositionend', _compositionEnd);
     _compose();
     _project();
   }
@@ -115,8 +120,12 @@ class OfficeEditorView {
   late DomEventListener _copy;
   late DomEventListener _cut;
   late DomEventListener _paste;
+  late DomEventListener _compositionStart;
+  late DomEventListener _compositionEnd;
   final OfficeClipboard _clipboard = const OfficeClipboard();
+  final OfficeDomReconciler _reconciler = const OfficeDomReconciler();
   bool _disposed = false;
+  bool _composing = false;
 
   EditorState get state => _state;
   PageGraph get pageGraph => _pageGraph;
@@ -169,8 +178,13 @@ class OfficeEditorView {
       // é honesto para documentos de trabalho, não para 200 páginas.
       _compose();
     }
-    _project();
-    _writeSelection();
+    // Durante a composição a projeção pertence ao BROWSER: reconstruí-la
+    // aqui destruiria os nós que o IME está usando para desenhar o
+    // candidato, e a composição morreria no meio da palavra.
+    if (!_composing) {
+      _project();
+      _writeSelection();
+    }
     onStateChange?.call(_state);
   }
 
@@ -196,7 +210,13 @@ class OfficeEditorView {
     host.removeEventListener('copy', _copy);
     host.removeEventListener('cut', _cut);
     host.removeEventListener('paste', _paste);
+    host.removeEventListener('compositionstart', _compositionStart);
+    host.removeEventListener('compositionend', _compositionEnd);
   }
+
+  /// True enquanto uma composição IME está em curso. Enquanto for true, a
+  /// projeção NÃO é reconstruída.
+  bool get isComposing => _composing;
 
   // -- laço -----------------------------------------------------------------
 
@@ -239,6 +259,39 @@ class OfficeEditorView {
       dispatch: dispatch,
     );
     if (handled) event.preventDefault();
+  }
+
+  // -- composição IME --------------------------------------------------------
+
+  void _handleCompositionStart(DomEvent event) {
+    if (_disposed) return;
+    _composing = true;
+  }
+
+  /// Fim da composição: o browser JÁ escreveu na projeção. Lemos o bloco
+  /// afetado e reconstruímos a diferença como transação normal — o modelo
+  /// volta a ser a fonte de verdade e o histórico vê UMA edição.
+  void _handleCompositionEnd(DomEvent event) {
+    if (_disposed) return;
+    _composing = false;
+    final native = _adapter.getNativeSelectionRange();
+    if (native == null) {
+      _project();
+      return;
+    }
+    final transaction = _reconciler.reconcile(
+      host: host,
+      node: native.startContainer,
+      state: _state,
+    );
+    if (transaction == null) {
+      // Nada mudou no modelo, mas o DOM pode ter ficado com nós próprios do
+      // IME: reprojetar devolve a projeção canônica.
+      _project();
+      _writeSelection();
+      return;
+    }
+    dispatch(transaction);
   }
 
   // -- clipboard -------------------------------------------------------------
@@ -293,10 +346,11 @@ class OfficeEditorView {
   void _handleBeforeInput(DomEvent event) {
     if (_disposed || event is! DomInputEvent) return;
 
-    // Composição IME: não é cancelável de forma confiável e ainda não temos
-    // o caminho de reconciliação. Ignorar é pior UX que suportar, mas é
-    // honesto — fingir que funciona corromperia o documento.
-    if (event.isComposing) return;
+    // Composição IME: NÃO cancelar. O browser precisa dos próprios nós para
+    // desenhar o candidato, e cancelar aqui quebraria CJK, acentos mortos e
+    // a autocorreção do mobile. O que ele escrever é reconciliado no
+    // `compositionend`.
+    if (event.isComposing || _composing) return;
 
     // Tudo que chega aqui é cancelado: o browser não escreve na projeção.
     event.preventDefault();

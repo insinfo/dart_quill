@@ -252,6 +252,35 @@ void main() {
         contains('bold'));
   });
 
+  test('composição IME REAL: o browser escreve e o modelo reconcilia', () {
+    final view = mountWithExtensions(docOf([paragraph('ca')]));
+    caretAt(view, 1 + 2);
+
+    final surface = focusSurface();
+    surface.dispatchEvent(web.CompositionEvent(
+        'compositionstart',
+        web.CompositionEventInit(bubbles: true, cancelable: true)));
+    expect(view.isComposing, isTrue);
+
+    // O que o IME faz: escreve DIRETO no nó de texto da projeção.
+    const map = OfficeDomPositionMap();
+    final position = map.domPositionFor(host, 1 + 2)!;
+    final textNode = (position.node as dynamic).node as web.Text;
+    textNode.data = '${textNode.data}fé';
+    adapter.setSelectionByNodes(
+        position.node, position.offset, position.node, position.offset);
+
+    surface.dispatchEvent(web.CompositionEvent(
+        'compositionend',
+        web.CompositionEventInit(
+            data: 'fé', bubbles: true, cancelable: true)));
+
+    expect(view.isComposing, isFalse);
+    expect(docText(view), 'café',
+        reason: 'o que o browser escreveu tem de voltar para o MODELO');
+    expect(hostElement.textContent, contains('café'));
+  });
+
   test('dispose solta o listener: digitar depois não muda mais nada', () {
     final view = mount(docOf([paragraph('final')]));
     caretAt(view, 1 + 5);
