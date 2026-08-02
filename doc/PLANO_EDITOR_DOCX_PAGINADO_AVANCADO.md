@@ -3622,6 +3622,19 @@ tabela de revisões própria).
 5. **Layout determinístico e PDF** — StyleResolver, shaping latino, line
    breaking, page composer, fragmentação, PageGraph, PdfWriter dirigido
    pelo PageGraph. Gate: editor e PDF usam o MESMO PageGraph.
+   *(INICIADA 2026-08-02 — lado PDF do gate provado:
+   `layout/page_graph.dart` (tipos em TWIPS: PageLayout, BlockFragment,
+   LineBox, PositionMap, LayoutQuality, diagnostics),
+   `layout/layout_composer.dart` (quebra de linha por FontMetrics — a
+   MESMA autoridade de medição do exportador PDF —, fragmentação ENTRE
+   páginas em granularidade de LINHA: um parágrafo atravessa páginas sem
+   virar dois nós, com continuesFrom/OnNextPage; heading/lista/blockquote/
+   codeBlock do perfil Quill) e `layout/pdf_renderer.dart` (transcreve o
+   grafo, não decide layout). Testes: paridade POR PÁGINA grafo↔PDF,
+   determinismo, PositionMap, corpus real via importQuillDelta→compose→
+   render. Pendências da fase: tabelas no composer, TextShaper etapa 1,
+   fontes embutidas CID no renderer, e o lado EDITOR do gate (DOMRenderer
+   da Fase 2 consumindo o mesmo grafo))*
 6. **Recursos Word** — tabelas divididas, repeat header, cantSplit,
    widow/orphan, keep-next, footnotes, fields, TOC, seções múltiplas.
 7. **200 páginas** — invalidação incremental por PageSignature, cache
