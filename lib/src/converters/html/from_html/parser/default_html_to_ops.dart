@@ -66,6 +66,18 @@ class DefaultHtmlToOperations extends HtmlOperations {
 
     // Render do conteúdo inline
     final nodes = element.nodes;
+    // <p><br></p> é UMA linha em branco: processar o <br> (que vira newline)
+    // e ainda fechar o parágrafo com outro newline dobrava as linhas em
+    // branco a cada ciclo export -> import (H6).
+    final isBlankParagraph = nodes.isNotEmpty &&
+        nodes.every((n) =>
+            (n is dom.Element && n.isBreakLine) ||
+            (n.nodeType == dom.Node.TEXT_NODE &&
+                (n.text ?? '').trim().isEmpty));
+    if (isBlankParagraph) {
+      delta.insert('\n');
+      return delta.toList();
+    }
     for (final node in nodes) {
       processNode(
         node,
@@ -424,14 +436,44 @@ class DefaultHtmlToOperations extends HtmlOperations {
 
     addInsert('\n', {'table-temporary': anchor});
 
-    // ---------- 2) Células ----------
+    String onlyNumber(String v) => v.replaceAll(RegExp(r'[^0-9.]'), '');
+
+    // ---------- 2) <colgroup> vira table-col (H6) ----------
+    // Sem isto as larguras de coluna do HTML exportado não voltavam ao
+    // editor nem ao PDF — só a largura por célula sobrevivia.
+    for (final col in table.querySelectorAll('colgroup col')) {
+      final rawWidth = (col.attributes['width'] ?? '').trim().isNotEmpty
+          ? col.attributes['width']!.trim()
+          : (RegExp(r'width\s*:\s*([^;]+)', caseSensitive: false)
+                  .firstMatch(col.attributes['style'] ?? '')
+                  ?.group(1) ??
+              '');
+      final width = onlyNumber(rawWidth);
+      if (width.isNotEmpty) {
+        addInsert('\n', {
+          'table-col': {'width': width}
+        });
+      }
+    }
+
+    // ---------- 3) Células ----------
     final scope = table.querySelector('tbody') ?? table;
     final rows = scope.querySelectorAll('tr');
 
-    String onlyNumber(String v) => v.replaceAll(RegExp(r'[^0-9.]'), '');
+    // Ocupação de colunas por rowspan (H6): uma célula mesclada ocupa a
+    // MESMA coluna nas linhas seguintes; sem a grade o índice de bloco das
+    // células dessas linhas escorregava para a esquerda.
+    final occupied = <int>[];
 
     for (var r = 0; r < rows.length; r++) {
       final row = rows[r];
+
+      // Round-trip estável (H6): o id de linha é uma string opaca; quando o
+      // HTML traz o original (`data-row`), ele volta intacto em vez de ser
+      // reindexado — reimportar o próprio export não muda o Delta.
+      final rowId = (row.attributes['data-row'] ?? '').trim().isNotEmpty
+          ? row.attributes['data-row']!.trim()
+          : (r + 1).toString();
 
       // mantém ordem real th/td
       final cells = <dom.Element>[
@@ -439,18 +481,18 @@ class DefaultHtmlToOperations extends HtmlOperations {
           if (c.localName == 'th' || c.localName == 'td') c
       ];
 
-      var block = 1; // table-cell-block inicia em 1 por linha
+      var column = 0; // índice de coluna real, contando ocupação de rowspan
 
       for (final cell in cells) {
+        while (column < occupied.length && occupied[column] > 0) {
+          column++;
+        }
         final cellStyle = (cell.getAttribute('style') ?? '').trim();
 
-        // texto da célula (bold se tiver <strong>/<b>)
-        final rawText = cell.text;
-        final text = rawText.trim();
-        if (text.isNotEmpty) {
-          final hasBold = cell.querySelector('strong,b') != null;
-          addInsert(text, hasBold ? {'bold': true} : null);
-        }
+        final rowspan = (cell.getAttribute('rowspan') ?? '').trim();
+        final colspan = (cell.getAttribute('colspan') ?? '').trim();
+        final colSpanN = int.tryParse(colspan.isEmpty ? '1' : colspan) ?? 1;
+        final rowSpanN = int.tryParse(rowspan.isEmpty ? '1' : rowspan) ?? 1;
 
         // align
         var align = 'center';
@@ -470,27 +512,100 @@ class DefaultHtmlToOperations extends HtmlOperations {
           if (wm != null) width = onlyNumber(wm.group(1)!);
         }
 
-        final rowspan = (cell.getAttribute('rowspan') ?? '').trim();
-        final colspan = (cell.getAttribute('colspan') ?? '').trim();
-
         final tableCell = <String, String>{
-          'data-row': (r + 1).toString(),
+          'data-row': rowId,
           'width': width,
           'style': cellStyle,
         };
         if (rowspan.isNotEmpty) tableCell['rowspan'] = rowspan;
         if (colspan.isNotEmpty) tableCell['colspan'] = colspan;
 
-        // fecha a célula com '\n' + atributos da linha/célula
-        addInsert('\n', {
-          'table-cell-block': block.toString(), // STRING, igual ao seu delta
-          'table-cell': tableCell, // todos valores como STRING
+        // Id de célula: o original quando o HTML o traz (`data-cell`),
+        // senão o índice de coluna real (1-based).
+        final cellId = (cell.attributes['data-cell'] ?? '').trim().isNotEmpty
+            ? cell.attributes['data-cell']!.trim()
+            : (column + 1).toString();
+        final cellLineAttrs = <String, dynamic>{
+          'table-cell-block': cellId,
+          'table-cell': tableCell,
           'align': align,
-        });
+        };
 
-        // avança block respeitando colspan
-        final span = int.tryParse(colspan.isEmpty ? '1' : colspan) ?? 1;
-        block += span;
+        // Conteúdo RICO da célula (H6): antes era `cell.text` com um bold
+        // único para a célula toda — links, cores, itálico parcial e
+        // múltiplos parágrafos se perdiam. Cada bloco interno vira uma
+        // linha da MESMA célula (mesmo table-cell-block), o dialeto do
+        // editor para célula multi-bloco.
+        final cellDelta = Delta();
+        void processCellNode(dom.Node node) {
+          if (node is dom.Element &&
+              const ['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li']
+                  .contains(node.localName)) {
+            for (final child in node.nodes) {
+              processNode(child, const {}, cellDelta,
+                  addSpanAttrs: true,
+                  onDetectLineheightCssVariable:
+                      onDetectLineheightCssVariable);
+            }
+            cellDelta.insert('\n');
+            return;
+          }
+          processNode(node, const {}, cellDelta,
+              addSpanAttrs: true,
+              onDetectLineheightCssVariable: onDetectLineheightCssVariable);
+        }
+
+        for (final node in cell.nodes) {
+          processCellNode(node);
+        }
+
+        var wroteLine = false;
+        for (final op in cellDelta.toList()) {
+          final data = op.data;
+          if (data is! String) {
+            ops.add(op);
+            continue;
+          }
+          var rest = data;
+          while (rest.contains('\n')) {
+            final index = rest.indexOf('\n');
+            final before = rest.substring(0, index);
+            if (before.trim().isNotEmpty) {
+              addInsert(before, op.attributes);
+            }
+            addInsert('\n', cellLineAttrs);
+            wroteLine = true;
+            rest = rest.substring(index + 1);
+          }
+          if (rest.trim().isNotEmpty) {
+            addInsert(rest, op.attributes);
+            wroteLine = false;
+          }
+        }
+        // Fecha a última linha da célula (ou uma célula vazia).
+        final lastOp = ops.isEmpty ? null : ops.last;
+        final closed = wroteLine &&
+            lastOp != null &&
+            lastOp.data == '\n' &&
+            lastOp.attributes?['table-cell-block'] == cellId;
+        if (!closed) {
+          addInsert('\n', cellLineAttrs);
+        }
+
+        // marca a ocupação desta célula na grade
+        while (occupied.length < column + colSpanN) {
+          occupied.add(0);
+        }
+        if (rowSpanN > 1) {
+          for (var c = column; c < column + colSpanN; c++) {
+            occupied[c] = rowSpanN;
+          }
+        }
+        column += colSpanN;
+      }
+
+      for (var c = 0; c < occupied.length; c++) {
+        if (occupied[c] > 0) occupied[c]--;
       }
     }
 

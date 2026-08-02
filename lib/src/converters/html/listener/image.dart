@@ -5,8 +5,10 @@ import '../line.dart';
 
 /// Convert Image attributes into image element.
 class Image extends InlineListener {
-  String wrapper =
-      '<img src="{src}" {width} {height} alt="" class="img-responsive img-fluid" />';
+  /// Sem classes de framework (H4): a promessa do conversor é HTML sem
+  /// dependência de CSS, então a responsividade vai como estilo inline.
+  String wrapper = '<img src="{src}" {width} {height} alt="" '
+      'style="max-width: 100%; height: auto;" />';
 
   @override
   void process(Line line) {

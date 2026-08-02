@@ -129,7 +129,7 @@ void main() {
       final html = htmlOf('colspan and rowspan');
       expect(html, contains('colspan="2"'));
       expect(html, contains('rowspan="2"'));
-      expect(countOf('<tr>', html), 3);
+      expect(countOf('<tr', html), 3);
     });
 
     test('estilos de célula colados do Word continuam no <td>', () {
@@ -137,12 +137,12 @@ void main() {
       expect(html, contains('<td'));
       expect(html, contains('style="'));
       // a borda base do conversor não pode apagar o estilo que veio no delta
-      expect(html, contains('border:1px solid #000;'));
+      expect(html, contains('border: 1px solid #000;'));
     });
 
     test('uma tabela 2x2 do editor tem duas linhas e quatro células', () {
       final html = htmlOf('a 2x2 table from an empty document');
-      expect(countOf('<tr>', html), 2);
+      expect(countOf('<tr', html), 2);
       expect(countOf('<td', html), 4);
     });
   });

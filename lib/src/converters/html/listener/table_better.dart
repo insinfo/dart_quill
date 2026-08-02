@@ -189,7 +189,8 @@ class TableBetter extends BlockListener {
       tagWritten = true;
 
       final tableMeta = _tableMeta;
-      final tblClass = _escape(tableMeta['data-class'] ?? tableMeta['class']);
+      final tblClass = _withoutEditorClasses(
+          _escape(tableMeta['data-class'] ?? tableMeta['class']));
       final border = _escape(tableMeta['border']);
       final cellspacing = _escape(tableMeta['cellspacing']);
       var rawStyle = _escape(tableMeta['style']);
@@ -222,8 +223,8 @@ class TableBetter extends BlockListener {
       final cellspAttr =
           (cellspacing?.isNotEmpty == true) ? ' cellspacing="$cellspacing"' : '';
 
-      final styleMerged =
-          _mergeStyles('border-collapse: collapse;', styleEscaped ?? '');
+      final styleMerged = styleMapToString(parseInlineStyleToMap(
+          'border-collapse: collapse; ${styleEscaped ?? ''}'));
       buf!.write('<table$classAttr$borderAttr$cellspAttr'
           ' style="$styleMerged">\n');
 
@@ -246,7 +247,7 @@ class TableBetter extends BlockListener {
       final width = _escape(attrs['width']);
       final colspan = _escape(attrs['colspan']);
       final rowspan = _escape(attrs['rowspan']);
-      final cls = _escape(attrs['class']);
+      final cls = _withoutEditorClasses(_escape(attrs['class']));
       final style = _escape(attrs['style']);
 
       // Uma célula com um único parágrafo mantém o texto direto no <td> (o
@@ -299,17 +300,24 @@ class TableBetter extends BlockListener {
         inner = sb.toString();
       }
 
-      // sempre aplicamos borda simples e padding; mesclamos com style do plugin
+      // sempre aplicamos borda simples e padding; mesclamos com style do
+      // plugin POR MAPA: concatenar acumulava declarações duplicadas a cada
+      // ciclo export -> import -> export (H6).
       const baseTd = 'border:1px solid #000;padding:6px;';
-      final merged = _mergeStyles(baseTd, style ?? '');
-      final styleAttr = ' style="$tdAlignCss$merged"';
+      final styleAttr =
+          ' style="${styleMapToString(parseInlineStyleToMap('$baseTd$tdAlignCss${style ?? ''}'))}"';
 
       final widthAttr = (width?.isNotEmpty == true) ? ' width="$width"' : '';
       final colAttr = (colspan?.isNotEmpty == true) ? ' colspan="$colspan"' : '';
       final rowAttr = (rowspan?.isNotEmpty == true) ? ' rowspan="$rowspan"' : '';
       final classAttr = (cls?.isNotEmpty == true) ? ' class="$cls"' : '';
+      // O id opaco da célula também viaja (H6): é o que o staticFormats do
+      // plugin lê num paste e o que o importador de HTML devolve intacto.
+      final cellIdAttr = (currentCell?.isNotEmpty == true)
+          ? ' data-cell="${_escape(currentCell!)}"'
+          : '';
 
-      buf!.write('<td$widthAttr$colAttr$rowAttr$classAttr$styleAttr>'
+      buf!.write('<td$widthAttr$colAttr$rowAttr$classAttr$cellIdAttr$styleAttr>'
           '$inner</td>');
       cellBlocks.clear();
       cellAttrs = null;
@@ -414,7 +422,10 @@ class TableBetter extends BlockListener {
 
         if (!rowOpen || currentRow != row) {
           _closeRow();
-          buf!.write('<tr>');
+          // O id opaco da linha viaja no HTML (H6): reimportar o próprio
+          // export devolve o mesmo data-row em vez de reindexar de 1.
+          final rowAttr = row.isNotEmpty ? ' data-row="${_escape(row)}"' : '';
+          buf!.write('<tr$rowAttr>');
           rowOpen = true;
           currentRow = row;
         }
@@ -463,10 +474,19 @@ class TableBetter extends BlockListener {
         .replaceAll("'", '&#39;');
   }
 
-  static String _mergeStyles(String a, String b) {
-    if (b.trim().isEmpty) return a;
-    if (a.trim().isEmpty) return b;
-    final left = a.trim().endsWith(';') ? a.trim() : '${a.trim()};';
-    return '$left ${b.trim()}';
-  }
+}
+
+/// Remove os tokens de classe do editor e do Word (H4): `ql-*` só faz
+/// sentido dentro do Quill e `Mso*` só dentro do Word — num HTML sem CSS os
+/// dois são ruído que ainda por cima denuncia a origem.
+String? _withoutEditorClasses(String? classAttr) {
+  if (classAttr == null || classAttr.isEmpty) return classAttr;
+  final kept = classAttr
+      .split(RegExp(r'\s+'))
+      .where((token) =>
+          token.isNotEmpty &&
+          !token.startsWith('ql-') &&
+          !token.startsWith('Mso'))
+      .join(' ');
+  return kept;
 }

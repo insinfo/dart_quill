@@ -244,7 +244,18 @@ class DeltaToHtmlConverter {
 
   /// Rende o HTML para o delta atual.
   String render() {
-    _lines = _opsToLines(getOps());
+    // H7: um Delta que não termina em '\n' derrubava a conversão inteira —
+    // os listeners inline exigem um terminador de bloco depois deles. Todo
+    // documento Quill termina em newline; um que chegue sem (recorte de op,
+    // dado antigo) ganha o terminador em vez de uma exceção.
+    final ops = List<dynamic>.of(getOps());
+    final last = ops.isEmpty ? null : ops.last;
+    final lastInsert = last is Map ? last['insert'] : null;
+    if (ops.isNotEmpty &&
+        (lastInsert is! String || !lastInsert.endsWith(DELTA_EOL))) {
+      ops.add(<String, dynamic>{'insert': DELTA_EOL});
+    }
+    _lines = _opsToLines(ops);
 
     for (final line in _lines) {
       _processListeners(line, Listener.TYPE_INLINE);

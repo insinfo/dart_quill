@@ -12,8 +12,9 @@ class Lists extends BlockListener {
   static const String LIST_TYPE_CHECKED = 'checked';
   static const String LIST_TYPE_UNCHECKED = 'unchecked';
 
-  /// Classe aplicada em <ul> para checklists.
-  String checkListClass = 'list-unstyled';
+  /// Estilo inline do <ul> de checklist (H4): `list-unstyled` era classe de
+  /// framework e não fazia nada num HTML sem CSS.
+  String checkListStyle = 'list-style-type: none; padding-left: 0;';
 
   @override
   void process(Line line) {
@@ -83,7 +84,7 @@ class Lists extends BlockListener {
       if (!isOpen) {
         output.write('<$thisTag');
         if (isCheck) {
-          output.write(' class="$checkListClass"');
+          output.write(' style="$checkListStyle"');
         }
         output.write('>\n');
         isOpen = true;

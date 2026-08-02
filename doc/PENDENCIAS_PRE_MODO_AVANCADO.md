@@ -207,7 +207,11 @@ conversores.
 | W8 — tabela colada dentro de célula era descartada INTEIRA | **corrigido**: achatada — âncoras somem, cada linha de célula vira linha de texto na célula de destino (o teste de paridade antigo pinava a perda; repinado no novo comportamento) |
 | W9 — exceção num normalizador quebrava o paste | **corrigido**: try/catch por normalizador no pipeline |
 | W10 — zero fixtures de HTML real do Word | **coberto**: `test/assets/html/word_paste_sample.html` (estrutura real de clipboard do Word: `mso-list` + `Ignore`, `<style>` com classes) + 10 casos em `word_paste_normalizer_test.dart` |
-| H4–H7 | pendentes |
+| H4 — classes vazando no "HTML sem CSS" | **corrigido**: `ql-*`/`Mso*` filtrados de `<table>`/`<td>`, imagem sem `img-responsive`/`img-fluid` (responsividade inline), checklist sem `list-unstyled` (estilo inline) |
+| H5 — `indent`/`direction` de parágrafo sem listener | **corrigido**: o listener Align compõe `align` + `indent` (3em/nível) + `dir="rtl"` num único `<p>` (um listener por atributo perderia os combinados); `line-height` segue sem payload real no SALI (mesmo achado do P11) |
+| H6 — HTML→Delta achatava célula | **corrigido**: conteúdo rico por célula (negrito parcial, link, múltiplos parágrafos = linhas do mesmo `table-cell-block`), `<colgroup>` → `table-col`, grade de ocupação para `rowspan`, `data-row`/`data-cell` viajam no HTML e voltam intactos; export → import → export é ponto fixo (estilos deduplicados por mapa; `<p><br></p>` não dobra mais) |
+| H7 — Delta sem `
+` final derrubava a conversão | **corrigido**: o terminador é acrescentado em vez de lançar; ficam pendentes os padrões O(n²) de `Lists.render`/`getFirstLine` e o suspeito superlinear do `Scroll.build` (documentado em PERF_ABERTURA_DOCX_GRANDE.md) |
 
 Testes que travam o corrigido: `html_table_rows_test.dart`,
 `html_table_cells_test.dart`, `cell_text_hydration_test.dart`,

@@ -44,13 +44,13 @@ void main() {
       ];
 
       final html = opsToHtml(ops);
-      expect(countOf('<tr>', html), 2,
+      expect(countOf('<tr', html), 2,
           reason: 'dois ids distintos => duas <tr> ($html)');
       expect(countOf('</tr>', html), 2);
       expect(countOf('<td', html), 4);
       // a primeira linha contém a/b, a segunda c/d
       final firstRow = html.substring(
-          html.indexOf('<tr>'), html.indexOf('</tr>'));
+          html.indexOf('<tr'), html.indexOf('</tr>'));
       expect(firstRow, contains('>a</td>'));
       expect(firstRow, contains('>b</td>'));
       expect(firstRow, isNot(contains('>c</td>')));
@@ -74,7 +74,7 @@ void main() {
       ];
 
       final html = opsToHtml(ops);
-      expect(countOf('<tr>', html), 2);
+      expect(countOf('<tr', html), 2);
       expect(countOf('</tr>', html), 2);
       expect(countOf('<td', html), 3);
     });
@@ -95,7 +95,7 @@ void main() {
       ];
 
       final html = opsToHtml(ops);
-      expect(countOf('<tr>', html), 1);
+      expect(countOf('<tr', html), 1);
       expect(countOf('</tr>', html), 1);
     });
   });
@@ -118,7 +118,7 @@ void main() {
         ('b', 'row-1a'),
         ('c', 'row-2b'),
       ]));
-      expect(countOf('<tr>', html), 2, reason: html);
+      expect(countOf('<tr', html), 2, reason: html);
       expect(countOf('</tr>', html), 2);
       expect(countOf('<td', html), 3);
     });
@@ -129,7 +129,7 @@ void main() {
         ('b', '1'),
         ('c', '2'),
       ]));
-      expect(countOf('<tr>', html), 2, reason: html);
+      expect(countOf('<tr', html), 2, reason: html);
       expect(countOf('</tr>', html), 2);
     });
   });
