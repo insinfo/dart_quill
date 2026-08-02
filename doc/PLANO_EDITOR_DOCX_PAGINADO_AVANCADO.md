@@ -3683,7 +3683,30 @@ tabela de revisões própria).
    a tecla física (keyCode 229 em vários browsers) e dispararia atalho no
    meio de uma palavra. 24 testes VM + 2 em Chrome REAL (Ctrl+B sobre
    seleção nativa, Ctrl+Z desfazendo com a projeção acompanhando).
-   Pendências da fase: IME, clipboard e reconciliação DOM→modelo)*
+   O CLIPBOARD entrou em seguida (`view/clipboard.dart`) com duas rotas
+   deliberadamente diferentes: **interna** — o HTML copiado carrega o
+   `Slice` serializado num atributo (`data-dq-office-slice`), e colar de
+   volta reconstrói a árvore EXATA, com marcas, atributos de bloco e as
+   BORDAS ABERTAS do recorte (é o único jeito de copiar meio parágrafo e
+   colar meio parágrafo sem inventar estrutura); **externa** — HTML de
+   outro programa é interpretado contra o schema e texto puro vira
+   parágrafos, com perda por definição e descarte explícito do que não
+   sabemos representar. O parsing usa `package:html` em vez do DOM do
+   browser: mesmo resultado em VM e em Chrome, então a mesma suíte cobre
+   os dois e colar não depende de montar nada na projeção. Colar é SEMPRE
+   cancelado — deixar o browser escrever HTML arbitrário na projeção
+   colocaria no DOM conteúdo que o modelo não conhece. Copiar também vem
+   do MODELO: a projeção tem marcadores de lista e quebras de página que
+   não são texto do documento e o serializador nativo os arrastaria junto.
+   Dois bugs REAIS achados pelos testes: (a) `Fragment.from` guarda a
+   lista recebida — limpar o acumulador esvaziava o fragmento já
+   construído, deixando tamanho sem filhos (RangeError); (b) o recorte
+   colado saía FECHADO, então colar no meio de um parágrafo o partia em
+   dois ("antes  colado" com espaço duplo) — `_openSlice` abre as bordas
+   quando todo o conteúdo é bloco de texto, e a primeira linha funde no
+   bloco atual como no Word. 32 testes VM + 2 em Chrome REAL (DataTransfer
+   nativo no copiar e no colar). Pendências da fase: IME e reconciliação
+   DOM→modelo)*
 3. **Delta** — importer/exporter + compatibility report + custom op opaco +
    alternância Quill↔Office + testes com todos os Deltas SALI. Gate: Delta
    básico abre e volta sem perda. *(GATE CUMPRIDO 2026-08-02:

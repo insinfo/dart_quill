@@ -29,6 +29,7 @@ import '../layout/layout_composer.dart';
 import '../layout/page_graph.dart';
 import '../model/index.dart';
 import '../state/index.dart';
+import 'clipboard.dart';
 import 'extension.dart';
 
 /// Um `inputType` que a view reconhece e roteia pelo modelo.
@@ -57,8 +58,14 @@ class OfficeEditorView {
             PageGraphDomRenderer(document: adapter.document, editable: true) {
     _beforeInput = _handleBeforeInput;
     _keyDown = _handleKeyDown;
+    _copy = _handleCopy;
+    _cut = _handleCut;
+    _paste = _handlePaste;
     host.addEventListener('beforeinput', _beforeInput);
     host.addEventListener('keydown', _keyDown);
+    host.addEventListener('copy', _copy);
+    host.addEventListener('cut', _cut);
+    host.addEventListener('paste', _paste);
     _compose();
     _project();
   }
@@ -105,6 +112,10 @@ class OfficeEditorView {
   late PageGraph _pageGraph;
   late DomEventListener _beforeInput;
   late DomEventListener _keyDown;
+  late DomEventListener _copy;
+  late DomEventListener _cut;
+  late DomEventListener _paste;
+  final OfficeClipboard _clipboard = const OfficeClipboard();
   bool _disposed = false;
 
   EditorState get state => _state;
@@ -182,6 +193,9 @@ class OfficeEditorView {
     _disposed = true;
     host.removeEventListener('beforeinput', _beforeInput);
     host.removeEventListener('keydown', _keyDown);
+    host.removeEventListener('copy', _copy);
+    host.removeEventListener('cut', _cut);
+    host.removeEventListener('paste', _paste);
   }
 
   // -- laço -----------------------------------------------------------------
@@ -225,6 +239,55 @@ class OfficeEditorView {
       dispatch: dispatch,
     );
     if (handled) event.preventDefault();
+  }
+
+  // -- clipboard -------------------------------------------------------------
+
+  /// Escreve o recorte na área de transferência. Devolve false quando não há
+  /// nada selecionado — aí o evento segue seu curso normal.
+  bool _writeClipboard(DomClipboardEvent event) {
+    syncSelectionFromDom();
+    final selection = _state.selection;
+    if (selection.empty) return false;
+    final data = event.clipboardData;
+    if (data == null) return false;
+    final payload = _clipboard.serialize(selection.content());
+    data.setData('text/plain', payload.text);
+    data.setData('text/html', payload.html);
+    return true;
+  }
+
+  void _handleCopy(DomEvent event) {
+    if (_disposed || event is! DomClipboardEvent) return;
+    // Copiar é do MODELO, não do DOM: a projeção tem marcadores de lista e
+    // quebras de página que não são texto do documento, e o serializador
+    // nativo os arrastaria junto.
+    if (_writeClipboard(event)) event.preventDefault();
+  }
+
+  void _handleCut(DomEvent event) {
+    if (_disposed || event is! DomClipboardEvent) return;
+    if (!_writeClipboard(event)) return;
+    event.preventDefault();
+    final selection = _state.selection;
+    dispatch(_state.tr..delete(selection.from, selection.to));
+  }
+
+  void _handlePaste(DomEvent event) {
+    if (_disposed || event is! DomClipboardEvent) return;
+    // SEMPRE cancela: deixar o browser colar HTML arbitrário na projeção
+    // escreveria no DOM um conteúdo que o modelo não conhece.
+    event.preventDefault();
+    final data = event.clipboardData;
+    if (data == null) return;
+    final slice = _clipboard.parse(
+      html: data.getData('text/html'),
+      text: data.getData('text/plain'),
+      schema: _state.schema,
+    );
+    if (slice == null) return;
+    syncSelectionFromDom();
+    dispatch(_state.tr..replaceSelection(slice));
   }
 
   void _handleBeforeInput(DomEvent event) {

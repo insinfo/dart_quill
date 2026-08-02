@@ -215,6 +215,43 @@ void main() {
     expect(hostElement.textContent, isNot(contains('XYZ')));
   });
 
+  test('copiar escreve no DataTransfer REAL do browser', () {
+    mountWithExtensions(docOf([paragraph('copie isto')]));
+    const map = OfficeDomPositionMap();
+    final from = map.domPositionFor(host, 1)!;
+    final to = map.domPositionFor(host, 1 + 10)!;
+    focusSurface();
+    adapter.setSelectionByNodes(from.node, from.offset, to.node, to.offset);
+
+    final data = web.DataTransfer();
+    focusSurface().dispatchEvent(web.ClipboardEvent(
+        'copy',
+        web.ClipboardEventInit(
+            clipboardData: data, bubbles: true, cancelable: true)));
+
+    expect(data.getData('text/plain'), 'copie isto');
+    expect(data.getData('text/html'), contains(officeSliceAttribute));
+  });
+
+  test('colar do DataTransfer REAL entra pelo modelo e reprojeta', () {
+    final view = mountWithExtensions(docOf([paragraph('antes ')]));
+    caretAt(view, 1 + 6);
+
+    final data = web.DataTransfer()..setData('text/html', '<p><b>ok</b></p>');
+    final event = web.ClipboardEvent(
+        'paste',
+        web.ClipboardEventInit(
+            clipboardData: data, bubbles: true, cancelable: true));
+    focusSurface().dispatchEvent(event);
+
+    expect(event.defaultPrevented, isTrue,
+        reason: 'o browser nunca cola direto na projeção');
+    expect(docText(view), contains('antes ok'));
+    expect(hostElement.textContent, contains('antes ok'));
+    expect(view.state.doc.child(0).lastChild?.marks.map((m) => m.type.name),
+        contains('bold'));
+  });
+
   test('dispose solta o listener: digitar depois não muda mais nada', () {
     final view = mount(docOf([paragraph('final')]));
     caretAt(view, 1 + 5);
