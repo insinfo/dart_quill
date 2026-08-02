@@ -148,10 +148,15 @@ void main() {
       final ops = _ops(delta);
       final text = ops.map((op) => op['insert']).whereType<String>().join();
       expect(text, contains('item'));
-      expect(text, isNot(contains('1.')),
-          reason: 'the mso-list bullet marker must be dropped: $ops');
-      expect(ops.any((op) => op['attributes']?['list'] != null), isTrue,
-          reason: 'a Word list paragraph becomes a real list item: $ops');
+      // Politica do normalizador estendido (W3, paridade com o
+      // sali_word_paste.js em producao): um item ISOLADO mantem o marcador
+      // como texto literal — o Quill renumeraria de 1 qualquer lista, entao
+      // "2. Descricao" viraria "1." — e nao vira lista. O que continua
+      // proibido e o marcador DUPLICADO (texto + lista ao mesmo tempo).
+      expect('1.'.allMatches(text).length, 1,
+          reason: 'o marcador literal aparece exatamente uma vez: $ops');
+      expect(ops.any((op) => op['attributes']?['list'] != null), isFalse,
+          reason: 'item isolado fica como paragrafo, nao vira lista: $ops');
     });
   });
 
