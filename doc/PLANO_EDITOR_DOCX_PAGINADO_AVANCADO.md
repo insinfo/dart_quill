@@ -3637,9 +3637,16 @@ tabela de revisões própria).
    virou sealed), composição com cascata de larguras (colWidths verbatim →
    células → reescala à área útil), fragmentação por LINHA DE TABELA entre
    páginas sem perder linha (testado com 60 linhas × 2 células = 120
-   grades no PDF, continuesFrom/OnNextPage no mesmo nó). Pendências da
-   fase: TextShaper etapa 1, fontes embutidas CID no renderer, e o lado
-   EDITOR do gate (DOMRenderer da Fase 2 consumindo o mesmo grafo))*
+   grades no PDF, continuesFrom/OnNextPage no mesmo nó). Fontes CID entregues em
+   seguida: `layout/fonts.dart` (LayoutFontFace com parse preguiçoso da
+   TrueType + LayoutFontSet com a política de fallback do exportador) — o
+   COMPOSER mede pela hmtx REAL da face e o RENDERER embute a mesma face
+   como CID/Identity-H com subset das runas do grafo, uma única autoridade
+   nas duas saídas (testado com a Inter: Identity-H + FontFile2 + hex Tj no
+   stream, e a medição com face difere da métrica embarcada). Pendências da
+   fase: TextShaper etapa 1 (kerning/ligaturas latinas sobre a mesma
+   interface de medição) e o lado EDITOR do gate (DOMRenderer da Fase 2
+   consumindo o mesmo grafo))*
 6. **Recursos Word** — tabelas divididas, repeat header, cantSplit,
    widow/orphan, keep-next, footnotes, fields, TOC, seções múltiplas.
 7. **200 páginas** — invalidação incremental por PageSignature, cache

@@ -209,6 +209,44 @@ void main() {
       expect(rects, 120, reason: '60 linhas × 2 células');
     });
 
+    test('face embutida: CID no PDF e medição pela hmtx real', () {
+      final bytes = File('test/assets/fonts/Inter-Regular.ttf')
+          .readAsBytesSync();
+      final fonts = LayoutFontSet([LayoutFontFace('Inter', bytes)]);
+      final doc = docOf([
+        schema.node('paragraph', null, Fragment.from([
+          schema.text('Acentuação perfeita — “aspas” e travessão',
+              [schema.marks['font']!.create({'value': 'Inter'})]),
+        ])),
+      ]);
+      // O MESMO conjunto de faces nas duas pontas.
+      final graph = LayoutComposer(fonts: fonts).compose(doc);
+      final pdf = PageGraphPdfRenderer(fonts: fonts).render(graph);
+      final raw = String.fromCharCodes(pdf);
+      expect(raw, contains('/Identity-H'),
+          reason: 'a face tem de entrar como CID');
+      expect(raw, contains('/FontFile2'),
+          reason: 'o programa da fonte (subset) tem de estar embutido');
+      final streams = PdfReader(pdf).decodedStreams.join('\n');
+      expect(RegExp(r'<[0-9a-f]+> Tj').hasMatch(streams), isTrue,
+          reason: 'o texto sai como string hex CID: $streams');
+
+      // Sem a face, a medição muda: a largura da linha difere entre os
+      // dois grafos — prova de que a hmtx REAL foi usada na medição.
+      final without = LayoutComposer().compose(doc);
+      final lineWith = (graph.pages.first.fragments.first as BlockFragment)
+          .lines
+          .first
+          .widthTwips;
+      final lineWithout =
+          (without.pages.first.fragments.first as BlockFragment)
+              .lines
+              .first
+              .widthTwips;
+      expect(lineWith, isNot(lineWithout),
+          reason: 'métrica da Inter difere da Arial embarcada');
+    });
+
     test('Delta real do SALI passa pelo grafo até o PDF', () {
       final raw = jsonDecode(
           File('test/assets/delta/documento.delta.json').readAsStringSync());

@@ -22,6 +22,7 @@ import '../../office/document/fonts/font_metrics.dart';
 import '../../office/document/fonts/font_registry.dart';
 import '../model/index.dart';
 import '../office/ids.dart';
+import 'fonts.dart';
 import 'page_graph.dart';
 
 /// Converte pt→twips.
@@ -33,12 +34,17 @@ class LayoutComposer {
     this.quality = LayoutQuality.draft,
     this.baseFontFamily = 'Arial',
     this.baseFontSizePt = 12,
-  });
+    LayoutFontSet? fonts,
+  }) : fonts = fonts ?? LayoutFontSet(const []);
 
   final PageSetupTwips setup;
   final LayoutQuality quality;
   final String baseFontFamily;
   final double baseFontSizePt;
+
+  /// Faces embutidas: quando presentes, a medição usa a hmtx REAL da face —
+  /// a mesma que o renderer embute — e as duas saídas quebram igual.
+  final LayoutFontSet fonts;
 
   /// Recuo por nível de lista, em twips (21,6 pt como o exportador linear).
   static const int _listIndentTwips = 432;
@@ -271,9 +277,29 @@ class LayoutComposer {
   FontMetrics _metricsFor(String family) =>
       FontRegistry.instance.lookup(family) ?? FontRegistry.instance.lookup(null)!;
 
+  double _measurePt(ResolvedRunStyle style, String text) {
+    final face =
+        fonts.faceFor(style.family, bold: style.bold, italic: style.italic);
+    if (face != null) return face.measureWidthPt(text, style.sizePt);
+    return _metricsFor(style.family).measureWidth(text, style.sizePt);
+  }
+
+  ({double ascent, double descent}) _verticalPt(ResolvedRunStyle style) {
+    final face =
+        fonts.faceFor(style.family, bold: style.bold, italic: style.italic);
+    if (face != null) {
+      return (
+        ascent: face.ascentPt(style.sizePt),
+        descent: face.descentPt(style.sizePt),
+      );
+    }
+    final m = _metricsFor(style.family);
+    return (ascent: m.ascentPx(style.sizePt), descent: m.descentPx(style.sizePt));
+  }
+
   int _lineHeightTwips(String family, double sizePt) {
-    final m = _metricsFor(family);
-    return _ptToTwips(m.ascentPx(sizePt) + m.descentPx(sizePt));
+    final v = _verticalPt(ResolvedRunStyle(family: family, sizePt: sizePt));
+    return _ptToTwips(v.ascent + v.descent);
   }
 
   ResolvedRunStyle _styleOfText(PMNode text, _BlockStyle blockStyle) {
@@ -336,7 +362,6 @@ class LayoutComposer {
     block.content.forEach((child, offset, index) {
       if (child.isText) {
         final style = _styleOfText(child, blockStyle);
-        final metrics = _metricsFor(style.family);
         final text = child.text!;
         final re = RegExp(r'(\s+)|([^\s]+)');
         for (final m in re.allMatches(text)) {
@@ -345,7 +370,7 @@ class LayoutComposer {
             text: piece,
             style: style,
             isSpace: m.group(1) != null,
-            widthTwips: _ptToTwips(metrics.measureWidth(piece, style.sizePt)),
+            widthTwips: _ptToTwips(_measurePt(style, piece)),
             charStart: charOffset + m.start,
           ));
         }
@@ -394,9 +419,9 @@ class LayoutComposer {
       }
       var ascent = 0, height = 0;
       for (final segment in segments) {
-        final m = _metricsFor(segment.style.family);
-        final a = _ptToTwips(m.ascentPx(segment.style.sizePt));
-        final h = a + _ptToTwips(m.descentPx(segment.style.sizePt));
+        final v = _verticalPt(segment.style);
+        final a = _ptToTwips(v.ascent);
+        final h = a + _ptToTwips(v.descent);
         if (a > ascent) ascent = a;
         if (h > height) height = h;
       }
@@ -429,12 +454,11 @@ class LayoutComposer {
       if (token.widthTwips > widthTwips && current.isEmpty) {
         // Palavra maior que a coluna: corte duro por caracteres.
         var rest = token;
-        final metrics = _metricsFor(token.style.family);
         while (rest.widthTwips > widthTwips && rest.text.length > 1) {
           var cut = rest.text.length - 1;
           while (cut > 1 &&
-              _ptToTwips(metrics.measureWidth(
-                      rest.text.substring(0, cut), rest.style.sizePt)) >
+              _ptToTwips(_measurePt(
+                      rest.style, rest.text.substring(0, cut))) >
                   widthTwips) {
             cut--;
           }
@@ -443,8 +467,7 @@ class LayoutComposer {
             text: head,
             style: rest.style,
             isSpace: false,
-            widthTwips:
-                _ptToTwips(metrics.measureWidth(head, rest.style.sizePt)),
+            widthTwips: _ptToTwips(_measurePt(rest.style, head)),
             charStart: rest.charStart,
           ));
           currentWidth += current.last.widthTwips;
@@ -453,8 +476,8 @@ class LayoutComposer {
             text: rest.text.substring(cut),
             style: rest.style,
             isSpace: false,
-            widthTwips: _ptToTwips(metrics.measureWidth(
-                rest.text.substring(cut), rest.style.sizePt)),
+            widthTwips:
+                _ptToTwips(_measurePt(rest.style, rest.text.substring(cut))),
             charStart: rest.charStart + cut,
           );
         }
