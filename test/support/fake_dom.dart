@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dart_quill/src/platform/dom.dart';
 import 'package:html/dom.dart' as html_dom;
 import 'package:html/parser.dart' as html_parser;
@@ -40,6 +42,17 @@ class FakeDomAdapter implements DomAdapter {
   @override
   void downloadBytes(String filename, String mimeType, List<int> bytes) {
     downloads.add((filename: filename, mimeType: mimeType, bytes: bytes));
+  }
+
+  /// Pedidos de [pickFile] pendentes: o teste injeta o arquivo chamando o
+  /// callback registrado.
+  final List<({String accept, void Function(String, Uint8List) onFile})>
+      filePicks = [];
+
+  @override
+  void pickFile(
+      String accept, void Function(String name, Uint8List bytes) onFile) {
+    filePicks.add((accept: accept, onFile: onFile));
   }
 
   @override
@@ -429,8 +442,7 @@ class FakeDomNode implements DomNode {
   }
 
   @override
-  List<DomNode> get childNodes =>
-      List<DomNode>.unmodifiable(internalChildren);
+  List<DomNode> get childNodes => List<DomNode>.unmodifiable(internalChildren);
 
   @override
   DomNode? get firstChild => _firstChild;

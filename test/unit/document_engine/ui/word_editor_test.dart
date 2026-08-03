@@ -10,6 +10,7 @@
 @TestOn('vm')
 library;
 
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -42,8 +43,8 @@ void main() {
     host.remove();
   });
 
-  PMNode paragraph(String text) => schema.node(
-      'paragraph', null, Fragment.from([schema.text(text)]));
+  PMNode paragraph(String text) =>
+      schema.node('paragraph', null, Fragment.from([schema.text(text)]));
 
   PMNode docOf(int blocks) => schema.node(
       'doc',
@@ -103,8 +104,8 @@ void main() {
     test('a barra de status mostra a página corrente e o total', () {
       final editor = mount(blocks: 200);
       final status = host.querySelector('.dq-office-statusbar')!;
-      expect(status.textContent,
-          contains('de ${editor.pageGraph.pages.length}'));
+      expect(
+          status.textContent, contains('de ${editor.pageGraph.pages.length}'));
       expect(status.textContent, contains('Página 1'));
     });
 
@@ -118,8 +119,8 @@ void main() {
 
       // Seletor simples: o fake DOM não implementa seletor composto.
       final bold = host.querySelector('.dq-office-b')!;
-      (bold as FakeDomElement)
-          .dispatchEvent('click', FakeDomMouseEvent(type: 'click', target: bold));
+      (bold as FakeDomElement).dispatchEvent(
+          'click', FakeDomMouseEvent(type: 'click', target: bold));
 
       expect(
           editor.state.doc.child(0).firstChild?.marks.map((m) => m.type.name),
@@ -137,8 +138,7 @@ void main() {
       final editor = mount(blocks: 200);
       final bytes = editor.exportPdf();
       expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
-      expect(
-          OfficePdfService().fromPageGraph(editor.pageGraph).pageCount,
+      expect(OfficePdfService().fromPageGraph(editor.pageGraph).pageCount,
           editor.pageGraph.pages.length);
     });
 
@@ -200,7 +200,7 @@ void main() {
       expect(bold.classes.contains('dq-office-btn-active'), isFalse);
     });
 
-    test('o select de estilos reflete o bloco do cursor', () {
+    test('a galeria de estilos reflete o bloco do cursor', () {
       final editor = mount(blocks: 3);
       const map = OfficeDomPositionMap();
       final pages = host.querySelector('.dq-office-pages')!;
@@ -209,13 +209,70 @@ void main() {
           position.node, position.offset, position.node, position.offset);
 
       editor.view.syncSelectionFromDom();
-      final select = host.querySelector('.dq-office-style')!;
-
-      // Vira Título 2 pela ribbon; o select acompanha.
+      // Vira Título 2; o cartão correspondente acompanha.
       final tr = editor.state.tr;
       tr.setNodeMarkup(0, schema.nodes['heading'], {'level': 2});
       editor.view.dispatch(tr);
-      expect(select.value, 'Título 2');
+      expect(
+          host
+              .querySelector('.dq-office-stylecard-titulo-2')!
+              .classes
+              .contains('dq-office-stylecard-active'),
+          isTrue);
+    });
+
+    test('tamanho e família refletem a formatação da seleção', () {
+      final editor = mount(blocks: 3);
+      final size = schema.marks['size']!;
+      final font = schema.marks['font']!;
+      editor.view.dispatch(editor.state.tr
+        ..setSelection(TextSelection.create(editor.state.doc, 1, 10))
+        ..addMark(1, 10, size.create({'value': '18pt'}))
+        ..addMark(1, 10, font.create({'value': 'Calibri'})));
+
+      expect(host.querySelector('.dq-office-font-size')!.value, '18');
+      expect(host.querySelector('.dq-office-font-family')!.value, 'Calibri');
+    });
+
+    test('trocar o tamanho formata a seleção nativa', () {
+      final editor = mount(blocks: 3);
+      const map = OfficeDomPositionMap();
+      final pages = host.querySelector('.dq-office-pages')!;
+      final from = map.domPositionFor(pages, 1)!;
+      final to = map.domPositionFor(pages, 10)!;
+      adapter.setSelectionByNodes(from.node, from.offset, to.node, to.offset);
+
+      final select = host.querySelector('.dq-office-font-size')!;
+      select.value = '18';
+      (select as FakeDomElement)
+          .dispatchEvent('change', FakeDomEvent('change', select));
+
+      final marks = editor.state.doc.child(0).firstChild!.marks;
+      expect(
+          marks.firstWhere((mark) => mark.type.name == 'size').attrs['value'],
+          '18pt');
+      expect(select.value, '18');
+    });
+
+    test('selectionchange torna a ribbon contextual sem clicar em botão', () {
+      final editor = mount(blocks: 3);
+      final boldType = schema.marks['bold']!;
+      editor.view.dispatch(editor.state.tr
+        ..setSelection(TextSelection.create(editor.state.doc, 20))
+        ..addMark(1, 10, boldType.create()));
+      final bold = host.querySelector('.dq-office-b')!;
+      expect(bold.classes.contains('dq-office-btn-active'), isFalse);
+
+      const map = OfficeDomPositionMap();
+      final pages = host.querySelector('.dq-office-pages')!;
+      final position = map.domPositionFor(pages, 3)!;
+      adapter.setSelectionByNodes(
+          position.node, position.offset, position.node, position.offset);
+      (adapter.document as FakeDomDocument)
+          .dispatchEvent('selectionchange', FakeDomEvent('selectionchange'));
+
+      expect(bold.classes.contains('dq-office-btn-active'), isTrue,
+          reason: 'mover o cursor atualiza a ribbon imediatamente');
     });
   });
 
@@ -233,6 +290,20 @@ void main() {
       editor!.dispose();
       mount(mode: OfficeWordMode.view);
       expect(count('.dq-office-vruler'), 0);
+    });
+
+    test('segue somente a página que contém a seleção', () {
+      final editor = mount(blocks: 200);
+      final secondPage = editor.pageGraph.positionMap.entries
+          .firstWhere((entry) => entry.pageIndex == 1);
+      editor.view.dispatch(editor.state.tr
+        ..setSelection(
+            TextSelection.create(editor.state.doc, secondPage.docPosStart)));
+
+      final slot = host.querySelector('.dq-office-vruler-slot')!;
+      expect(slot.getAttribute('data-page'), '1');
+      expect(count('.dq-office-vruler'), 1,
+          reason: 'só a página da seleção tem régua vertical');
     });
   });
 
@@ -437,6 +508,13 @@ void main() {
       throw StateError('botão não encontrado');
     }
 
+    DomElement buttonByTitle(String title) {
+      for (final b in host.querySelectorAll('.dq-office-btn')) {
+        if (b.getAttribute('title') == title) return b;
+      }
+      throw StateError('botão não encontrado: $title');
+    }
+
     void click(DomElement el) => (el as FakeDomElement)
         .dispatchEvent('click', FakeDomMouseEvent(type: 'click', target: el));
 
@@ -462,7 +540,7 @@ void main() {
       fake.downloads.clear();
 
       click(tab('Arquivo'));
-      click(button('DOCX'));
+      click(buttonByTitle('Exportar DOCX'));
 
       final download = fake.downloads.single;
       expect(download.filename, endsWith('.docx'));
@@ -477,17 +555,68 @@ void main() {
           contains('Parágrafo 0'));
       expect(doc.childCount, editor.state.doc.childCount);
     });
+
+    test('Exportar Delta gera JSON Quill que reimporta', () {
+      final editor = mount(blocks: 5);
+      final fake = adapter as FakeDomAdapter;
+      fake.downloads.clear();
+
+      click(tab('Arquivo'));
+      click(buttonByTitle('Exportar Delta Quill (.json)'));
+
+      final download = fake.downloads.single;
+      expect(download.filename, endsWith('.json'));
+      final decoded = jsonDecode(utf8.decode(download.bytes)) as Map;
+      final imported = importQuillDelta(decoded['ops'] as List, schema).doc;
+      expect(imported.textContent, editor.state.doc.textContent);
+    });
+
+    test('Abrir Delta substitui o documento pelo arquivo escolhido', () {
+      final editor = mount(blocks: 5);
+      final fake = adapter as FakeDomAdapter;
+      fake.filePicks.clear();
+
+      click(tab('Arquivo'));
+      click(buttonByTitle('Abrir Delta Quill (.json)'));
+      final request = fake.filePicks.single;
+      expect(request.accept, contains('.json'));
+      request.onFile(
+          'novo.json',
+          Uint8List.fromList(utf8.encode(jsonEncode({
+            'ops': [
+              {'insert': 'Documento aberto\n'}
+            ]
+          }))));
+
+      expect(editor.state.doc.textContent, contains('Documento aberto'));
+    });
+
+    test('Abrir DOCX substitui conteúdo e geometria', () {
+      final editor = mount(blocks: 5);
+      final fake = adapter as FakeDomAdapter;
+      fake.filePicks.clear();
+      final importedDoc = schema.node(
+          'doc', null, Fragment.from([paragraph('Conteúdo vindo do DOCX')]));
+      final bytes = OfficeDocxCodec(schema: schema).exportDocument(importedDoc);
+
+      click(tab('Arquivo'));
+      click(buttonByTitle('Abrir arquivo DOCX'));
+      final request = fake.filePicks.single;
+      expect(request.accept, '.docx');
+      request.onFile('novo.docx', bytes);
+
+      expect(editor.state.doc.textContent, contains('Conteúdo vindo do DOCX'));
+      expect(editor.pageGraph.pages, isNotEmpty);
+    });
   });
 
   test('zoom reconstrói as réguas na nova escala', () {
     final editor = mount();
-    final widthBefore = host
-        .querySelector('.dq-office-ruler-center')!
-        .getAttribute('style');
+    final widthBefore =
+        host.querySelector('.dq-office-ruler-center')!.getAttribute('style');
     editor.setZoom(1.5);
-    final widthAfter = host
-        .querySelector('.dq-office-ruler-center')!
-        .getAttribute('style');
+    final widthAfter =
+        host.querySelector('.dq-office-ruler-center')!.getAttribute('style');
     expect(widthAfter, isNot(widthBefore),
         reason: 'régua na escala antiga com página na nova era o bug');
   });
@@ -518,11 +647,12 @@ void main() {
       adapter.setSelectionByNodes(p.node, p.offset, p.node, p.offset);
     }
 
-    test('a régua vive DENTRO do canvas, com canto e marcadores', () {
+    test('a horizontal fica sob a ribbon, fora do canvas', () {
       mount();
       final canvas = host.querySelector('.dq-office-canvas')!;
-      expect(canvas.querySelectorAll('.dq-office-ruler').length, 1,
-          reason: 'a régua acompanha a área do documento, como no Word');
+      expect(canvas.querySelectorAll('.dq-office-ruler').length, 0);
+      expect(host.querySelectorAll('.dq-office-ruler').length, 1,
+          reason: 'a faixa horizontal pertence ao chrome sob a ribbon');
       expect(count('.dq-office-ruler-corner'), 1);
       expect(count('.dq-office-indent-first'), 1);
       expect(count('.dq-office-indent-left'), 1);
@@ -535,13 +665,10 @@ void main() {
       editor.view.syncSelectionFromDom();
 
       final marker = host.querySelector('.dq-office-indent-left')!;
-      (marker as FakeDomElement).dispatchEvent(
-          'pointerdown',
-          FakeDomMouseEvent(
-              type: 'pointerdown', target: marker, clientX: 100));
+      (marker as FakeDomElement).dispatchEvent('pointerdown',
+          FakeDomMouseEvent(type: 'pointerdown', target: marker, clientX: 100));
       final canvas = host.querySelector('.dq-office-canvas')!;
-      (canvas as FakeDomElement).dispatchEvent(
-          'pointerup',
+      (canvas as FakeDomElement).dispatchEvent('pointerup',
           FakeDomMouseEvent(type: 'pointerup', target: canvas, clientX: 176));
 
       // 76px / (96/72/20) px por twip = 1140 twips (~2 cm).
@@ -562,13 +689,10 @@ void main() {
       editor.view.syncSelectionFromDom();
 
       final marker = host.querySelector('.dq-office-indent-first')!;
-      (marker as FakeDomElement).dispatchEvent(
-          'pointerdown',
-          FakeDomMouseEvent(
-              type: 'pointerdown', target: marker, clientX: 100));
+      (marker as FakeDomElement).dispatchEvent('pointerdown',
+          FakeDomMouseEvent(type: 'pointerdown', target: marker, clientX: 100));
       final canvas = host.querySelector('.dq-office-canvas')!;
-      (canvas as FakeDomElement).dispatchEvent(
-          'pointerup',
+      (canvas as FakeDomElement).dispatchEvent('pointerup',
           FakeDomMouseEvent(type: 'pointerup', target: canvas, clientX: 138));
 
       final block = editor.pageGraph.pages.first.fragments

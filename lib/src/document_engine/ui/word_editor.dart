@@ -53,6 +53,7 @@ import '../view/editor_view.dart';
 import '../view/extension.dart';
 import 'controller.dart';
 import 'ribbon.dart';
+import 'ribbon_actions.dart' as ribbon_actions;
 import 'rulers.dart';
 import 'status_bar.dart';
 import 'title_bar.dart';
@@ -158,8 +159,9 @@ class OfficeWordEditor implements OfficeWordController {
 
   /// O PDF da MESMA paginação que está na tela — não há segunda composição.
   @override
-  Uint8List exportPdf() =>
-      OfficePdfService(title: options.title).fromPageGraph(_view.pageGraph).bytes;
+  Uint8List exportPdf() => OfficePdfService(title: options.title)
+      .fromPageGraph(_view.pageGraph)
+      .bytes;
 
   /// O DOCX do documento atual (pacote montado do zero — o caminho para
   /// documento nascido no editor; DOCX importado preserva pelo
@@ -187,6 +189,19 @@ class OfficeWordEditor implements OfficeWordController {
     _remountPreservingState();
   }
 
+  /// Abre um documento NOVO (aba Arquivo): estado e histórico recomeçam.
+  @override
+  void openDocument(PMNode doc, {PageSetupTwips? setup}) {
+    if (_disposed) return;
+    if (setup != null) _setup = setup;
+    _view.dispose();
+    _rebuildRulers();
+    _mountView(EditorState.create(EditorStateConfig(
+      doc: doc,
+      plugins: OfficeExtensionSet(officeDefaultExtensions(_schema)).plugins,
+    )));
+  }
+
   // -- montagem ---------------------------------------------------------------
 
   void _build(PMNode document) {
@@ -209,14 +224,15 @@ class OfficeWordEditor implements OfficeWordController {
 
     _canvas = _kit.el('div', 'dq-office-canvas');
     if (options.mode == OfficeWordMode.word) {
-      // As réguas vivem DENTRO da área do documento, como no Word: a
-      // horizontal é sticky no topo do canvas e compartilha a centralização
-      // da página (alinham por construção e rolam juntas); a vertical fica
-      // à esquerda da página.
+      // A régua horizontal é uma faixa do chrome: fica imediatamente abaixo
+      // da ribbon e NÃO passeia junto das páginas.
       _hRuler = OfficeHorizontalRuler(this);
       _hRulerSlot = _kit.el('div', 'dq-office-ruler-wrap');
       _hRulerSlot!.append(_hRuler!.build());
-      _canvas.append(_hRulerSlot!);
+      host.append(_hRulerSlot!);
+
+      // A vertical continua no canvas porque acompanha a página da seleção,
+      // mas é ancorada no lado esquerdo do VIEWPORT, não ao lado da folha.
       _vRuler = OfficeVerticalRuler(this);
       _vRulerSlot = _kit.el('div', 'dq-office-vruler-slot');
       _vRulerSlot!.append(_vRuler!.build());
@@ -225,6 +241,9 @@ class OfficeWordEditor implements OfficeWordController {
           'pointermove', (event) => _hRuler?.handlePointerMove(event));
       _canvas.addEventListener(
           'pointerup', (event) => _hRuler?.handlePointerUp(event));
+      _canvas.addEventListener('scroll', (_) => _positionVerticalRuler());
+      _canvas.addEventListener(
+          'mouseup', (_) => ribbon_actions.maybeApplyFormatPainter(this));
     }
     _pagesHost = _kit.el('div', 'dq-office-pages');
     _canvas.append(_pagesHost);
@@ -308,6 +327,27 @@ class OfficeWordEditor implements OfficeWordController {
     _ribbon?.refreshState();
     _ribbon?.refreshContextual();
     _hRuler?.positionMarkers();
+    _positionVerticalRuler();
+  }
+
+  /// Coloca a única régua vertical na página que contém o cursor/seleção.
+  /// `left = scrollLeft` mantém a régua no canto esquerdo visível mesmo ao
+  /// rolar horizontalmente. O topo é calculado no mesmo fluxo flex das
+  /// páginas (padding do canvas + alturas + gaps).
+  void _positionVerticalRuler() {
+    final slot = _vRulerSlot;
+    if (slot == null || !_viewReady || _view.pageGraph.pages.isEmpty) return;
+    final pages = _view.pageGraph.pages;
+    var pageIndex =
+        _view.pageGraph.positionMap.pageOf(_view.state.selection.from);
+    pageIndex = pageIndex.clamp(0, pages.length - 1);
+    var top = 26.0;
+    for (var i = 0; i < pageIndex; i++) {
+      top += pages[i].setup.heightTwips * pxPerTwip + 26.0;
+    }
+    slot.setAttribute('style',
+        'top:${top.toStringAsFixed(2)}px;left:${_canvas.scrollLeft}px;');
+    slot.setAttribute('data-page', '$pageIndex');
   }
 
   void dispose() {

@@ -49,6 +49,13 @@ abstract interface class OfficeWordController {
   void setZoom(double zoom);
   void setPageSetup(PageSetupTwips setup);
 
+  /// Substitui o documento aberto (Abrir DOCX/Delta na aba Arquivo).
+  ///
+  /// O histórico de undo recomeça — é um documento NOVO, não uma edição.
+  /// Com [setup], a geometria de página do arquivo aberto vale (um DOCX
+  /// ofício abre em ofício).
+  void openDocument(PMNode doc, {PageSetupTwips? setup});
+
   Uint8List exportPdf();
   Uint8List exportDocx();
 }

@@ -29,8 +29,8 @@ final class RibbonContext {
   /// fica registrado para o realce de estado.
   DomElement markButton(String mark, String text, String title, String cssClass,
       {String? icon}) {
-    final button = kit.button(text, title,
-        () => _ribbon.controller.runCommand(mark),
+    final button = kit.button(
+        text, title, () => _ribbon.controller.runCommand(mark),
         extraClass: cssClass, icon: icon);
     _ribbon._markButtons[mark] = button;
     return button;
@@ -38,6 +38,25 @@ final class RibbonContext {
 
   void registerStyleSelect(DomElement select) {
     _ribbon._styleSelect = select;
+  }
+
+  /// Select cujo valor acompanha uma marca com atributo `value` (família e
+  /// tamanho da fonte). A seleção nativa é sincronizada antes de cada ação,
+  /// e o `selectionchange` atualiza estes controles sem editar o documento.
+  void registerMarkValueSelect(
+      String mark, DomElement select, String fallback) {
+    _ribbon._markValueSelects[mark] = (element: select, fallback: fallback);
+  }
+
+  /// Botão de uma variante de marca (subscrito/sobrescrito).
+  void registerMarkValueButton(String mark, String value, DomElement button) {
+    _ribbon._markValueButtons[(mark: mark, value: value)] = button;
+  }
+
+  /// Cartão da GALERIA de estilos (Normal, Título 1…): registrado para o
+  /// realce do estilo do bloco corrente.
+  void registerStyleCard(String name, DomElement card) {
+    _ribbon._styleCards[name] = card;
   }
 }
 
@@ -49,6 +68,10 @@ class OfficeRibbon {
 
   final Map<String, DomElement> _tabs = {};
   final Map<String, DomElement> _markButtons = {};
+  final Map<String, ({DomElement element, String fallback})> _markValueSelects =
+      {};
+  final Map<({String mark, String value}), DomElement> _markValueButtons = {};
+  final Map<String, DomElement> _styleCards = {};
   DomElement? _styleSelect;
   DomElement? _body;
 
@@ -108,6 +131,9 @@ class OfficeRibbon {
     });
     kit.clear(body);
     _markButtons.clear();
+    _markValueSelects.clear();
+    _markValueButtons.clear();
+    _styleCards.clear();
     _styleSelect = null;
 
     final context = RibbonContext(controller, kit, this);
@@ -144,7 +170,6 @@ class OfficeRibbon {
   /// reflete o modelo, nunca o contrário.
   void refreshState() {
     if (!controller.viewReady) return;
-    if (_markButtons.isEmpty && _styleSelect == null) return;
     final state = controller.view.state;
     final selection = state.selection;
 
@@ -167,12 +192,46 @@ class OfficeRibbon {
       }
     });
 
-    final style = _styleSelect;
-    if (style != null) {
-      final block = selection.fromRes.parent;
-      final level = block.type.name == 'heading' ? block.attrs['level'] : null;
-      style.value =
-          level is int && level >= 1 && level <= 3 ? 'Título $level' : 'Normal';
+    String? markValue(String name) {
+      final type = controller.schema.marks[name];
+      if (type == null) return null;
+      final marks = selection.empty
+          ? (state.storedMarks ?? selection.fromRes.marks())
+          : state.doc.resolve(selection.from + 1).marks();
+      for (final mark in marks) {
+        if (mark.type == type) return mark.attrs['value'] as String?;
+      }
+      return null;
     }
+
+    _markValueSelects.forEach((name, control) {
+      var value = markValue(name) ?? control.fallback;
+      if (name == 'size') value = value.replaceAll('pt', '');
+      control.element.value = value;
+    });
+
+    _markValueButtons.forEach((key, button) {
+      if (markValue(key.mark) == key.value) {
+        button.classes.add('dq-office-btn-active');
+      } else {
+        button.classes.remove('dq-office-btn-active');
+      }
+    });
+
+    final block = selection.fromRes.parent;
+    final level = block.type.name == 'heading' ? block.attrs['level'] : null;
+    final current =
+        level is int && level >= 1 && level <= 3 ? 'Título $level' : 'Normal';
+
+    final style = _styleSelect;
+    if (style != null) style.value = current;
+
+    _styleCards.forEach((name, card) {
+      if (name == current) {
+        card.classes.add('dq-office-stylecard-active');
+      } else {
+        card.classes.remove('dq-office-stylecard-active');
+      }
+    });
   }
 }

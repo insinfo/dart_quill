@@ -130,8 +130,8 @@
 .dq-office-ribbon-content {
   display: flex;
   align-items: stretch;
-  height: 92px;
-  padding: 5px 7px 15px;
+  height: 104px;
+  padding: 6px 7px 16px;
   overflow-x: auto;
   overflow-y: hidden;
 }
@@ -139,7 +139,7 @@
 .dq-office-ribbon-group {
   position: relative;
   flex: 0 0 auto;
-  height: 72px;
+  height: 84px;
   padding: 0 9px 14px;
   border-right: 1px solid #e1e1e1;
 }
@@ -161,7 +161,7 @@
 }
 
 .dq-office-ribbon-rows {
-  height: 62px;
+  height: 72px;
   display: grid;
   grid-template-rows: repeat(auto-fit, 30px);
   align-content: center;
@@ -169,7 +169,7 @@
 }
 
 .dq-office-ribbon-row {
-  height: 30px;
+  min-height: 30px;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -249,19 +249,141 @@
   background: #f5f9fd;
 }
 
-/* regua horizontal DENTRO do canvas: sticky no topo, centro com a largura
-   da pagina e a mesma centralizacao — alinham por construcao e rolam
-   juntas, inclusive no zoom. */
+.dq-office-font-family {
+  width: 116px;
+}
+
+.dq-office-font-size {
+  width: 48px;
+}
+
+.dq-office-btn-labeled {
+  display: flex;
+  justify-content: flex-start;
+  gap: 5px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.dq-office-btn-big {
+  width: 58px;
+  height: 62px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.dq-office-btn-big .dq-icon {
+  font-size: 27px;
+}
+
+.dq-office-btn-small {
+  width: 78px;
+  height: 20px;
+  padding: 0 4px;
+}
+
+.dq-office-btn-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+
+.dq-office-colorwrap {
+  position: relative;
+}
+
+.dq-office-palette {
+  position: absolute;
+  z-index: 30;
+  top: 31px;
+  left: 0;
+  width: 148px;
+  display: grid;
+  grid-template-columns: repeat(5, 24px);
+  gap: 3px;
+  padding: 7px;
+  border: 1px solid #b9b9b9;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .18);
+}
+
+.dq-office-palette-hidden {
+  display: none;
+}
+
+.dq-office-swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #aaa;
+  cursor: pointer;
+}
+
+.dq-office-swatch:hover {
+  outline: 2px solid #185abd;
+}
+
+.dq-office-swatch-none {
+  background: linear-gradient(to bottom right, #fff 45%, #d13438 46%, #d13438 54%, #fff 55%);
+}
+
+.dq-office-stylecard {
+  width: 92px;
+  height: 58px;
+  padding: 4px 6px 3px;
+  border: 1px solid #d5d5d5;
+  background: #fff;
+  color: #242424;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dq-office-stylecard:hover,
+.dq-office-stylecard-active {
+  border-color: #5b9bd5;
+  background: #eaf3fb;
+}
+
+.dq-office-stylecard-sample,
+.dq-office-stylecard-label {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dq-office-stylecard-sample {
+  color: #1f4e79;
+  font-family: Calibri, Arial, sans-serif;
+  font-size: 17px;
+  line-height: 27px;
+}
+
+.dq-office-stylecard-normal .dq-office-stylecard-sample {
+  color: #242424;
+  font-size: 13px;
+}
+
+.dq-office-stylecard-label {
+  font-size: 10px;
+}
+
+/* Régua horizontal: faixa própria imediatamente abaixo da ribbon. */
 .dq-office-ruler-wrap {
-  position: sticky;
-  top: 0;
-  z-index: 6;
+  position: relative;
+  z-index: 8;
+  flex: 0 0 26px;
   background: #e9eef2;
-  margin: -26px 0 8px;
   padding: 2px 0;
+  border-bottom: 1px solid #d4d9dd;
+  overflow: hidden;
 }
 
 .dq-office-ruler {
+  position: relative;
   height: 22px;
   user-select: none;
 }
@@ -274,8 +396,8 @@
 
 .dq-office-ruler-corner {
   position: absolute;
-  left: -30px;
-  top: 0;
+  left: 0;
+  top: 2px;
   width: 22px;
   height: 22px;
   border: 1px solid #c4c9cd;
@@ -403,14 +525,15 @@
   user-select: none;
 }
 
-/* regua vertical: encostada a esquerda da pagina centrada, mesmo desenho */
+/* Uma única régua vertical, no canto esquerdo do viewport, posicionada pelo
+   controlador na página que contém a seleção. */
 .dq-office-vruler-slot {
   position: absolute;
-  top: 26px;
-  left: 50%;
-  height: 0;
+  z-index: 7;
+  width: 24px;
   overflow: visible;
   pointer-events: none;
+  background: #e9eef2;
 }
 
 .dq-office-vruler {

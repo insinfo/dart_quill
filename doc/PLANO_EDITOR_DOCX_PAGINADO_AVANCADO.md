@@ -2596,6 +2596,44 @@ pacote) + 71 de layout. Pendências seguintes: galeria de tamanhos de
 tabela, drag de margens na régua, mini-UIs contextuais de imagem/forma/
 caixa de texto (dependem do pipeline de embeds no composer).
 
+**[ENTREGUE 2026-08-02 — correção do chrome Word e ribbon contextual.]**
+O feedback visual posterior mostrou que a posição das réguas e a densidade
+da Página Inicial ainda não reproduziam o comportamento de produto. Esta
+rodada corrigiu o contrato, não apenas a aparência:
+
+1. **Réguas na posição do Word** — a horizontal saiu do canvas e virou uma
+   faixa própria colada imediatamente abaixo da ribbon. A vertical deixou
+   de ficar junto da folha centrada: existe uma única instância no canto
+   esquerdo visível do viewport e o `PositionMap` a move para a página que
+   contém o cursor/seleção (`data-page` torna o vínculo verificável). Scroll
+   horizontal mantém o eixo esquerdo e zoom/geometria reconstroem as duas
+   escalas.
+2. **Página Inicial completa e componentizada** — Área de Transferência
+   (Colar grande, Recortar, Copiar e Pincel), Fonte (família, tamanho,
+   aumentar/diminuir, caixa, limpar formatação, B/I/U/tachado,
+   subscrito/sobrescrito, realce e cor com paletas), Parágrafo (listas,
+   recuos e quatro alinhamentos), galeria visual de Estilos e Edição. Os
+   SVGs oficiais incorporados passaram de 37 para 46 e a pipeline
+   reprodutível continua sendo `tool/build_icon_font.dart`.
+3. **Ribbon realmente contextual** — `selectionchange` do documento agora
+   sincroniza a seleção nativa com `EditorState` mesmo quando mover o cursor
+   não produz transação. Negrito e demais marcas acendem/apagam, a galeria
+   acompanha o heading, família e tamanho refletem a marca `value`, e
+   sub/sobrescrito refletem sua variante. Alterar fonte/tamanho funciona
+   tanto numa faixa selecionada quanto no caret via `storedMarks`.
+4. **Arquivo nos dois sentidos** — além de PDF/DOCX, a aba ganhou Abrir
+   DOCX, Abrir Delta Quill JSON e Exportar Delta. `DomAdapter.pickFile`
+   mantém a UI sem dependência direta de browser; web usa `<input
+   type=file>`/`arrayBuffer`, fake DOM registra o pedido para testes. Abrir
+   cria um novo `EditorState` (histórico novo); DOCX também aplica sua
+   geometria de página.
+
+Os testes de UI passaram a travar explicitamente mudança de tamanho sobre
+seleção nativa, atualização por `selectionchange`, estado dos selects e da
+galeria, vínculo da régua vertical à página ativa e round-trip/abertura de
+Delta e DOCX. O CSS permanece asset substituível, escopado em
+`dq-office-*`.
+
 ---|---|
 | digitar/apagar/Enter sobre páginas | o laço `beforeinput → modelo → PageGraph → projeção` |
 | barra de ferramentas | usa `runCommand`, o MESMO caminho dos atalhos — a UI não tem rota própria para mudar o documento |

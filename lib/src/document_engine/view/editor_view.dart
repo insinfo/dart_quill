@@ -91,6 +91,15 @@ class OfficeEditorView {
       _scroll = _handleScroll;
       (_scrollContainer ?? host).addEventListener('scroll', _scroll!);
     }
+    // Mover o caret não gera transação — é o selectionchange do DOCUMENTO
+    // que mantém o modelo (e a UI contextual: realce da ribbon, marcadores
+    // da régua) em dia com onde o usuário está. O guard de host em
+    // readNativeSelection ignora seleções fora deste editor.
+    _selectionChange = (_) {
+      if (_disposed || _composing) return;
+      if (syncSelectionFromDom()) onStateChange?.call(_state);
+    };
+    _adapter.document.addEventListener('selectionchange', _selectionChange!);
     _compose();
     _project();
   }
@@ -155,6 +164,7 @@ class OfficeEditorView {
   final OfficeClipboard _clipboard = const OfficeClipboard();
   final OfficeDomReconciler _reconciler = const OfficeDomReconciler();
   DomEventListener? _scroll;
+  DomEventListener? _selectionChange;
   bool _disposed = false;
   bool _composing = false;
   PageWindow? _window;
@@ -261,6 +271,10 @@ class OfficeEditorView {
     host.removeEventListener('compositionend', _compositionEnd);
     if (_scroll != null) {
       (_scrollContainer ?? host).removeEventListener('scroll', _scroll!);
+    }
+    if (_selectionChange != null) {
+      _adapter.document
+          .removeEventListener('selectionchange', _selectionChange!);
     }
   }
 

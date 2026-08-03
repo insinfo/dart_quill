@@ -9,6 +9,8 @@ import 'package:dart_quill/src/themes/snow.dart';
 import 'package:dart_quill/src/ui/tooltip.dart';
 import 'package:test/test.dart';
 
+import 'dart:typed_data';
+
 import '../../support/quill_test_helpers.dart';
 import '../../support/test_helpers.dart';
 
@@ -80,6 +82,11 @@ class _LayoutAdapter implements DomAdapter {
   @override
   void downloadBytes(String filename, String mimeType, List<int> bytes) =>
       inner.downloadBytes(filename, mimeType, bytes);
+
+  @override
+  void pickFile(
+          String accept, void Function(String name, Uint8List bytes) onFile) =>
+      inner.pickFile(accept, onFile);
 
   @override
   DomNativeRange? caretRangeFromPoint(num x, num y) =>

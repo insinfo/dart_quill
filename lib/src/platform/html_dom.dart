@@ -349,7 +349,8 @@ class HtmlDomInputEvent extends HtmlDomEvent implements DomInputEvent {
   HtmlDomInputEvent(super.nativeEvent);
 
   @override
-  bool get isComposing => nativeEvent.isA<web.InputEvent>() &&
+  bool get isComposing =>
+      nativeEvent.isA<web.InputEvent>() &&
       (nativeEvent as web.InputEvent).isComposing;
 
   @override
@@ -534,7 +535,8 @@ class HtmlDomMouseEvent extends HtmlDomEvent implements DomMouseEvent {
 
 class HtmlDomKeyboardEvent extends HtmlDomEvent implements DomKeyboardEvent {
   @override
-  bool get isComposing => nativeEvent.isA<web.KeyboardEvent>() &&
+  bool get isComposing =>
+      nativeEvent.isA<web.KeyboardEvent>() &&
       (nativeEvent as web.KeyboardEvent).isComposing;
 
   HtmlDomKeyboardEvent(super.nativeEvent);
@@ -715,16 +717,32 @@ class HtmlDomAdapter implements DomAdapter {
 
   @override
   void downloadBytes(String filename, String mimeType, List<int> bytes) {
-    final blob = web.Blob(
-        [Uint8List.fromList(bytes).toJS].toJS,
+    final blob = web.Blob([Uint8List.fromList(bytes).toJS].toJS,
         web.BlobPropertyBag(type: mimeType));
     final url = web.URL.createObjectURL(blob);
-    final anchor =
-        web.document.createElement('a') as web.HTMLAnchorElement
-          ..href = url
-          ..download = filename;
+    final anchor = web.document.createElement('a') as web.HTMLAnchorElement
+      ..href = url
+      ..download = filename;
     anchor.click();
     web.URL.revokeObjectURL(url);
+  }
+
+  @override
+  void pickFile(
+      String accept, void Function(String name, Uint8List bytes) onFile) {
+    final input = web.document.createElement('input') as web.HTMLInputElement
+      ..type = 'file'
+      ..accept = accept;
+    input.addEventListener(
+        'change',
+        ((web.Event _) {
+          final file = input.files?.item(0);
+          if (file == null) return;
+          file.arrayBuffer().toDart.then((buffer) {
+            onFile(file.name, buffer.toDart.asUint8List());
+          });
+        }).toJS);
+    input.click();
   }
 
   @override

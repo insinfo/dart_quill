@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'dom.dart';
 
 /// Stub adapter for non-web platforms (VM, etc)
@@ -41,6 +43,10 @@ class _StubDomAdapter implements DomAdapter {
 
   @override
   void downloadBytes(String filename, String mimeType, List<int> bytes) {}
+
+  @override
+  void pickFile(
+      String accept, void Function(String name, Uint8List bytes) onFile) {}
 
   @override
   void setSelectionRange(DomElement root, int index, int length) {}

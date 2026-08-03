@@ -31,12 +31,12 @@ void main() {
         ..rel = 'stylesheet'
         ..href = href;
       final loaded = Completer<void>();
-      link.addEventListener(
-          'load', ((web.Event _) => loaded.complete()).toJS);
+      link.addEventListener('load', ((web.Event _) => loaded.complete()).toJS);
       link.addEventListener(
           'error',
-          ((web.Event _) => loaded
-              .completeError(StateError('falhou ao carregar $href'))).toJS);
+          ((web.Event _) =>
+                  loaded.completeError(StateError('falhou ao carregar $href')))
+              .toJS);
       web.document.head!.append(link);
       await loaded.future;
     }
@@ -61,9 +61,8 @@ void main() {
           schema.node(
               'paragraph',
               null,
-              Fragment.from([
-                schema.text('Parágrafo $i com texto real para paginar.')
-              ]))
+              Fragment.from(
+                  [schema.text('Parágrafo $i com texto real para paginar.')]))
       ]));
 
   OfficeWordEditor mount({int blocks = 40}) => editor = OfficeWordEditor.mount(
@@ -93,10 +92,27 @@ void main() {
     expect(center.getBoundingClientRect().width, closeTo(pageWidth, 2));
     // ALINHAMENTO: o centro da régua e a página compartilham o eixo — a
     // diferença de left tem de ser subpixel.
-    final page2 = web.document.querySelector('.dq-office-page')
-        as web.HTMLElement;
+    final page2 =
+        web.document.querySelector('.dq-office-page') as web.HTMLElement;
     expect(center.getBoundingClientRect().left,
         closeTo(page2.getBoundingClientRect().left, 1.5));
+
+    // A horizontal pertence ao chrome: fica colada sob a ribbon, fora do
+    // viewport rolável. A vertical nasce no canto esquerdo do viewport e
+    // acompanha apenas a página ativa.
+    final ribbonRect = (ribbon as web.HTMLElement).getBoundingClientRect();
+    final rulerWrap =
+        web.document.querySelector('.dq-office-ruler-wrap') as web.HTMLElement;
+    final rulerRect = rulerWrap.getBoundingClientRect();
+    expect(rulerRect.top, closeTo(ribbonRect.bottom, 1));
+    final canvas =
+        web.document.querySelector('.dq-office-canvas') as web.HTMLElement;
+    final vertical =
+        web.document.querySelector('.dq-office-vruler-slot') as web.HTMLElement;
+    expect(vertical.getBoundingClientRect().left,
+        closeTo(canvas.getBoundingClientRect().left, 1));
+    expect(vertical.getBoundingClientRect().top,
+        closeTo(page2.getBoundingClientRect().top, 1));
   });
 
   test('clique REAL no botão de negrito formata a seleção nativa', () {
@@ -115,18 +131,18 @@ void main() {
 
   test('zoom muda a largura REAL da página, não o grafo', () {
     final editor = mount();
-    final before = (web.document.querySelector('.dq-office-page')
-            as web.HTMLElement)
-        .getBoundingClientRect()
-        .width;
+    final before =
+        (web.document.querySelector('.dq-office-page') as web.HTMLElement)
+            .getBoundingClientRect()
+            .width;
     final pagesBefore = editor.pageGraph.pages.length;
 
     editor.setZoom(1.5);
 
-    final after = (web.document.querySelector('.dq-office-page')
-            as web.HTMLElement)
-        .getBoundingClientRect()
-        .width;
+    final after =
+        (web.document.querySelector('.dq-office-page') as web.HTMLElement)
+            .getBoundingClientRect()
+            .width;
     expect(after, closeTo(before * 1.5, 3));
     expect(editor.pageGraph.pages.length, pagesBefore);
   });

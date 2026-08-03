@@ -39,42 +39,52 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Com a fonte carregada, o texto-fallback dos botoes some. */
-.dq-office-btn:has(.dq-icon) .dq-office-btn-text { display: none; }
+/* Com a fonte carregada, o texto-fallback dos botoes some — exceto nos
+   botoes ROTULADOS (grandes ou icone+rotulo, como no Word). */
+.dq-office-btn:not(.dq-office-btn-labeled):has(.dq-icon) .dq-office-btn-text { display: none; }
 .dq-icon-addcell:before { content: "\ea01"; }
 .dq-icon-align-center:before { content: "\ea02"; }
 .dq-icon-align-just:before { content: "\ea03"; }
 .dq-icon-align-left:before { content: "\ea04"; }
 .dq-icon-align-right:before { content: "\ea05"; }
 .dq-icon-bold:before { content: "\ea06"; }
-.dq-icon-columns:before { content: "\ea07"; }
-.dq-icon-copy:before { content: "\ea08"; }
-.dq-icon-cut:before { content: "\ea09"; }
-.dq-icon-decoffset:before { content: "\ea0a"; }
-.dq-icon-delcell:before { content: "\ea0b"; }
-.dq-icon-download:before { content: "\ea0c"; }
-.dq-icon-incoffset:before { content: "\ea0d"; }
-.dq-icon-insertimage:before { content: "\ea0e"; }
-.dq-icon-insertshape:before { content: "\ea0f"; }
-.dq-icon-inserttable:before { content: "\ea10"; }
-.dq-icon-italic:before { content: "\ea11"; }
-.dq-icon-menu-header:before { content: "\ea12"; }
-.dq-icon-merge-cells:before { content: "\ea13"; }
-.dq-icon-multilevels:before { content: "\ea14"; }
-.dq-icon-numbering:before { content: "\ea15"; }
-.dq-icon-pagebreak:before { content: "\ea16"; }
-.dq-icon-pagemargins:before { content: "\ea17"; }
-.dq-icon-pageorient:before { content: "\ea18"; }
-.dq-icon-pagesize:before { content: "\ea19"; }
-.dq-icon-paste:before { content: "\ea1a"; }
-.dq-icon-print:before { content: "\ea1b"; }
-.dq-icon-redo:before { content: "\ea1c"; }
-.dq-icon-rows-and-columns:before { content: "\ea1d"; }
-.dq-icon-save:before { content: "\ea1e"; }
-.dq-icon-setmarkers:before { content: "\ea1f"; }
-.dq-icon-strikeout:before { content: "\ea20"; }
-.dq-icon-subscript:before { content: "\ea21"; }
-.dq-icon-superscript:before { content: "\ea22"; }
-.dq-icon-text:before { content: "\ea23"; }
-.dq-icon-underline:before { content: "\ea24"; }
-.dq-icon-undo:before { content: "\ea25"; }
+.dq-icon-change-case:before { content: "\ea07"; }
+.dq-icon-clearstyle:before { content: "\ea08"; }
+.dq-icon-columns:before { content: "\ea09"; }
+.dq-icon-copy:before { content: "\ea0a"; }
+.dq-icon-copystyle:before { content: "\ea0b"; }
+.dq-icon-cut:before { content: "\ea0c"; }
+.dq-icon-decfont:before { content: "\ea0d"; }
+.dq-icon-decoffset:before { content: "\ea0e"; }
+.dq-icon-delcell:before { content: "\ea0f"; }
+.dq-icon-download:before { content: "\ea10"; }
+.dq-icon-fontcolor:before { content: "\ea11"; }
+.dq-icon-highlight:before { content: "\ea12"; }
+.dq-icon-incfont:before { content: "\ea13"; }
+.dq-icon-incoffset:before { content: "\ea14"; }
+.dq-icon-insertimage:before { content: "\ea15"; }
+.dq-icon-insertshape:before { content: "\ea16"; }
+.dq-icon-inserttable:before { content: "\ea17"; }
+.dq-icon-italic:before { content: "\ea18"; }
+.dq-icon-linespace:before { content: "\ea19"; }
+.dq-icon-menu-header:before { content: "\ea1a"; }
+.dq-icon-merge-cells:before { content: "\ea1b"; }
+.dq-icon-multilevels:before { content: "\ea1c"; }
+.dq-icon-numbering:before { content: "\ea1d"; }
+.dq-icon-pagebreak:before { content: "\ea1e"; }
+.dq-icon-pagemargins:before { content: "\ea1f"; }
+.dq-icon-pageorient:before { content: "\ea20"; }
+.dq-icon-pagesize:before { content: "\ea21"; }
+.dq-icon-paracolor:before { content: "\ea22"; }
+.dq-icon-paste:before { content: "\ea23"; }
+.dq-icon-print:before { content: "\ea24"; }
+.dq-icon-redo:before { content: "\ea25"; }
+.dq-icon-rows-and-columns:before { content: "\ea26"; }
+.dq-icon-save:before { content: "\ea27"; }
+.dq-icon-setmarkers:before { content: "\ea28"; }
+.dq-icon-strikeout:before { content: "\ea29"; }
+.dq-icon-subscript:before { content: "\ea2a"; }
+.dq-icon-superscript:before { content: "\ea2b"; }
+.dq-icon-text:before { content: "\ea2c"; }
+.dq-icon-underline:before { content: "\ea2d"; }
+.dq-icon-undo:before { content: "\ea2e"; }

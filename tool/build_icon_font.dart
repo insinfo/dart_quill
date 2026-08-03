@@ -43,6 +43,15 @@ const Map<String, String> icons = {
       'common/main/resources/img/toolbar/2.5x/btn-align-center.svg',
   'align-right': 'common/main/resources/img/toolbar/2.5x/btn-align-right.svg',
   'align-just': 'common/main/resources/img/toolbar/2.5x/btn-align-just.svg',
+  'incfont': 'common/main/resources/img/toolbar/2.5x/btn-incfont.svg',
+  'decfont': 'common/main/resources/img/toolbar/2.5x/btn-decfont.svg',
+  'copystyle': 'common/main/resources/img/toolbar/2.5x/btn-copystyle.svg',
+  'clearstyle': 'common/main/resources/img/toolbar/2.5x/btn-clearstyle.svg',
+  'change-case': 'common/main/resources/img/toolbar/2.5x/btn-change-case.svg',
+  'fontcolor': 'common/main/resources/img/toolbar/2.5x/btn-fontcolor.svg',
+  'highlight': 'common/main/resources/img/toolbar/2.5x/btn-highlight.svg',
+  'linespace': 'common/main/resources/img/toolbar/2.5x/btn-linespace.svg',
+  'paracolor': 'common/main/resources/img/toolbar/2.5x/btn-paracolor.svg',
   'setmarkers': 'common/main/resources/img/toolbar/2.5x/btn-setmarkers.svg',
   'numbering': 'common/main/resources/img/toolbar/2.5x/btn-numbering.svg',
   'multilevels':
@@ -123,8 +132,9 @@ const String cssHeader = '''
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Com a fonte carregada, o texto-fallback dos botoes some. */
-.dq-office-btn:has(.dq-icon) .dq-office-btn-text { display: none; }
+/* Com a fonte carregada, o texto-fallback dos botoes some — exceto nos
+   botoes ROTULADOS (grandes ou icone+rotulo, como no Word). */
+.dq-office-btn:not(.dq-office-btn-labeled):has(.dq-icon) .dq-office-btn-text { display: none; }
 ''';
 
 Future<void> main(List<String> args) async {

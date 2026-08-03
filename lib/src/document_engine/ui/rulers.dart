@@ -7,9 +7,10 @@
 /// primeira linha no topo, recuo esquerdo embaixo, recuo direito na margem
 /// direita.
 ///
-/// O alinhamento com a página é estrutural: o centro da régua tem a largura
-/// exata da página e compartilha a centralização do canvas, então nenhum
-/// JavaScript de medição é necessário e o zoom realinha sozinho.
+/// A horizontal ocupa uma faixa própria imediatamente abaixo da ribbon. A
+/// vertical fica no limite esquerdo do viewport do documento e é movida
+/// para a página que contém a seleção — há uma única régua vertical ativa,
+/// como no Word.
 library;
 
 import '../../platform/dom.dart';
@@ -18,7 +19,8 @@ import 'controller.dart';
 const int _quarterCmTwips = 142; // 0,25 cm
 
 class OfficeHorizontalRuler {
-  OfficeHorizontalRuler(this.controller) : _kit = OfficeDomKit(controller.adapter);
+  OfficeHorizontalRuler(this.controller)
+      : _kit = OfficeDomKit(controller.adapter);
 
   final OfficeWordController controller;
   final OfficeDomKit _kit;
@@ -40,14 +42,14 @@ class OfficeHorizontalRuler {
 
     final corner = _kit.el('div', 'dq-office-ruler-corner');
     corner.appendText('L');
-    center.append(corner);
+    track.append(corner);
 
     final band = _kit.el('div', 'dq-office-ruler-band');
     final content = _kit.el('div', 'dq-office-ruler-content');
     content.setAttribute(
         'style',
         'left:${px(setup.marginLeftTwips)}px;'
-        'width:${px(setup.contentWidthTwips)}px;');
+            'width:${px(setup.contentWidthTwips)}px;');
     band.append(content);
     center.append(band);
 
@@ -77,7 +79,8 @@ class OfficeHorizontalRuler {
       center.append(tick);
     }
 
-    _first = _marker('dq-office-indent-first', 'Recuo da primeira linha', 'first');
+    _first =
+        _marker('dq-office-indent-first', 'Recuo da primeira linha', 'first');
     _left = _marker('dq-office-indent-left', 'Recuo à esquerda', 'left');
     _right = _marker('dq-office-indent-right', 'Recuo à direita', 'right');
     center.append(_first!);
@@ -168,8 +171,7 @@ class OfficeHorizontalRuler {
     final left = value('left');
     final first = value('first');
     final right = value('right');
-    _left!.setAttribute(
-        'style', 'left:${px(setup.marginLeftTwips + left)}px;');
+    _left!.setAttribute('style', 'left:${px(setup.marginLeftTwips + left)}px;');
     _first!.setAttribute(
         'style', 'left:${px(setup.marginLeftTwips + left + first)}px;');
     _right!.setAttribute('style',
@@ -178,7 +180,8 @@ class OfficeHorizontalRuler {
 }
 
 class OfficeVerticalRuler {
-  OfficeVerticalRuler(this.controller) : _kit = OfficeDomKit(controller.adapter);
+  OfficeVerticalRuler(this.controller)
+      : _kit = OfficeDomKit(controller.adapter);
 
   final OfficeWordController controller;
   final OfficeDomKit _kit;
@@ -188,10 +191,6 @@ class OfficeVerticalRuler {
     final setup = controller.pageSetup;
 
     final ruler = _kit.el('div', 'dq-office-vruler');
-    // Encostada à esquerda da página centrada: o offset é -(largura da
-    // página)/2 - largura da régua - respiro.
-    ruler.setAttribute(
-        'style', 'margin-left:${-(px(setup.widthTwips) / 2 + 30)}px;');
     final track = _kit.el('div', 'dq-office-vruler-track');
     track.setAttribute('style', 'height:${px(setup.heightTwips)}px;');
 
@@ -199,7 +198,7 @@ class OfficeVerticalRuler {
     content.setAttribute(
         'style',
         'top:${px(setup.marginTopTwips)}px;'
-        'height:${px(setup.contentHeightTwips)}px;');
+            'height:${px(setup.contentHeightTwips)}px;');
     track.append(content);
 
     final totalQuarters = setup.heightTwips ~/ _quarterCmTwips;

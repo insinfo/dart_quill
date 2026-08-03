@@ -18,9 +18,209 @@ void addMarkOverSelection(
   if (type == null) return;
   c.syncSelection();
   final selection = c.view.state.selection;
+  final mark = type.create(attrs);
+  if (selection.empty) {
+    c.dispatch(c.view.state.tr..addStoredMark(mark));
+  } else {
+    c.dispatch(c.view.state.tr..addMark(selection.from, selection.to, mark));
+  }
+}
+
+/// O valor da marca [markName] vigente na seleção (caret: o que a próxima
+/// digitação usará), ou null.
+String? currentMarkValue(OfficeWordController c, String markName) {
+  final type = c.schema.marks[markName];
+  if (type == null) return null;
+  final state = c.view.state;
+  final selection = state.selection;
+  final marks = selection.empty
+      ? (state.storedMarks ?? selection.fromRes.marks())
+      : state.doc.resolve(selection.from + 1).marks();
+  for (final mark in marks) {
+    if (mark.type == type) return mark.attrs['value'] as String?;
+  }
+  return null;
+}
+
+/// A escada de tamanhos do Word (o que A^ e A˅ percorrem).
+const List<int> wordFontSizes = [
+  8,
+  9,
+  10,
+  11,
+  12,
+  14,
+  16,
+  18,
+  20,
+  24,
+  28,
+  36,
+  48,
+  72
+];
+
+/// Aumentar/Diminuir Fonte: um degrau na escada a partir do tamanho vigente.
+void stepFontSize(OfficeWordController c, {required bool up}) {
+  c.syncSelection();
+  final raw = currentMarkValue(c, 'size') ?? '12pt';
+  final current = int.tryParse(raw.replaceAll('pt', '')) ?? 12;
+  int next = current;
+  if (up) {
+    next = wordFontSizes.firstWhere((s) => s > current, orElse: () => current);
+  } else {
+    next = wordFontSizes.lastWhere((s) => s < current, orElse: () => current);
+  }
+  if (next != current) {
+    addMarkOverSelection(c, 'size', {'value': '${next}pt'});
+  }
+}
+
+/// x₂/x² do Word: liga sub/sobrescrito, desliga se já era o mesmo.
+void toggleScript(OfficeWordController c, String value) {
+  final type = c.schema.marks['script'];
+  if (type == null) return;
+  c.syncSelection();
+  final selection = c.view.state.selection;
+  final tr = c.view.state.tr;
+  if (currentMarkValue(c, 'script') == value) {
+    if (selection.empty) {
+      tr.removeStoredMark(type);
+    } else {
+      tr.removeMark(selection.from, selection.to, type);
+    }
+  } else {
+    final mark = type.create({'value': value});
+    if (selection.empty) {
+      tr.addStoredMark(mark);
+    } else {
+      tr.addMark(selection.from, selection.to, mark);
+    }
+  }
+  c.dispatch(tr);
+}
+
+/// A borracha do Word: remove TODAS as marcas da seleção.
+void clearFormatting(OfficeWordController c) {
+  c.syncSelection();
+  final selection = c.view.state.selection;
+  final tr = c.view.state.tr;
+  if (selection.empty) {
+    tr.setStoredMarks([]);
+  } else {
+    tr.removeMark(selection.from, selection.to);
+  }
+  c.dispatch(tr);
+}
+
+/// Cor da fonte / realce: aplica a marca, ou a remove com [color] null.
+void applyMarkColor(OfficeWordController c, String markName, String? color) {
+  final type = c.schema.marks[markName];
+  if (type == null) return;
+  c.syncSelection();
+  final selection = c.view.state.selection;
+  final tr = c.view.state.tr;
+  if (color == null) {
+    if (selection.empty) {
+      tr.removeStoredMark(type);
+    } else {
+      tr.removeMark(selection.from, selection.to, type);
+    }
+  } else {
+    final mark = type.create({'value': color});
+    if (selection.empty) {
+      tr.addStoredMark(mark);
+    } else {
+      tr.addMark(selection.from, selection.to, mark);
+    }
+  }
+  c.dispatch(tr);
+}
+
+/// Aa do Word (simplificado): alterna a seleção entre MAIÚSCULAS e
+/// minúsculas.
+void toggleCase(OfficeWordController c) {
+  c.syncSelection();
+  final state = c.view.state;
+  final selection = state.selection;
   if (selection.empty) return;
-  c.dispatch(
-      c.view.state.tr..addMark(selection.from, selection.to, type.create(attrs)));
+  final text = state.doc.textBetween(selection.from, selection.to);
+  if (text.isEmpty) return;
+  final next =
+      text == text.toUpperCase() ? text.toLowerCase() : text.toUpperCase();
+  c.dispatch(state.tr..insertText(next, selection.from, selection.to));
+}
+
+/// Aumentar/Diminuir Recuo (o passo de 1,27 cm do Word).
+void indentBy(OfficeWordController c, int deltaTwips) {
+  c.syncSelection();
+  final style = c.currentBlockStyle();
+  final current =
+      style?['indentTwips'] is num ? (style!['indentTwips'] as num).toInt() : 0;
+  final content = c.pageSetup.contentWidthTwips;
+  c.applyBlockStyle(
+      {'indentTwips': (current + deltaTwips).clamp(0, content - 567)});
+}
+
+// -- área de transferência interna + pincel de formatação ---------------------
+
+/// Clipboard INTERNO do componente (os botões da ribbon não têm acesso ao
+/// clipboard do sistema sem permissão do browser — Ctrl+C/V continuam sendo
+/// o caminho nativo, como no Word Online).
+Slice? _internalClipboard;
+
+/// Marcas armadas pelo Pincel de Formatação, aplicadas à PRÓXIMA seleção.
+List<Mark>? _painterMarks;
+
+void copySelection(OfficeWordController c) {
+  c.syncSelection();
+  final selection = c.view.state.selection;
+  if (selection.empty) return;
+  _internalClipboard = selection.content();
+}
+
+void cutSelection(OfficeWordController c) {
+  c.syncSelection();
+  final selection = c.view.state.selection;
+  if (selection.empty) return;
+  _internalClipboard = selection.content();
+  c.dispatch(c.view.state.tr..deleteSelection());
+}
+
+void pasteInternal(OfficeWordController c) {
+  final slice = _internalClipboard;
+  if (slice == null) return;
+  c.syncSelection();
+  c.dispatch(c.view.state.tr..replaceSelection(slice));
+}
+
+/// Pincel de Formatação: copia as marcas vigentes; a próxima seleção as
+/// recebe (one-shot, como um clique no pincel do Word).
+void armFormatPainter(OfficeWordController c) {
+  c.syncSelection();
+  final state = c.view.state;
+  final selection = state.selection;
+  _painterMarks = List.of(selection.empty
+      ? (state.storedMarks ?? selection.fromRes.marks())
+      : state.doc.resolve(selection.from + 1).marks());
+}
+
+bool get formatPainterArmed => _painterMarks != null;
+
+/// Chamado pelo orquestrador no mouseup do canvas: aplica e desarma.
+void maybeApplyFormatPainter(OfficeWordController c) {
+  final marks = _painterMarks;
+  if (marks == null) return;
+  _painterMarks = null;
+  c.syncSelection();
+  final selection = c.view.state.selection;
+  if (selection.empty) return;
+  final tr = c.view.state.tr;
+  tr.removeMark(selection.from, selection.to);
+  for (final mark in marks) {
+    tr.addMark(selection.from, selection.to, mark);
+  }
+  c.dispatch(tr);
 }
 
 /// Alinha os BLOCOS cobertos pela seleção.
@@ -103,8 +303,7 @@ void insertTable(OfficeWordController c, int rows, int cols) {
   final tr = c.view.state.tr..replaceSelectionWith(table);
   final around = tr.mapping.map(from);
   int? cellText;
-  tr.doc.nodesBetween(
-      around - table.nodeSize < 0 ? 0 : around - table.nodeSize,
+  tr.doc.nodesBetween(around - table.nodeSize < 0 ? 0 : around - table.nodeSize,
       around + 2 > tr.doc.content.size ? tr.doc.content.size : around + 2,
       (node, pos, parent, index) {
     if (cellText == null && node.type.name == 'table') {

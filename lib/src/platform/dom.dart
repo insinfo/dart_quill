@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 typedef DomEventListener = void Function(DomEvent event);
 
 // Abstractions to decouple the rest of the codebase from dart:html.
@@ -313,6 +315,15 @@ abstract class DomAdapter {
   /// editor Word precisa exportar PDF/DOCX sem que o COMPONENTE dependa de
   /// `package:web` — o componente roda nos testes de VM como qualquer outro.
   void downloadBytes(String filename, String mimeType, List<int> bytes);
+
+  /// Abre o seletor de arquivo do usuário e entrega nome + bytes.
+  ///
+  /// Contraparte de [downloadBytes] para a aba Arquivo (Abrir DOCX/Delta).
+  /// Na web cria um `<input type=file>` e lê o arquivo escolhido; num
+  /// adaptador sem browser é no-op (o fake registra o pedido e permite
+  /// injetar o arquivo no teste).
+  void pickFile(
+      String accept, void Function(String name, Uint8List bytes) onFile);
   void setSelectionRange(DomElement root, int index, int length);
   void setSelectionByNodes(
       DomNode startNode, int startOffset, DomNode endNode, int endOffset);
