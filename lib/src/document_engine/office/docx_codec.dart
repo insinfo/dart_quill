@@ -115,12 +115,17 @@ class OfficeDocxCodec {
   /// rótulo de um parágrafo depende de tudo que veio antes dele.
   OfficeNumberingCounter? _counter;
 
+  /// DOCX currently being converted, needed to resolve image relationships
+  /// from the main document and each header/footer part.
+  DocxFile? _activeFile;
+
   /// Quebras de seção encontradas nos parágrafos, na ordem do documento.
   final List<WpSectionProperties> _sectionBreaks = [];
 
   /// Importa o pacote inteiro, preservando o que não sabemos ler.
   OfficeDocxImport import(Uint8List bytes, {String documentId = 'docx'}) {
     final docx = DocxReader.read(bytes);
+    _activeFile = docx;
     _styles = docx.styles;
     _counter = OfficeNumberingCounter(docx.numbering);
     _sectionBreaks.clear();
@@ -169,7 +174,8 @@ class OfficeDocxCodec {
       // no XML. Sem id, nenhuma âncora casa no save e o writer regenera o
       // documento inteiro — anulando justamente a preservação.
       final nodeId = 'b$ordinal';
-      final node = _blockToNode(block, report, nodeId);
+      final node = _blockToNode(
+          block, report, nodeId, fromPart: docx.mainPartName);
       if (node == null) {
         ordinal++;
         continue;
@@ -332,7 +338,8 @@ class OfficeDocxCodec {
       final blocks = <PMNode>[];
       var ordinal = 0;
       for (final block in region.blocks) {
-        final node = _blockToNode(block, report, '$variant-$ordinal');
+        final node = _blockToNode(
+            block, report, '$variant-$ordinal', fromPart: region.partName);
         ordinal++;
         if (node != null) blocks.add(node);
       }
@@ -361,6 +368,8 @@ class OfficeDocxCodec {
         'marginRightTwips': section.marginRightTwips,
         'marginBottomTwips': section.marginBottomTwips,
         'marginLeftTwips': section.marginLeftTwips,
+        'headerDistanceTwips': section.headerDistanceTwips,
+        'footerDistanceTwips': section.footerDistanceTwips,
         'titlePage': section.titlePage,
       };
 
@@ -391,6 +400,10 @@ class OfficeDocxCodec {
       marginRightTwips: value('marginRightTwips', fallback.marginRightTwips),
       marginBottomTwips: value('marginBottomTwips', fallback.marginBottomTwips),
       marginLeftTwips: value('marginLeftTwips', fallback.marginLeftTwips),
+      headerDistanceTwips:
+          value('headerDistanceTwips', fallback.headerDistanceTwips),
+      footerDistanceTwips:
+          value('footerDistanceTwips', fallback.footerDistanceTwips),
     );
   }
 
@@ -410,6 +423,10 @@ class OfficeDocxCodec {
       marginRightTwips: value('marginRightTwips', fallback.marginRightTwips),
       marginBottomTwips: value('marginBottomTwips', fallback.marginBottomTwips),
       marginLeftTwips: value('marginLeftTwips', fallback.marginLeftTwips),
+      headerDistanceTwips:
+          value('headerDistanceTwips', fallback.headerDistanceTwips),
+      footerDistanceTwips:
+          value('footerDistanceTwips', fallback.footerDistanceTwips),
     );
   }
 
@@ -486,11 +503,11 @@ class OfficeDocxCodec {
 
   /// Um bloco Word vira nó editável, ou `null` quando ainda não sabemos
   /// representá-lo — e nesse caso ele continua vivo nas partes opacas.
-  PMNode? _blockToNode(
-      WpBlock block, OfficeCompatibilityReport report, String nodeId) {
+  PMNode? _blockToNode(WpBlock block, OfficeCompatibilityReport report,
+      String nodeId, {required String fromPart}) {
     switch (block) {
       case WpParagraph():
-        return _paragraphToNode(block, nodeId);
+        return _paragraphToNode(block, nodeId, report, fromPart);
       case WpTable():
         report.add('docx-table-opaque',
             'tabela preservada na parte original; a edição semântica entra '
@@ -577,13 +594,101 @@ class OfficeDocxCodec {
         _ => null,
       };
 
-  PMNode _paragraphToNode(WpParagraph paragraph, String nodeId) {
+  PMNode _paragraphToNode(WpParagraph paragraph, String nodeId,
+      OfficeCompatibilityReport report, String fromPart) {
     final inline = <PMNode>[];
+    var fieldInstruction = StringBuffer();
+    var fieldActive = false;
+    var fieldResult = false;
+
+    void appendField(String instruction, WpRunProperties? properties) {
+      final upper = instruction.toUpperCase();
+      final value = upper.contains('NUMPAGES')
+          ? '{NUMPAGES}'
+          : upper.contains('PAGE')
+              ? '{PAGE}'
+              : null;
+      if (value == null) return;
+      inline.add(schema.text(value, _marksOf(properties)));
+    }
+
+    void appendRun(WpRun run) {
+      for (final content in run.content) {
+        switch (content) {
+          case WpText text:
+            if (!fieldActive || !fieldResult) {
+              if (fieldActive) {
+                fieldInstruction.write(text.text);
+              } else {
+                inline.add(schema.text(text.text, _marksOf(run.properties)));
+              }
+            }
+          case WpInstrText instruction:
+            if (fieldActive && !fieldResult) {
+              fieldInstruction.write(instruction.text);
+            }
+          case WpFieldChar char:
+            switch (char.fldCharType) {
+              case 'begin':
+                fieldActive = true;
+                fieldResult = false;
+                fieldInstruction = StringBuffer();
+              case 'separate':
+                fieldResult = true;
+              case 'end':
+                appendField(fieldInstruction.toString(), run.properties);
+                fieldActive = false;
+                fieldResult = false;
+            }
+          case WpDrawing drawing:
+            final relId = drawing.embedRelId;
+            final bytes = relId == null
+                ? null
+                : _activeFile!.imageBytes(relId, fromPart: fromPart);
+            final contentType = relId == null
+                ? null
+                : _activeFile!.imageContentType(relId, fromPart: fromPart);
+            if (bytes == null) {
+              report.add('docx-image-missing',
+                  'imagem sem relação resolvível em $fromPart');
+              continue;
+            }
+            final width = drawing.widthEmu == null
+                ? null
+                : (drawing.widthEmu! / 635).round();
+            final height = drawing.heightEmu == null
+                ? null
+                : (drawing.heightEmu! / 635).round();
+            inline.add(schema.node('image', {
+              'src': 'data:${contentType ?? 'image/png'};base64,${base64Encode(bytes)}',
+              'width': width,
+              'height': height,
+            }));
+          case WpTabChar _:
+            inline.add(schema.text('\t', _marksOf(run.properties)));
+          case WpNoBreakHyphen _:
+            inline.add(schema.text('-', _marksOf(run.properties)));
+          case WpBreak _:
+            inline.add(schema.text(' ', _marksOf(run.properties)));
+          case _:
+            break;
+        }
+      }
+    }
+
     for (final child in paragraph.inlines) {
-      if (child is! WpRun) continue;
-      final text = child.text;
-      if (text.isEmpty) continue;
-      inline.add(schema.text(text, _marksOf(child.properties)));
+      switch (child) {
+        case WpRun run:
+          appendRun(run);
+        case WpHyperlink link:
+          for (final run in link.runs) {
+            appendRun(run);
+          }
+        case WpSimpleField field:
+          appendField(field.instruction, field.runs.firstOrNull?.properties);
+        case WpPreservedInline _:
+          break;
+      }
     }
     final level = _headingLevelOf(paragraph.properties?.styleId);
     final presentation = _resolvePresentation(paragraph);

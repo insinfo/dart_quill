@@ -25,6 +25,14 @@ void main() {
 
   Uint8List corpus() => File(etpPath).readAsBytesSync();
 
+  bool containsNode(PMNode node, String type) {
+    if (node.type.name == type) return true;
+    for (var i = 0; i < node.childCount; i++) {
+      if (containsNode(node.child(i), type)) return true;
+    }
+    return false;
+  }
+
   Map<String, List<int>> partsOf(Uint8List docx) {
     final archive = ZipArchive.decodeBytes(docx);
     return {for (final e in archive.entries) e.name: e.content};
@@ -334,6 +342,19 @@ void main() {
       final pdf = OfficePdfService().fromSnapshot(imported.snapshot);
       expect(pdf.pageCount, greaterThan(0));
       expect(pdf.bytes.length, greaterThan(1000));
+    });
+
+    test('preserva imagens e campos de página nas raízes', () {
+      if (!hasCorpus) return;
+      final imported = OfficeDocxCodec().import(corpus());
+      final header = OfficeDocxCodec.regionOf(imported.snapshot.headers, schema);
+      final footer = OfficeDocxCodec.regionOf(imported.snapshot.footers, schema);
+
+      expect(header, isNotNull);
+      expect(footer, isNotNull);
+      expect(containsNode(header!, 'image'), isTrue);
+      final footerText = footer!.textBetween(0, footer.content.size);
+      expect(footerText, anyOf(contains('{PAGE}'), contains('{NUMPAGES}')));
     });
   });
 

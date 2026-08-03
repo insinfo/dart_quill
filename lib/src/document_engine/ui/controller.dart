@@ -53,8 +53,10 @@ abstract interface class OfficeWordController {
   ///
   /// O histórico de undo recomeça — é um documento NOVO, não uma edição.
   /// Com [setup], a geometria de página do arquivo aberto vale (um DOCX
-  /// ofício abre em ofício).
-  void openDocument(PMNode doc, {PageSetupTwips? setup});
+  /// ofício abre em ofício). Headers and footers are separate roots because
+  /// the same content is projected on every page.
+  void openDocument(PMNode doc,
+      {PageSetupTwips? setup, PMNode? header, PMNode? footer});
 
   Uint8List exportPdf();
   Uint8List exportDocx();

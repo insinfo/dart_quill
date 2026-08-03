@@ -106,6 +106,8 @@ class OfficeWordEditor implements OfficeWordController {
   bool _viewReady = false;
 
   late PageSetupTwips _setup = options.setup;
+  PMNode? _header;
+  PMNode? _footer;
 
   // -- OfficeWordController ---------------------------------------------------
 
@@ -191,9 +193,12 @@ class OfficeWordEditor implements OfficeWordController {
 
   /// Abre um documento NOVO (aba Arquivo): estado e histórico recomeçam.
   @override
-  void openDocument(PMNode doc, {PageSetupTwips? setup}) {
+  void openDocument(PMNode doc,
+      {PageSetupTwips? setup, PMNode? header, PMNode? footer}) {
     if (_disposed) return;
     if (setup != null) _setup = setup;
+    _header = header;
+    _footer = footer;
     _view.dispose();
     _rebuildRulers();
     _mountView(EditorState.create(EditorStateConfig(
@@ -270,8 +275,8 @@ class OfficeWordEditor implements OfficeWordController {
       extensions: officeDefaultExtensions(_schema),
       composer: LayoutComposer(
         setup: _setup,
-        header: _regionOf(options.headerText),
-        footer: _regionOf(options.footerText),
+        header: _header ?? _regionOf(options.headerText),
+        footer: _footer ?? _regionOf(options.footerText),
       ),
       renderer: PageGraphDomRenderer(
         document: adapter.document,

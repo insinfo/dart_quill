@@ -801,8 +801,17 @@ class LayoutComposer {
           text: '￼',
           style: style,
           isSpace: false,
-          widthTwips: _ptToTwips(baseFontSizePt),
+          widthTwips: child.type.name == 'image'
+              ? (child.attrs['width'] as num?)?.toInt() ??
+                  _ptToTwips(baseFontSizePt)
+              : _ptToTwips(baseFontSizePt),
           charStart: charOffset,
+          imageSrc: child.type.name == 'image'
+              ? child.attrs['src'] as String?
+              : null,
+          imageHeightTwips: child.type.name == 'image'
+              ? (child.attrs['height'] as num?)?.toInt()
+              : null,
         ));
         charOffset += 1;
       }
@@ -818,6 +827,8 @@ class LayoutComposer {
       final segments = <LineSegment>[];
       for (final token in current) {
         if (segments.isNotEmpty &&
+            segments.last.imageSrc == null &&
+            token.imageSrc == null &&
             identical(segments.last.style, token.style)) {
           segments[segments.length - 1] = LineSegment(
             text: segments.last.text + token.text,
@@ -829,6 +840,8 @@ class LayoutComposer {
             text: token.text,
             style: token.style,
             widthTwips: token.widthTwips,
+            imageSrc: token.imageSrc,
+            imageHeightTwips: token.imageHeightTwips,
           ));
         }
       }
@@ -839,6 +852,10 @@ class LayoutComposer {
         final h = a + _ptToTwips(v.descent);
         if (a > ascent) ascent = a;
         if (h > height) height = h;
+        if (segment.imageHeightTwips != null &&
+            segment.imageHeightTwips! > height) {
+          height = segment.imageHeightTwips!;
+        }
       }
       if (height == 0) {
         height = _lineHeightTwips(baseFontFamily, blockStyle.baseSizePt);
@@ -1048,6 +1065,8 @@ class _Token {
     required this.isSpace,
     required this.widthTwips,
     required this.charStart,
+    this.imageSrc,
+    this.imageHeightTwips,
   });
 
   final String text;
@@ -1055,4 +1074,6 @@ class _Token {
   final bool isSpace;
   final int widthTwips;
   final int charStart;
+  final String? imageSrc;
+  final int? imageHeightTwips;
 }

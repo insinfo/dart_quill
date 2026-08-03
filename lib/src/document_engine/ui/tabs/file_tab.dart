@@ -26,6 +26,12 @@ List<DomElement> buildFileTab(RibbonContext ctx) {
             c.openDocument(
               PMNode.fromJSON(c.schema, snapshot.body),
               setup: OfficeDocxCodec.pageSetupOf(snapshot),
+              // An imported DOCX with no region must not inherit the demo's
+              // configured header/footer text.
+              header: OfficeDocxCodec.regionOf(snapshot.headers, c.schema) ??
+                  c.schema.node('doc', null, Fragment.empty),
+              footer: OfficeDocxCodec.regionOf(snapshot.footers, c.schema) ??
+                  c.schema.node('doc', null, Fragment.empty),
             );
           });
         }),

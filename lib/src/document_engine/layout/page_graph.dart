@@ -73,11 +73,18 @@ class LineSegment {
     required this.text,
     required this.style,
     required this.widthTwips,
+    this.imageSrc,
+    this.imageHeightTwips,
   });
 
   final String text;
   final ResolvedRunStyle style;
   final int widthTwips;
+
+  /// Non-null for an inline DOCX image. The placeholder text remains in
+  /// [text] for stable character offsets, while the DOM renders the image.
+  final String? imageSrc;
+  final int? imageHeightTwips;
 }
 
 /// Alinhamento de bloco.

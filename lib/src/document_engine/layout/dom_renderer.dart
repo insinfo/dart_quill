@@ -330,6 +330,17 @@ class PageGraphDomRenderer {
 
   DomElement _renderSegment(LineSegment segment) {
     final style = segment.style;
+    if (segment.imageSrc != null) {
+      final image = document.createElement('img');
+      image.classes.add('$officeCssPrefix-image');
+      image.setAttribute('src', segment.imageSrc!);
+      image.setAttribute(
+          'style',
+          'display:inline-block;vertical-align:middle;'
+          'width:${_n(_px(segment.widthTwips))}px;'
+          'height:${_n(_px(segment.imageHeightTwips ?? segment.widthTwips))}px;');
+      return image;
+    }
     final span = document.createElement('span');
     span.classes.add('$officeCssPrefix-run');
     final css = StringBuffer()
