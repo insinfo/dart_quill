@@ -1,0 +1,73 @@
+name: Deploy office editor to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'example/office_editor/**'
+      - 'lib/**'
+      - 'assets/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build office editor
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Cache pub
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.yaml', 'pubspec.lock', 'example/office_editor/pubspec.yaml', 'example/office_editor/pubspec.lock') }}
+          restore-keys: pub-${{ runner.os }}-
+
+      - name: Install root dependencies
+        run: dart pub get
+
+      - name: Install example dependencies
+        run: dart pub get
+        working-directory: example/office_editor
+
+      - name: Build web application
+        run: dart run build_runner build --release --delete-conflicting-outputs --output web:build
+        working-directory: example/office_editor
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: example/office_editor/build
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
