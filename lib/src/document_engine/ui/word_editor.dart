@@ -50,12 +50,15 @@ import '../layout/page_graph.dart';
 import '../model/index.dart';
 import '../office/docx_codec.dart';
 import '../office/pdf_service.dart';
-import '../office/schema.dart';
 import '../office/snapshot.dart';
 import '../state/index.dart';
 import '../view/editor_view.dart';
 import '../view/extension.dart';
+import 'context_menu.dart';
 import 'controller.dart';
+import 'object_adorner.dart';
+import 'overlay.dart';
+import 'quickbar.dart';
 import 'ribbon.dart';
 import 'ribbon_actions.dart' as ribbon_actions;
 import 'rulers.dart';
@@ -63,7 +66,23 @@ import 'status_bar.dart';
 import 'title_bar.dart';
 import 'word_options.dart';
 
-export 'controller.dart' show OfficeWordController, OfficeDomKit;
+export 'controller.dart'
+    show OfficeWordController, OfficeDomKit, OfficeComboBox;
+export 'context_menu.dart' show OfficeContextMenu;
+export 'image_insert.dart'
+    show
+        insertImage,
+        pickAndInsertImage,
+        imagePixelSize,
+        imageMimeType,
+        officeImageNode,
+        officeImageAccept,
+        officeTwipsPerPixel;
+export 'menu.dart' show OfficeMenuEntry, buildMenu, openMenu, openMenuAt;
+export 'object_adorner.dart' show OfficeObjectAdorner, officeResizableNodeTypes;
+export 'overlay.dart'
+    show OfficeOverlay, OfficePopupHandle, OfficePopupPlacement;
+export 'quickbar.dart' show OfficeSelectionQuickbar;
 export 'ribbon.dart' show OfficeRibbon, RibbonContext;
 export 'rulers.dart' show OfficeHorizontalRuler, OfficeVerticalRuler;
 export 'word_options.dart';
@@ -73,6 +92,12 @@ class OfficeWordEditor implements OfficeWordController {
       : _kit = OfficeDomKit(adapter);
 
   /// Monta o editor completo dentro de [host].
+  ///
+  /// Sem [schema], vale o schema DO DOCUMENTO. Isso não é um detalhe: cada
+  /// chamada de `officeQuillSchema()` constrói uma instância nova, e um
+  /// editor com schema diferente do documento rejeita silenciosamente toda
+  /// inserção posterior (o content matching compara tipos por identidade).
+  /// O sintoma é uma transação que "não faz nada" — caro de diagnosticar.
   static OfficeWordEditor mount({
     required DomElement host,
     required DomAdapter adapter,
@@ -80,8 +105,17 @@ class OfficeWordEditor implements OfficeWordController {
     OfficeWordEditorOptions options = const OfficeWordEditorOptions(),
     Schema? schema,
   }) {
-    final editor = OfficeWordEditor._(
-        host, adapter, options, schema ?? officeQuillSchema());
+    final resolved = schema ?? document.type.schema;
+    if (schema != null && !identical(schema, document.type.schema)) {
+      throw ArgumentError.value(
+        schema,
+        'schema',
+        'o documento foi construído com OUTRA instância de Schema; '
+            'tipos de nó são comparados por identidade e toda edição '
+            'posterior seria descartada em silêncio',
+      );
+    }
+    final editor = OfficeWordEditor._(host, adapter, options, resolved);
     editor._build(document);
     return editor;
   }
@@ -98,6 +132,11 @@ class OfficeWordEditor implements OfficeWordController {
   late DomElement _pagesHost;
   late DomElement _canvas;
 
+  late final OfficeOverlay _overlay = OfficeOverlay(this);
+  late final OfficeObjectAdorner _objectAdorner = OfficeObjectAdorner(this);
+  OfficeSelectionQuickbar? _quickbar;
+  OfficeContextMenu? _contextMenu;
+  DomEventListener? _contextMenuListener;
   OfficeRibbon? _ribbon;
   OfficeHorizontalRuler? _hRuler;
   OfficeVerticalRuler? _vRuler;
@@ -107,6 +146,9 @@ class OfficeWordEditor implements OfficeWordController {
 
   double _zoom = 1.0;
   int _lastCanvasScrollLeft = 0;
+  int _busyDepth = 0;
+  DomElement? _busyOverlay;
+  DomElement? _busyLabel;
   bool _disposed = false;
   bool _viewReady = false;
   bool _dirty = false;
@@ -147,6 +189,8 @@ class OfficeWordEditor implements OfficeWordController {
 
   @override
   Schema get schema => _schema;
+  @override
+  OfficeOverlay get overlay => _overlay;
   @override
   OfficeEditorView get view => _view;
   @override
@@ -217,6 +261,10 @@ class OfficeWordEditor implements OfficeWordController {
   Future<void> savePdf() async {
     if (_disposed || _pdfExportInFlight) return;
     _pdfExportInFlight = true;
+    await runBusy('Exportando PDF…', () => _savePdfInner());
+  }
+
+  Future<void> _savePdfInner() async {
     final filename = '$documentBaseName.pdf';
     final timings = <String, int>{};
     final watch = Stopwatch()..start();
@@ -301,6 +349,10 @@ class OfficeWordEditor implements OfficeWordController {
   Future<void> saveDocx() async {
     if (_disposed || _saveInFlight) return;
     _saveInFlight = true;
+    await runBusy('Salvando DOCX…', () => _saveDocxInner());
+  }
+
+  Future<void> _saveDocxInner() async {
     final saveRevision = _changeRevision;
     final filename = '$documentBaseName.docx';
     final timings = <String, int>{};
@@ -343,6 +395,50 @@ class OfficeWordEditor implements OfficeWordController {
     } finally {
       _saveInFlight = false;
     }
+  }
+
+  /// Overlay de ocupado com spinner. Aparece na PRIMEIRA entrada e some na
+  /// última saída (contador), então abrir + prewarm + compose exibem UM
+  /// spinner contínuo. O trabalho pesado do editor é cooperativo (cede o
+  /// event loop), então a animação CSS continua rodando.
+  @override
+  Future<T> runBusy<T>(String label, Future<T> Function() action) async {
+    if (_disposed) return action();
+    _busyDepth++;
+    _showBusy(label);
+    // Um frame para o browser PINTAR o overlay antes do primeiro slice de
+    // trabalho síncrono.
+    await Future<void>.delayed(Duration.zero);
+    try {
+      return await action();
+    } finally {
+      _busyDepth--;
+      if (_busyDepth <= 0) {
+        _busyDepth = 0;
+        _hideBusy();
+      }
+    }
+  }
+
+  void _showBusy(String label) {
+    var overlay = _busyOverlay;
+    if (overlay == null) {
+      overlay = _kit.el('div', 'dq-office-busy');
+      final box = _kit.el('div', 'dq-office-busy-box');
+      box.append(_kit.el('div', 'dq-office-busy-spinner'));
+      _busyLabel = _kit.el('span', 'dq-office-busy-label');
+      box.append(_busyLabel!);
+      overlay.append(box);
+      _busyOverlay = overlay;
+    }
+    if (_busyLabel != null) _kit.setText(_busyLabel!, label);
+    if (overlay.parentNode == null) host.append(overlay);
+    host.setAttribute('data-dq-office-busy', 'true');
+  }
+
+  void _hideBusy() {
+    _busyOverlay?.remove();
+    host.setAttribute('data-dq-office-busy', 'false');
   }
 
   /// Troca a escala da projeção. Só a borda twips→px muda: grafo, mapa de
@@ -543,6 +639,41 @@ class OfficeWordEditor implements OfficeWordController {
     _statusBar = OfficeStatusBar(this);
     host.append(_statusBar!.build());
 
+    // A camada de popups/adornos cobre o editor inteiro e vem por último:
+    // dropdowns, comboboxes, quickbars e menus ficam acima de tudo sem
+    // depender de z-index espalhado por componente.
+    host.append(_overlay.build());
+    // Rolar o documento tira o popup do lugar a que ele se ancorou; o Word
+    // fecha em vez de deixar um menu órfão flutuando. A moldura do objeto
+    // NÃO é popup: ela pertence ao objeto e apenas reacompanha a geometria.
+    _canvas.addEventListener('scroll', (_) {
+      _overlay.closeAll();
+      _objectAdorner.refresh();
+    });
+
+    if (options.mode != OfficeWordMode.view) {
+      // O arrasto de alça pertence ao canvas inteiro: soltar o ponteiro fora
+      // do objeto ainda tem de encerrar (e aplicar) o redimensionamento.
+      _canvas.addEventListener(
+          'pointermove', (event) => _objectAdorner.handlePointerMove(event));
+      _canvas.addEventListener(
+          'pointerup', (event) => _objectAdorner.handlePointerUp(event));
+    }
+
+    if (options.mode != OfficeWordMode.view) {
+      _quickbar = OfficeSelectionQuickbar(this);
+      _contextMenu = OfficeContextMenu(this);
+      _contextMenuListener = installContextMenu(this, _canvas, _contextMenu!);
+      // A quickbar nasce quando o usuário TERMINA de selecionar — durante o
+      // arrasto ela cobriria justamente o texto que ele está mirando.
+      _canvas.addEventListener('mouseup', _handleSelectionFinished);
+      _canvas.addEventListener('keyup', _handleSelectionFinishedByKeyboard);
+      // Digitar/apagar dispensa a barra: a formatação é sobre uma seleção,
+      // e ela deixou de existir no momento em que a tecla substituiu o
+      // texto.
+      _canvas.addEventListener('keydown', (_) => _quickbar?.hide());
+    }
+
     _mountView(EditorState.create(EditorStateConfig(
       doc: document,
       plugins: OfficeExtensionSet(_extensions).plugins,
@@ -582,13 +713,32 @@ class OfficeWordEditor implements OfficeWordController {
         scrollTopInsetPx: 26,
       ),
       virtualization: options.virtualization,
+      progressive: options.progressivePagination,
       scrollContainer: _canvas,
       honorRenderedPageBreaks: _renderedPageBreakHintsValid,
       onStateChange: _handleStateChange,
       onVisiblePageChange: (_) => _statusBar?.update(),
+      onPaginationProgress: _handlePaginationProgress,
     );
     _viewReady = true;
+    if (options.progressivePagination != null) {
+      host.setAttribute(
+        'data-dq-office-pagination',
+        _view.pageGraph.isPartial ? 'partial' : 'complete',
+      );
+    }
     measureOpenDocumentPhase<void>('refresh', _refresh);
+  }
+
+  /// A cada fatia da paginação progressiva: contagem na status bar e o
+  /// atributo que integrações/e2e usam para saber quando o total é final.
+  void _handlePaginationProgress(int pages, bool complete) {
+    if (_disposed) return;
+    host.setAttribute(
+      'data-dq-office-pagination',
+      complete ? 'complete' : 'partial',
+    );
+    _statusBar?.update();
   }
 
   void _handleStateChange(EditorState state) {
@@ -612,6 +762,74 @@ class OfficeWordEditor implements OfficeWordController {
     event.stopPropagation();
     unawaited(saveDocx());
   }
+
+  /// `mouseup` no documento: se sobrou seleção, a quickbar aparece sobre
+  /// ela; senão, some. É também onde o pincel de formatação é aplicado, e a
+  /// ordem importa — o pincel age primeiro para a barra já refletir o
+  /// resultado.
+  void _handleSelectionFinished(DomEvent event) {
+    if (_disposed) return;
+    syncSelection();
+    if (_view.state.selection.empty) {
+      _quickbar?.hide();
+      return;
+    }
+    // Com um OBJETO selecionado quem aparece é o adorno (moldura + alças)
+    // mais a barra DO OBJETO — não a de formatação de TEXTO, que não teria
+    // em que agir.
+    if (_view.state.selection is NodeSelection) {
+      _showObjectQuickbar();
+      return;
+    }
+    final pointer = event is DomMouseEvent ? event : null;
+    _quickbar?.showForSelection(
+      anchorX: pointer?.clientX,
+      anchorY: pointer?.clientY,
+    );
+  }
+
+  /// Seleção pelo teclado (Shift+setas, Ctrl+A): só as teclas que de fato
+  /// terminam uma seleção abrem a barra.
+  void _handleSelectionFinishedByKeyboard(DomEvent event) {
+    if (_disposed || event is! DomKeyboardEvent) return;
+    final selecting = event.shiftKey ||
+        ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() == 'a');
+    if (!selecting) return;
+    syncSelection();
+    if (_view.state.selection.empty) {
+      _quickbar?.hide();
+      return;
+    }
+    _quickbar?.showForSelection();
+  }
+
+  /// A barra do objeto nasce no canto superior direito dele, onde o Word põe
+  /// o botão de Opções de Layout. Sem geometria (VM/fake DOM) ela ainda
+  /// abre, no canto da camada.
+  void _showObjectQuickbar() {
+    final quickbar = _quickbar;
+    if (quickbar == null) return;
+    final target = _objectAdorner.selectedObject();
+    if (target == null) {
+      quickbar.hide();
+      return;
+    }
+    final element = _objectAdorner.elementFor(target.pos);
+    final bounds = element == null
+        ? null
+        : adapter.getElementBounds(element, relativeTo: _overlay.layer);
+    final layerBounds = adapter.getElementBounds(_overlay.layer);
+    // `open` trabalha em coordenadas de tela para `atPoint`; devolvemos a
+    // origem da camada ao valor medido em relação a ela.
+    final layerLeft = _numOf(layerBounds?['left']);
+    final layerTop = _numOf(layerBounds?['top']);
+    quickbar.showForObject(
+      x: layerLeft + _numOf(bounds?['left']) + _numOf(bounds?['width']) + 6,
+      y: layerTop + _numOf(bounds?['top']),
+    );
+  }
+
+  static double _numOf(Object? value) => value is num ? value.toDouble() : 0.0;
 
   void _markDirty() {
     _changeRevision++;
@@ -678,6 +896,8 @@ class OfficeWordEditor implements OfficeWordController {
     _statusBar?.update();
     _ribbon?.refreshState();
     _ribbon?.refreshContextual();
+    _quickbar?.refreshState();
+    _objectAdorner.refresh();
     _hRuler?.positionMarkers();
     _positionVerticalRuler();
   }
@@ -708,6 +928,12 @@ class OfficeWordEditor implements OfficeWordController {
     if (_disposed) return;
     _disposed = true;
     host.removeEventListener('keydown', _saveShortcut);
+    final contextMenu = _contextMenuListener;
+    if (contextMenu != null) {
+      _canvas.removeEventListener('contextmenu', contextMenu);
+    }
+    _objectAdorner.clear();
+    _overlay.dispose();
     _view.dispose();
     _kit.clear(host);
     host.classes.remove('dq-office-app');

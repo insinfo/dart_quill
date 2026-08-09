@@ -29,6 +29,7 @@ class OfficeWordEditorOptions {
     this.title = 'Documento',
     this.showTitleBar = false,
     this.fonts = const LayoutFontSet([]),
+    this.progressivePagination,
   });
 
   final OfficeWordMode mode;
@@ -58,4 +59,9 @@ class OfficeWordEditorOptions {
   /// atende um run `Ecofont_Spranq_eco_Sans` que declare Calibri como fallback.
   /// Sem faces, o editor usa as métricas compactas e o PDF standard-14.
   final LayoutFontSet fonts;
+
+  /// Liga a paginação progressiva na abertura de documentos. Null (padrão)
+  /// compõe todas as páginas antes da primeira projeção — o comportamento
+  /// determinístico que os testes e integrações existentes esperam.
+  final OfficeProgressivePagination? progressivePagination;
 }

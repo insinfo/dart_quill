@@ -12,14 +12,14 @@ import '../ribbon.dart';
 import '../ribbon_actions.dart' as actions;
 
 /// Cores de fonte do Word (primeira linha da paleta padrão).
-const List<String?> _fontColors = [
+const List<String?> officeFontColors = [
   null, // Automático — remove a marca
   '#000000', '#c00000', '#ff0000', '#ffc000', '#ffff00', '#92d050',
   '#00b050', '#00b0f0', '#0070c0', '#002060', '#7030a0',
 ];
 
 /// Cores de realce do Word.
-const List<String?> _highlightColors = [
+const List<String?> officeHighlightColors = [
   null, // Sem cor
   '#ffff00', '#00ff00', '#00ffff', '#ff00ff', '#0000ff', '#ff0000',
   '#000080', '#008080', '#008000', '#800080', '#800000', '#808000',
@@ -68,43 +68,8 @@ List<DomElement> buildHomeTab(RibbonContext ctx) {
     ]),
     kit.group('Fonte', [
       kit.row([
-        () {
-          final select = kit.select(
-            'dq-office-font-family',
-            const ['Arial', 'Calibri', 'Times New Roman', 'Courier New'],
-            'Arial',
-            (value) =>
-                actions.addMarkOverSelection(c, 'font', {'value': value}),
-          );
-          ctx.registerMarkValueSelect('font', select, 'Arial');
-          return select;
-        }(),
-        () {
-          final select = kit.select(
-            'dq-office-font-size',
-            const [
-              '8',
-              '9',
-              '10',
-              '11',
-              '12',
-              '14',
-              '16',
-              '18',
-              '20',
-              '24',
-              '28',
-              '36',
-              '48',
-              '72'
-            ],
-            '12',
-            (value) => actions
-                .addMarkOverSelection(c, 'size', {'value': '${value}pt'}),
-          );
-          ctx.registerMarkValueSelect('size', select, '12');
-          return select;
-        }(),
+        buildFontFamilyCombo(ctx),
+        buildFontSizeCombo(ctx),
         kit.button(
             'A^', 'Aumentar Fonte', () => actions.stepFontSize(c, up: true),
             icon: 'incfont'),
@@ -141,18 +106,18 @@ List<DomElement> buildHomeTab(RibbonContext ctx) {
           ctx.registerMarkValueButton('script', 'super', button);
           return button;
         }(),
-        _paletteButton(ctx,
+        buildPaletteButton(ctx,
             icon: 'highlight',
             text: 'ab',
             title: 'Cor do Realce do Texto',
             mark: 'background',
-            colors: _highlightColors),
-        _paletteButton(ctx,
+            colors: officeHighlightColors),
+        buildPaletteButton(ctx,
             icon: 'fontcolor',
             text: 'A',
             title: 'Cor da Fonte',
             mark: 'color',
-            colors: _fontColors),
+            colors: officeFontColors),
       ]),
     ]),
     kit.group('Parágrafo', [
@@ -199,6 +164,107 @@ List<DomElement> buildHomeTab(RibbonContext ctx) {
   ];
 }
 
+/// As famílias que o seletor de fonte oferece.
+///
+/// A lista do Word é a das fontes INSTALADAS; num editor web isso não
+/// existe. Ficamos com as faces seguras de Office/web, e o combobox é
+/// editável — a fonte que veio de um DOCX (`Ecofont`, `Aptos`…) é exibida e
+/// preservada mesmo fora desta lista, que era o defeito do `<select>`.
+const List<String> officeFontFamilies = [
+  'Arial',
+  'Arial Black',
+  'Arial Narrow',
+  'Bookman Old Style',
+  'Calibri',
+  'Cambria',
+  'Candara',
+  'Century Gothic',
+  'Comic Sans MS',
+  'Consolas',
+  'Constantia',
+  'Corbel',
+  'Courier New',
+  'Franklin Gothic Book',
+  'Garamond',
+  'Georgia',
+  'Impact',
+  'Lucida Console',
+  'Lucida Sans Unicode',
+  'Palatino Linotype',
+  'Segoe UI',
+  'Symbol',
+  'Tahoma',
+  'Times New Roman',
+  'Trebuchet MS',
+  'Verdana',
+  'Wingdings',
+];
+
+/// Combobox de família, compartilhado pela ribbon e pela quickbar.
+DomElement buildFontFamilyCombo(RibbonContext ctx, {String? extraClass}) {
+  final combo = OfficeComboBox(
+    controller: ctx.controller,
+    cssClass:
+        'dq-office-font-family${extraClass == null ? '' : ' $extraClass'}',
+    items: officeFontFamilies,
+    title: 'Fonte',
+    previewFontPerItem: true,
+    onCommit: (value) =>
+        actions.addMarkOverSelection(ctx.controller, 'font', {'value': value}),
+  );
+  final element = combo.build();
+  ctx.registerInlineCombo('font', combo);
+  return element;
+}
+
+/// Combobox de tamanho: aceita digitar valores fora da escada (10,5 pt é
+/// comum em ofícios) e rejeita entradas impossíveis devolvendo o valor do
+/// modelo.
+DomElement buildFontSizeCombo(RibbonContext ctx, {String? extraClass}) {
+  final combo = OfficeComboBox(
+    controller: ctx.controller,
+    cssClass: 'dq-office-font-size${extraClass == null ? '' : ' $extraClass'}',
+    items: const [
+      '8',
+      '9',
+      '10',
+      '10.5',
+      '11',
+      '12',
+      '14',
+      '16',
+      '18',
+      '20',
+      '22',
+      '24',
+      '26',
+      '28',
+      '36',
+      '48',
+      '72',
+    ],
+    title: 'Tamanho da Fonte',
+    parseValue: parseFontSize,
+    onCommit: (value) => actions
+        .addMarkOverSelection(ctx.controller, 'size', {'value': '${value}pt'}),
+  );
+  final element = combo.build();
+  ctx.registerInlineCombo('size', combo);
+  return element;
+}
+
+/// Normaliza o tamanho digitado. Aceita vírgula decimal (o teclado
+/// brasileiro), corta em 1–1638 pt (o limite do Word) e devolve null para
+/// qualquer coisa que não seja um corpo válido.
+String? parseFontSize(String raw) {
+  final points =
+      double.tryParse(raw.replaceAll('pt', '').replaceAll(',', '.').trim());
+  if (points == null || points < 1 || points > 1638) return null;
+  // O Word grava meio ponto (half-points no OOXML): 10,3 vira 10,5.
+  final snapped = (points * 2).round() / 2;
+  return snapped == snapped.roundToDouble() ? '${snapped.round()}' : '$snapped';
+}
+
 /// Coluna de botões pequenos ao lado do botão grande (padrão do grupo Área
 /// de Transferência do Word).
 DomElement _column(OfficeDomKit kit, List<DomElement> buttons) {
@@ -211,36 +277,47 @@ DomElement _column(OfficeDomKit kit, List<DomElement> buttons) {
 
 /// Botão de cor com PALETA: clique abre/fecha o popup de amostras; escolher
 /// uma aplica a marca ([mark]) na seleção. `null` = Automático/Sem cor.
-DomElement _paletteButton(RibbonContext ctx,
+///
+/// A paleta abre no [OfficeOverlay] — não mais escondida por classe dentro
+/// do grupo da ribbon, onde herdava recorte e ficava presa ao layout do
+/// botão.
+DomElement buildPaletteButton(RibbonContext ctx,
     {required String icon,
     required String text,
     required String title,
     required String mark,
-    required List<String?> colors}) {
+    required List<String?> colors,
+    String? extraClass}) {
   final kit = ctx.kit;
-  final wrap = kit.el('span', 'dq-office-colorwrap');
-  final palette = kit.el('div', 'dq-office-palette dq-office-palette-hidden');
-  for (final color in colors) {
-    final swatch = kit.el('button',
-        'dq-office-swatch${color == null ? ' dq-office-swatch-none' : ''}');
-    swatch.setAttribute('type', 'button');
-    swatch.setAttribute('title', color ?? 'Sem cor');
-    if (color != null) swatch.setAttribute('style', 'background:$color;');
-    swatch.addEventListener('click', (event) {
-      event.preventDefault();
-      palette.classes.add('dq-office-palette-hidden');
-      actions.applyMarkColor(ctx.controller, mark, color);
-    });
-    palette.append(swatch);
-  }
-  wrap.append(kit.button(text, title, () {
-    if (palette.classes.contains('dq-office-palette-hidden')) {
-      palette.classes.remove('dq-office-palette-hidden');
-    } else {
-      palette.classes.add('dq-office-palette-hidden');
+  final controller = ctx.controller;
+  final wrap = kit.el(
+      'span', 'dq-office-colorwrap${extraClass == null ? '' : ' $extraClass'}');
+  final group = 'palette:$mark';
+
+  DomElement buildPalette() {
+    final palette = kit.el('div', 'dq-office-palette');
+    for (final color in colors) {
+      final swatch = kit.el('button',
+          'dq-office-swatch${color == null ? ' dq-office-swatch-none' : ''}');
+      swatch.setAttribute('type', 'button');
+      swatch.setAttribute('title', color ?? 'Sem cor');
+      if (color != null) swatch.setAttribute('style', 'background:$color;');
+      swatch.addEventListener('click', (event) {
+        event.preventDefault();
+        controller.overlay.closeGroup(group);
+        controller.syncSelection();
+        actions.applyMarkColor(controller, mark, color);
+      });
+      palette.append(swatch);
     }
+    return palette;
+  }
+
+  wrap.append(kit.button(text, title, () {
+    // Clicar de novo fecha — comportamento de toda galeria da ribbon.
+    if (controller.overlay.closeGroup(group)) return;
+    controller.overlay.open(group, buildPalette(), anchor: wrap);
   }, icon: icon));
-  wrap.append(palette);
   return wrap;
 }
 
@@ -248,7 +325,7 @@ DomElement _paletteButton(RibbonContext ctx,
 DomElement _styleCard(RibbonContext ctx, String name, String preview) {
   final kit = ctx.kit;
   final card = kit.el(
-      'button', 'dq-office-stylecard dq-office-stylecard-${_slug(name)}');
+      'button', 'dq-office-stylecard dq-office-stylecard-${styleSlug(name)}');
   card.setAttribute('type', 'button');
   card.setAttribute('title', name);
   final sample = kit.el('span', 'dq-office-stylecard-sample');
@@ -265,8 +342,51 @@ DomElement _styleCard(RibbonContext ctx, String name, String preview) {
   return card;
 }
 
-String _slug(String name) =>
-    name.toLowerCase().replaceAll('í', 'i').replaceAll(' ', '-');
+/// B4: nome de estilo → sufixo de classe CSS seguro.
+///
+/// Os nomes reais de um DOCX (`Nível 1-SemNum`, `Título 2 - Recuado`,
+/// `Ênfase (forte)`) têm acentos, espaços, parênteses e barras; concatenar
+/// isso numa classe produzia seletor inválido. Aqui: acentos são
+/// transliterados, qualquer outro caractere fora de `a-z0-9` vira hífen, e
+/// um nome que não sobra nada usável cai num hash estável — a classe é só um
+/// gancho de estilização, nunca a identidade do estilo.
+String styleSlug(String name) {
+  const accents = {
+    'á': 'a',
+    'à': 'a',
+    'â': 'a',
+    'ã': 'a',
+    'ä': 'a',
+    'é': 'e',
+    'ê': 'e',
+    'è': 'e',
+    'ë': 'e',
+    'í': 'i',
+    'ì': 'i',
+    'î': 'i',
+    'ï': 'i',
+    'ó': 'o',
+    'ò': 'o',
+    'ô': 'o',
+    'õ': 'o',
+    'ö': 'o',
+    'ú': 'u',
+    'ù': 'u',
+    'û': 'u',
+    'ü': 'u',
+    'ç': 'c',
+    'ñ': 'n',
+  };
+  final buffer = StringBuffer();
+  for (final character in name.toLowerCase().split('')) {
+    buffer.write(accents[character] ?? character);
+  }
+  final slug = buffer
+      .toString()
+      .replaceAll(RegExp('[^a-z0-9]+'), '-')
+      .replaceAll(RegExp('^-+|-+\$'), '');
+  return slug.isEmpty ? 'estilo-${name.hashCode.toUnsigned(16)}' : slug;
+}
 
 /// Os controles da toolbar compacta do modo flow.
 List<DomElement> buildCompactControls(RibbonContext ctx) {

@@ -12,6 +12,7 @@
  */
 
 .dq-office-app {
+  position: relative; /* ancora o overlay de ocupado */
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -294,24 +295,15 @@
   position: relative;
 }
 
+/* A paleta vive no overlay: sem position/z-index próprios, o popup do
+   overlay já resolve empilhamento e posicionamento. */
 .dq-office-palette {
-  position: absolute;
-  z-index: 30;
-  top: 31px;
-  left: 0;
   width: 148px;
   display: grid;
   grid-template-columns: repeat(5, 24px);
   gap: 3px;
   padding: 7px;
-  border: 1px solid #b9b9b9;
-  border-radius: 2px;
   background: #fff;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, .18);
-}
-
-.dq-office-palette-hidden {
-  display: none;
 }
 
 .dq-office-swatch {
@@ -583,16 +575,19 @@
   width: 5px;
 }
 
-/* barra de status */
+/* barra de status — faixa clara e baixa, como no Word */
 .dq-office-statusbar {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 16px;
-  background: #185abd;
-  color: #fff;
-  padding: 3px 12px;
-  font-size: 12px;
+  gap: 14px;
+  background: #f3f2f1;
+  border-top: 1px solid #e1dfdd;
+  color: #444;
+  padding: 1px 10px;
+  font-size: 11px;
+  line-height: 18px;
+  min-height: 20px;
 }
 
 .dq-office-status-spacer {
@@ -600,9 +595,451 @@
 }
 
 .dq-office-statusbar .dq-office-select {
-  height: 22px;
-  font-size: 11.5px;
+  height: 18px;
+  font-size: 11px;
   color: #242424;
+}
+
+/* slider de zoom (− trilho + percentual) */
+.dq-office-zoom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dq-office-zoom-step {
+  border: none;
+  background: transparent;
+  color: #444;
+  font-size: 13px;
+  line-height: 16px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.dq-office-zoom-step:hover {
+  background: #e1dfdd;
+}
+
+.dq-office-zoom-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 110px;
+  height: 2px;
+  margin: 0;
+  background: #b5b3b1;
+  border-radius: 1px;
+  outline: none;
+  cursor: pointer;
+}
+
+.dq-office-zoom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  background: #605e5c;
+  border: 1px solid #f3f2f1;
+}
+
+.dq-office-zoom-slider::-moz-range-thumb {
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  background: #605e5c;
+  border: 1px solid #f3f2f1;
+}
+
+.dq-office-zoom-label {
+  min-width: 34px;
+  text-align: right;
+  color: #444;
+}
+
+/* ---- camada de overlay: popups, dropdowns, quickbars, menus ---- */
+
+.dq-office-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  /* A camada em si é transparente a eventos; só os popups recebem. */
+  pointer-events: none;
+}
+
+.dq-office-popup {
+  position: absolute;
+  pointer-events: auto;
+  background: #fff;
+  border: 1px solid #b9b9b9;
+  border-radius: 2px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  font-size: 12px;
+  color: #242424;
+}
+
+/* Listas (fontes, tamanhos) rolam em vez de estourar a janela. */
+.dq-office-popup-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* ---- combobox editável (fonte / tamanho) ---- */
+
+.dq-office-combo {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  height: 24px;
+  border: 1px solid #c7c7c7;
+  border-radius: 2px;
+  background: #fff;
+}
+
+.dq-office-combo:focus-within {
+  border-color: #185abd;
+}
+
+.dq-office-combo-input {
+  border: none;
+  outline: none;
+  padding: 0 4px;
+  font: inherit;
+  font-size: 12px;
+  color: #242424;
+  background: transparent;
+  min-width: 0;
+}
+
+.dq-office-font-family.dq-office-combo-input {
+  width: 116px;
+}
+
+.dq-office-font-size.dq-office-combo-input {
+  width: 42px;
+}
+
+.dq-office-combo-caret {
+  width: 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+}
+
+.dq-office-combo-caret::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform: translate(-50%, -25%);
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 4px solid #444;
+}
+
+.dq-office-combo-caret:hover {
+  background: #e1dfdd;
+}
+
+.dq-office-combo-list {
+  min-width: 140px;
+  padding: 2px 0;
+}
+
+.dq-office-combo-item {
+  display: block;
+  width: 100%;
+  padding: 3px 10px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  color: #242424;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dq-office-combo-item:hover {
+  background: #e8f0fb;
+}
+
+.dq-office-combo-item-active {
+  background: #cfe4fa;
+}
+
+/* ---- moldura e alças do objeto selecionado ---- */
+
+.dq-office-objframe {
+  position: absolute;
+  pointer-events: none; /* a moldura não intercepta; as alças sim */
+  border: 1px solid #185abd;
+  box-sizing: border-box;
+  z-index: 35;
+}
+
+.dq-office-objframe-dragging {
+  border-style: dashed;
+  background: rgba(24, 90, 189, 0.06);
+}
+
+.dq-office-objhandle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  background: #fff;
+  border: 1px solid #185abd;
+  border-radius: 50%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.dq-office-objhandle-nw { left: 0; top: 0; cursor: nwse-resize; }
+.dq-office-objhandle-n { left: 50%; top: 0; cursor: ns-resize; }
+.dq-office-objhandle-ne { left: 100%; top: 0; cursor: nesw-resize; }
+.dq-office-objhandle-e { left: 100%; top: 50%; cursor: ew-resize; }
+.dq-office-objhandle-se { left: 100%; top: 100%; cursor: nwse-resize; }
+.dq-office-objhandle-s { left: 50%; top: 100%; cursor: ns-resize; }
+.dq-office-objhandle-sw { left: 0; top: 100%; cursor: nesw-resize; }
+.dq-office-objhandle-w { left: 0; top: 50%; cursor: ew-resize; }
+
+/* ---- quickbar de seleção (mini toolbar do Word) ---- */
+
+.dq-office-quickbar {
+  padding: 3px;
+}
+
+.dq-office-quickbar-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dq-office-quickbar-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dq-office-quickbar .dq-office-btn {
+  height: 24px;
+  min-width: 24px;
+  padding: 0 4px;
+}
+
+.dq-office-qb-font.dq-office-combo-input {
+  width: 96px;
+}
+
+.dq-office-qb-size.dq-office-combo-input {
+  width: 38px;
+}
+
+/* ---- menus e dropdowns (ribbon e botão direito) ---- */
+
+.dq-office-menu {
+  min-width: 180px;
+  padding: 3px 0;
+}
+
+.dq-office-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 10px 5px 4px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-size: 12.5px;
+  color: #242424;
+  cursor: pointer;
+}
+
+.dq-office-menu-item:hover {
+  background: #e8f0fb;
+}
+
+.dq-office-menu-item-disabled {
+  color: #a6a6a6;
+  cursor: default;
+}
+
+.dq-office-menu-item-disabled:hover {
+  background: transparent;
+}
+
+.dq-office-menu-mark {
+  flex: 0 0 14px;
+  text-align: center;
+  color: #185abd;
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.dq-office-menu-texts {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.dq-office-menu-label {
+  white-space: nowrap;
+}
+
+.dq-office-menu-description {
+  font-size: 11px;
+  color: #666;
+  white-space: nowrap;
+}
+
+.dq-office-menu-detail {
+  margin-left: 18px;
+  color: #767676;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.dq-office-menu-sep {
+  height: 1px;
+  margin: 3px 6px;
+  background: #e1dfdd;
+}
+
+.dq-office-menuwrap {
+  display: inline-flex;
+}
+
+/* Botão de dropdown: a setinha do Word depois do rótulo. */
+.dq-office-btn-menu::after {
+  content: "";
+  display: inline-block;
+  margin-left: 4px;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 4px solid currentColor;
+  vertical-align: middle;
+}
+
+/* Botões grandes de Configurar Página: ícone em cima, rótulo embaixo. */
+.dq-office-menuwrap-big .dq-office-btn {
+  flex-direction: column;
+  height: 62px;
+  min-width: 56px;
+  padding: 4px 8px;
+  gap: 2px;
+}
+
+/* ---- grid picker de tabela ---- */
+
+.dq-office-gridpicker {
+  padding: 8px;
+}
+
+.dq-office-gridpicker-label {
+  padding-bottom: 6px;
+  font-size: 12px;
+  color: #444;
+  text-align: center;
+}
+
+.dq-office-gridpicker-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 16px);
+  gap: 2px;
+}
+
+.dq-office-gridcell {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid #b9b9b9;
+  background: #fff;
+  cursor: pointer;
+}
+
+.dq-office-gridcell-on {
+  background: #cfe4fa;
+  border-color: #185abd;
+}
+
+/* ---- spinners de recuo/espaçamento (aba Layout) ---- */
+
+.dq-office-spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: #444;
+}
+
+.dq-office-spinner-label {
+  min-width: 62px;
+}
+
+.dq-office-spinner-input {
+  width: 62px;
+  height: 22px;
+  border: 1px solid #c7c7c7;
+  border-radius: 2px;
+  padding: 0 4px;
+  font: inherit;
+  font-size: 12px;
+  color: #242424;
+}
+
+.dq-office-spinner-input:focus {
+  outline: none;
+  border-color: #185abd;
+}
+
+/* overlay de ocupado (abrir/salvar) */
+.dq-office-busy {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.6);
+  cursor: progress;
+}
+
+.dq-office-busy-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #e1dfdd;
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  padding: 12px 18px;
+  font-size: 13px;
+  color: #333;
+}
+
+.dq-office-busy-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #c7e0f4;
+  border-top-color: #185abd;
+  border-radius: 50%;
+  animation: dq-office-busy-spin 0.8s linear infinite;
+}
+
+@keyframes dq-office-busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* flow: superficie continua, sem chrome de pagina */

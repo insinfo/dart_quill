@@ -6,6 +6,7 @@
 library;
 
 import '../commands/index.dart' as cmd;
+import '../layout/layout_composer.dart';
 import '../layout/page_graph.dart';
 import '../model/index.dart';
 import '../state/index.dart';
@@ -40,6 +41,94 @@ String? currentMarkValue(OfficeWordController c, String markName) {
     if (mark.type == type) return mark.attrs['value'] as String?;
   }
   return null;
+}
+
+/// A fonte/tamanho EFETIVOS da seleção, como o Word os mostra na ribbon.
+///
+/// Duas diferenças em relação a [currentMarkValue], e as duas importam:
+///
+/// * **Seleção mista devolve null.** Ler só o primeiro caractere anunciaria
+///   "Arial" numa seleção meio Arial meio Times; o Word deixa o controle
+///   VAZIO, que é a informação honesta.
+/// * **Sem marca, vale o estilo do parágrafo.** Num DOCX importado a fonte
+///   costuma vir da cascata de estilos (`attrs['style']`), não de formatação
+///   direta — o fallback fixo "Arial/12" mentia em todo documento real.
+///
+/// [markName] é `font` (família) ou `size` (corpo em pontos, sem `pt`).
+String? effectiveInlineValue(OfficeWordController c, String markName) {
+  final type = c.schema.marks[markName];
+  if (type == null) return null;
+  final state = c.view.state;
+  final selection = state.selection;
+
+  String? fromMarks(Iterable<Mark> marks) {
+    for (final mark in marks) {
+      if (mark.type == type) {
+        return _normalizeInlineValue(markName, mark.attrs['value']);
+      }
+    }
+    return null;
+  }
+
+  String? fromBlock(PMNode? block) {
+    final style = block?.attrs['style'];
+    if (style is! Map) return null;
+    return _normalizeInlineValue(
+        markName, style[markName == 'font' ? 'family' : 'sizePt']);
+  }
+
+  // Sem marca e sem estilo, o valor efetivo é o PADRÃO com que o layout
+  // realmente desenhou o texto. Deixar o controle vazio aqui seria mentir
+  // por omissão: vazio significa "seleção mista", não "não sei".
+  final documentDefault = _normalizeInlineValue(
+    markName,
+    markName == 'font'
+        ? LayoutComposer.defaultBaseFontFamily
+        : LayoutComposer.defaultBaseFontSizePt,
+  );
+
+  if (selection.empty) {
+    final marks = state.storedMarks ?? selection.fromRes.marks();
+    return fromMarks(marks) ??
+        fromBlock(selection.fromRes.parent) ??
+        documentDefault;
+  }
+
+  String? result;
+  var sawText = false;
+  var mixed = false;
+  state.doc.nodesBetween(selection.from, selection.to,
+      (node, pos, parent, index) {
+    if (mixed) return false;
+    if (!node.isText) return true;
+    final value = fromMarks(node.marks) ?? fromBlock(parent) ?? documentDefault;
+    if (!sawText) {
+      result = value;
+      sawText = true;
+    } else if (value != result) {
+      mixed = true;
+    }
+    return false;
+  });
+  if (mixed) return null;
+  // Seleção sem run de texto (só um bloco vazio): vale o estilo do bloco.
+  return sawText
+      ? result
+      : (fromBlock(selection.fromRes.parent) ?? documentDefault);
+}
+
+/// `10.0` → `10`, `11.5` → `11.5`, `'12pt'` → `12`; família passa direto.
+String? _normalizeInlineValue(String markName, Object? raw) {
+  if (raw == null) return null;
+  if (markName == 'font') {
+    final family = '$raw'.trim();
+    return family.isEmpty ? null : family;
+  }
+  final points = raw is num
+      ? raw.toDouble()
+      : double.tryParse('$raw'.replaceAll('pt', '').trim());
+  if (points == null || points <= 0) return null;
+  return points == points.roundToDouble() ? '${points.round()}' : '$points';
 }
 
 /// A escada de tamanhos do Word (o que A^ e A˅ percorrem).
@@ -187,6 +276,10 @@ void cutSelection(OfficeWordController c) {
   c.dispatch(c.view.state.tr..deleteSelection());
 }
 
+/// Há algo copiado NO editor para colar? (O menu de contexto desabilita o
+/// item em vez de oferecer uma colagem que não faria nada.)
+bool get hasInternalClipboard => _internalClipboard != null;
+
 void pasteInternal(OfficeWordController c) {
   final slice = _internalClipboard;
   if (slice == null) return;
@@ -235,6 +328,50 @@ void setAlign(OfficeWordController c, String align) {
     return false;
   });
   if (tr.docChanged) c.dispatch(tr);
+}
+
+/// Alinha o OBJETO selecionado.
+///
+/// Uma caixa de texto flutuante tem alinhamento próprio (`positionHAlign`,
+/// que o renderer honra); uma imagem em linha herda o alinhamento do
+/// parágrafo que a contém — que é exatamente como o Word se comporta nos
+/// dois casos.
+void setObjectAlign(OfficeWordController c, String align) {
+  final state = c.view.state;
+  final selection = state.selection;
+  if (selection is! NodeSelection) return;
+  final node = selection.node;
+  if (node.type.name == 'textBox') {
+    c.dispatch(state.tr
+      ..setNodeMarkup(selection.from, null, {
+        ...node.attrs,
+        'positionHAlign': align,
+      })
+      ..setSelection(NodeSelection.create(state.doc, selection.from)));
+    return;
+  }
+  // Imagem em linha: alinhar o parágrafo que a contém, preservando a
+  // seleção do objeto.
+  final resolved = state.doc.resolve(selection.from);
+  if (resolved.depth == 0) return;
+  final blockPos = resolved.before(resolved.depth);
+  final block = state.doc.nodeAt(blockPos);
+  if (block == null) return;
+  final tr = state.tr
+    ..setNodeMarkup(blockPos, null, {...block.attrs, 'align': align});
+  tr.setSelection(NodeSelection.create(tr.doc, selection.from));
+  c.dispatch(tr);
+}
+
+/// Apaga o objeto selecionado, deixando o caret onde ele estava.
+void deleteSelectedObject(OfficeWordController c) {
+  final state = c.view.state;
+  final selection = state.selection;
+  if (selection is! NodeSelection) return;
+  final tr = state.tr..delete(selection.from, selection.to);
+  final position = selection.from.clamp(0, tr.doc.content.size);
+  tr.setSelection(Selection.near(tr.doc.resolve(position)));
+  c.dispatch(tr);
 }
 
 /// Alterna lista no bloco: parágrafo vira `listItem` do tipo pedido, o
@@ -337,6 +474,42 @@ void insertPageBreak(OfficeWordController c) {
   c.dispatch(tr);
 }
 
+/// "Página em Branco" do Word: duas quebras em volta de um parágrafo vazio,
+/// de modo que o conteúdo depois do cursor recomece na página seguinte à
+/// nova página em branco.
+void insertBlankPage(OfficeWordController c) {
+  c.syncSelection();
+  final state = c.view.state;
+  final tr = state.tr;
+  final from = state.selection.from;
+  tr.split(from);
+
+  Map<String, dynamic> withBreak(PMNode block) {
+    final style = block.attrs['style'];
+    return {
+      ...block.attrs,
+      'style': {
+        if (style is Map) ...style.cast<String, dynamic>(),
+        'pageBreakBefore': true,
+      },
+    };
+  }
+
+  // O bloco que ficou depois do corte abre a página seguinte…
+  final afterPos = tr.doc.resolve(tr.mapping.map(from));
+  final tailPos = afterPos.before(afterPos.depth);
+  final tail = tr.doc.nodeAt(tailPos);
+  if (tail == null) return;
+  tr.setNodeMarkup(tailPos, null, withBreak(tail));
+
+  // …e um parágrafo vazio, também com quebra, ocupa a página em branco.
+  final blank = c.schema.node('paragraph', {
+    'style': {'pageBreakBefore': true}
+  });
+  tr.insert(tailPos, blank);
+  c.dispatch(tr);
+}
+
 /// Insere uma tabela vazia no cursor, com o caret na PRIMEIRA célula —
 /// como no Word (e é o que faz a aba contextual aparecer imediatamente).
 void insertTable(OfficeWordController c, int rows, int cols) {
@@ -394,10 +567,20 @@ void setPaper(OfficeWordController c, String name) {
     'Carta' => (12240, 15840), // 8,5 × 11 pol
     _ => (11906, 16838), // A4
   };
+  setPaperTwips(c, w, h);
+}
+
+/// Papel por MEDIDA, preservando a orientação corrente: escolher "Ofício"
+/// num documento em paisagem devolve ofício em paisagem, como no Word.
+void setPaperTwips(
+    OfficeWordController c, int portraitWidth, int portraitHeight) {
   final setup = c.pageSetup;
   final portrait = setup.heightTwips >= setup.widthTwips;
-  c.setPageSetup(
-      _copySetup(setup, width: portrait ? w : h, height: portrait ? h : w));
+  c.setPageSetup(_copySetup(
+    setup,
+    width: portrait ? portraitWidth : portraitHeight,
+    height: portrait ? portraitHeight : portraitWidth,
+  ));
 }
 
 void setMargins(OfficeWordController c, String name) {
@@ -406,14 +589,33 @@ void setMargins(OfficeWordController c, String name) {
     'Larga' => (1418, 2880), // 2,5 cm × 5,08 cm
     _ => (1418, 1418), // Normal: 2,5 cm
   };
+  setMarginsTwips(
+    c,
+    top: vertical,
+    bottom: vertical,
+    left: horizontal,
+    right: horizontal,
+  );
+}
+
+/// Margens explícitas. As distâncias de cabeçalho/rodapé são PRESERVADAS:
+/// elas pertencem à seção importada e não fazem parte da predefinição
+/// escolhida — sobrescrevê-las moveria o cabeçalho de todo documento real.
+void setMarginsTwips(
+  OfficeWordController c, {
+  required int top,
+  required int bottom,
+  required int left,
+  required int right,
+}) {
   final setup = c.pageSetup;
   c.setPageSetup(PageSetupTwips(
     widthTwips: setup.widthTwips,
     heightTwips: setup.heightTwips,
-    marginTopTwips: vertical,
-    marginBottomTwips: vertical,
-    marginLeftTwips: horizontal,
-    marginRightTwips: horizontal,
+    marginTopTwips: top,
+    marginBottomTwips: bottom,
+    marginLeftTwips: left,
+    marginRightTwips: right,
     headerDistanceTwips: setup.headerDistanceTwips,
     footerDistanceTwips: setup.footerDistanceTwips,
   ));

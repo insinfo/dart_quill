@@ -88,6 +88,136 @@ const Map<String, String> icons = {
   'save': 'common/main/resources/img/toolbar/2.5x/btn-save.svg',
   'print': 'common/main/resources/img/toolbar/2.5x/btn-print.svg',
   'download': 'common/main/resources/img/toolbar/2.5x/btn-download.svg',
+  'print-preview':
+      'common/main/resources/img/toolbar/2.5x/btn-print-preview.svg',
+  // Edição e navegação
+  'search': 'common/main/resources/img/toolbar/2.5x/btn-menu-search.svg',
+  'replace': 'common/main/resources/img/toolbar/2.5x/btn-replace.svg',
+  'word-count':
+      'documenteditor/main/resources/img/toolbar/2.5x/btn-word-count.svg',
+  'paragraph-marks':
+      'common/main/resources/img/toolbar/2.5x/btn-paragraph.svg',
+  'select-tool':
+      'documenteditor/main/resources/img/toolbar/2.5x/btn-select-tool.svg',
+  'hand-tool':
+      'documenteditor/main/resources/img/toolbar/2.5x/btn-hand-tool.svg',
+  // Inserir (o resto da aba do Word)
+  'hyperlink':
+      'common/main/resources/img/toolbar/2.5x/btn-inserthyperlink.svg',
+  'symbol': 'common/main/resources/img/toolbar/2.5x/big/btn-symbol.svg',
+  'equation': 'common/main/resources/img/toolbar/2.5x/btn-equation.svg',
+  'comment': 'common/main/resources/img/toolbar/2.5x/btn-add-comment.svg',
+  'blankpage':
+      'documenteditor/main/resources/img/toolbar/2.5x/big/btn-blankpage.svg',
+  'bookmark':
+      'documenteditor/main/resources/img/toolbar/2.5x/big/btn-bookmarks.svg',
+  'cross-reference':
+      'documenteditor/main/resources/img/toolbar/2.5x/big/btn-cross-reference.svg',
+  'caption':
+      'documenteditor/main/resources/img/toolbar/2.5x/big/btn-caption.svg',
+  'contents':
+      'documenteditor/main/resources/img/toolbar/2.5x/btn-contents.svg',
+  'textart': 'common/main/resources/img/toolbar/2.5x/big/btn-textart.svg',
+  'dropcap':
+      'documenteditor/main/resources/img/toolbar/2.5x/big/btn-dropcap.svg',
+  'field': 'documenteditor/main/resources/img/toolbar/2.5x/btn-field.svg',
+  'insertchart':
+      'common/main/resources/img/toolbar/2.5x/big/btn-insertchart.svg',
+  // Cabeçalho, rodapé e numeração
+  'editheader':
+      'common/main/resources/img/toolbar/2.5x/big/btn-editheader.svg',
+  'pagenum':
+      'documenteditor/main/resources/img/toolbar/2.5x/big/btn-pagenum.svg',
+  'pagenum-bottom-center':
+      'documenteditor/main/resources/img/toolbar/2.5x/huge/btn-page-number-bottom-center.svg',
+  'pagenum-bottom-right':
+      'documenteditor/main/resources/img/toolbar/2.5x/huge/btn-page-number-bottom-right.svg',
+  'pagenum-top-center':
+      'documenteditor/main/resources/img/toolbar/2.5x/huge/btn-page-number-top-center.svg',
+  // Layout e Design
+  'hyphenation':
+      'documenteditor/main/resources/img/toolbar/2.5x/big/btn-hyphenation.svg',
+  'line-numbering':
+      'documenteditor/main/resources/img/toolbar/2.5x/big/btn-line-numbering.svg',
+  'watermark':
+      'documenteditor/main/resources/img/toolbar/2.5x/big/btn-watermark.svg',
+  'page-color':
+      'documenteditor/main/resources/img/toolbar/2.5x/big/btn-page-color.svg',
+  'colorschemas':
+      'common/main/resources/img/toolbar/2.5x/btn-colorschemas.svg',
+  'columns-one': 'common/main/resources/img/toolbar/2.5x/btn-columns-one.svg',
+  'columns-two': 'common/main/resources/img/toolbar/2.5x/btn-columns-two.svg',
+  'columns-three':
+      'common/main/resources/img/toolbar/2.5x/btn-columns-three.svg',
+  'columns-left':
+      'documenteditor/main/resources/img/toolbar/2.5x/btn-columns-left.svg',
+  'columns-right':
+      'documenteditor/main/resources/img/toolbar/2.5x/btn-columns-right.svg',
+  // Bordas (tabela e parágrafo)
+  'border-all': 'common/main/resources/img/toolbar/2.5x/btn-border-all.svg',
+  'border-no': 'common/main/resources/img/toolbar/2.5x/btn-border-no.svg',
+  'border-out': 'common/main/resources/img/toolbar/2.5x/btn-border-out.svg',
+  'border-inside':
+      'common/main/resources/img/toolbar/2.5x/btn-border-inside.svg',
+  'border-top': 'common/main/resources/img/toolbar/2.5x/btn-border-top.svg',
+  'border-bottom':
+      'common/main/resources/img/toolbar/2.5x/btn-border-bottom.svg',
+  'border-left': 'common/main/resources/img/toolbar/2.5x/btn-border-left.svg',
+  'border-right':
+      'common/main/resources/img/toolbar/2.5x/btn-border-right.svg',
+  'border-insidehor':
+      'common/main/resources/img/toolbar/2.5x/btn-border-insidehor.svg',
+  'border-insidevert':
+      'common/main/resources/img/toolbar/2.5x/btn-border-insidevert.svg',
+  'border-style':
+      'common/main/resources/img/toolbar/2.5x/btn-border-style.svg',
+  // Tabela (Design e Layout)
+  'distribute-rows':
+      'documenteditor/main/resources/img/toolbar/2.5x/btn-distribute-rows.svg',
+  'distribute-columns':
+      'documenteditor/main/resources/img/toolbar/2.5x/btn-distribute-columns.svg',
+  'table-to-text':
+      'documenteditor/main/resources/img/toolbar/2.5x/btn-table-to-text.svg',
+  'table-align-left':
+      'documenteditor/main/resources/img/toolbar/2.5x/huge/btn-table-align-left.svg',
+  'table-align-center':
+      'documenteditor/main/resources/img/toolbar/2.5x/huge/btn-table-align-center.svg',
+  'table-align-right':
+      'documenteditor/main/resources/img/toolbar/2.5x/huge/btn-table-align-right.svg',
+  'align-top': 'common/main/resources/img/toolbar/2.5x/btn-align-top.svg',
+  'align-middle':
+      'common/main/resources/img/toolbar/2.5x/btn-align-middle.svg',
+  'align-bottom':
+      'common/main/resources/img/toolbar/2.5x/btn-align-bottom.svg',
+  // Objetos: disposição do texto, ordenação e proporção
+  'wrap-inline':
+      'documenteditor/main/resources/img/toolbar/2.5x/huge/btn-wrap-inline.svg',
+  'wrap-square':
+      'documenteditor/main/resources/img/toolbar/2.5x/huge/btn-wrap-square.svg',
+  'wrap-tight':
+      'documenteditor/main/resources/img/toolbar/2.5x/huge/btn-wrap-tight.svg',
+  'wrap-through':
+      'documenteditor/main/resources/img/toolbar/2.5x/huge/btn-wrap-through.svg',
+  'wrap-topbottom':
+      'documenteditor/main/resources/img/toolbar/2.5x/huge/btn-wrap-topbottom.svg',
+  'wrap-behind':
+      'documenteditor/main/resources/img/toolbar/2.5x/huge/btn-wrap-behind.svg',
+  'wrap-infront':
+      'documenteditor/main/resources/img/toolbar/2.5x/huge/btn-wrap-infront.svg',
+  'img-wrap':
+      'documenteditor/main/resources/img/toolbar/2.5x/big/btn-img-wrap.svg',
+  'arrange-front':
+      'common/main/resources/img/toolbar/2.5x/btn-arrange-front.svg',
+  'arrange-back':
+      'common/main/resources/img/toolbar/2.5x/btn-arrange-back.svg',
+  'arrange-forward':
+      'common/main/resources/img/toolbar/2.5x/btn-arrange-forward.svg',
+  'arrange-backward':
+      'common/main/resources/img/toolbar/2.5x/btn-arrange-backward.svg',
+  'flip-hor': 'common/main/resources/img/toolbar/2.5x/btn-flip-hor.svg',
+  'flip-vert': 'common/main/resources/img/toolbar/2.5x/btn-flip-vert.svg',
+  'advanced-ratio':
+      'common/main/resources/img/toolbar/2.5x/btn-advanced-ratio.svg',
 };
 
 const String cssHeader = '''

@@ -334,11 +334,18 @@ class _CachedTableLines {
 }
 
 class LayoutComposer {
+  /// A face e o corpo usados quando o documento não diz nada — a mesma
+  /// referência que a ribbon precisa para mostrar a fonte EFETIVA de um
+  /// parágrafo sem formatação explícita (um Delta do Quill, por exemplo).
+  /// Constantes para que layout e chrome não divirjam em silêncio.
+  static const String defaultBaseFontFamily = 'Arial';
+  static const double defaultBaseFontSizePt = 12;
+
   LayoutComposer({
     this.setup = const PageSetupTwips(),
     this.quality = LayoutQuality.draft,
-    this.baseFontFamily = 'Arial',
-    this.baseFontSizePt = 12,
+    this.baseFontFamily = defaultBaseFontFamily,
+    this.baseFontSizePt = defaultBaseFontSizePt,
     LayoutFontSet? fonts,
     this.header,
     this.footer,
@@ -414,8 +421,37 @@ class LayoutComposer {
   PageGraph compose(
     PMNode doc, {
     bool honorRenderedPageBreaks = true,
+    int? maxPages,
   }) =>
-      _composeFrom(doc, honorRenderedPageBreaks: honorRenderedPageBreaks);
+      _composeFrom(
+        doc,
+        honorRenderedPageBreaks: honorRenderedPageBreaks,
+        stopAfterPages: maxPages,
+      );
+
+  /// Continua uma composição PARCIAL (paginação progressiva, estilo Word):
+  /// as páginas já compostas são reusadas como estão e a composição retoma
+  /// do bloco registrado em [PageGraph.resume]. Com [maxPages], para de novo
+  /// na próxima fronteira limpa após esse total.
+  PageGraph composeContinue(
+    PMNode doc,
+    PageGraph partial, {
+    int? maxPages,
+  }) {
+    final resume = partial.resume;
+    if (resume == null) return partial;
+    return _composeFrom(
+      doc,
+      reusedPages: partial.pages,
+      reusedEntries: partial.positionMap.entries,
+      startBlockIndex: resume.blockIndex,
+      startOffset: resume.offset,
+      startListOrdinal: resume.listOrdinal,
+      startSuppressSpaceBeforeAtPageTop: resume.suppressSpaceBeforeAtPageTop,
+      honorRenderedPageBreaks: resume.honorRenderedPageBreaks,
+      stopAfterPages: maxPages,
+    );
+  }
 
   /// Warms the typographic cache cooperatively before a large document is
   /// paginated on the browser main isolate.
@@ -659,25 +695,47 @@ class LayoutComposer {
     PageGraph? convergeAgainst,
     int convergeFromPage = 0,
     bool honorRenderedPageBreaks = true,
+    int? stopAfterPages,
   }) {
     final diagnostics = LayoutDiagnostics();
     final usesRenderedPaginationCache =
         honorRenderedPageBreaks && _hasRenderedPageBreakHints(doc);
+    // Os markers `lastRenderedPageBreak` descrevem o layout que o WORD
+    // calculou com as métricas dele. Quando as nossas medem o conteúdo mais
+    // alto e uma página estoura ANTES do marker correspondente, todos os
+    // markers seguintes ficam desalinhados: cada um fecharia uma
+    // página-lasca logo depois da quebra física. Da primeira divergência em
+    // diante os hints são descartados e o documento pagina naturalmente —
+    // que é o que o Word faz ao repaginar um arquivo cujo cache não bate.
+    var honorHints = honorRenderedPageBreaks;
     final pages = <PageLayout>[...reusedPages];
     final mapEntries = <PositionMapEntry>[...reusedEntries];
 
     var currentFragments = <PageFragment>[];
     var pendingMetadataFragments = <BlockFragment>[];
+    // Retomando no meio do documento (incremental ou progressivo), a seção
+    // ativa é a que os blocos anteriores já atravessaram — reiniciar na
+    // primeira aplicaria a geometria errada ao restante.
     var sectionIndex = 0;
-    var activeSetup = sections.isEmpty ? setup : sections.first;
+    if (startBlockIndex > 0 && sections.length > 1) {
+      for (var i = 0; i < startBlockIndex && i < doc.childCount; i++) {
+        if (_endsSection(doc.child(i)) && sectionIndex + 1 < sections.length) {
+          sectionIndex++;
+        }
+      }
+    }
+    var activeSetup = sections.isEmpty ? setup : sections[sectionIndex];
+    // O inset do rodapé é um limite FÍSICO e vale também quando os hints de
+    // `lastRenderedPageBreak` são honrados: os markers do Word foram medidos
+    // com as métricas do Word, e as nossas podem produzir linhas mais altas.
+    // Sem o inset, uma página "cheia" pelos markers desenhava o corpo por
+    // cima do rodapé (TR: overlap de ~383 twips na página 1).
     var capacity = activeSetup.contentHeightTwips -
-        (usesRenderedPaginationCache
-            ? 0
-            : _footerBodyInsetTwips(
-                activeSetup,
-                _footerForPage(pages.length),
-                pages.length,
-              ));
+        _footerBodyInsetTwips(
+          activeSetup,
+          _footerForPage(pages.length),
+          pages.length,
+        );
     if (capacity < 0) capacity = 0;
     var bodyTopInsetTwips = _headerBodyInsetTwips(
       activeSetup,
@@ -710,13 +768,11 @@ class LayoutComposer {
       ));
       currentFragments = [];
       capacity = activeSetup.contentHeightTwips -
-          (usesRenderedPaginationCache
-              ? 0
-              : _footerBodyInsetTwips(
-                  activeSetup,
-                  _footerForPage(pages.length),
-                  pages.length,
-                ));
+          _footerBodyInsetTwips(
+            activeSetup,
+            _footerForPage(pages.length),
+            pages.length,
+          );
       if (capacity < 0) capacity = 0;
       bodyTopInsetTwips = _headerBodyInsetTwips(
         activeSetup,
@@ -837,8 +893,32 @@ class LayoutComposer {
     }
 
     var offset = startOffset;
+    PageGraphResume? partialResume;
+
+    // Paginação progressiva: o alvo foi atingido e a próxima página nasceria
+    // com um bloco FRESCO? Então este é um ponto de retomada válido — o
+    // mesmo contrato das assinaturas `startsFreshBlock` do reuso
+    // incremental. Blocos que atravessam páginas (uma tabela longa) não
+    // param no meio: a fatia cresce, nunca corrompe o estado.
+    bool shouldStopForSlice() =>
+        stopAfterPages != null &&
+        pages.length >= stopAfterPages &&
+        currentFragments.isEmpty &&
+        pendingMetadataFragments.isEmpty &&
+        !converged;
+
     for (var index = startBlockIndex; index < doc.childCount; index++) {
       if (index > startBlockIndex && tryConverge(index, offset, listOrdinal)) {
+        break;
+      }
+      if (index > startBlockIndex && shouldStopForSlice()) {
+        partialResume = PageGraphResume(
+          blockIndex: index,
+          offset: offset,
+          listOrdinal: listOrdinal,
+          suppressSpaceBeforeAtPageTop: suppressSpaceBeforeAtPageTop,
+          honorRenderedPageBreaks: honorHints,
+        );
         break;
       }
       final block = doc.child(index);
@@ -849,7 +929,7 @@ class LayoutComposer {
       // assinatura registrar a página nova começando nele.
       final manualPageBreakBefore = _pageBreakBefore(block);
       final inlinePageBreakOnly = _isImportedPageBreakOnlyParagraph(block);
-      final renderedPageBreakBefore = honorRenderedPageBreaks &&
+      final renderedPageBreakBefore = honorHints &&
           _renderedPageBreakBefore(block) &&
           !_hasInlineRenderedPageBreakHint(block);
       if ((manualPageBreakBefore || inlinePageBreakOnly) &&
@@ -909,7 +989,7 @@ class LayoutComposer {
           diagnostics,
           tableDocPos: docPos,
           availableTwips: activeSetup.contentWidthTwips,
-          honorRenderedPageBreaks: honorRenderedPageBreaks,
+          honorRenderedPageBreaks: honorHints,
         );
         var headerCount = 0;
         while (headerCount < rows.length && rows[headerCount].repeatHeader) {
@@ -931,6 +1011,21 @@ class LayoutComposer {
         var i = 0;
         var firstOfTable = true;
         while (i < rows.length) {
+          // Ponto de retomada progressivo: a tabela inteira começaria numa
+          // página fresca depois do alvo de páginas da fatia.
+          if (i == 0 &&
+              firstOfTable &&
+              index > startBlockIndex &&
+              shouldStopForSlice()) {
+            partialResume = PageGraphResume(
+              blockIndex: index,
+              offset: blockOffset,
+              listOrdinal: ordinalBefore,
+              suppressSpaceBeforeAtPageTop: suppressSpaceBeforeAtPageTop,
+              honorRenderedPageBreaks: honorHints,
+            );
+            break;
+          }
           var repeatedHeaders =
               !firstOfTable && headerCount > 0 && i >= headerCount
                   ? [
@@ -950,7 +1045,7 @@ class LayoutComposer {
             final key = rowKey(row);
             final renderedBreak = _pageBreakInTableRow(
               row,
-              honorRenderedPageBreaks: honorRenderedPageBreaks,
+              honorRenderedPageBreaks: honorHints,
             );
 
             if (renderedInternalBreakSourceRow != null &&
@@ -1039,6 +1134,10 @@ class LayoutComposer {
                     .add('grupo de linhas de tabela mais alto que a página');
               }
             } else {
+              // Quebra forçada pela CAPACIDADE física, não por um marker: as
+              // métricas divergiram do cache do Word e os hints seguintes
+              // fechariam páginas-lasca. Daqui em diante, paginação natural.
+              honorHints = false;
               closePage(suppressSpaceBefore: true);
               if (i == 0 && tryConverge(index, blockOffset, ordinalBefore)) {
                 break;
@@ -1071,6 +1170,7 @@ class LayoutComposer {
           }
         }
         if (converged) break;
+        if (partialResume != null) break;
         continue;
       }
 
@@ -1112,7 +1212,7 @@ class LayoutComposer {
                   blockStyle.rightIndentTwips,
               blockStyle,
               diagnostics,
-              honorRenderedPageBreaks: honorRenderedPageBreaks,
+              honorRenderedPageBreaks: honorHints,
               gridLinePitchTwips: activeSetup.activeDocumentGridLinePitchTwips,
             );
 
@@ -1143,7 +1243,7 @@ class LayoutComposer {
                 nextStyle.rightIndentTwips,
             nextStyle,
             LayoutDiagnostics(),
-            honorRenderedPageBreaks: honorRenderedPageBreaks,
+            honorRenderedPageBreaks: honorHints,
             gridLinePitchTwips: activeSetup.activeDocumentGridLinePitchTwips,
           );
           final nextBlankHeight = _resolvedLineHeightTwips(
@@ -1202,9 +1302,23 @@ class LayoutComposer {
       var forcePageAfterBlock = false;
       var i = 0;
       while (i < lines.length) {
+        // Ponto de retomada progressivo: o bloco inteiro começaria numa
+        // página fresca depois do alvo de páginas da fatia.
+        if (i == 0 &&
+            firstLineOfBlock &&
+            index > startBlockIndex &&
+            shouldStopForSlice()) {
+          partialResume = PageGraphResume(
+            blockIndex: index,
+            offset: blockOffset,
+            listOrdinal: ordinalBefore,
+            suppressSpaceBeforeAtPageTop: suppressSpaceBeforeAtPageTop,
+            honorRenderedPageBreaks: honorHints,
+          );
+          break;
+        }
         if ((lines[i].manualPageBreakBefore ||
-                (honorRenderedPageBreaks &&
-                    lines[i].renderedPageBreakBefore)) &&
+                (honorHints && lines[i].renderedPageBreakBefore)) &&
             _hasVisualPageContent(currentFragments)) {
           closePage(
             suppressSpaceBefore: lines[i].manualPageBreakBefore,
@@ -1225,8 +1339,7 @@ class LayoutComposer {
         while (i + take < lines.length) {
           if (take > 0 &&
               (lines[i + take].manualPageBreakBefore ||
-                  (honorRenderedPageBreaks &&
-                      lines[i + take].renderedPageBreakBefore))) {
+                  (honorHints && lines[i + take].renderedPageBreakBefore))) {
             break;
           }
           final candidate = lines[i + take].heightTwips;
@@ -1258,8 +1371,7 @@ class LayoutComposer {
         // só permitiria uma divisão 1+2 ou 2+1.
         final stoppedAtExplicitBreak = i + take < lines.length &&
             (lines[i + take].manualPageBreakBefore ||
-                (honorRenderedPageBreaks &&
-                    lines[i + take].renderedPageBreakBefore));
+                (honorHints && lines[i + take].renderedPageBreakBefore));
         if (!stoppedAtExplicitBreak &&
             blockStyle.widowControl &&
             lines.length > 1 &&
@@ -1308,6 +1420,10 @@ class LayoutComposer {
                   .add('linha mais alta que a página no nó ${block.type.name}');
             }
           } else {
+            // Divergência física: a página encheu antes do marker do Word.
+            // Os hints restantes fechariam páginas-lasca — paginação natural
+            // daqui em diante.
+            honorHints = false;
             closePage(suppressSpaceBefore: true);
             // A fronteira de página nasce AQUI quando o bloco inteiro não
             // cabe no que sobrou: é o ponto em que a página nova começa
@@ -1353,6 +1469,7 @@ class LayoutComposer {
         i += take;
       }
       if (converged) break;
+      if (partialResume != null) break;
       if (forcePageAfterBlock && currentFragments.isNotEmpty) {
         closePage(suppressSpaceBefore: true);
       }
@@ -1364,13 +1481,11 @@ class LayoutComposer {
         sectionIndex++;
         activeSetup = sections[sectionIndex];
         capacity = activeSetup.contentHeightTwips -
-            (usesRenderedPaginationCache
-                ? 0
-                : _footerBodyInsetTwips(
-                    activeSetup,
-                    _footerForPage(pages.length),
-                    pages.length,
-                  ));
+            _footerBodyInsetTwips(
+              activeSetup,
+              _footerForPage(pages.length),
+              pages.length,
+            );
         if (capacity < 0) capacity = 0;
         bodyTopInsetTwips = _headerBodyInsetTwips(
           activeSetup,
@@ -1468,6 +1583,7 @@ class LayoutComposer {
       docSize: doc.content.size,
       blockCount: doc.childCount,
       honoredRenderedPageBreakHints: usesRenderedPaginationCache,
+      resume: partialResume,
     );
   }
 

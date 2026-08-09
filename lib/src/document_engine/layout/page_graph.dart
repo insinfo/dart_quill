@@ -789,6 +789,37 @@ class LayoutDiagnostics {
 }
 
 /// O resultado completo da composição: o que editor e PDF consomem.
+/// Estado de retomada de uma composição PARCIAL (paginação progressiva).
+///
+/// Existe apenas quando o compositor parou numa fronteira limpa (página
+/// fechada exatamente no fim de um bloco). Todos os campos são o estado de
+/// ENTRADA do próximo bloco — o mesmo contrato do resume incremental.
+class PageGraphResume {
+  const PageGraphResume({
+    required this.blockIndex,
+    required this.offset,
+    required this.listOrdinal,
+    required this.suppressSpaceBeforeAtPageTop,
+    required this.honorRenderedPageBreaks,
+  });
+
+  /// Índice do próximo bloco de topo a compor.
+  final int blockIndex;
+
+  /// Offset do documento no início desse bloco.
+  final int offset;
+
+  /// Contador corrente de lista ordenada.
+  final int listOrdinal;
+
+  /// A página seguinte nasce suprimindo o spaceBefore automático?
+  final bool suppressSpaceBeforeAtPageTop;
+
+  /// Os hints `lastRenderedPageBreak` continuam válidos para o restante?
+  /// (False quando uma divergência física já os descartou.)
+  final bool honorRenderedPageBreaks;
+}
+
 class PageGraph {
   const PageGraph({
     required this.pages,
@@ -798,6 +829,7 @@ class PageGraph {
     this.docSize = 0,
     this.blockCount = 0,
     this.honoredRenderedPageBreakHints = false,
+    this.resume,
   });
 
   final List<PageLayout> pages;
@@ -818,4 +850,11 @@ class PageGraph {
   /// completa sem o cache obsoleto. O grafo seguinte volta a permitir reuso
   /// incremental mesmo que os nós opacos continuem preservados no modelo.
   final bool honoredRenderedPageBreakHints;
+
+  /// Não nulo quando este grafo é PARCIAL (paginação progressiva em curso):
+  /// as páginas existentes são definitivas, mas o documento continua em
+  /// [PageGraphResume.blockIndex].
+  final PageGraphResume? resume;
+
+  bool get isPartial => resume != null;
 }

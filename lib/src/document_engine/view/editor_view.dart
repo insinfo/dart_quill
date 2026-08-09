@@ -22,6 +22,8 @@
 /// fingir suporte (o gate de IME é explícito no plano).
 library;
 
+import 'dart:async' show unawaited;
+
 import '../../platform/dom.dart';
 import '../diagnostics/open_document_timing.dart';
 import '../layout/dom_position_map.dart';
@@ -47,6 +49,22 @@ class OfficeVirtualization {
   final int radius;
 }
 
+/// Paginação progressiva estilo Word: a abertura compõe só as primeiras
+/// páginas ([initialPages]), projeta imediatamente e continua paginando em
+/// fatias de [pagesPerSlice] no event loop — a contagem de páginas e a
+/// barra de rolagem crescem como no Word. As fatias param em fronteiras
+/// LIMPAS de bloco, então um bloco que atravessa páginas (uma tabela longa)
+/// alonga a fatia em vez de corrompê-la.
+class OfficeProgressivePagination {
+  const OfficeProgressivePagination({
+    this.initialPages = 12,
+    this.pagesPerSlice = 24,
+  });
+
+  final int initialPages;
+  final int pagesPerSlice;
+}
+
 /// Um `inputType` que a view reconhece e roteia pelo modelo.
 enum OfficeInputAction {
   insertText,
@@ -68,10 +86,12 @@ class OfficeEditorView {
     PageGraphDomRenderer? renderer,
     List<OfficeExtension> extensions = const [],
     this.virtualization,
+    this.progressive,
     DomElement? scrollContainer,
     bool honorRenderedPageBreaks = true,
     this.onStateChange,
     this.onVisiblePageChange,
+    this.onPaginationProgress,
   })  : _state = state,
         _scrollContainer = scrollContainer,
         _adapter = adapter,
@@ -82,6 +102,7 @@ class OfficeEditorView {
             PageGraphDomRenderer(document: adapter.document, editable: true) {
     _beforeInput = _handleBeforeInput;
     _keyDown = _handleKeyDown;
+    _pointerDown = _handlePointerDown;
     _copy = _handleCopy;
     _cut = _handleCut;
     _paste = _handlePaste;
@@ -89,6 +110,7 @@ class OfficeEditorView {
     _compositionEnd = _handleCompositionEnd;
     host.addEventListener('beforeinput', _beforeInput);
     host.addEventListener('keydown', _keyDown);
+    host.addEventListener('pointerdown', _pointerDown);
     host.addEventListener('copy', _copy);
     host.addEventListener('cut', _cut);
     host.addEventListener('paste', _paste);
@@ -129,10 +151,12 @@ class OfficeEditorView {
     LayoutComposer? composer,
     PageGraphDomRenderer? renderer,
     OfficeVirtualization? virtualization,
+    OfficeProgressivePagination? progressive,
     DomElement? scrollContainer,
     bool honorRenderedPageBreaks = true,
     void Function(EditorState state)? onStateChange,
     void Function(int pageIndex)? onVisiblePageChange,
+    void Function(int pages, bool complete)? onPaginationProgress,
   }) {
     final set = OfficeExtensionSet(extensions);
     return OfficeEditorView(
@@ -144,10 +168,12 @@ class OfficeEditorView {
       renderer: renderer,
       extensions: extensions,
       virtualization: virtualization,
+      progressive: progressive,
       scrollContainer: scrollContainer,
       honorRenderedPageBreaks: honorRenderedPageBreaks,
       onStateChange: onStateChange,
       onVisiblePageChange: onVisiblePageChange,
+      onPaginationProgress: onPaginationProgress,
     );
   }
 
@@ -160,6 +186,13 @@ class OfficeEditorView {
   /// Null monta o documento inteiro (o padrão, e o certo para documentos
   /// pequenos: virtualizar tem custo próprio).
   final OfficeVirtualization? virtualization;
+
+  /// Paginação progressiva na abertura. Null compõe tudo antes de projetar.
+  final OfficeProgressivePagination? progressive;
+
+  /// Progresso da paginação progressiva: contagem corrente de páginas e se
+  /// o documento terminou de paginar. A barra de status vive disto.
+  final void Function(int pages, bool complete)? onPaginationProgress;
 
   final DomElement? _scrollContainer;
   final OfficeDomPositionMap _positions = const OfficeDomPositionMap();
@@ -176,6 +209,7 @@ class OfficeEditorView {
   bool _renderedPageBreakHintsValid;
   late DomEventListener _beforeInput;
   late DomEventListener _keyDown;
+  late DomEventListener _pointerDown;
   late DomEventListener _copy;
   late DomEventListener _cut;
   late DomEventListener _paste;
@@ -189,6 +223,10 @@ class OfficeEditorView {
   bool _composing = false;
   int _visiblePage = 0;
   PageWindow? _window;
+
+  /// Geração das fatias de paginação em curso: qualquer troca de grafo fora
+  /// do laço progressivo (edição, dispose) o cancela incrementando isto.
+  int _paginationGeneration = 0;
 
   EditorState get state => _state;
   PageGraph get pageGraph => _pageGraph;
@@ -292,8 +330,10 @@ class OfficeEditorView {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    _paginationGeneration++;
     host.removeEventListener('beforeinput', _beforeInput);
     host.removeEventListener('keydown', _keyDown);
+    host.removeEventListener('pointerdown', _pointerDown);
     host.removeEventListener('copy', _copy);
     host.removeEventListener('cut', _cut);
     host.removeEventListener('paste', _paste);
@@ -317,13 +357,76 @@ class OfficeEditorView {
 
   // -- laço -----------------------------------------------------------------
 
-  void _compose() => _pageGraph = _composer.compose(
+  void _compose() {
+    final policy = progressive;
+    if (policy == null) {
+      _pageGraph = _composer.compose(
         _state.doc,
         honorRenderedPageBreaks: _renderedPageBreakHintsValid,
       );
+      return;
+    }
+    // Progressivo: compõe só as primeiras páginas, projeta, e o laço de
+    // fatias completa o resto no event loop — a contagem cresce como no
+    // Word.
+    _pageGraph = _composer.compose(
+      _state.doc,
+      honorRenderedPageBreaks: _renderedPageBreakHintsValid,
+      maxPages: policy.initialPages,
+    );
+    if (_pageGraph.isPartial) {
+      _schedulePaginationSlices(policy);
+    } else {
+      onPaginationProgress?.call(_pageGraph.pages.length, true);
+    }
+  }
+
+  void _schedulePaginationSlices(OfficeProgressivePagination policy) {
+    final generation = ++_paginationGeneration;
+    onPaginationProgress?.call(_pageGraph.pages.length, false);
+    Future<void> run() async {
+      while (!_disposed &&
+          generation == _paginationGeneration &&
+          _pageGraph.isPartial) {
+        await Future<void>.delayed(Duration.zero);
+        if (_disposed ||
+            generation != _paginationGeneration ||
+            !_pageGraph.isPartial) {
+          return;
+        }
+        // Durante composição IME a projeção pertence ao browser; a fatia
+        // espera a próxima volta do event loop.
+        if (_composing) continue;
+        _pageGraph = _composer.composeContinue(
+          _state.doc,
+          _pageGraph,
+          maxPages: _pageGraph.pages.length + policy.pagesPerSlice,
+        );
+        _project();
+        _writeSelection();
+        onPaginationProgress?.call(
+            _pageGraph.pages.length, !_pageGraph.isPartial);
+      }
+    }
+
+    unawaited(run());
+  }
 
   /// Recompõe a partir da menor posição que a transação tocou.
   void _composeAfter(Transaction transaction) {
+    if (_pageGraph.isPartial) {
+      // Uma edição no meio da paginação progressiva: o reuso incremental
+      // convergiria contra um grafo SEM cauda e declararia o documento
+      // completo faltando páginas. Cancela as fatias e recompõe inteiro —
+      // a edição já invalidou os hints, então é a composição natural.
+      _paginationGeneration++;
+      _pageGraph = _composer.compose(
+        _state.doc,
+        honorRenderedPageBreaks: false,
+      );
+      onPaginationProgress?.call(_pageGraph.pages.length, true);
+      return;
+    }
     final changedFrom = _changedFrom(transaction);
     if (changedFrom == null) {
       // AddMark/RemoveMark e passos de atributo mudam o documento sem mudar
@@ -497,11 +600,58 @@ class OfficeEditorView {
 
   // -- entrada --------------------------------------------------------------
 
+  /// Clicar num OBJETO (imagem, caixa de texto) seleciona o NÓ, como no
+  /// Word — não um ponto de texto ao lado dele.
+  ///
+  /// Sem isto, clicar numa imagem colocava o caret num dos lados e todo o
+  /// vocabulário de objeto (moldura, alças, Delete que apaga a figura)
+  /// ficava inacessível. Os objetos são `contenteditable=false`, então o
+  /// browser sozinho não produz nenhuma seleção útil sobre eles.
+  void _handlePointerDown(DomEvent event) {
+    if (_disposed || _composing) return;
+    final target = event.target;
+    if (target == null) return;
+    final element = _objectElementAt(target);
+    if (element == null) return;
+    final pos = _positions.modelPositionAt(element, 0);
+    if (pos == null) return;
+    final resolved = _state.doc.resolve(_clamp(pos, _state.doc));
+    final node = resolved.nodeAfter;
+    if (node == null || !NodeSelection.isSelectable(node)) return;
+    // O browser não deve iniciar uma seleção de texto por cima do objeto: o
+    // arrasto a partir daqui pertence ao redimensionamento/reposicionamento.
+    event.preventDefault();
+    dispatch(_state.tr..setSelection(NodeSelection.create(_state.doc, pos)));
+  }
+
+  /// O elemento de objeto que contém [node], ou null.
+  DomElement? _objectElementAt(DomNode node) {
+    DomNode? current = node;
+    while (current != null) {
+      if (current is DomElement &&
+          (current.classes.contains('$officeCssPrefix-image') ||
+              current.classes.contains('$officeCssPrefix-text-box'))) {
+        return current;
+      }
+      if (current == host) break;
+      current = current.parentNode;
+    }
+    return null;
+  }
+
   /// Atalhos das extensões. Só cancela o evento quando um comando REALMENTE
   /// tratou a tecla — cancelar o que não se tratou quebraria navegação,
   /// atalhos do browser e acessibilidade.
   void _handleKeyDown(DomEvent event) {
     if (_disposed || event is! DomKeyboardEvent) return;
+    // Com um OBJETO selecionado o teclado age sobre o nó, não sobre texto:
+    // Delete/Backspace apagam a figura e as setas saem dela para o texto
+    // vizinho. O `beforeinput` não cobre isso de forma confiável porque o
+    // objeto é `contenteditable=false`.
+    if (!event.isComposing && _handleObjectKey(event)) {
+      event.preventDefault();
+      return;
+    }
     // Durante composição IME o keydown carrega a tecla física (keyCode 229
     // em vários browsers): disparar atalho aqui agiria no meio de uma
     // palavra sendo composta.
@@ -529,6 +679,48 @@ class OfficeEditorView {
       dispatch: dispatch,
     );
     if (handled) event.preventDefault();
+  }
+
+  /// Teclas que agem sobre o OBJETO selecionado. Devolve true quando tratou.
+  bool _handleObjectKey(DomKeyboardEvent event) {
+    final selection = _state.selection;
+    if (selection is! NodeSelection) return false;
+    if (event.ctrlKey || event.metaKey || event.altKey) return false;
+    switch (event.key) {
+      case 'Delete':
+      case 'Backspace':
+        final tr = _state.tr..delete(selection.from, selection.to);
+        tr.setSelection(
+            Selection.near(tr.doc.resolve(_clamp(selection.from, tr.doc))));
+        dispatch(tr);
+        return true;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        _escapeObject(backward: true);
+        return true;
+      case 'ArrowRight':
+      case 'ArrowDown':
+        _escapeObject(backward: false);
+        return true;
+      case 'Escape':
+        _escapeObject(backward: false);
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /// Sai do objeto para o texto vizinho, com o caret do lado pedido.
+  void _escapeObject({required bool backward}) {
+    final selection = _state.selection;
+    final anchor = backward ? selection.from : selection.to;
+    final found = Selection.findFrom(
+      _state.doc.resolve(_clamp(anchor, _state.doc)),
+      backward ? -1 : 1,
+      true,
+    );
+    if (found == null) return;
+    dispatch(_state.tr..setSelection(found));
   }
 
   // -- composição IME --------------------------------------------------------

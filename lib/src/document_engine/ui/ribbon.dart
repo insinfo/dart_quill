@@ -8,6 +8,7 @@ library;
 
 import '../../platform/dom.dart';
 import 'controller.dart';
+import 'ribbon_actions.dart' as actions;
 import 'table_ops.dart' as table_ops;
 import 'tabs/file_tab.dart';
 import 'tabs/home_tab.dart';
@@ -48,6 +49,22 @@ final class RibbonContext {
     _ribbon._markValueSelects[mark] = (element: select, fallback: fallback);
   }
 
+  /// Combobox de fonte/tamanho: o realce de estado escreve nele o valor
+  /// EFETIVO da seleção (marca → estilo do parágrafo), ou VAZIO quando a
+  /// seleção mistura valores — o comportamento do Word.
+  void registerInlineCombo(String mark, OfficeComboBox combo) {
+    _ribbon._inlineCombos[mark] = combo;
+  }
+
+  /// Campo numérico ligado a uma chave de `attrs['style']` do parágrafo
+  /// (recuos e espaçamento da aba Layout). O realce de estado escreve o
+  /// valor do bloco corrente convertido para a unidade do campo:
+  /// [toPoints] = pontos (espaçamento), senão centímetros (recuo).
+  void registerBlockStyleField(String styleKey, DomElement input,
+      {required bool toPoints}) {
+    _ribbon._blockStyleFields[styleKey] = (element: input, points: toPoints);
+  }
+
   /// Botão de uma variante de marca (subscrito/sobrescrito).
   void registerMarkValueButton(String mark, String value, DomElement button) {
     _ribbon._markValueButtons[(mark: mark, value: value)] = button;
@@ -70,6 +87,8 @@ class OfficeRibbon {
   final Map<String, DomElement> _markButtons = {};
   final Map<String, ({DomElement element, String fallback})> _markValueSelects =
       {};
+  final Map<String, OfficeComboBox> _inlineCombos = {};
+  final Map<String, ({DomElement element, bool points})> _blockStyleFields = {};
   final Map<({String mark, String value}), DomElement> _markValueButtons = {};
   final Map<String, DomElement> _styleCards = {};
   DomElement? _styleSelect;
@@ -107,6 +126,14 @@ class OfficeRibbon {
     return ribbon;
   }
 
+  /// Um contexto de construção SEM painel de abas.
+  ///
+  /// É o que permite a quickbar (e qualquer outra mini-UI) usar os mesmos
+  /// construtores de controle da ribbon e herdar de graça o realce de
+  /// estado: os controles se registram nesta instância e [refreshState] os
+  /// atualiza. Sem isto, cada mini-UI reimplementaria "o B está aceso?".
+  RibbonContext contextFor() => RibbonContext(controller, kit, this);
+
   /// A toolbar compacta do modo flow: uma linha, sem abas.
   DomElement buildCompact() {
     final ribbon = kit.el('div', 'dq-office-ribbon');
@@ -130,8 +157,13 @@ class OfficeRibbon {
       }
     });
     kit.clear(body);
+    // A aba anterior foi descartada: qualquer popup ancorado nela (paleta,
+    // lista de fontes) perdeu o âncora e não pode continuar aberto.
+    controller.overlay.closeAll();
     _markButtons.clear();
     _markValueSelects.clear();
+    _inlineCombos.clear();
+    _blockStyleFields.clear();
     _markValueButtons.clear();
     _styleCards.clear();
     _styleSelect = null;
@@ -209,6 +241,26 @@ class OfficeRibbon {
       if (name == 'size') value = value.replaceAll('pt', '');
       control.element.value = value;
     });
+
+    // Fonte/tamanho: valor EFETIVO (marca direta → cascata de estilos do
+    // documento) e VAZIO em seleção mista, como o Word mostra.
+    _inlineCombos.forEach((name, combo) {
+      combo.setValue(actions.effectiveInlineValue(controller, name));
+    });
+
+    if (_blockStyleFields.isNotEmpty) {
+      final blockStyle = controller.currentBlockStyle();
+      _blockStyleFields.forEach((key, field) {
+        final raw = blockStyle?[key];
+        final twips = raw is num ? raw.toDouble() : 0.0;
+        final value = field.points ? twips / 20 : twips / 567;
+        // Sem casas decimais quando o valor é redondo — "0" e não "0.00",
+        // que é o que o Word mostra nesses spinners.
+        field.element.value = value == value.roundToDouble()
+            ? '${value.round()}'
+            : value.toStringAsFixed(2);
+      });
+    }
 
     _markValueButtons.forEach((key, button) {
       if (markValue(key.mark) == key.value) {

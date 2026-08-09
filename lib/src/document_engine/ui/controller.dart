@@ -14,12 +14,18 @@ import '../model/index.dart';
 import '../office/snapshot.dart';
 import '../state/index.dart';
 import '../view/editor_view.dart';
+import 'overlay.dart';
 import 'word_options.dart';
 
 abstract interface class OfficeWordController {
   DomAdapter get adapter;
   Schema get schema;
   OfficeWordEditorOptions get options;
+
+  /// A camada de popups/adornos do editor. Todo controle flutuante (paleta,
+  /// dropdown, combobox, quickbar, menu de contexto) abre por aqui — é o que
+  /// garante uma única regra de fechamento e nenhum popup recortado.
+  OfficeOverlay get overlay;
 
   /// Nome base do documento corrente, sem caminho nem extensão.
   ///
@@ -107,6 +113,12 @@ abstract interface class OfficeWordController {
 
   /// Gera e baixa o PDF cooperativamente, sem bloquear documentos longos.
   Future<void> savePdf();
+
+  /// Executa [action] com o overlay de ocupado ([label]: "Abrindo documento…",
+  /// "Salvando DOCX…"). Chamadas aninhadas empilham; o overlay some quando a
+  /// última termina. O overlay é do COMPONENTE — a aplicação não precisa de
+  /// spinner próprio para abrir/salvar.
+  Future<T> runBusy<T>(String label, Future<T> Function() action);
 }
 
 /// Helpers de construção de DOM compartilhados pelos componentes.
@@ -160,6 +172,11 @@ final class OfficeDomKit {
     } else {
       button.appendText(text);
     }
+    // B6: um controle da ribbon NUNCA tira o foco do documento. Sem isto o
+    // browser move o foco para o botão no mousedown, a seleção visível
+    // some/pisca e o usuário perde de vista o texto que está formatando —
+    // é o mesmo `preventDefault` que ONLYOFFICE aplica em toda a toolbar.
+    button.addEventListener('mousedown', (event) => event.preventDefault());
     button.addEventListener('click', (event) {
       event.preventDefault();
       action();
@@ -198,5 +215,154 @@ final class OfficeDomKit {
       row.append(control);
     }
     return row;
+  }
+}
+
+/// Combobox EDITÁVEL da ribbon (fonte e tamanho), como no Word.
+///
+/// Um `<select>` não serve para estes dois controles por dois motivos que
+/// aparecem em todo DOCX real: ele não exibe um valor fora da lista (a fonte
+/// do documento importado simplesmente sumiria) e não deixa digitar um
+/// tamanho que não esteja na escada (10,5 é comum em ofícios).
+///
+/// O campo é um `<input>`; a lista abre no [OfficeOverlay], então nunca é
+/// recortada pelo grupo da ribbon. O valor VAZIO é significativo: é como o
+/// Word mostra uma seleção com fontes/tamanhos misturados.
+final class OfficeComboBox {
+  OfficeComboBox({
+    required this.controller,
+    required this.cssClass,
+    required this.items,
+    required this.onCommit,
+    this.title,
+    this.previewFontPerItem = false,
+    this.parseValue,
+  }) : _kit = OfficeDomKit(controller.adapter);
+
+  final OfficeWordController controller;
+  final String cssClass;
+  final List<String> items;
+
+  /// Chamado com o valor final (digitado e confirmado, ou escolhido na
+  /// lista). Só dispara quando o valor MUDA — reaplicar a mesma fonte a cada
+  /// blur poluiria o histórico de undo com transações vazias.
+  final void Function(String value) onCommit;
+  final String? title;
+
+  /// Cada item da lista é desenhado com a própria fonte (galeria de fontes).
+  final bool previewFontPerItem;
+
+  /// Normaliza/valida o que foi digitado; devolver null rejeita a entrada e
+  /// o campo volta ao valor do modelo.
+  final String? Function(String raw)? parseValue;
+
+  final OfficeDomKit _kit;
+  late final DomElement _input;
+  late final DomElement _root;
+  String _current = '';
+
+  DomElement build() {
+    final wrap = _kit.el('div', 'dq-office-combo');
+    _root = wrap;
+    // A classe semântica fica no INPUT, não no invólucro: para quem consome
+    // o componente (tema, teste, automação) `.dq-office-font-size` continua
+    // sendo o campo com `.value`, exatamente como era o `<select>`.
+    final input = _kit.el('input', 'dq-office-combo-input $cssClass');
+    input.setAttribute('type', 'text');
+    input.setAttribute('spellcheck', 'false');
+    if (title != null) {
+      input.setAttribute('title', title!);
+      input.setAttribute('aria-label', title!);
+    }
+    _input = input;
+    input.addEventListener('change', (_) => _commitTyped());
+    input.addEventListener('keydown', (event) {
+      if (event is! DomKeyboardEvent) return;
+      if (event.key == 'Enter') {
+        event.preventDefault();
+        _commitTyped();
+      } else if (event.key == 'Escape') {
+        // Esc no campo desiste da digitação e devolve o valor do modelo —
+        // sem isso o usuário fica preso a um texto inválido.
+        _input.value = _current;
+        controller.overlay.closeGroup(_group);
+      } else if (event.key == 'ArrowDown') {
+        event.preventDefault();
+        _openList();
+      }
+    });
+    wrap.append(input);
+
+    final caret = _kit.el('button', 'dq-office-combo-caret');
+    caret.setAttribute('type', 'button');
+    caret.setAttribute('tabindex', '-1');
+    if (title != null) caret.setAttribute('aria-label', title!);
+    caret.addEventListener('mousedown', (event) => event.preventDefault());
+    caret.addEventListener('click', (event) {
+      event.preventDefault();
+      // Clicar de novo fecha, como toda galeria da ribbon.
+      if (controller.overlay.closeGroup(_group)) return;
+      _openList();
+    });
+    wrap.append(caret);
+    return wrap;
+  }
+
+  String get _group => 'combo:$cssClass';
+
+  /// Reflete o modelo. Vazio = seleção mista (o comportamento do Word).
+  void setValue(String? value) {
+    _current = value ?? '';
+    _input.value = _current;
+  }
+
+  void _commitTyped() {
+    final raw = _input.value.trim();
+    if (raw.isEmpty) {
+      _input.value = _current;
+      return;
+    }
+    final parsed = parseValue == null ? raw : parseValue!(raw);
+    if (parsed == null) {
+      _input.value = _current;
+      return;
+    }
+    if (parsed == _current) {
+      _input.value = parsed;
+      return;
+    }
+    _current = parsed;
+    _input.value = parsed;
+    controller.syncSelection();
+    onCommit(parsed);
+  }
+
+  void _openList() {
+    final list = _kit.el('div', 'dq-office-combo-list');
+    for (final item in items) {
+      final option = _kit.el('button', 'dq-office-combo-item');
+      option.setAttribute('type', 'button');
+      if (item == _current) option.classes.add('dq-office-combo-item-active');
+      if (previewFontPerItem) {
+        option.setAttribute('style', "font-family:'$item';");
+      }
+      option.appendText(item);
+      option.addEventListener('click', (event) {
+        event.preventDefault();
+        controller.overlay.closeGroup(_group);
+        if (item == _current) return;
+        _current = item;
+        _input.value = item;
+        controller.syncSelection();
+        onCommit(item);
+      });
+      list.append(option);
+    }
+    controller.overlay.open(
+      _group,
+      list,
+      anchor: _root,
+      extraClass: 'dq-office-popup-list',
+    );
   }
 }

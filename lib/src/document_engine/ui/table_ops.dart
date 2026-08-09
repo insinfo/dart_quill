@@ -17,8 +17,8 @@ int? tableDepthOf(EditorState state) {
   return null;
 }
 
-PMNode _emptyCell(Schema schema) => schema.node(
-    'tableCell', null, Fragment.from([schema.node('paragraph')]));
+PMNode _emptyCell(Schema schema) =>
+    schema.node('tableCell', null, Fragment.from([schema.node('paragraph')]));
 
 /// Insere uma linha acima/abaixo da linha da seleção.
 void tableInsertRow(
@@ -31,8 +31,11 @@ void tableInsertRow(
   if (depth == null) return;
   final resolved = state.selection.fromRes;
   final row = resolved.node(depth + 1);
-  final newRow = schema.node('tableRow', null,
-      Fragment.from([for (var c = 0; c < row.childCount; c++) _emptyCell(schema)]));
+  final newRow = schema.node(
+      'tableRow',
+      null,
+      Fragment.from(
+          [for (var c = 0; c < row.childCount; c++) _emptyCell(schema)]));
   final pos = above ? resolved.before(depth + 1) : resolved.after(depth + 1);
   dispatch(state.tr..insert(pos, newRow));
 }
@@ -49,8 +52,8 @@ void tableDeleteRow(
     tableDelete(state, dispatch);
     return;
   }
-  dispatch(state.tr
-    ..delete(resolved.before(depth + 1), resolved.after(depth + 1)));
+  dispatch(
+      state.tr..delete(resolved.before(depth + 1), resolved.after(depth + 1)));
 }
 
 /// Insere uma coluna à esquerda/direita da coluna da seleção, em TODAS as
@@ -78,7 +81,8 @@ void tableInsertColumn(
     var cellOffset = rowOffset + 1;
     for (var c = 0; c < row.childCount; c++) {
       if (c == colIndex) {
-        insertions.add(before ? cellOffset : cellOffset + row.child(c).nodeSize);
+        insertions
+            .add(before ? cellOffset : cellOffset + row.child(c).nodeSize);
         break;
       }
       cellOffset += row.child(c).nodeSize;

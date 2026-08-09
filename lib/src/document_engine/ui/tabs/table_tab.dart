@@ -19,11 +19,18 @@ List<DomElement> buildTableTab(RibbonContext ctx) {
   return [
     kit.group('Linhas', [
       kit.row([
-        kit.button('⬆+', 'Inserir linha acima', () => run(() =>
-            ops.tableInsertRow(c.view.state, c.dispatch, c.schema, above: true)),
+        kit.button(
+            '⬆+',
+            'Inserir linha acima',
+            () => run(() => ops.tableInsertRow(
+                c.view.state, c.dispatch, c.schema,
+                above: true)),
             icon: 'addcell'),
-        kit.button('⬇+', 'Inserir linha abaixo', () => run(() =>
-            ops.tableInsertRow(c.view.state, c.dispatch, c.schema,
+        kit.button(
+            '⬇+',
+            'Inserir linha abaixo',
+            () => run(() => ops.tableInsertRow(
+                c.view.state, c.dispatch, c.schema,
                 above: false))),
         kit.button('⬚✕', 'Excluir linha',
             () => run(() => ops.tableDeleteRow(c.view.state, c.dispatch)),
@@ -32,11 +39,17 @@ List<DomElement> buildTableTab(RibbonContext ctx) {
     ]),
     kit.group('Colunas', [
       kit.row([
-        kit.button('⬅+', 'Inserir coluna à esquerda', () => run(() =>
-            ops.tableInsertColumn(c.view.state, c.dispatch, c.schema,
+        kit.button(
+            '⬅+',
+            'Inserir coluna à esquerda',
+            () => run(() => ops.tableInsertColumn(
+                c.view.state, c.dispatch, c.schema,
                 before: true))),
-        kit.button('➡+', 'Inserir coluna à direita', () => run(() =>
-            ops.tableInsertColumn(c.view.state, c.dispatch, c.schema,
+        kit.button(
+            '➡+',
+            'Inserir coluna à direita',
+            () => run(() => ops.tableInsertColumn(
+                c.view.state, c.dispatch, c.schema,
                 before: false))),
         kit.button('▯✕', 'Excluir coluna',
             () => run(() => ops.tableDeleteColumn(c.view.state, c.dispatch))),

@@ -501,11 +501,26 @@ class HtmlDomMouseEvent extends HtmlDomEvent implements DomMouseEvent {
 
   web.MouseEvent get _mouseEvent => nativeEvent as web.MouseEvent;
 
-  @override
-  num get clientX => _mouseEvent.clientX;
+  /// Coordenadas do ponteiro como NÚMERO, não como `int`.
+  ///
+  /// `package:web` declara `MouseEvent.clientX/Y` como `int`, mas o browser
+  /// devolve fracionário em três situações comuns: `PointerEvent` (que é o
+  /// que um monitor de toque/caneta produz), zoom do browser diferente de
+  /// 100% e telas com device pixel ratio fracionário. Ler esse valor pelo
+  /// getter tipado explode com TypeError no dart2js e derruba o handler
+  /// inteiro — o sintoma é "arrastar não faz nada" só em algumas máquinas.
+  /// Lemos a propriedade crua e convertemos para double.
+  num _coordinate(String property) {
+    final value = (nativeEvent as JSObject).getProperty<JSAny?>(property.toJS);
+    if (value.isA<JSNumber>()) return (value as JSNumber).toDartDouble;
+    return 0;
+  }
 
   @override
-  num get clientY => _mouseEvent.clientY;
+  num get clientX => _coordinate('clientX');
+
+  @override
+  num get clientY => _coordinate('clientY');
 
   @override
   DomDataTransfer? get dataTransfer {
@@ -1205,10 +1220,23 @@ class HtmlDomDocument implements DomDocument {
     // no-op. Without this guard a second add would orphan the first native
     // registration (it could no longer be removed).
     if (_documentListeners.containsKey(key)) return;
+    // O mesmo mapeamento por TIPO usado nos elementos. Sem ele, um listener
+    // de `keydown` no documento recebia um `DomEvent` genérico e todo código
+    // que testa `event is DomKeyboardEvent` (atalhos globais, Esc que fecha
+    // popups) desistia em silêncio — funcionava nos testes de VM, onde o
+    // fake DOM entrega o evento tipado, e não funcionava no browser.
     final wrapped = (web.Event event) {
-      listener(event.isA<web.MouseEvent>()
-          ? HtmlDomMouseEvent(event)
-          : HtmlDomEvent(event));
+      if (const ['keydown', 'keyup', 'keypress'].contains(type)) {
+        listener(HtmlDomKeyboardEvent(event));
+      } else if (type == 'beforeinput') {
+        listener(HtmlDomInputEvent(event));
+      } else if (const ['copy', 'cut', 'paste'].contains(type)) {
+        listener(HtmlDomClipboardEvent(event));
+      } else if (event.isA<web.MouseEvent>()) {
+        listener(HtmlDomMouseEvent(event));
+      } else {
+        listener(HtmlDomEvent(event));
+      }
     }.toJS;
     _documentListeners[key] = wrapped;
     nativeDocument.addEventListener(type, wrapped);

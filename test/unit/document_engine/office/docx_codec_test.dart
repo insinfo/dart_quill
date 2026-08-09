@@ -2194,10 +2194,17 @@ void main() {
         expect(pages.first, 53);
         expect(pages.last, 140);
       }
+      // O rodapé do TR é mais alto que a margem inferior e as métricas
+      // locais divergem do cache do Word já na primeira página: a partir da
+      // primeira quebra forçada pela capacidade FÍSICA os hints são
+      // descartados, então as fronteiras abaixo são as da paginação natural
+      // (idênticas em `graph` e `natural` para este corpus).
       expect(visiblePageText(graph.pages[18]),
           startsWith('pela empresa proponente'));
-      expect(visiblePageText(graph.pages[30]), startsWith('de Nota Fiscal'));
-      expect(visiblePageText(graph.pages[42]), startsWith('Assim,'));
+      expect(visiblePageText(graph.pages[30]),
+          startsWith('Enviar a documentação pertinente'));
+      expect(visiblePageText(graph.pages[42]),
+          startsWith('ESTIMATIVAS DO VALOR DA CONTRATAÇÃO'));
       expect(visiblePageText(graph.pages[43]), startsWith('ANEXO I'));
       final page53 = graph.pages[52];
       final page53Text = visiblePageText(page53);
@@ -2236,7 +2243,7 @@ void main() {
       expect(bodyBottom, lessThanOrEqualTo(bodyCapacity),
           reason: 'a tabela da página 53 não pode invadir o rodapé');
       expect(visiblePageText(graph.pages[139]),
-          startsWith('20 Cadastro de responsável técnico'));
+          startsWith('23 Cadastro de equipamentos da obra'));
     });
 
     test('ETP de produção mantém 19 páginas e rodapé fora do corpo', () {

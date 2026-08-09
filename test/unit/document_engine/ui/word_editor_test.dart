@@ -23,6 +23,18 @@ import 'package:dart_quill/src/platform/dom.dart';
 import '../../../support/fake_dom.dart';
 import '../../../support/test_helpers.dart';
 
+/// A célula N×M do grid picker. Por atributo, iterando: o fake DOM só
+/// entende seletores simples, sem `[data-...]`.
+DomElement? gridCell(DomElement host, int rows, int columns) {
+  for (final cell in host.querySelectorAll('.dq-office-gridcell')) {
+    if (cell.getAttribute('data-rows') == '$rows' &&
+        cell.getAttribute('data-columns') == '$columns') {
+      return cell;
+    }
+  }
+  return null;
+}
+
 void main() {
   final schema = officeQuillSchema();
 
@@ -367,7 +379,13 @@ void main() {
         for (final g in host.querySelectorAll('.dq-office-ribbon-group'))
           g.getAttribute('data-group-label')
       ];
-      expect(labels, containsAll(['Orientação', 'Tamanho', 'Margens']));
+      expect(labels, containsAll(['Configurar Página', 'Parágrafo']));
+      final buttonTitles = [
+        for (final b in host.querySelectorAll('.dq-office-btn'))
+          b.getAttribute('title')
+      ];
+      expect(buttonTitles,
+          containsAll(['Margens', 'Orientação da Página', 'Tamanho do Papel']));
       expect(layout.classes.contains('dq-office-ribbon-tab-active'), isTrue);
     });
 
@@ -378,10 +396,20 @@ void main() {
       (layout as FakeDomElement).dispatchEvent(
           'click', FakeDomMouseEvent(type: 'click', target: layout));
 
-      DomElement? landscape;
+      // O dropdown do Word: o botão abre o menu, o item aplica.
+      DomElement? orientation;
       for (final b in host.querySelectorAll('.dq-office-btn')) {
-        if (b.getAttribute('title') == 'Paisagem') landscape = b;
+        if (b.getAttribute('title') == 'Orientação da Página') orientation = b;
       }
+      (orientation! as FakeDomElement).dispatchEvent(
+          'click', FakeDomMouseEvent(type: 'click', target: orientation));
+
+      DomElement? landscape;
+      for (final item in host.querySelectorAll('.dq-office-menu-item')) {
+        if ((item.textContent ?? '').contains('Paisagem')) landscape = item;
+      }
+      expect(landscape, isNotNull,
+          reason: 'o menu Orientação tem de estar aberto no overlay');
       (landscape! as FakeDomElement).dispatchEvent(
           'click', FakeDomMouseEvent(type: 'click', target: landscape));
 
@@ -528,7 +556,11 @@ void main() {
       final editor = mount(blocks: 3);
       caretAt(1 + 5);
       click(tab('Inserir'));
-      click(byTitlePrefix('Inserir tabela'));
+      // Grid picker do Word: o botão abre a grade, a célula 3×3 insere.
+      click(byTitlePrefix('Tabela'));
+      final cell = gridCell(host, 3, 3);
+      expect(cell, isNotNull, reason: 'o grid picker tem de abrir no overlay');
+      click(cell!);
 
       var tables = 0;
       for (var i = 0; i < editor.state.doc.childCount; i++) {
@@ -1174,7 +1206,8 @@ void main() {
     OfficeWordEditor mountWithTable() {
       final editor = mount(blocks: 3);
       click(tab('Inserir'));
-      click(byTitle('Inserir tabela 3×3'));
+      click(byTitle('Tabela'));
+      click(gridCell(host, 3, 3)!);
       return editor;
     }
 
@@ -1252,6 +1285,227 @@ void main() {
       }
       expect(tab('Tabela').classes.contains('dq-office-ribbon-tab-hidden'),
           isTrue);
+    });
+  });
+
+  group('mini-UI contextual', () {
+    void click(DomElement element) => (element as FakeDomElement).dispatchEvent(
+        'click', FakeDomMouseEvent(type: 'click', target: element));
+
+    void selectRange(int from, int to) {
+      const map = OfficeDomPositionMap();
+      final pages = host.querySelector('.dq-office-pages')!;
+      final start = map.domPositionFor(pages, from)!;
+      final end = map.domPositionFor(pages, to)!;
+      adapter.setSelectionByNodes(
+          start.node, start.offset, end.node, end.offset);
+    }
+
+    /// O `mouseup` que TERMINA a seleção — o gatilho da quickbar no Word.
+    void finishSelection() {
+      final canvas = host.querySelector('.dq-office-canvas') as FakeDomElement;
+      canvas.dispatchEvent(
+          'mouseup',
+          FakeDomMouseEvent(
+              type: 'mouseup', target: canvas, clientX: 120, clientY: 200));
+    }
+
+    test('selecionar texto abre a quickbar; colapsar fecha', () {
+      mount(blocks: 3);
+      expect(count('.dq-office-quickbar'), 0,
+          reason: 'sem seleção não há mini toolbar');
+
+      selectRange(1, 10);
+      finishSelection();
+      expect(count('.dq-office-quickbar'), 1);
+      // Os controles que o Word oferece na mini toolbar.
+      // O fake DOM só entende seletor simples: descemos pela subárvore.
+      final bar = host.querySelector('.dq-office-quickbar')!;
+      final titles = [
+        for (final b in bar.querySelectorAll('.dq-office-btn'))
+          b.getAttribute('title')
+      ];
+      expect(titles, containsAll(['Negrito (Ctrl+B)', 'Cor da Fonte']));
+
+      selectRange(5, 5);
+      finishSelection();
+      expect(count('.dq-office-quickbar'), 0,
+          reason: 'seleção colapsada dispensa a barra');
+    });
+
+    test('a quickbar formata a MESMA seleção e reflete o estado', () {
+      final editor = mount(blocks: 3);
+      selectRange(1, 10);
+      finishSelection();
+
+      final bar = host.querySelector('.dq-office-quickbar')!;
+      DomElement quickbarButton(String title) {
+        for (final b in bar.querySelectorAll('.dq-office-btn')) {
+          if (b.getAttribute('title') == title) return b;
+        }
+        throw StateError('botão da quickbar não encontrado: $title');
+      }
+
+      final bold = quickbarButton('Negrito (Ctrl+B)');
+      expect(bold.classes.contains('dq-office-btn-active'), isFalse);
+      click(bold);
+
+      expect(
+          editor.state.doc
+              .child(0)
+              .firstChild!
+              .marks
+              .map((mark) => mark.type.name),
+          contains('bold'),
+          reason: 'a mini toolbar age na seleção que o usuário fez');
+      expect(bold.classes.contains('dq-office-btn-active'), isTrue,
+          reason: 'o botão acende pela mesma leitura de modelo da ribbon');
+    });
+
+    test('digitar dispensa a quickbar', () {
+      mount(blocks: 3);
+      selectRange(1, 10);
+      finishSelection();
+      expect(count('.dq-office-quickbar'), 1);
+
+      final canvas = host.querySelector('.dq-office-canvas') as FakeDomElement;
+      canvas.dispatchEvent('keydown',
+          FakeDomKeyboardEvent(type: 'keydown', target: canvas, key: 'a'));
+      expect(count('.dq-office-quickbar'), 0);
+    });
+
+    test('botão direito abre o menu do EDITOR, não o do browser', () {
+      mount(blocks: 3);
+      final canvas = host.querySelector('.dq-office-canvas') as FakeDomElement;
+      final event = FakeDomMouseEvent(
+          type: 'contextmenu', target: canvas, clientX: 80, clientY: 90);
+      canvas.dispatchEvent('contextmenu', event);
+
+      expect(event.defaultPrevented, isTrue,
+          reason: 'sem preventDefault o menu nativo aparece por cima');
+      expect(count('.dq-office-menu'), 1);
+      final labels = [
+        for (final item in host.querySelectorAll('.dq-office-menu-label'))
+          item.textContent
+      ];
+      expect(labels, containsAll(['Recortar', 'Copiar', 'Colar', 'Negrito']));
+      // Fora de tabela, os itens de tabela não existem — o menu é contextual.
+      expect(labels, isNot(contains('Excluir Linha')));
+    });
+
+    test('o menu de contexto ganha os itens de tabela dentro de uma', () {
+      final editor = mount(blocks: 3);
+      click(host
+          .querySelectorAll('.dq-office-ribbon-tab')
+          .firstWhere((tab) => tab.textContent == 'Inserir'));
+      click(host
+          .querySelectorAll('.dq-office-btn')
+          .firstWhere((button) => button.getAttribute('title') == 'Tabela'));
+      click(gridCell(host, 3, 3)!);
+
+      var tablePos = -1;
+      var offset = 0;
+      for (var i = 0; i < editor.state.doc.childCount; i++) {
+        final child = editor.state.doc.child(i);
+        if (child.type.name == 'table') {
+          tablePos = offset + 4;
+          break;
+        }
+        offset += child.nodeSize;
+      }
+      expect(tablePos, greaterThan(0), reason: 'a tabela foi inserida');
+      editor.view.dispatch(editor.state.tr
+        ..setSelection(TextSelection.create(editor.state.doc, tablePos)));
+
+      final canvas = host.querySelector('.dq-office-canvas') as FakeDomElement;
+      canvas.dispatchEvent(
+          'contextmenu',
+          FakeDomMouseEvent(
+              type: 'contextmenu', target: canvas, clientX: 10, clientY: 10));
+
+      final labels = [
+        for (final item in host.querySelectorAll('.dq-office-menu-label'))
+          item.textContent
+      ];
+      expect(labels, containsAll(['Excluir Linha', 'Excluir Tabela']));
+    });
+
+    test('Esc fecha o popup aberto', () {
+      mount(blocks: 3);
+      final canvas = host.querySelector('.dq-office-canvas') as FakeDomElement;
+      canvas.dispatchEvent(
+          'contextmenu',
+          FakeDomMouseEvent(
+              type: 'contextmenu', target: canvas, clientX: 10, clientY: 10));
+      expect(count('.dq-office-menu'), 1);
+
+      (adapter.document as FakeDomDocument).dispatchEvent(
+          'keydown', FakeDomKeyboardEvent(type: 'keydown', key: 'Escape'));
+      expect(count('.dq-office-menu'), 0);
+    });
+  });
+
+  group('paginação progressiva', () {
+    OfficeWordEditor mountProgressive({int blocks = 400}) =>
+        editor = OfficeWordEditor.mount(
+          host: host,
+          adapter: adapter,
+          document: docOf(blocks),
+          schema: schema,
+          options: const OfficeWordEditorOptions(
+            footerText: 'Página {PAGE} de {NUMPAGES}',
+            progressivePagination: OfficeProgressivePagination(
+              initialPages: 3,
+              pagesPerSlice: 4,
+            ),
+          ),
+        );
+
+    test('a primeira projeção é PARCIAL e o total cresce em background',
+        () async {
+      final reference = mount(blocks: 400);
+      final totalPages = reference.pageGraph.pages.length;
+      expect(totalPages, greaterThan(6));
+      editor!.dispose();
+
+      final progressive = mountProgressive();
+      expect(progressive.pageGraph.isPartial, isTrue,
+          reason: 'a abertura projeta só as primeiras páginas');
+      expect(progressive.pageGraph.pages.length, lessThan(totalPages));
+      expect(host.getAttribute('data-dq-office-pagination'), 'partial');
+
+      await settleAsyncFileOpen(() => !progressive.pageGraph.isPartial);
+      expect(progressive.pageGraph.pages.length, totalPages,
+          reason: 'as fatias completam o MESMO grafo do compose único');
+      expect(host.getAttribute('data-dq-office-pagination'), 'complete');
+      final status = host.querySelector('.dq-office-statusbar')!;
+      expect(status.textContent, contains('de $totalPages'));
+    });
+
+    test('editar durante a paginação cancela as fatias e compõe inteiro',
+        () async {
+      final progressive = mountProgressive();
+      expect(progressive.pageGraph.isPartial, isTrue);
+
+      progressive.dispatch(progressive.state.tr..insertText('EDIT', 1, 1));
+      expect(progressive.pageGraph.isPartial, isFalse,
+          reason: 'a edição não pode conviver com um grafo sem cauda');
+      expect(progressive.state.doc.textBetween(1, 5), 'EDIT');
+      // As fatias antigas foram canceladas: nada muda depois delas.
+      final pages = progressive.pageGraph.pages.length;
+      await settleAsyncFileOpen(() => true);
+      expect(progressive.pageGraph.pages.length, pages);
+    });
+
+    test('dispose no meio da paginação não deixa fatias vivas', () async {
+      final progressive = mountProgressive();
+      expect(progressive.pageGraph.isPartial, isTrue);
+      progressive.dispose();
+      editor = null;
+      // Nenhuma exceção de fatia órfã nas voltas seguintes do event loop.
+      for (var i = 0; i < 10; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
     });
   });
 
