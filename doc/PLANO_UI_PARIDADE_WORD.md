@@ -117,12 +117,12 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 |---|---|---|
 | Renderização (inclusive variantes par/ímpar/primeira página) | ✅ | `dom_renderer.dart:164-205`; variantes em `word_editor.dart:129-131` |
 | Campos PAGE/NUMPAGES resolvidos por página | ✅ | `layout/layout_composer.dart:399-401, 1886-1935` |
-| Duplo clique entra no modo cabeçalho/rodapé | ❌ | região é `contenteditable=false` (`dom_renderer.dart:197`) |
-| Linha tracejada + etiqueta "Cabeçalho"/"Rodapé" no modo de edição | ❌ | — |
-| Corpo esmaecido durante a edição do cabeçalho | ❌ | — |
-| Aba contextual "Cabeçalho e Rodapé" (ir para rodapé, primeira pág. diferente, par/ímpar, distâncias, fechar) | ❌ | flags já existem no modelo (`_titlePage`, `_evenAndOddHeaders`) |
-| Inserir nº de página / campo no cabeçalho | ❌ | — |
-| Edições no cabeçalho exportadas no DOCX | ❌ | headers/footers hoje são somente-leitura na sessão |
+| Duplo clique entra no modo cabeçalho/rodapé | ✅ | `ui/header_footer.dart` + `word_editor.dart` (2026-08-09) |
+| Linha tracejada + etiqueta "Cabeçalho"/"Rodapé" no modo de edição | ✅ | a etiqueta diz QUAL variante está aberta (primeira página / par) |
+| Corpo esmaecido durante a edição do cabeçalho | ✅ | tira o `contenteditable`, não só a opacidade — senão o caret voltaria ao texto pelo teclado |
+| Aba contextual "Cabeçalho e Rodapé" | ✅ | `ui/tabs/header_footer_tab.dart` (2026-08-09) |
+| Inserir nº de página / campo no cabeçalho | ❌ | o compositor RESOLVE PAGE/NUMPAGES (`layout_composer.dart:1886-1935`) mas não há caminho de CRIAÇÃO do par de field markers; um botão que escrevesse "1" fixo daria cabeçalho errado nas outras páginas |
+| Edições no cabeçalho exportadas no DOCX | ❌ | a EDIÇÃO funciona e o orquestrador mantém as variantes; falta o codec aceitá-las — `exportEditedFromDocx` só recebe o corpo e `header*.xml` fica byte a byte |
 
 ### 1.7 Layout de página e seções
 
@@ -280,6 +280,31 @@ Propriedades da Tabela; direção do texto e margens de célula (o compositor l�
 cabeçalho (o renderer já repete, falta ligar `word.tblHeader` pela UI); e o
 realce de estado dos botões novos — a ribbon só reflete marcas e estilo de
 bloco, então o alinhamento vertical corrente ainda não acende o botão.
+
+### 2.7 F6 (cabeçalho/rodapé) concluída em 2026-08-09
+
+Duplo clique na região entra no modo, duplo clique no corpo sai. A
+restrição do §6 foi respeitada: **não há um segundo laço de edição**.
+`OfficeEditorView` já era parametrizada por raiz, estado, compositor e
+renderer — a sessão monta outra instância com a raiz no OVERLAY (fora de
+`.dq-office-pages`, o que impede os dois laços de receberem o mesmo evento
+por bubbling) e um compositor da geometria da região.
+
+Duas decisões de custo, ambas documentadas no código:
+- cada tecla troca só o MODELO da região e marca sujo; a repaginação sai
+  uma vez, ao fechar. Recompor a cada caractere travaria a digitação num
+  DOCX de 140 páginas. O preço: com o modo aberto, as outras páginas ainda
+  mostram o cabeçalho antigo;
+- suspender a edição do corpo TIRA o `contenteditable`, não só a opacidade.
+
+`OfficeWordController` ganhou `activeView`, e as ações de formatação
+passaram a lê-la: com o modo aberto, negrito, undo e a quickbar agem na
+REGIÃO. Régua e barra de status continuam descrevendo o corpo, que é o que
+elas medem.
+
+**Pendente:** o botão "Nº de Página" (falta caminho de criação de field
+markers) e a exportação DOCX das edições (falta o codec aceitar as
+variantes — o orquestrador já as mantém atualizadas).
 
 ### 2.6 F7 (réguas + quebras) concluída em 2026-08-09
 
@@ -616,7 +641,7 @@ overlay/NodeSelection destravam tudo que envolve objeto.
 - **Critério revisto:** aplicar bordas/sombreamento numa tabela → a projeção
   muda e o DOCX exportado abre no Word com `w:tcBorders`/`w:shd`.
 
-### F6 — Cabeçalho/rodapé editável
+### F6 — Cabeçalho/rodapé editável — **CONCLUÍDA 2026-08-09** (campo PAGE e exportação DOCX pendentes)
 - §3.6 completo: duplo clique, tracejado + etiqueta, corpo esmaecido, aba
   contextual, variantes (primeira/par/ímpar), campo PAGE, exportação.
 - **Critério:** editar "Folha:" no cabeçalho do ETP, salvar, reabrir no Word
