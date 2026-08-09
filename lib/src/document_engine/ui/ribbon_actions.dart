@@ -479,6 +479,46 @@ void insertPageBreak(OfficeWordController c) {
   c.dispatch(tr);
 }
 
+/// A quebra de SEÇÃO "Próxima Página" do menu Quebras.
+///
+/// São duas coisas que só funcionam juntas, e é por isso que elas vivem na
+/// mesma ação: a marca `style.sectionBreak` no bloco que TERMINA a seção, e
+/// uma entrada nova em `sections` para a seção que começa. O compositor só
+/// troca de geometria quando as duas existem (`_endsSection(block) &&
+/// sectionIndex + 1 < sections.length`) — gravar só a marca produziria uma
+/// quebra invisível.
+///
+/// A seção nova nasce com a geometria da anterior: a quebra sozinha não muda
+/// nada na tela, exatamente como no Word. O que ela habilita é a aba Layout
+/// passar a valer só daqui para a frente.
+///
+/// Devolve `false` quando o cursor não está num bloco de primeiro nível
+/// (dentro de uma célula, por exemplo) — o Word também não secciona ali.
+bool insertSectionBreak(OfficeWordController c) {
+  c.syncSelection();
+  final state = c.activeView.state;
+  final tr = state.tr;
+  final from = state.selection.from;
+  tr.split(from);
+  final resolved = tr.doc.resolve(tr.mapping.map(from));
+  if (resolved.depth != 1) return false;
+  final blockPos = resolved.before(resolved.depth);
+  final ending = tr.doc.resolve(blockPos).nodeBefore;
+  if (ending == null) return false;
+  final endingPos = blockPos - ending.nodeSize;
+  final style = ending.attrs['style'];
+  tr.setNodeMarkup(endingPos, null, {
+    ...ending.attrs,
+    'style': {
+      if (style is Map) ...style.cast<String, dynamic>(),
+      'sectionBreak': true,
+    },
+  });
+  c.dispatch(tr);
+  c.insertSectionAfterSelection();
+  return true;
+}
+
 /// As quebras INLINE do menu Quebras (`<w:br w:type="…"/>`).
 ///
 /// Só dois tipos chegam aqui, e os dois têm efeito verificável no layout:

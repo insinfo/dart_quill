@@ -139,17 +139,19 @@ List<OfficeMenuEntry> _paperEntries(OfficeWordController c) {
 
 /// O menu Quebras.
 ///
-/// As quebras de PÁGINA saem habilitadas porque o compositor as honra de
-/// verdade; as de SEÇÃO saem DESABILITADAS, e essa é uma escolha
-/// deliberada. `LayoutComposer` só troca de geometria quando existe uma
-/// próxima entrada em `sections` (`_endsSection(block) && sectionIndex + 1 <
-/// sections.length`), e o chrome ainda não sabe CRIAR uma seção — pior,
-/// `setPageSetup` zera a lista importada (bug B3 do plano). Gravar
-/// `style.sectionBreak` aqui produziria um item de menu que não muda nada,
-/// que é o pior resultado possível: o usuário acharia que dividiu o
-/// documento em seções e continuaria com uma só.
+/// "Próxima Página" cria seção de verdade: marca o bloco e insere a entrada
+/// correspondente em `sections` (B3 resolvido). As outras três continuam
+/// desabilitadas, cada uma pelo seu motivo — o compositor FECHA a página em
+/// toda fronteira de seção (`layout_composer.dart:1480`), então uma quebra
+/// "Contínua" sairia da tela como quebra de página, e não existe no motor a
+/// noção de completar a paridade com página em branco de que Par/Ímpar
+/// dependem. Um item que grava o atributo e desenha outra coisa é pior que
+/// um item desabilitado com o motivo escrito.
 List<OfficeMenuEntry> _breakEntries(OfficeWordController c) {
-  const pending = 'Requer geometria POR SEÇÃO (pendente — B3 do plano)';
+  const continuous = 'O compositor sempre fecha a página na fronteira de '
+      'seção — sairia como quebra de página';
+  const parity = 'Requer página em branco automática de paridade (não '
+      'implementada no compositor)';
   return [
     OfficeMenuEntry(
       label: 'Página',
@@ -168,24 +170,26 @@ List<OfficeMenuEntry> _breakEntries(OfficeWordController c) {
       onSelect: () => actions.insertHardBreak(c, 'textWrapping'),
     ),
     const OfficeMenuEntry.separator(),
-    const OfficeMenuEntry(
+    OfficeMenuEntry(
       label: 'Próxima Página',
-      description: pending,
-      enabled: false,
+      description: 'Começa uma seção nova na página seguinte, com a mesma '
+          'geometria — daí em diante Margens e Orientação valem só para ela',
+      icon: 'pagebreak',
+      onSelect: () => actions.insertSectionBreak(c),
     ),
     const OfficeMenuEntry(
       label: 'Contínua',
-      description: pending,
+      description: continuous,
       enabled: false,
     ),
     const OfficeMenuEntry(
       label: 'Página Par',
-      description: pending,
+      description: parity,
       enabled: false,
     ),
     const OfficeMenuEntry(
       label: 'Página Ímpar',
-      description: pending,
+      description: parity,
       enabled: false,
     ),
   ];

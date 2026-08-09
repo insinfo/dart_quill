@@ -293,17 +293,17 @@ void main() {
       expect(enabled(itemOf(menu, 'Página')), isTrue);
       expect(enabled(itemOf(menu, 'Coluna')), isTrue);
       expect(enabled(itemOf(menu, 'Disposição do Texto')), isTrue);
-      // Quebras de SEÇÃO exigem geometria por seção (B3): item visível,
-      // desabilitado, com o motivo escrito.
-      for (final label in const [
-        'Próxima Página',
-        'Contínua',
-        'Página Par',
-        'Página Ímpar'
-      ]) {
+      // "Próxima Página" cria seção de verdade desde que o B3 saiu: marca o
+      // bloco e insere a geometria correspondente.
+      expect(enabled(itemOf(menu, 'Próxima Página')), isTrue);
+      // As outras três continuam visíveis e desabilitadas, cada uma com o
+      // motivo escrito — o compositor fecha a página em toda fronteira de
+      // seção, e não sabe completar paridade com página em branco.
+      for (final label in const ['Contínua', 'Página Par', 'Página Ímpar']) {
         expect(enabled(itemOf(menu, label)), isFalse, reason: label);
       }
-      expect(menu.textContent, contains('POR SEÇÃO'));
+      expect(menu.textContent, contains('sempre fecha a página'));
+      expect(menu.textContent, contains('paridade'));
     });
 
     test('Quebra de página abre a página seguinte', () {

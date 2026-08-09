@@ -112,6 +112,15 @@ abstract interface class OfficeWordController {
   void setZoom(double zoom);
   void setPageSetup(PageSetupTwips setup);
 
+  /// Cria uma seção nova logo depois da seção onde o cursor está, com a MESMA
+  /// geometria dela.
+  ///
+  /// Duplicar em vez de inventar uma geometria é o que faz a quebra ser
+  /// invisível até o usuário mudar algo — igual ao Word. Quem marca o bloco
+  /// com `style.sectionBreak` é a ação da ribbon; sem esta entrada
+  /// correspondente em `sections` o compositor ignoraria a marca.
+  void insertSectionAfterSelection();
+
   /// Substitui o documento aberto (Abrir DOCX/Delta na aba Arquivo).
   ///
   /// O histórico de undo recomeça — é um documento NOVO, não uma edição.

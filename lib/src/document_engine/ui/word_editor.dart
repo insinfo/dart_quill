@@ -221,8 +221,42 @@ class OfficeWordEditor implements OfficeWordController {
   bool get evenAndOddHeaders => _evenAndOddHeaders;
   @override
   bool get viewReady => _viewReady;
+
+  /// A geometria da seção onde o cursor está.
+  ///
+  /// Com `_sections` preenchida o compositor usa `sections[i]` e IGNORA
+  /// `_setup` — devolver `_setup` aqui fazia a régua e os dropdowns de
+  /// Layout descreverem uma página que não é a que está na tela num
+  /// documento com seção paisagem no meio.
   @override
-  PageSetupTwips get pageSetup => _setup;
+  PageSetupTwips get pageSetup =>
+      _sections.isEmpty ? _setup : _sections[_selectionSectionIndex()];
+
+  /// Índice da seção que contém a seleção, contando as quebras anteriores —
+  /// a mesma regra do compositor (`_endsSection`).
+  int _selectionSectionIndex() {
+    if (_sections.length <= 1 || !_viewReady) return 0;
+    final doc = _view.state.doc;
+    final target = _view.state.selection.from;
+    var offset = 0;
+    var section = 0;
+    for (var i = 0; i < doc.childCount; i++) {
+      final block = doc.child(i);
+      // O bloco que CARREGA a quebra ainda pertence à seção que termina
+      // nele — é a mesma regra do compositor ("o `sectPr` descreve a seção
+      // que termina NELE"). Por isso a checagem vem antes da contagem.
+      if (target < offset + block.nodeSize) return section;
+      offset += block.nodeSize;
+      final style = block.attrs['style'];
+      if (style is Map &&
+          style['sectionBreak'] == true &&
+          section + 1 < _sections.length) {
+        section++;
+      }
+    }
+    return section;
+  }
+
   @override
   double get zoom => _zoom;
   @override
@@ -500,15 +534,54 @@ class OfficeWordEditor implements OfficeWordController {
   @override
   void setPageSetup(PageSetupTwips setup) {
     if (_disposed) return;
-    _setup = setup;
     _renderedPageBreakHintsValid = false;
-    _pageSetupDirty = true;
     _markDirty();
-    // A aba Layout hoje altera o documento inteiro. Uma escolha explícita do
-    // usuário portanto substitui a sequência de seções importada pelo setup
-    // único escolhido, em vez de parecer funcionar e continuar usando as
-    // geometrias antigas.
-    _sections = const [];
+
+    if (_sections.length <= 1) {
+      // Documento de uma seção: o setup É o do documento, e a exportação
+      // regenera o `sectPr` final com ele.
+      _setup = setup;
+      _sections = const [];
+      _pageSetupDirty = true;
+      _remountPreservingState();
+      return;
+    }
+
+    // Documento com várias seções (B3): a escolha vale para a seção do
+    // cursor, e as outras ficam como estavam. Descartar a lista inteira —
+    // o que este método fazia — jogava fora a paisagem do anexo por causa
+    // de uma troca de margem feita na capa.
+    final index = _selectionSectionIndex();
+    final updated = List<PageSetupTwips>.of(_sections);
+    updated[index] = setup;
+    _sections = List.unmodifiable(updated);
+    if (index == _sections.length - 1) {
+      // Só a ÚLTIMA seção chega ao arquivo: `_editedFile` aplica o override
+      // ao `sectPr` do corpo, que é o da última seção. Marcar sujo ao editar
+      // uma seção intermediária faria a geometria dela ser gravada por cima
+      // da última — corrupção silenciosa, pior que a limitação.
+      _setup = setup;
+      _pageSetupDirty = true;
+    }
+    _remountPreservingState();
+  }
+
+  @override
+  void insertSectionAfterSelection() {
+    if (_disposed) return;
+    // A geometria de partida é a da seção onde o cursor está — inclusive
+    // quando ainda não há lista nenhuma, caso em que a primeira seção é o
+    // setup do documento.
+    final base = pageSetup;
+    final index = _sections.isEmpty ? 0 : _selectionSectionIndex();
+    final updated = _sections.isEmpty
+        ? <PageSetupTwips>[base, base]
+        : (List<PageSetupTwips>.of(_sections)..insert(index + 1, base));
+    _sections = List.unmodifiable(updated);
+    // Os hints de quebra do Word descrevem a paginação ANTIGA; uma seção
+    // nova muda onde as páginas terminam.
+    _renderedPageBreakHintsValid = false;
+    _markDirty();
     _remountPreservingState();
   }
 
