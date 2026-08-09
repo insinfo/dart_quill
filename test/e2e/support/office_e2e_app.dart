@@ -79,6 +79,32 @@ typedef _BrowserExportCapture = ({
   Map<String, dynamic> performance,
 });
 
+/// Localiza um DOCX de `resources/` pelo PREFIXO do nome.
+///
+/// Os corpora de produção têm acento no nome (`Gestão`, `Recuperação`), e a
+/// forma de normalização Unicode gravada no disco difere entre o Windows do
+/// desenvolvedor e o checkout do Linux da CI: um caminho literal
+/// `File('…Gestão…')` existe aqui e NÃO existe lá. Varrer o diretório e
+/// comparar por prefixo ASCII é a única forma que funciona nos dois.
+File officeCorpusFile(String prefix) {
+  final directory = Directory('resources');
+  if (directory.existsSync()) {
+    for (final file in directory.listSync().whereType<File>()) {
+      final name = file.uri.pathSegments.last;
+      if (name.startsWith(prefix) && name.toLowerCase().endsWith('.docx')) {
+        return file;
+      }
+    }
+  }
+  // Devolve um caminho inexistente com nome legível: o chamador decide entre
+  // pular (corpus opcional) e falhar com mensagem clara.
+  return File('resources/$prefix<ausente>.docx');
+}
+
+/// Os dois corpora de produção usados pelos e2e do editor Office.
+File officeEtpCorpus() => officeCorpusFile('PGCTIC1_-_ETP_-');
+File officeTrCorpus() => officeCorpusFile('PGCTIC1_-_TR_-');
+
 /// A built office example under control of a real Chromium instance.
 final class OfficeE2eApp {
   OfficeE2eApp._(

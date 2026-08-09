@@ -2,7 +2,6 @@
 @Timeout(Duration(minutes: 45))
 library;
 
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dart_quill/dart_quill_office.dart';
@@ -21,10 +20,7 @@ void main() {
     () async {
       const bodyMarker = ' E2E_TR_REPAGINATE_BODY';
       const tableMarker = ' E2E_TR_FRAGMENTED_TABLE';
-      final source = File(
-        'resources/PGCTIC1_-_TR_-_SISTEMA_GESTAO_PUBLICA__Recuperação_'
-        'Automática_.docx',
-      );
+      final source = officeTrCorpus();
 
       await app.importDocx(
         source,

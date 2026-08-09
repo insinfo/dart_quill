@@ -18,18 +18,11 @@ import 'support/office_e2e_app.dart';
 void main() {
   late OfficeE2eApp app;
 
-  const documents = [
-    (
-      name: 'etp',
-      path: 'resources/PGCTIC1_-_ETP_-_Sistema_de_Gestão_Pública.docx',
-      pages: 19,
-    ),
-    (
-      name: 'tr',
-      path: 'resources/PGCTIC1_-_TR_-_SISTEMA_GESTAO_PUBLICA__Recuperação_'
-          'Automática_.docx',
-      pages: 140,
-    ),
+  // Por PREFIXO (ver officeCorpusFile): caminho literal com acento não
+  // resolve no checkout do Linux da CI.
+  final documents = [
+    (name: 'etp', path: officeEtpCorpus().path, pages: 19),
+    (name: 'tr', path: officeTrCorpus().path, pages: 140),
   ];
 
   setUpAll(() async => app = await OfficeE2eApp.start());

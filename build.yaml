@@ -1,0 +1,25 @@
+# Configuração do build_runner do pacote raiz.
+#
+# O único assunto aqui é ISOLAMENTO: `example/office_editor` é um pacote
+# próprio que vive DENTRO da árvore do pacote raiz. Quando o harness de e2e o
+# compila, ele cria `example/office_editor/.dart_tool/build/generated/**`; um
+# build seguinte da raiz enxergava esses arquivos como fontes SUAS e morria
+# com `UnexpectedOutputException: dart_quill|lib/.dart2js.meta_module.clean`
+# — um erro que só aparece quando os dois builds rodam na mesma máquina, ou
+# seja, exatamente na CI (e nunca no primeiro build local limpo).
+#
+# Declarar as fontes da raiz resolve na origem: o exemplo nunca entra.
+targets:
+  $default:
+    sources:
+      include:
+        - lib/**
+        - web/**
+        - test/**
+        - tool/**
+        - pubspec.yaml
+        # Fonte sintética que o build_runner exige de todo pacote; sem ela a
+        # build emite SEVERE ("missing sources: $package$") a cada execução.
+        - $package$
+      exclude:
+        - example/**

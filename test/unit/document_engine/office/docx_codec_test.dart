@@ -320,13 +320,15 @@ void main() {
     test(
       'importAsync equivale ao sync nos dois corpus de produção',
       () async {
-        final paths = <String>[
-          'resources/PGCTIC1_-_ETP_-_Sistema_de_Gestão_Pública.docx',
-          'resources/PGCTIC1_-_TR_-_SISTEMA_GESTAO_PUBLICA__Recuperação_Automática_.docx',
-        ];
-        for (final path in paths) {
-          final file = File(path);
-          expect(file.existsSync(), isTrue, reason: 'corpus ausente: $path');
+        // Os arquivos são LOCALIZADOS por prefixo, não por caminho literal:
+        // os nomes têm acentos e a forma de normalização Unicode do nome no
+        // disco difere entre Windows (NFC) e o checkout do Linux da CI —
+        // `File('…Gestão…').existsSync()` devolvia false lá e derrubava só
+        // este teste. Os demais deste arquivo já varriam o diretório.
+        final files = <File>[...productionEtpFiles, ...trFiles];
+        if (files.isEmpty) return;
+        for (final file in files) {
+          final path = file.path;
           final bytes = file.readAsBytesSync();
           final synchronous = OfficeDocxCodec(schema: schema).import(
             bytes,

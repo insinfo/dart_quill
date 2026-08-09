@@ -63,7 +63,7 @@ void main() {
       () async {
     await app.reload();
     await app.importDocx(
-      File('resources/PGCTIC1_-_ETP_-_Sistema_de_Gestão_Pública.docx'),
+      officeEtpCorpus(),
       artifactName: 'etp-page-capture',
       captureScreenshots: false,
     );
@@ -172,10 +172,7 @@ void main() {
 
   test('TR captures Word boundary pages, edits and saves through trusted UI',
       () async {
-    const sourcePath =
-        'resources/PGCTIC1_-_TR_-_SISTEMA_GESTAO_PUBLICA__Recuperação_'
-        'Automática_.docx';
-    final source = File(sourcePath);
+    final source = officeTrCorpus();
     await app.reload();
     final imported = await app.importDocx(
       source,

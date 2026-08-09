@@ -137,10 +137,12 @@ void main() {
   late OfficeE2eApp app;
   final schema = officeQuillSchema();
 
-  const documents = [
+  // Por PREFIXO, nunca por caminho literal: os nomes têm acento e a
+  // normalização Unicode do disco difere entre Windows e o Linux da CI.
+  final documents = [
     _DocxCase(
       name: 'etp',
-      path: 'resources/PGCTIC1_-_ETP_-_Sistema_de_Gestão_Pública.docx',
+      path: officeEtpCorpus().path,
       expectedPages: 19,
       importBudget: Duration(seconds: 15),
       screenshotPages: [1, 10, 19],
@@ -148,8 +150,7 @@ void main() {
     ),
     _DocxCase(
       name: 'tr',
-      path: 'resources/PGCTIC1_-_TR_-_SISTEMA_GESTAO_PUBLICA__Recuperação_'
-          'Automática_.docx',
+      path: officeTrCorpus().path,
       expectedPages: 140,
       importBudget: Duration(seconds: 60),
       screenshotPages: [1, 53, 65, 130],
