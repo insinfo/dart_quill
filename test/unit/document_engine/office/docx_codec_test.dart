@@ -2248,6 +2248,79 @@ void main() {
           startsWith('23 Cadastro de equipamentos da obra'));
     });
 
+    test('edição de cabeçalho chega ao DOCX exportado', () {
+      if (!hasProductionEtpCorpus) return;
+      final bytes = productionEtpCorpus();
+      final codec = OfficeDocxCodec(schema: schema);
+      final imported = codec.import(bytes, includePackageResources: false);
+      final variants =
+          OfficeDocxCodec.regionVariantsOf(imported.snapshot.headers, schema);
+      expect(variants, isNotEmpty, reason: 'o ETP tem cabeçalho');
+
+      // Edita a variante `default` como a sessão de F6 faria: um documento
+      // novo com o texto trocado.
+      final marker = 'CABECALHO_EDITADO_${variants.keys.first}';
+      final edited = schema.node(
+        'doc',
+        null,
+        Fragment.from([
+          schema.node('paragraph', null, Fragment.from([schema.text(marker)])),
+        ]),
+      );
+
+      final exported = codec.exportEditedFromDocx(
+        bytes,
+        imported.snapshot.sourceMap,
+        PMNode.fromJSON(schema, imported.snapshot.body),
+        headers: {'default': edited},
+      );
+
+      // O texto novo tem de estar na PARTE de cabeçalho do pacote — e o
+      // corpo não pode tê-lo absorvido.
+      final archive = ZipArchive.decodeBytes(exported);
+      var headerWithMarker = 0;
+      for (final name in archive.entries.map((entry) => entry.name)) {
+        if (!name.startsWith('word/header')) continue;
+        if ((archive.readString(name) ?? '').contains(marker)) {
+          headerWithMarker++;
+        }
+      }
+      expect(headerWithMarker, 1,
+          reason: 'exatamente a parte editada carrega o texto novo');
+      expect(archive.readString('word/document.xml')!.contains(marker), isFalse,
+          reason: 'o cabeçalho não pode vazar para o corpo');
+
+      // E o pacote continua abrindo, com o cabeçalho novo no snapshot.
+      final reopened = codec.import(exported, includePackageResources: false);
+      final reopenedHeaders =
+          OfficeDocxCodec.regionVariantsOf(reopened.snapshot.headers, schema);
+      expect(reopenedHeaders['default']!.textContent, contains(marker));
+    });
+
+    test('sem regiões editadas as partes de cabeçalho ficam intactas', () {
+      if (!hasProductionEtpCorpus) return;
+      final bytes = productionEtpCorpus();
+      final codec = OfficeDocxCodec(schema: schema);
+      final imported = codec.import(bytes, includePackageResources: false);
+
+      final exported = codec.exportEditedFromDocx(
+        bytes,
+        imported.snapshot.sourceMap,
+        PMNode.fromJSON(schema, imported.snapshot.body),
+      );
+
+      final before = ZipArchive.decodeBytes(bytes);
+      final after = ZipArchive.decodeBytes(exported);
+      for (final name in before.entries.map((entry) => entry.name)) {
+        if (!name.startsWith('word/header') &&
+            !name.startsWith('word/footer')) {
+          continue;
+        }
+        expect(after.readString(name), before.readString(name),
+            reason: 'a parte $name não foi editada e tem de sair byte a byte');
+      }
+    });
+
     test('ETP de produção mantém 19 páginas e rodapé fora do corpo', () {
       if (!hasProductionEtpCorpus) return;
       final codec = OfficeDocxCodec(schema: schema);

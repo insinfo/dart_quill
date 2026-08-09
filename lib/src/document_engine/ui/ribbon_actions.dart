@@ -536,6 +536,59 @@ void insertBlankPage(OfficeWordController c) {
   c.dispatch(tr);
 }
 
+/// Insere o campo `PAGE` (ou `NUMPAGES`) no cursor.
+///
+/// Um campo do Word não é texto: é uma SEQUÊNCIA de marcadores de run —
+/// `begin`, a instrução, `separate` e `end` — e o valor visível é só o
+/// resultado em cache. Escrever "1" como texto produziria um cabeçalho que
+/// diz "1" em todas as páginas; o compositor resolve PAGE/NUMPAGES por
+/// página justamente a partir destes marcadores
+/// (`layout_composer._resolveFields`).
+///
+/// A forma criada aqui é IDÊNTICA à que a importação produz
+/// (`docx_codec.appendRunMarker`), inclusive o `officeXml` verbatim de cada
+/// marcador — é ele que a exportação devolve ao `w:fldChar`/`w:instrText`.
+/// Inventar outra forma daria um campo que o layout resolve mas o Word não
+/// reconhece.
+void insertPageField(OfficeWordController c, {String command = 'PAGE'}) {
+  final type = c.schema.nodes['opaqueInline'];
+  if (type == null) return;
+  c.syncSelection();
+  final state = c.activeView.state;
+  final marks = state.selection.empty
+      ? (state.storedMarks ?? state.selection.fromRes.marks())
+      : state.doc.resolve(state.selection.from + 1).marks();
+
+  PMNode marker(String qname, String xml,
+          {String? fieldMarker, String? fieldCommand}) =>
+      type.create(
+        {
+          'insert': {
+            'qname': qname,
+            'officeXml': xml,
+            'runContent': true,
+            if (fieldMarker != null) 'fieldMarker': fieldMarker,
+            if (fieldCommand != null) 'fieldCommand': fieldCommand,
+          }
+        },
+        null,
+        marks,
+      );
+
+  final field = Fragment.from([
+    marker('w:fldChar', '<w:fldChar w:fldCharType="begin"/>',
+        fieldMarker: 'begin'),
+    marker('w:instrText',
+        '<w:instrText xml:space="preserve"> $command </w:instrText>',
+        fieldMarker: 'instruction'),
+    marker('w:fldChar', '<w:fldChar w:fldCharType="separate"/>',
+        fieldMarker: 'separate', fieldCommand: command),
+    marker('w:fldChar', '<w:fldChar w:fldCharType="end"/>', fieldMarker: 'end'),
+  ]);
+
+  c.dispatch(state.tr..replaceSelection(Slice(field, 0, 0)));
+}
+
 /// Insere uma tabela vazia no cursor, com o caret na PRIMEIRA célula —
 /// como no Word (e é o que faz a aba contextual aparecer imediatamente).
 void insertTable(OfficeWordController c, int rows, int cols) {

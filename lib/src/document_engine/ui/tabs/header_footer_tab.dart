@@ -9,18 +9,19 @@
 /// mudar o documento: navegação e fechamento falam com a sessão, as opções e
 /// as distâncias passam pelo controlador, e o controlador repagina.
 ///
-/// **Por que "Nº de Página" não está aqui.** Inserir o campo `PAGE` exige um
-/// nó `opaqueInline` com o par de field markers do OOXML e a resolução por
-/// página no compositor; o compositor JÁ resolve o campo importado
-/// (`_resolveFields`), mas não existe caminho de CRIAÇÃO. Um botão que
-/// escrevesse o texto "1" fixo produziria um cabeçalho errado em todas as
-/// outras páginas — pior que a ausência do botão.
+/// **Nº de Página** insere o CAMPO, não o texto: uma sequência de field
+/// markers (`begin`, instrução, `separate`, `end`) idêntica à que a
+/// importação produz. Escrever "1" como texto daria um cabeçalho que diz
+/// "1" em todas as páginas; com o campo, o compositor resolve o número por
+/// página (`layout_composer._resolveFields`) e o Word reconhece o resultado
+/// no arquivo exportado.
 library;
 
 import '../../../platform/dom.dart';
 import '../../layout/page_graph.dart';
 import '../controller.dart';
 import '../ribbon.dart';
+import '../ribbon_actions.dart' as actions;
 
 List<DomElement> buildHeaderFooterTab(RibbonContext ctx) {
   final c = ctx.controller;
@@ -64,6 +65,26 @@ List<DomElement> buildHeaderFooterTab(RibbonContext ctx) {
         _distanceSpinner(
             ctx, 'Rodapé a partir da Base', 'dq-office-hf-footer-distance',
             isHeader: false),
+      ]),
+    ]),
+    kit.group('Inserir', [
+      kit.row([
+        kit.button(
+          'Nº de Página',
+          'Inserir o campo Número de Página (resolve por página, '
+              'não é texto fixo)',
+          () => actions.insertPageField(c),
+          extraClass: 'dq-office-btn-labeled',
+          icon: 'pagenum',
+        ),
+      ]),
+      kit.row([
+        kit.button(
+          'Total de Páginas',
+          'Inserir o campo NUMPAGES (total de páginas do documento)',
+          () => actions.insertPageField(c, command: 'NUMPAGES'),
+          extraClass: 'dq-office-btn-labeled',
+        ),
       ]),
     ]),
     kit.group('Fechar', [

@@ -343,6 +343,8 @@ class OfficeWordEditor implements OfficeWordController {
         sourceMap,
         _view.state.doc,
         pageSetup: pageSetupOverride,
+        headers: _editedRegions(_header, _headerVariants),
+        footers: _editedRegions(_footer, _footerVariants),
       );
     }
     final source = _sourceSnapshot;
@@ -365,10 +367,25 @@ class OfficeWordEditor implements OfficeWordController {
         sourceMap,
         _view.state.doc,
         pageSetup: _pageSetupDirty ? _setup : null,
+        headers: _editedRegions(_header, _headerVariants),
+        footers: _editedRegions(_footer, _footerVariants),
         timings: timings,
       );
     }
     return exportDocx();
+  }
+
+  /// As regiões editadas na sessão, por chave de variante, para a
+  /// exportação reserializar a PARTE correspondente.
+  ///
+  /// Um documento sem variantes ainda tem a região `default` (o `_header`
+  /// simples): mandá-la sob essa chave é o que faz a edição de um cabeçalho
+  /// comum chegar ao arquivo. As variantes, quando existem, mandam sozinhas
+  /// — `_header` nesse caso é apenas um apelido da `default`.
+  Map<String, PMNode> _editedRegions(
+      PMNode? single, Map<String, PMNode> variants) {
+    if (variants.isNotEmpty) return variants;
+    return single == null ? const {} : {'default': single};
   }
 
   /// Caminho único de Save usado pelo botão DOCX e por Ctrl/Cmd+S.

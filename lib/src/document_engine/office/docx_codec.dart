@@ -1165,10 +1165,13 @@ class OfficeDocxCodec {
     Map<String, dynamic> sourceMap,
     PMNode doc, {
     PageSetupTwips? pageSetup,
+    Map<String, PMNode> headers = const {},
+    Map<String, PMNode> footers = const {},
   }) {
     final signatures = _beginSignatureOperation();
     try {
       final docx = DocxReader.read(sourceBytes);
+      _applyEditedRegions(docx, headers: headers, footers: footers);
       return _exportEditedFile(
         docx,
         _anchorsOf(sourceMap),
@@ -1181,12 +1184,70 @@ class OfficeDocxCodec {
     }
   }
 
+  /// Reescreve as PARTES `word/header*.xml`/`footer*.xml` das regiões
+  /// editadas na sessão, mantendo as demais byte a byte.
+  ///
+  /// É o mesmo contrato do corpo, com uma diferença que importa: aqui não há
+  /// âncoras por bloco. Uma região é pequena (um cabeçalho de ofício tem
+  /// poucos parágrafos) e é editada por inteiro, então a parte é
+  /// reserializada inteira — mas SÓ a parte que mudou, e apenas quando a
+  /// sessão realmente entregou um documento para ela.
+  ///
+  /// O invólucro (`<w:hdr …>` com os namespaces do arquivo) é PRESERVADO:
+  /// regerá-lo do zero perderia declarações de namespace que o pacote usa em
+  /// outros lugares (`mc:Ignorable`, `w14`, `wp14`), e o Word rejeita o
+  /// documento inteiro quando um prefixo usado não está declarado.
+  void _applyEditedRegions(
+    DocxFile docx, {
+    required Map<String, PMNode> headers,
+    required Map<String, PMNode> footers,
+  }) {
+    if (headers.isEmpty && footers.isEmpty) return;
+    _activeFile = docx;
+    _applyEditedRegionGroup(docx, docx.headersByType, headers, 'w:hdr');
+    _applyEditedRegionGroup(docx, docx.footersByType, footers, 'w:ftr');
+  }
+
+  void _applyEditedRegionGroup(
+    DocxFile docx,
+    Map<String, WpHeaderFooter> parts,
+    Map<String, PMNode> edited,
+    String rootTag,
+  ) {
+    edited.forEach((type, doc) {
+      final part = parts[type];
+      // Uma variante que o pacote NÃO tem (o usuário ligou "primeira página
+      // diferente" numa sessão) exigiria criar a parte, a relação e a
+      // referência no sectPr. Isso é criação de estrutura, não edição, e
+      // fica de fora até haver caminho completo — silenciosamente ignorar é
+      // melhor que gravar um pacote inconsistente que o Word recusa.
+      if (part == null) return;
+      final original = docx.package.partString(part.partName);
+      if (original == null) return;
+      final open = original.indexOf('<$rootTag');
+      final close = original.lastIndexOf('</$rootTag>');
+      if (open < 0 || close < 0) return;
+      final bodyStart = original.indexOf('>', open);
+      if (bodyStart < 0 || bodyStart > close) return;
+
+      final buffer = StringBuffer(original.substring(0, bodyStart + 1));
+      for (final block in doc.children) {
+        buffer.write(DocxWriter.serializeBlock(_nodeToBlock(block)));
+      }
+      buffer.write(original.substring(close));
+      final xml = buffer.toString();
+      if (xml != original) docx.package.setPartString(part.partName, xml);
+    });
+  }
+
   /// Fast path cooperativo para o botão Salvar/Exportar do browser.
   Future<Uint8List> exportEditedFromDocxAsync(
     Uint8List sourceBytes,
     Map<String, dynamic> sourceMap,
     PMNode doc, {
     PageSetupTwips? pageSetup,
+    Map<String, PMNode> headers = const {},
+    Map<String, PMNode> footers = const {},
     Map<String, int>? timings,
   }) async {
     final signatures = _beginSignatureOperation();
@@ -1205,6 +1266,7 @@ class OfficeDocxCodec {
         }
       }
       await Future<void>.delayed(Duration.zero);
+      _applyEditedRegions(docx, headers: headers, footers: footers);
       return await _exportEditedFileAsync(
         docx,
         _anchorsOf(sourceMap),
