@@ -15,3 +15,6 @@ pubspec.lock
 resources/
 # melos
 # pubspec_overrides.yaml
+
+# Worktrees temporários de subagentes — nunca versionados.
+.claude/
