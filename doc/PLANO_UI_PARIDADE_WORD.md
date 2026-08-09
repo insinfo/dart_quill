@@ -134,7 +134,7 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Múltiplas seções com geometrias diferentes (importadas) | ✅ | `word_editor.dart:126`, composer usa `sections` |
 | Editar UMA seção (aba Layout por seção) | ❌ | qualquer mudança vira documento inteiro |
 | Colunas (1/2/3, esquerda, direita) | ❌ | dropdown existe em `tabs/layout_tab.dart`, todos os itens DESABILITADOS: nenhuma leitura de `w:cols` em `layout/`, e o compositor documenta o fluxo monocoluna (`layout_composer.dart:2914-2916`) |
-| Quebras: página/coluna/seção (próxima página, contínua, par, ímpar) | 🟡 | dropdown em `tabs/layout_tab.dart` (2026-08-09): Página, Coluna e Disposição do Texto habilitadas e honradas (`layout_composer.dart:930, 2913, 2917`); as quatro de SEÇÃO ficam desabilitadas até B3 |
+| Quebras: página/coluna/seção (próxima página, contínua, par, ímpar) | 🟡 | dropdown em `tabs/layout_tab.dart` (2026-08-09): Página, Coluna, Disposição do Texto e **Próxima Página** habilitadas e honradas (`layout_composer.dart:930, 1480, 2913`); Contínua sairia como quebra de página (o compositor sempre fecha a página na fronteira) e Par/Ímpar exigem página em branco de paridade — as três seguem desabilitadas com o motivo escrito |
 | Números de linha | ❌ | — |
 | Hifenização | ❌ | — |
 | Recuar/Espaçamento (grupo Parágrafo da aba Layout: esquerda/direita/antes/depois com spinners) | ✅ | `tabs/layout_tab.dart` (2026-08-09): 4 spinners (cm nos recuos, pt no espaçamento) pelo MESMO `applyBlockStyle` da régua, com o valor do bloco refletido |
@@ -192,9 +192,15 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
    constantes públicas para layout e chrome não divergirem). Um parágrafo
    sem formatação direta mostra a fonte com que o texto foi DESENHADO, não
    um palpite.
-3. **B3 — `setPageSetup` destrói seções importadas.** `word_editor.dart`
-   zera `_sections`. Com a aba Layout por seção (F7) isso passa a editar só a
-   seção da seleção. **Ainda aberto.**
+3. ~~**B3 — `setPageSetup` destrói seções importadas**~~ — **CORRIGIDO
+   2026-08-09**: `pageSetup` passou a resolver a seção do CURSOR (antes
+   devolvia `_setup`, que o compositor ignora quando há seções — a régua
+   descrevia uma página que não estava na tela) e `setPageSetup` substitui só
+   a entrada dessa seção. Limite explícito e testado: **o arquivo recebe só a
+   última seção**, porque `_editedFile` aplica o override ao `sectPr` do
+   corpo; editar uma seção intermediária muda a tela e não marca geometria
+   suja — marcar gravaria a geometria dela por cima da última, corrupção
+   silenciosa. Seções intermediárias na exportação continuam abertas.
 4. ~~**B4 — cartões de estilo com `_slug` frágil**~~ — **CORRIGIDO
    2026-08-09**: `styleSlug` translitera acentos, colapsa o resto em hífens
    e cai num hash estável quando não sobra nada usável.
@@ -302,9 +308,18 @@ passaram a lê-la: com o modo aberto, negrito, undo e a quickbar agem na
 REGIÃO. Régua e barra de status continuam descrevendo o corpo, que é o que
 elas medem.
 
-**Pendente:** o botão "Nº de Página" (falta caminho de criação de field
-markers) e a exportação DOCX das edições (falta o codec aceitar as
-variantes — o orquestrador já as mantém atualizadas).
+**Concluído depois, no mesmo dia:**
+- **exportação DOCX das edições** — `_applyEditedRegions` reescreve
+  `word/header*.xml`/`footer*.xml` das variantes editadas preservando o
+  invólucro `<w:hdr …>` original (regenerar os namespaces faria o Word
+  rejeitar o documento inteiro), sem tocar nas partes não editadas e
+  ignorando variantes que o pacote não tem — criar parte + relacionamento +
+  referência no `sectPr` é criação de estrutura, não edição;
+- **botão "Nº de Página"** — `insertPageField` cria a sequência
+  begin/instrução/separate/end com o `officeXml` literal do OOXML, então o
+  compositor resolve 1, 2, 3 por página e o Word reconhece o campo no
+  arquivo. Um "1" digitado diria 1 em todas as páginas; é essa a diferença
+  que os testes protegem.
 
 ### 2.6 F7 (réguas + quebras) concluída em 2026-08-09
 
@@ -647,7 +662,7 @@ overlay/NodeSelection destravam tudo que envolve objeto.
 - **Critério:** editar "Folha:" no cabeçalho do ETP, salvar, reabrir no Word
   com a edição em TODAS as páginas; réguas refletem a área do cabeçalho.
 
-### F7 — Layout completo + seções — **PARCIAL 2026-08-09** (réguas e quebras feitas; seções/colunas dependem de B3 e de colunas no compositor)
+### F7 — Layout completo + seções — **PARCIAL 2026-08-09** (réguas, quebras e geometria por seção feitas; colunas dependem de layout multicoluna no compositor, e a exportação de seções intermediárias segue aberta)
 - Aba Layout com os dropdowns reais (F1) aplicando POR SEÇÃO (fix B3);
   Margens Personalizadas…/Mais Tamanhos…; quebras de seção (próxima página,
   contínua, par, ímpar) e de coluna; colunas 1/2/3/esq/dir; números de linha;
