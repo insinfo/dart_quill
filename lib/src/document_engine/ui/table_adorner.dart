@@ -41,6 +41,12 @@ class OfficeTableAdorner {
     double guideLeft,
   })? _drag;
 
+  /// Célula onde um arrasto de SELEÇÃO começou (posição do nó), enquanto o
+  /// botão está pressionado. Só vira seleção retangular quando o ponteiro
+  /// entra em OUTRA célula — arrastar dentro de uma célula continua sendo
+  /// seleção de texto normal, como no Word.
+  int? _selectionAnchorCell;
+
   bool get isDragging => _drag != null;
 
   /// Redesenha realce e âncora para o estado atual.
@@ -76,7 +82,7 @@ class OfficeTableAdorner {
       highlight.setAttribute(
         'style',
         'left:${_px(bounds['left'])}px;top:${_px(bounds['top'])}px;'
-        'width:${_px(bounds['width'])}px;height:${_px(bounds['height'])}px;',
+            'width:${_px(bounds['width'])}px;height:${_px(bounds['height'])}px;',
       );
       controller.overlay.layer.append(highlight);
       _cellHighlights.add(highlight);
@@ -149,14 +155,22 @@ class OfficeTableAdorner {
     final target = event.target;
     if (target == null) return false;
     final cellElement = _ancestorCell(target);
-    if (cellElement == null) return false;
+    if (cellElement == null) {
+      _selectionAnchorCell = null;
+      return false;
+    }
     final bounds = controller.adapter.getElementBounds(cellElement);
     if (bounds == null) return false;
     final right = bounds['right'];
     if (right is! num) return false;
     if ((event.clientX - right).abs() > officeColumnResizeTolerancePx) {
+      // Não é a divisa: o gesto pode virar uma seleção retangular se o
+      // ponteiro alcançar outra célula.
+      _selectionAnchorCell =
+          int.tryParse(cellElement.getAttribute('data-doc-from') ?? '');
       return false;
     }
+    _selectionAnchorCell = null;
 
     final cellPos =
         int.tryParse(cellElement.getAttribute('data-doc-from') ?? '');
@@ -185,14 +199,46 @@ class OfficeTableAdorner {
   }
 
   void handlePointerMove(DomEvent event) {
+    if (event is! DomMouseEvent) return;
     final drag = _drag;
-    if (drag == null || event is! DomMouseEvent) return;
+    if (drag != null) {
+      event.preventDefault();
+      _showGuide(drag.guideLeft + (event.clientX - drag.startX).toDouble());
+      return;
+    }
+    _extendCellSelection(event);
+  }
+
+  /// Arrastar entre células: assim que o ponteiro entra numa célula
+  /// DIFERENTE da âncora, a seleção deixa de ser de texto e vira o
+  /// retângulo. O browser não conseguiria produzir essa seleção sozinho —
+  /// e uma seleção crua entre células é justamente o que a view bloqueia
+  /// para não destruir a grade.
+  void _extendCellSelection(DomMouseEvent event) {
+    final anchor = _selectionAnchorCell;
+    if (anchor == null) return;
+    // Sem botão pressionado não há arrasto (o `buttons` do DOM não está na
+    // abstração; usar o alvo é suficiente porque só chegamos aqui entre um
+    // pointerdown e o pointerup correspondentes).
+    final target = event.target;
+    if (target == null) return;
+    final cellElement = _ancestorCell(target);
+    if (cellElement == null) return;
+    final headPos =
+        int.tryParse(cellElement.getAttribute('data-doc-from') ?? '');
+    if (headPos == null || headPos == anchor) return;
     event.preventDefault();
-    _showGuide(drag.guideLeft + (event.clientX - drag.startX).toDouble());
+    ops.selectCellRange(
+      controller.view.state,
+      controller.dispatch,
+      anchor + 1,
+      headPos + 1,
+    );
   }
 
   void handlePointerUp(DomEvent event) {
     final drag = _drag;
+    _selectionAnchorCell = null;
     if (drag == null) return;
     _drag = null;
     _guide?.remove();

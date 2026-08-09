@@ -86,6 +86,9 @@ export 'overlay.dart'
 export 'quickbar.dart' show OfficeSelectionQuickbar;
 export 'ribbon.dart' show OfficeRibbon, RibbonContext;
 export 'rulers.dart' show OfficeHorizontalRuler, OfficeVerticalRuler;
+export 'table_adorner.dart'
+    show OfficeTableAdorner, officeColumnResizeTolerancePx;
+export 'table_map.dart' show OfficeTableMap, OfficeTableCell;
 export 'word_options.dart';
 
 class OfficeWordEditor implements OfficeWordController {
@@ -790,6 +793,15 @@ class OfficeWordEditor implements OfficeWordController {
     // em que agir.
     if (_view.state.selection is NodeSelection) {
       _showObjectQuickbar();
+      return;
+    }
+    // Seleção retangular de CÉLULAS: a barra é a de tabela.
+    if (_view.state.selection is CellSelection) {
+      final pointer = event is DomMouseEvent ? event : null;
+      _quickbar?.showForTable(
+        x: pointer?.clientX ?? 0,
+        y: (pointer?.clientY ?? 0) + 12,
+      );
       return;
     }
     final pointer = event is DomMouseEvent ? event : null;

@@ -774,6 +774,47 @@
   background: #cfe4fa;
 }
 
+/* ---- adornos de tabela: seleção de células, âncora e guia de coluna ---- */
+
+.dq-office-cellmark {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(24, 90, 189, 0.18);
+  z-index: 33;
+}
+
+.dq-office-tableanchor {
+  position: absolute;
+  pointer-events: auto;
+  width: 14px;
+  height: 14px;
+  line-height: 12px;
+  text-align: center;
+  font-size: 11px;
+  color: #444;
+  background: #fff;
+  border: 1px solid #b9b9b9;
+  cursor: pointer;
+  z-index: 36;
+  user-select: none;
+}
+
+.dq-office-tableanchor:hover {
+  border-color: #185abd;
+  color: #185abd;
+}
+
+/* A guia vertical do redimensionamento de coluna, como no Word. */
+.dq-office-colguide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed #185abd;
+  pointer-events: none;
+  z-index: 37;
+}
+
 /* ---- moldura e alças do objeto selecionado ---- */
 
 .dq-office-objframe {

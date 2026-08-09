@@ -73,7 +73,7 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Funcionalidade | Status | Evidência |
 |---|---|---|
 | Mini toolbar flutuante ao selecionar texto (fonte, tamanho, N/I/S, cor, realce, listas) | ✅ | `ui/quickbar.dart` (2026-08-09): nasce no mouseup/keyup que TERMINA a seleção, some ao digitar/colapsar, altura medida para não cobrir o texto |
-| Mini toolbar de tabela (ao selecionar/clicar na âncora ⊞) | ❌ | — |
+| Mini toolbar de tabela (ao selecionar/clicar na âncora ⊞) | ✅ | `quickbar.showForTable` (2026-08-09) |
 | Mini toolbar de imagem (alinhamento, excluir) | 🟡 | `quickbar.showForObject` (2026-08-09); disposição do texto espera wrap no compositor |
 | Menu de botão direito (recortar/copiar/colar, marcas, recuo, itens de tabela) | ✅ | `ui/context_menu.dart` (2026-08-09): contextual, itens indisponíveis desabilitados; falta Fonte…/Parágrafo… (diálogos, F2 restante) |
 | Popover "Opções de Layout" (ícone ao lado do objeto selecionado) | ❌ | — |
@@ -100,10 +100,10 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 |---|---|---|
 | Inserir/excluir linha e coluna, excluir tabela | ✅ | `ui/table_ops.dart` + `tabs/table_tab.dart` |
 | Grid picker de inserção (hover N×M, 10×8 como no Word) | ✅ | `tabs/insert_tab.dart` `buildTableGridPicker` (2026-08-09) |
-| Âncora de mover ⊞ (canto sup. esquerdo) e handle de resize (inf. direito) | ❌ | — |
-| Seleção de célula/linha/coluna/tabela (arrastar entre células, clicar na borda) | ❌ | seleção entre células é BLOQUEADA (`editor_view.dart:900-908`) — correto p/ integridade, mas falta `CellSelection` |
-| Redimensionar coluna/linha arrastando bordas | ❌ | `colWidths` existe no schema (`schema.dart:112`), sem UI |
-| Mesclar/dividir células | ❌ | `vMerge` só é LIDO para navegação (`editor_view.dart:984-997`) |
+| Âncora ⊞ (seleciona a tabela) | ✅ | `ui/table_adorner.dart` (2026-08-09); o handle ◱ de redimensionar a tabela inteira fica para F5 |
+| Seleção de célula/linha/coluna/tabela (arrastar entre células) | ✅ | `CellSelection` + `ui/table_map.dart` (2026-08-09); a seleção CRUA entre células continua bloqueada na view, que é o que protege a grade |
+| Redimensionar coluna arrastando a borda | ✅ | guia tracejada, transação no pointerup, grava em `colWidths` E no `width` das células (2026-08-09); altura de LINHA pendente |
+| Mesclar/dividir células | 🟡 | mesclar concatena o conteúdo e soma os spans; dividir só na horizontal (2026-08-09) |
 | Galeria de estilos de tabela na ribbon (Design da Tabela) | ❌ | — |
 | Bordas/sombreamento de célula | ❌ | — |
 | Alinhamento vertical/horizontal da célula, direção do texto, margens | ❌ | — |
@@ -239,6 +239,40 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
     silêncio (transação sem passos). Agora `mount` usa o schema DO
     DOCUMENTO por padrão e rejeita explicitamente um `schema:` incompatível.
     O próprio `example/office_editor` tinha esse defeito.
+
+### 2.4 F4 concluída em 2026-08-09
+
+**Mapa de grade** (`ui/table_map.dart`). A árvore guarda linhas com as
+células que existem; a grade VISUAL é outra coisa, porque `colspan` ocupa
+colunas vizinhas e `rowspan`/`vMerge` ocupam linhas abaixo. Sem essa
+tradução não é possível responder "quais são as células da coluna 3" — a
+pergunta que seleção retangular, redimensionamento e mesclagem fazem o tempo
+todo. As duas formas de continuação vertical viram a mesma coisa aqui: o
+DOCX materializa `vMerge=continue` e o Quill omite o slot coberto.
+
+**CellSelection** (`state/selection.dart`). Uma faixa POR CÉLULA, não um
+`from..to` cru — que arrastaria junto as células intermediárias das outras
+colunas. Nunca é considerada vazia: células em branco selecionadas continuam
+sendo o destinatário de "excluir linha", "mesclar", "sombrear".
+
+**Operações** (`ui/table_ops.dart`): selecionar retângulo/linha/coluna/tabela;
+mesclar CONCATENANDO o conteúdo (perder texto em silêncio é o pior resultado
+possível dessa operação); dividir; e gravar largura de coluna nos DOIS
+lugares que precisam concordar — `colWidths` da tabela (`w:tblGrid`) e o
+`width` de cada célula. Escrever só um faz o Word e a projeção discordarem.
+
+**Adornos** (`ui/table_adorner.dart`): realce da seleção, âncora ⊞ que
+seleciona a tabela, e redimensionamento de coluna com guia tracejada — a
+transação sai UMA vez no `pointerup`, como no resize de objeto. Arrastar de
+uma célula para outra vira seleção retangular; arrastar DENTRO de uma célula
+continua sendo seleção de texto.
+
+**Quickbar de tabela**: inserir/excluir linha e coluna, mesclar e dividir,
+reusando as mesmas funções da aba contextual.
+
+**Pendente de F4:** marcadores de coluna na régua e altura de linha por
+arrasto; a divisão só é horizontal (a vertical exige rearranjar a grade
+inteira). Estilos de tabela e as duas abas contextuais são F5.
 
 ### 2.3 F3 concluída em 2026-08-09
 
@@ -491,7 +525,7 @@ overlay/NodeSelection destravam tudo que envolve objeto.
   (ainda) — no corpo: selecionar, redimensionar, desfazer; exportar DOCX e
   abrir no Word com o novo tamanho.
 
-### F4 — Tabela interativa (seleção, âncoras, resize, quickbar)
+### F4 — Tabela interativa (seleção, âncoras, resize, quickbar) — **CONCLUÍDA 2026-08-09** (régua de tabela e altura de linha pendentes)
 - `CellSelection`, âncora ⊞ (mover/selecionar tabela) e handle ◱;
 - resize de colunas/linhas com guia; marcadores de coluna na régua H;
 - quickbar de tabela; menu de contexto de tabela;

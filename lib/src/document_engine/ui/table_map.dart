@@ -63,8 +63,8 @@ class OfficeTableCell {
 
 /// A grade resolvida de uma tabela.
 class OfficeTableMap {
-  OfficeTableMap._(this.tablePos, this.table, this.cells, this.rows,
-      this.columns);
+  OfficeTableMap._(
+      this.tablePos, this.table, this.cells, this.rows, this.columns);
 
   /// Posição do nó `table` no documento.
   final int tablePos;
@@ -202,12 +202,10 @@ class OfficeTableMap {
     OfficeTableCell head,
   ) {
     var top = anchor.row < head.row ? anchor.row : head.row;
-    var bottom =
-        anchor.rowEnd > head.rowEnd ? anchor.rowEnd : head.rowEnd;
+    var bottom = anchor.rowEnd > head.rowEnd ? anchor.rowEnd : head.rowEnd;
     var left = anchor.column < head.column ? anchor.column : head.column;
-    var right = anchor.columnEnd > head.columnEnd
-        ? anchor.columnEnd
-        : head.columnEnd;
+    var right =
+        anchor.columnEnd > head.columnEnd ? anchor.columnEnd : head.columnEnd;
 
     // Expande enquanto alguma célula tocada ultrapassar a borda: uma
     // seleção que corta uma mesclagem ao meio não existe no Word.
