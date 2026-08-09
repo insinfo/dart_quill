@@ -133,8 +133,8 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Margens | 🟡 | dropdown com 4 predefinições do Word e as 4 medidas em cm, ✓ na vigente; `headerDistance`/`footerDistance` agora PRESERVADOS (2026-08-09). Falta "Margens Personalizadas…"; `setPageSetup` ainda apaga as seções importadas (B3) |
 | Múltiplas seções com geometrias diferentes (importadas) | ✅ | `word_editor.dart:126`, composer usa `sections` |
 | Editar UMA seção (aba Layout por seção) | ❌ | qualquer mudança vira documento inteiro |
-| Colunas (1/2/3, esquerda, direita) | ❌ | — |
-| Quebras: página/coluna/seção (próxima página, contínua, par, ímpar) | 🟡 | só quebra de página via atributo (`ribbon_actions.dart:319-338`); sem dropdown, sem quebras de seção/coluna |
+| Colunas (1/2/3, esquerda, direita) | ❌ | dropdown existe em `tabs/layout_tab.dart`, todos os itens DESABILITADOS: nenhuma leitura de `w:cols` em `layout/`, e o compositor documenta o fluxo monocoluna (`layout_composer.dart:2914-2916`) |
+| Quebras: página/coluna/seção (próxima página, contínua, par, ímpar) | 🟡 | dropdown em `tabs/layout_tab.dart` (2026-08-09): Página, Coluna e Disposição do Texto habilitadas e honradas (`layout_composer.dart:930, 2913, 2917`); as quatro de SEÇÃO ficam desabilitadas até B3 |
 | Números de linha | ❌ | — |
 | Hifenização | ❌ | — |
 | Recuar/Espaçamento (grupo Parágrafo da aba Layout: esquerda/direita/antes/depois com spinners) | ✅ | `tabs/layout_tab.dart` (2026-08-09): 4 spinners (cm nos recuos, pt no espaçamento) pelo MESMO `applyBlockStyle` da régua, com o valor do bloco refletido |
@@ -147,8 +147,8 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Régua H com ticks, números a partir da margem, área útil | ✅ | `ui/rulers.dart:35-93` |
 | Marcadores de recuo arrastáveis (primeira linha, esquerdo, direito) | ✅ | `rulers.dart:95-158` |
 | Régua vertical acompanhando a página da seleção | ✅ | `rulers.dart:182-233`, `word_editor.dart:689-705` |
-| Arrastar MARGENS pela régua (fronteira cinza/branco) | ❌ | — |
-| Tab stops: clicar na régua cria parada; seletor de tipo no canto (L girando) | ❌ | canto "L" é estático (`rulers.dart:43-45`) |
+| Arrastar MARGENS pela régua (fronteira cinza/branco) | ✅ | `rulers.dart` (2026-08-09): alça na fronteira, guia durante o gesto, UMA repaginação no pointerup |
+| Tab stops: clicar na régua cria parada; seletor de tipo no canto (L girando) | ✅ | `rulers.dart` (2026-08-09): canto gira entre esquerda/centro/direita/decimal; grava `style['tabs']`, que o compositor JÁ honrava (`layout_composer.dart:2664-2745`) |
 | Régua contextual de tabela (marcadores de borda de coluna) | ❌ | — |
 | Régua esmaecida/segmentada no modo cabeçalho/rodapé | ❌ | — |
 
@@ -280,6 +280,39 @@ Propriedades da Tabela; direção do texto e margens de célula (o compositor l�
 cabeçalho (o renderer já repete, falta ligar `word.tblHeader` pela UI); e o
 realce de estado dos botões novos — a ribbon só reflete marcas e estilo de
 bloco, então o alinhamento vertical corrente ainda não acende o botão.
+
+### 2.6 F7 (réguas + quebras) concluída em 2026-08-09
+
+**Réguas.** As fronteiras cinza/branco viraram alças de MARGEM; o canto "L"
+gira entre esquerda/centro/direita/decimal e é o tipo armado para a próxima
+parada; clicar na banda cria uma parada de tabulação, arrastar move, soltar
+fora remove. Todos os três arrastos seguem a regra do repositório: durante o
+gesto só a guia se move, e a transação/repaginação sai uma vez no
+`pointerup`.
+
+A pergunta aberta do plano ("o modelo já tem `tabs` no estilo de
+parágrafo?") tem resposta: **sim**. O compositor já lia `style['tabs']` e
+resolvia esquerda/centro/direita/decimal, com `leader` e `clear`
+(`layout_composer.dart:2354`, `:2664-2745`) — a régua só precisava escrever
+ali, sem tocar no motor.
+
+**Quebras e Colunas.** Dropdown de Quebras com Página, Coluna e Disposição
+do Texto habilitadas e honradas. As quatro de SEÇÃO e todas as opções de
+Colunas ficam VISÍVEIS e DESABILITADAS, com o motivo na descrição do item —
+desabilitar diz a verdade; habilitar seria um botão que não muda nada.
+
+**Bug latente corrigido:** os listeners de ponteiro da régua viviam só no
+`_canvas`, mas a faixa da régua é IRMÃ dele — um gesto curto contido na
+régua nunca gerava `pointermove` no canvas. Isso já afetava o arrasto dos
+marcadores de recuo.
+
+### 2.5b Correção de fidelidade herdada do F4
+
+`setTableColumnWidth` e `distributeTableColumns` gravavam a largura em
+`cell.width` e em `colWidths`, mas NÃO em `word.width` (o `w:tcW`). Numa
+tabela importada o `tcW` antigo sobrevive no XML e o Word costuma
+preferi-lo à grade nova: a coluna redimensionada voltava ao tamanho velho
+ao abrir no Word. As duas funções agora escrevem nos três lugares.
 
 ### 2.4 F4 concluída em 2026-08-09
 
@@ -589,7 +622,7 @@ overlay/NodeSelection destravam tudo que envolve objeto.
 - **Critério:** editar "Folha:" no cabeçalho do ETP, salvar, reabrir no Word
   com a edição em TODAS as páginas; réguas refletem a área do cabeçalho.
 
-### F7 — Layout completo + seções
+### F7 — Layout completo + seções — **PARCIAL 2026-08-09** (réguas e quebras feitas; seções/colunas dependem de B3 e de colunas no compositor)
 - Aba Layout com os dropdowns reais (F1) aplicando POR SEÇÃO (fix B3);
   Margens Personalizadas…/Mais Tamanhos…; quebras de seção (próxima página,
   contínua, par, ímpar) e de coluna; colunas 1/2/3/esq/dir; números de linha;
