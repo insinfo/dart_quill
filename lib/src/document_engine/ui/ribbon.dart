@@ -14,7 +14,8 @@ import 'tabs/file_tab.dart';
 import 'tabs/home_tab.dart';
 import 'tabs/insert_tab.dart';
 import 'tabs/layout_tab.dart';
-import 'tabs/table_tab.dart';
+import 'tabs/table_design_tab.dart';
+import 'tabs/table_layout_tab.dart';
 
 /// O que um builder de aba recebe: o controlador, o kit de DOM e os
 /// registradores de controles com estado (botões de marca, select de
@@ -83,6 +84,11 @@ class OfficeRibbon {
   final OfficeWordController controller;
   final OfficeDomKit kit;
 
+  /// As abas que só existem com a seleção dentro de uma tabela. São DUAS,
+  /// como no Word: a estrutura ("Tabela Layout") e a aparência ("Design da
+  /// Tabela") são grupos grandes demais para caber numa aba só.
+  static const List<String> tableTabKeys = ['tableDesign', 'tableLayout'];
+
   final Map<String, DomElement> _tabs = {};
   final Map<String, DomElement> _markButtons = {};
   final Map<String, ({DomElement element, String fallback})> _markValueSelects =
@@ -104,13 +110,14 @@ class OfficeRibbon {
       ('home', 'Página Inicial'),
       ('insert', 'Inserir'),
       ('layout', 'Layout'),
-      ('table', 'Tabela'),
+      ('tableDesign', 'Design da Tabela'),
+      ('tableLayout', 'Tabela Layout'),
     ]) {
       final tab = kit.el('button', 'dq-office-ribbon-tab');
       tab.setAttribute('type', 'button');
       tab.appendText(label);
       _tabs[key] = tab;
-      if (key == 'table') {
+      if (tableTabKeys.contains(key)) {
         // Contextual: só existe enquanto a seleção está numa tabela.
         tab.classes.add('dq-office-ribbon-tab-contextual');
         tab.classes.add('dq-office-ribbon-tab-hidden');
@@ -173,7 +180,8 @@ class OfficeRibbon {
       'layout' => buildLayoutTab(context),
       'insert' => buildInsertTab(context),
       'file' => buildFileTab(context),
-      'table' => buildTableTab(context),
+      'tableDesign' => buildTableDesignTab(context),
+      'tableLayout' => buildTableLayoutTab(context),
       _ => buildHomeTab(context),
     };
     for (final group in groups) {
@@ -182,18 +190,22 @@ class OfficeRibbon {
     refreshState();
   }
 
-  /// A shell é CONTEXTUAL: a aba Tabela existe enquanto a seleção está numa
-  /// tabela e some fora — voltando para Página Inicial se estava ativa.
+  /// A shell é CONTEXTUAL: as abas de tabela existem enquanto a seleção
+  /// está numa tabela e somem fora — voltando para Página Inicial se uma
+  /// delas estava ativa.
   void refreshContextual() {
-    final tab = _tabs['table'];
-    if (tab == null || !controller.viewReady) return;
+    if (!controller.viewReady) return;
     final inTable = table_ops.tableDepthOf(controller.view.state) != null;
-    if (inTable) {
-      tab.classes.remove('dq-office-ribbon-tab-hidden');
-    } else {
-      tab.classes.add('dq-office-ribbon-tab-hidden');
-      if (tab.classes.contains('dq-office-ribbon-tab-active')) {
-        showTab('home');
+    for (final key in tableTabKeys) {
+      final tab = _tabs[key];
+      if (tab == null) continue;
+      if (inTable) {
+        tab.classes.remove('dq-office-ribbon-tab-hidden');
+      } else {
+        tab.classes.add('dq-office-ribbon-tab-hidden');
+        if (tab.classes.contains('dq-office-ribbon-tab-active')) {
+          showTab('home');
+        }
       }
     }
   }

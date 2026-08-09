@@ -344,6 +344,29 @@ void main() {
           isNull);
     });
 
+    test('grava também o w:tcW, senão o Word ignora a grade nova', () {
+      final doc = grid3x3();
+      final tablePos = tablePositionOf(doc);
+      final state = stateOf(doc);
+
+      final result = run(
+        state,
+        (s, dispatch) => ops.setTableColumnWidth(
+          s,
+          dispatch,
+          tablePos: tablePos,
+          columnIndex: 1,
+          widthTwips: 2000,
+        ),
+      ).state;
+
+      final map = OfficeTableMap.of(result.doc, tablePos);
+      final word = map.cellCovering(0, 1)!.node.attrs['word'] as Map;
+      // O formato é o que docx_codec._widthFromJson lê de volta.
+      expect((word['width'] as Map)['value'], 2000);
+      expect((word['width'] as Map)['type'], 'dxa');
+    });
+
     test('largura não positiva é rejeitada', () {
       final doc = grid3x3();
       final state = stateOf(doc);

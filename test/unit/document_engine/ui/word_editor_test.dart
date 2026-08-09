@@ -1170,7 +1170,7 @@ void main() {
     });
   });
 
-  group('aba contextual Tabela', () {
+  group('abas contextuais de Tabela', () {
     DomElement tab(String text) {
       for (final t in host.querySelectorAll('.dq-office-ribbon-tab')) {
         if (t.textContent == text) return t;
@@ -1220,12 +1220,15 @@ void main() {
       throw StateError('tabela não encontrada');
     }
 
-    test('a aba aparece com a seleção NA tabela e some fora', () {
+    test('as DUAS abas aparecem com a seleção NA tabela e somem fora', () {
       final editor = mountWithTable();
-      final tableTab = tab('Tabela');
-      // Inserir deixa a seleção DENTRO da tabela — a aba já aparece, como
+      final tableTab = tab('Tabela Layout');
+      final designTab = tab('Design da Tabela');
+      // Inserir deixa a seleção DENTRO da tabela — as abas já aparecem, como
       // no Word.
       expect(tableTab.classes.contains('dq-office-ribbon-tab-hidden'), isFalse);
+      expect(
+          designTab.classes.contains('dq-office-ribbon-tab-hidden'), isFalse);
 
       // Fora = DEPOIS da tabela (ela foi inserida no início do documento,
       // então pos 1 fica dentro dela).
@@ -1238,16 +1241,18 @@ void main() {
         ..setSelection(TextSelection.create(editor.state.doc, outside + 1)));
       expect(tableTab.classes.contains('dq-office-ribbon-tab-hidden'), isTrue,
           reason: 'fora da tabela, a aba contextual some');
+      expect(designTab.classes.contains('dq-office-ribbon-tab-hidden'), isTrue,
+          reason: 'as duas somem juntas — o contexto é o mesmo');
 
       caretIntoTable(editor);
       expect(tableTab.classes.contains('dq-office-ribbon-tab-hidden'), isFalse,
-          reason: 'a shell é contextual: seleção na tabela mostra a aba');
+          reason: 'a shell é contextual: seleção na tabela mostra as abas');
     });
 
     test('inserir linha abaixo', () {
       final editor = mountWithTable();
       caretIntoTable(editor);
-      click(tab('Tabela'));
+      click(tab('Tabela Layout'));
       click(byTitle('Inserir linha abaixo'));
       expect(tableOf(editor).childCount, 4);
     });
@@ -1255,7 +1260,7 @@ void main() {
     test('inserir coluna à direita em TODAS as linhas', () {
       final editor = mountWithTable();
       caretIntoTable(editor);
-      click(tab('Tabela'));
+      click(tab('Tabela Layout'));
       click(byTitle('Inserir coluna à direita'));
       final table = tableOf(editor);
       for (var r = 0; r < table.childCount; r++) {
@@ -1267,7 +1272,7 @@ void main() {
     test('excluir linha e coluna', () {
       final editor = mountWithTable();
       caretIntoTable(editor);
-      click(tab('Tabela'));
+      click(tab('Tabela Layout'));
       click(byTitle('Excluir linha'));
       expect(tableOf(editor).childCount, 2);
       caretIntoTable(editor);
@@ -1275,16 +1280,43 @@ void main() {
       expect(tableOf(editor).child(0).childCount, 2);
     });
 
-    test('excluir a tabela esconde a aba', () {
+    test('excluir a tabela esconde as abas', () {
       final editor = mountWithTable();
       caretIntoTable(editor);
-      click(tab('Tabela'));
+      click(tab('Tabela Layout'));
       click(byTitle('Excluir tabela'));
       for (var i = 0; i < editor.state.doc.childCount; i++) {
         expect(editor.state.doc.child(i).type.name, isNot('table'));
       }
-      expect(tab('Tabela').classes.contains('dq-office-ribbon-tab-hidden'),
-          isTrue);
+      for (final name in const ['Tabela Layout', 'Design da Tabela']) {
+        expect(
+            tab(name).classes.contains('dq-office-ribbon-tab-hidden'), isTrue);
+      }
+    });
+
+    // Os dois testes abaixo cobrem a FIAÇÃO (aba registrada, botão montado,
+    // seleção sincronizada); o comportamento das operações em si está em
+    // `table_format_test.dart`, sobre o modelo.
+    test('Design da Tabela aplica bordas na célula do cursor', () {
+      final editor = mountWithTable();
+      caretIntoTable(editor);
+      click(tab('Design da Tabela'));
+      click(byTitle('Todas as bordas'));
+
+      final cell = tableOf(editor).child(0).child(0);
+      expect(((cell.attrs['word'] as Map)['borders'] as Map).keys.toSet(),
+          {'top', 'bottom', 'left', 'right'});
+    });
+
+    test('Tabela Layout alinha o conteúdo da célula ao centro', () {
+      final editor = mountWithTable();
+      caretIntoTable(editor);
+      click(tab('Tabela Layout'));
+      click(byTitle('Alinhar ao centro'));
+
+      final cell = tableOf(editor).child(0).child(0);
+      expect((cell.attrs['cell'] as Map)['verticalAlign'], 'center');
+      expect((cell.attrs['word'] as Map)['vAlign'], 'center');
     });
   });
 

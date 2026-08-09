@@ -56,7 +56,7 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 |---|---|---|
 | Abas Arquivo/Página Inicial/Inserir/Layout | ✅ | `ui/ribbon.dart:83-99` |
 | Aba contextual de Tabela (aparece/some com a seleção) | ✅ | `ribbon.dart:155-167` |
-| Duas abas contextuais de tabela ("Design da Tabela" + "Tabela Layout") | ❌ | só existe uma aba "Tabela" (`tabs/table_tab.dart`) |
+| Duas abas contextuais de tabela ("Design da Tabela" + "Tabela Layout") | ✅ | `tabs/table_design_tab.dart` + `tabs/table_layout_tab.dart`, registradas em `ribbon.dart:tableTabKeys` (2026-08-09) |
 | Aba contextual "Cabeçalho e Rodapé" | ❌ | — |
 | Aba contextual "Forma de Formato" (imagem/caixa selecionada) | ❌ | — |
 | Realce de estado: negrito/itálico/sub/sobre acesos conforme seleção | ✅ | `ribbon.dart:171-219` |
@@ -104,11 +104,11 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Seleção de célula/linha/coluna/tabela (arrastar entre células) | ✅ | `CellSelection` + `ui/table_map.dart` (2026-08-09); a seleção CRUA entre células continua bloqueada na view, que é o que protege a grade |
 | Redimensionar coluna arrastando a borda | ✅ | guia tracejada, transação no pointerup, grava em `colWidths` E no `width` das células (2026-08-09); altura de LINHA pendente |
 | Mesclar/dividir células | 🟡 | mesclar concatena o conteúdo e soma os spans; dividir só na horizontal (2026-08-09) |
-| Galeria de estilos de tabela na ribbon (Design da Tabela) | ❌ | — |
-| Bordas/sombreamento de célula | ❌ | — |
-| Alinhamento vertical/horizontal da célula, direção do texto, margens | ❌ | — |
+| Galeria de estilos de tabela na ribbon (Design da Tabela) | ❌ | o compositor NÃO resolve `w:tblStyle` (nenhuma ocorrência em `layout/`); a galeria gravaria um atributo ignorado — depende de F8 |
+| Bordas/sombreamento de célula | ✅ | `table_ops.setCellBorders/setCellShading` + aba Design (2026-08-09); honrados em `layout_composer.dart:3582,3846-3871` e `3577,4300-4306` |
+| Alinhamento vertical/horizontal da célula, direção do texto, margens | 🟡 | vertical feito (`setCellVerticalAlign`, honrado em `layout_composer.dart:3578,3814-3818`); horizontal é alinhamento de parágrafo (já existe na Página Inicial); direção do texto e margens de célula continuam sem UI |
 | Repetir linha de cabeçalho | 🟡 | renderer já REPETE header importado (`dom_renderer.dart:259-269`); sem UI para ligar/desligar |
-| Distribuir linhas/colunas, AutoAjuste, propriedades da tabela | ❌ | — |
+| Distribuir linhas/colunas, AutoAjuste, propriedades da tabela | 🟡 | distribuir linhas e colunas feito (2026-08-09); AutoAjuste e o diálogo de propriedades continuam ausentes |
 | Marcadores de coluna de tabela na régua | ❌ | `rulers.dart` não conhece tabela |
 
 ### 1.6 Cabeçalho e rodapé
@@ -239,6 +239,47 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
     silêncio (transação sem passos). Agora `mount` usa o schema DO
     DOCUMENTO por padrão e rejeita explicitamente um `schema:` incompatível.
     O próprio `example/office_editor` tinha esse defeito.
+
+### 2.5 F5 concluída em 2026-08-09 (sem a galeria de estilos)
+
+**Duas abas contextuais**, como no Word: `tabs/table_design_tab.dart`
+(aparência) e `tabs/table_layout_tab.dart` (estrutura). Elas nascem e somem
+juntas — o contexto é o mesmo — e `ribbon.dart` passou a tratar uma LISTA de
+abas contextuais (`OfficeRibbon.tableTabKeys`) em vez da chave única `table`.
+
+**A regra que decidiu o escopo:** nenhum controle grava atributo que o
+compositor ignora. Cada botão exposto foi conferido em `layout_composer.dart`:
+bordas de célula (`word.borders`, linha 3582 e 3846-3871), sombreamento
+(`cell.background`/`word.shading.fill`, 3577 e 4300-4306), alinhamento
+vertical (`cell.verticalAlign`/`word.vAlign`, 3578-3581 e 3814-3818), largura
+de coluna (`colWidths`, 3638) e altura de linha (`word.heightTwips` +
+`heightRule`, 3547-3548 e 3762-3773). Os cinco também sobrevivem à
+exportação: `docx_codec` reconstrói `w:tcBorders`, `w:shd`, `w:vAlign`,
+`w:tblGrid` e `w:trHeight` a partir desses mesmos mapas.
+
+**Ficou de fora, com motivo:** a galeria de estilos de tabela. Ela aplicaria
+`w:tblStyle`, e não existe UMA linha no `layout/` que leia esse atributo — a
+cascata de estilo de tabela (tabela → bandas → cabeçalho → célula) não está
+implementada. Um cartão de galeria mudaria o modelo e a tela continuaria
+idêntica, que é exatamente o botão-que-não-faz-nada que este plano proíbe.
+Fica para F8, junto do `OfficeStyleCatalog`.
+
+**Duas decisões de contrato que valem registro:**
+- "Sem bordas" grava `val: nil` EXPLÍCITO em vez de omitir a chave. Omitir
+  significa "não opinei" e deixa a célula herdar `tblBorders`; só o `nil`
+  apaga a aresta. O compositor distingue os dois casos por `containsKey`.
+- "Distribuir linhas" recebe a altura de FORA (`data-height-twips` das linhas
+  projetadas). A altura real de uma linha sem `w:trHeight` só existe depois de
+  composta; calculá-la dentro de uma operação de modelo significaria compor o
+  documento ali dentro. E a regra gravada é `atLeast`, nunca `exact`: `exact`
+  cortaria em silêncio o conteúdo que não coubesse.
+
+**Pendente desta fase:** galeria de estilos (F8); AutoAjuste e diálogo de
+Propriedades da Tabela; direção do texto e margens de célula (o compositor lê
+`word.margins`, mas o controle é um diálogo, não um botão); repetir linha de
+cabeçalho (o renderer já repete, falta ligar `word.tblHeader` pela UI); e o
+realce de estado dos botões novos — a ribbon só reflete marcas e estilo de
+bloco, então o alinhamento vertical corrente ainda não acende o botão.
 
 ### 2.4 F4 concluída em 2026-08-09
 
@@ -533,12 +574,14 @@ overlay/NodeSelection destravam tudo que envolve objeto.
 - **Critério:** tabela de severidade do ETP: selecionar coluna, redimensionar,
   mesclar duas células, desfazer tudo, exportar e conferir no Word.
 
-### F5 — Ribbon de tabela em duas abas + estilos de tabela
-- "Design da Tabela" (galeria de estilos com preview, opções de estilo,
-  sombreamento, bordas) e "Tabela Layout" (tamanho de célula, distribuir,
-  alinhamentos, direção do texto, repetir cabeçalho).
-- **Critério:** aplicar estilo embutido numa tabela nova → DOCX abre no Word
-  com o estilo correspondente.
+### F5 — Ribbon de tabela em duas abas + estilos de tabela — **CONCLUÍDA 2026-08-09 exceto a galeria de estilos** (ver §2.5)
+- "Design da Tabela" (sombreamento e bordas) e "Tabela Layout" (selecionar,
+  linhas/colunas, mesclar/dividir, distribuir, alinhamento vertical).
+- A GALERIA de estilos de tabela não entrou: o compositor não resolve
+  `w:tblStyle`, então ela seria um controle sem efeito na tela. Entra com o
+  catálogo de estilos de F8.
+- **Critério revisto:** aplicar bordas/sombreamento numa tabela → a projeção
+  muda e o DOCX exportado abre no Word com `w:tcBorders`/`w:shd`.
 
 ### F6 — Cabeçalho/rodapé editável
 - §3.6 completo: duplo clique, tracejado + etiqueta, corpo esmaecido, aba
