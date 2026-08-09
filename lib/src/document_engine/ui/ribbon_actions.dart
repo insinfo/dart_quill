@@ -474,6 +474,27 @@ void insertPageBreak(OfficeWordController c) {
   c.dispatch(tr);
 }
 
+/// As quebras INLINE do menu Quebras (`<w:br w:type="…"/>`).
+///
+/// Só dois tipos chegam aqui, e os dois têm efeito verificável no layout:
+///
+/// * `column` — o `PageGraph` é monocoluna, então a próxima coluna
+///   disponível é a primeira da página seguinte. É exatamente o que o Word
+///   faz num documento de uma coluna, e o compositor já trata o tipo
+///   (`layout_composer.dart`, `pageBreak: breakType == 'page' || 'column'`).
+/// * `textWrapping` — a quebra de linha simples ("Disposição do Texto" no
+///   menu do Word): fecha a linha sem fechar o parágrafo.
+///
+/// O nó `hardBreak` é o mesmo que a importação cria, então o DOCX exportado
+/// leva o `w:br` de volta com o tipo intacto.
+void insertHardBreak(OfficeWordController c, String breakType) {
+  final type = c.schema.nodes['hardBreak'];
+  if (type == null) return;
+  c.syncSelection();
+  c.dispatch(c.view.state.tr
+    ..replaceSelectionWith(type.create({'breakType': breakType})));
+}
+
 /// "Página em Branco" do Word: duas quebras em volta de um parágrafo vazio,
 /// de modo que o conteúdo depois do cursor recomece na página seguinte à
 /// nova página em branco.

@@ -53,6 +53,14 @@ List<DomElement> buildLayoutTab(RibbonContext ctx) {
         menuButton(c, 'Tamanho', 'Tamanho do Papel', 'layout:size',
             () => _paperEntries(c),
             icon: 'pagesize', extraClass: 'dq-office-menuwrap-big'),
+        menuButton(
+            c, 'Colunas', 'Colunas', 'layout:columns', () => _columnEntries(),
+            icon: 'columns', extraClass: 'dq-office-menuwrap-big'),
+      ]),
+      kit.row([
+        menuButton(c, 'Quebras', 'Quebras de Página e Seção', 'layout:breaks',
+            () => _breakEntries(c),
+            icon: 'pagebreak'),
       ]),
     ]),
     kit.group('Parágrafo', [
@@ -126,6 +134,85 @@ List<OfficeMenuEntry> _paperEntries(OfficeWordController c) {
         checked: shorter == paper.width && longer == paper.height,
         onSelect: () => actions.setPaperTwips(c, paper.width, paper.height),
       ),
+  ];
+}
+
+/// O menu Quebras.
+///
+/// As quebras de PÁGINA saem habilitadas porque o compositor as honra de
+/// verdade; as de SEÇÃO saem DESABILITADAS, e essa é uma escolha
+/// deliberada. `LayoutComposer` só troca de geometria quando existe uma
+/// próxima entrada em `sections` (`_endsSection(block) && sectionIndex + 1 <
+/// sections.length`), e o chrome ainda não sabe CRIAR uma seção — pior,
+/// `setPageSetup` zera a lista importada (bug B3 do plano). Gravar
+/// `style.sectionBreak` aqui produziria um item de menu que não muda nada,
+/// que é o pior resultado possível: o usuário acharia que dividiu o
+/// documento em seções e continuaria com uma só.
+List<OfficeMenuEntry> _breakEntries(OfficeWordController c) {
+  const pending = 'Requer geometria POR SEÇÃO (pendente — B3 do plano)';
+  return [
+    OfficeMenuEntry(
+      label: 'Página',
+      description: 'O conteúdo depois do cursor abre a página seguinte',
+      icon: 'pagebreak',
+      onSelect: () => actions.insertPageBreak(c),
+    ),
+    OfficeMenuEntry(
+      label: 'Coluna',
+      description: 'Num documento de uma coluna, salta para a próxima página',
+      onSelect: () => actions.insertHardBreak(c, 'column'),
+    ),
+    OfficeMenuEntry(
+      label: 'Disposição do Texto',
+      description: 'Termina a linha sem terminar o parágrafo',
+      onSelect: () => actions.insertHardBreak(c, 'textWrapping'),
+    ),
+    const OfficeMenuEntry.separator(),
+    const OfficeMenuEntry(
+      label: 'Próxima Página',
+      description: pending,
+      enabled: false,
+    ),
+    const OfficeMenuEntry(
+      label: 'Contínua',
+      description: pending,
+      enabled: false,
+    ),
+    const OfficeMenuEntry(
+      label: 'Página Par',
+      description: pending,
+      enabled: false,
+    ),
+    const OfficeMenuEntry(
+      label: 'Página Ímpar',
+      description: pending,
+      enabled: false,
+    ),
+  ];
+}
+
+/// O menu Colunas — inteiro desabilitado, de propósito.
+///
+/// Não existe layout de colunas no motor: o `PageGraph` é monocoluna (o
+/// próprio compositor documenta isso ao tratar `w:br w:type="column"` como
+/// salto de página) e nenhuma propriedade de `w:cols` é lida em
+/// `layout/`. Um item "Duas" que gravasse a contagem de colunas deixaria o
+/// texto exatamente onde está — então ele fica visível, marcado como
+/// indisponível, em vez de mentir. "Uma" aparece com ✓ porque é o que o
+/// documento REALMENTE é hoje.
+List<OfficeMenuEntry> _columnEntries() {
+  const pending = 'O compositor ainda não faz layout de colunas';
+  return const [
+    OfficeMenuEntry(
+      label: 'Uma',
+      description: 'O layout atual do editor',
+      checked: true,
+      enabled: false,
+    ),
+    OfficeMenuEntry(label: 'Duas', description: pending, enabled: false),
+    OfficeMenuEntry(label: 'Três', description: pending, enabled: false),
+    OfficeMenuEntry(label: 'À Esquerda', description: pending, enabled: false),
+    OfficeMenuEntry(label: 'À Direita', description: pending, enabled: false),
   ];
 }
 

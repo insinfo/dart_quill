@@ -626,10 +626,17 @@ class OfficeWordEditor implements OfficeWordController {
       _vRulerSlot = _kit.el('div', 'dq-office-vruler-slot');
       _vRulerSlot!.append(_vRuler!.build());
       _canvas.append(_vRulerSlot!);
-      _canvas.addEventListener(
-          'pointermove', (event) => _hRuler?.handlePointerMove(event));
-      _canvas.addEventListener(
-          'pointerup', (event) => _hRuler?.handlePointerUp(event));
+      // O arrasto da régua (recuo, margem, parada de tabulação) começa na
+      // FAIXA, que é irmã do canvas: um gesto curto, inteiramente contido na
+      // régua, nunca produziria um `pointermove` no canvas. Os dois registros
+      // cobrem o gesto inteiro sem duplicar evento (as duas caixas não se
+      // contêm).
+      for (final target in [_canvas, _hRulerSlot!]) {
+        target.addEventListener(
+            'pointermove', (event) => _hRuler?.handlePointerMove(event));
+        target.addEventListener(
+            'pointerup', (event) => _hRuler?.handlePointerUp(event));
+      }
       _canvas.addEventListener('scroll', (_) {
         _lastCanvasScrollLeft = _canvas.scrollLeft;
         _positionVerticalRuler();

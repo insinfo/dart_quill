@@ -386,6 +386,8 @@
   margin: 0 auto;
 }
 
+/* O canto é o SELETOR de tipo de tabulação: clicar gira entre esquerda,
+   centro, direita e decimal, e o glifo mostra qual está armado. */
 .dq-office-ruler-corner {
   position: absolute;
   left: 0;
@@ -397,6 +399,14 @@
   color: #555;
   font: 11px/20px Georgia, serif;
   text-align: center;
+  cursor: pointer;
+  user-select: none;
+  z-index: 7;
+}
+
+.dq-office-ruler-corner:hover {
+  background: #eef4fc;
+  border-color: #185abd;
 }
 
 .dq-office-indent {
@@ -469,6 +479,81 @@
   height: 3px;
   transform: translate(-50%, -50%);
   background: #555;
+}
+
+/* Ticks e números são irmãos da banda e ficam POR CIMA dela. Sem isto,
+   clicar num deles não criaria a parada de tabulação — e eles cobrem
+   justamente as posições redondas em que o usuário mira. */
+.dq-office-ruler-tick,
+.dq-office-ruler-number {
+  pointer-events: none;
+}
+
+/* alça de margem: a fronteira cinza/branco */
+.dq-office-margin {
+  position: absolute;
+  top: 4px;
+  bottom: 5px;
+  width: 7px;
+  transform: translateX(-50%);
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 4;
+}
+
+.dq-office-margin::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: transparent;
+}
+
+.dq-office-margin:hover::after {
+  background: #185abd;
+}
+
+/* guia do arrasto de margem: durante o gesto só ELA se move — a
+   repaginação sai uma única vez, no pointerup */
+.dq-office-ruler-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed #185abd;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.dq-office-ruler-tabs {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.dq-office-tabstop {
+  position: absolute;
+  bottom: 0;
+  min-width: 10px;
+  height: 9px;
+  transform: translateX(-50%);
+  cursor: ew-resize;
+  touch-action: none;
+  pointer-events: auto;
+  color: #333;
+  font: 10px/9px Georgia, serif;
+  text-align: center;
+  white-space: nowrap;
+  z-index: 6;
+}
+
+.dq-office-tabstop:hover {
+  color: #185abd;
 }
 
 .dq-office-ruler-tick-half {
