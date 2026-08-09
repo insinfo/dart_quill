@@ -105,6 +105,8 @@ class XmlSaxParser {
   final String _src;
   final XmlSaxHandler _handler;
   int _pos = 0;
+  int _depth = 0;
+  bool _seenRoot = false;
 
   XmlSaxParser._(this._src, this._handler);
 
@@ -114,6 +116,24 @@ class XmlSaxParser {
     if (source.isNotEmpty && source.codeUnitAt(0) == 0xfeff) start = 1;
     XmlSaxParser._(start == 0 ? source : source.substring(start), handler)
         ._parseDocument();
+  }
+
+  /// Parse cooperativo com a mesma máquina SAX de [parseString].
+  ///
+  /// A cada fatia o estado (`_pos`, profundidade e raiz) permanece no parser;
+  /// somente o event loop é devolvido. O DOM resultante e a ordem dos eventos
+  /// são portanto idênticos aos do caminho síncrono.
+  static Future<void> parseStringAsync(
+    String source,
+    XmlSaxHandler handler, {
+    Duration sliceBudget = const Duration(milliseconds: 16),
+  }) async {
+    var start = 0;
+    if (source.isNotEmpty && source.codeUnitAt(0) == 0xfeff) start = 1;
+    await XmlSaxParser._(
+      start == 0 ? source : source.substring(start),
+      handler,
+    )._parseDocumentAsync(sliceBudget);
   }
 
   /// Decodifica [bytes] como UTF-8 (tolerando BOM) e faz o parse.
@@ -131,76 +151,108 @@ class XmlSaxParser {
   }
 
   void _parseDocument() {
-    _handler.startDocument();
-    final src = _src;
-    final len = src.length;
-    var depth = 0;
-    var seenRoot = false;
+    _beginDocument();
+    while (_pos < _src.length) {
+      _parseNext();
+    }
+    _endDocument();
+  }
 
-    while (_pos < len) {
-      final c = src.codeUnitAt(_pos);
-      if (c == _lt) {
-        if (_pos + 1 >= len) {
-          throw XmlParseException('Documento termina dentro de tag', src, _pos);
-        }
-        final c1 = src.codeUnitAt(_pos + 1);
-        if (c1 == _slash) {
-          final qname = _parseEndTag();
-          depth--;
-          if (depth < 0) {
-            throw XmlParseException(
-                'Tag de fechamento sem abertura: </$qname>', src, _pos);
-          }
-          _handler.endElement(qname);
-        } else if (c1 == _excl) {
-          if (src.startsWith('<!--', _pos)) {
-            _parseComment();
-          } else if (src.startsWith('<![CDATA[', _pos)) {
-            if (depth == 0) {
-              throw XmlParseException('CDATA fora do elemento raiz', src, _pos);
-            }
-            _parseCData();
-          } else if (src.startsWith('<!DOCTYPE', _pos)) {
-            _skipDoctype();
-          } else {
-            throw XmlParseException('Marcação "<!" desconhecida', src, _pos);
-          }
-        } else if (c1 == _quest) {
-          _parsePiOrDeclaration(atStart: _pos == 0);
-        } else {
-          if (depth == 0 && seenRoot) {
-            throw XmlParseException(
-                'Mais de um elemento raiz no documento', src, _pos);
-          }
-          final selfClosing = _parseStartTag();
-          seenRoot = true;
-          if (!selfClosing) depth++;
-        }
-      } else {
-        final textEnd = src.indexOf('<', _pos);
-        final end = textEnd < 0 ? len : textEnd;
-        if (depth > 0) {
-          final text = _decodeText(src, _pos, end);
-          if (text.isNotEmpty) _handler.characters(text);
-        } else {
-          // Fora do raiz só whitespace é permitido.
-          for (var i = _pos; i < end; i++) {
-            final w = src.codeUnitAt(i);
-            if (w != _space && w != _tab && w != _lf && w != _cr) {
-              throw XmlParseException('Texto fora do elemento raiz', src, i);
-            }
-          }
-        }
-        _pos = end;
+  Future<void> _parseDocumentAsync(Duration sliceBudget) async {
+    _beginDocument();
+    final watch = Stopwatch()..start();
+    var tokens = 0;
+    while (_pos < _src.length) {
+      _parseNext();
+      // Consultar o relógio por lote evita que o próprio checkpoint domine
+      // XMLs pequenos; 128 tokens ainda ficam muito abaixo de um frame.
+      if (++tokens & 0x7f == 0 &&
+          watch.elapsedMicroseconds >= sliceBudget.inMicroseconds) {
+        await Future<void>.delayed(Duration.zero);
+        watch
+          ..reset()
+          ..start();
       }
     }
+    _endDocument();
+  }
 
-    if (depth != 0) {
-      throw XmlParseException('Elemento não fechado no fim do documento', src,
+  void _beginDocument() {
+    _pos = 0;
+    _depth = 0;
+    _seenRoot = false;
+    _handler.startDocument();
+  }
+
+  void _parseNext() {
+    final src = _src;
+    final len = src.length;
+    final c = src.codeUnitAt(_pos);
+    if (c == _lt) {
+      if (_pos + 1 >= len) {
+        throw XmlParseException('Documento termina dentro de tag', src, _pos);
+      }
+      final c1 = src.codeUnitAt(_pos + 1);
+      if (c1 == _slash) {
+        final qname = _parseEndTag();
+        _depth--;
+        if (_depth < 0) {
+          throw XmlParseException(
+              'Tag de fechamento sem abertura: </$qname>', src, _pos);
+        }
+        _handler.endElement(qname);
+      } else if (c1 == _excl) {
+        if (src.startsWith('<!--', _pos)) {
+          _parseComment();
+        } else if (src.startsWith('<![CDATA[', _pos)) {
+          if (_depth == 0) {
+            throw XmlParseException('CDATA fora do elemento raiz', src, _pos);
+          }
+          _parseCData();
+        } else if (src.startsWith('<!DOCTYPE', _pos)) {
+          _skipDoctype();
+        } else {
+          throw XmlParseException('Marcação "<!" desconhecida', src, _pos);
+        }
+      } else if (c1 == _quest) {
+        _parsePiOrDeclaration(atStart: _pos == 0);
+      } else {
+        if (_depth == 0 && _seenRoot) {
+          throw XmlParseException(
+              'Mais de um elemento raiz no documento', src, _pos);
+        }
+        final selfClosing = _parseStartTag();
+        _seenRoot = true;
+        if (!selfClosing) _depth++;
+      }
+      return;
+    }
+
+    final textEnd = src.indexOf('<', _pos);
+    final end = textEnd < 0 ? len : textEnd;
+    if (_depth > 0) {
+      final text = _decodeText(src, _pos, end);
+      if (text.isNotEmpty) _handler.characters(text);
+    } else {
+      // Fora do raiz só whitespace é permitido.
+      for (var i = _pos; i < end; i++) {
+        final w = src.codeUnitAt(i);
+        if (w != _space && w != _tab && w != _lf && w != _cr) {
+          throw XmlParseException('Texto fora do elemento raiz', src, i);
+        }
+      }
+    }
+    _pos = end;
+  }
+
+  void _endDocument() {
+    final len = _src.length;
+    if (_depth != 0) {
+      throw XmlParseException('Elemento não fechado no fim do documento', _src,
           len == 0 ? 0 : len - 1);
     }
-    if (!seenRoot) {
-      throw XmlParseException('Documento sem elemento raiz', src, 0);
+    if (!_seenRoot) {
+      throw XmlParseException('Documento sem elemento raiz', _src, 0);
     }
     _handler.endDocument();
   }

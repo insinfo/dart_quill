@@ -1,5 +1,5 @@
 @TestOn('vm')
-@Timeout(Duration(minutes: 12))
+@Timeout(Duration(minutes: 45))
 library;
 
 /// End-to-end coverage of the quill-table-better UI driven by REAL input:

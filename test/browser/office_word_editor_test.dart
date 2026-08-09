@@ -147,6 +147,70 @@ void main() {
     expect(editor.pageGraph.pages.length, pagesBefore);
   });
 
+  test('status profundo usa a geometria real de seções com alturas distintas',
+      () async {
+    host.setAttribute('style', 'height:400px;');
+    final editor = mount(blocks: 2);
+    const tall = PageSetupTwips(
+      widthTwips: 10000,
+      heightTwips: 16000,
+      marginTopTwips: 900,
+      marginBottomTwips: 900,
+    );
+    const short = PageSetupTwips(
+      widthTwips: 10000,
+      heightTwips: 6000,
+      marginTopTwips: 600,
+      marginBottomTwips: 600,
+    );
+    final firstSection = schema.node(
+      'paragraph',
+      {
+        'style': {'sectionBreak': true}
+      },
+      Fragment.from([schema.text('Fim da seção alta')]),
+    );
+    final mixedDocument = schema.node(
+      'doc',
+      null,
+      Fragment.from([
+        firstSection,
+        for (var index = 0; index < 120; index++)
+          schema.node(
+            'paragraph',
+            null,
+            Fragment.from([
+              schema.text('Parágrafo $index da seção baixa com texto '
+                  'suficiente para produzir muitas páginas reais.')
+            ]),
+          ),
+      ]),
+    );
+    editor.openDocument(
+      mixedDocument,
+      setup: tall,
+      sections: const [tall, short],
+    );
+
+    final total = editor.pageGraph.pages.length;
+    expect(total, greaterThan(8));
+    final targetIndex = total - 3;
+    final canvas =
+        web.document.querySelector('.dq-office-canvas') as web.HTMLElement;
+    final pages =
+        web.document.querySelector('.dq-office-pages') as web.HTMLElement;
+    final target = pages.children.item(targetIndex) as web.HTMLElement;
+    canvas.scrollTop +=
+        target.getBoundingClientRect().top - canvas.getBoundingClientRect().top;
+    canvas.dispatchEvent(web.Event('scroll'));
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+
+    expect(editor.view.visiblePageIndex, targetIndex,
+        reason: 'a altura da primeira seção não pode contaminar as demais');
+    final status = web.document.querySelector('.dq-office-status-item')!;
+    expect(status.textContent, 'Página ${targetIndex + 1} de $total');
+  });
+
   test('digitação REAL continua funcionando sob o chrome', () {
     final editor = mount(blocks: 3);
     const map = OfficeDomPositionMap();

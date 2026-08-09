@@ -23,6 +23,7 @@
 library;
 
 import '../../platform/dom.dart';
+import '../diagnostics/open_document_timing.dart';
 import '../layout/dom_position_map.dart';
 import '../layout/dom_renderer.dart';
 import '../layout/layout_composer.dart';
@@ -50,7 +51,10 @@ class OfficeVirtualization {
 enum OfficeInputAction {
   insertText,
   insertParagraph,
+  insertLineBreak,
   deleteBackward,
+  deleteWordBackward,
+  deleteSoftLineBackward,
   deleteForward,
 }
 
@@ -65,10 +69,13 @@ class OfficeEditorView {
     List<OfficeExtension> extensions = const [],
     this.virtualization,
     DomElement? scrollContainer,
+    bool honorRenderedPageBreaks = true,
     this.onStateChange,
+    this.onVisiblePageChange,
   })  : _state = state,
         _scrollContainer = scrollContainer,
         _adapter = adapter,
+        _renderedPageBreakHintsValid = honorRenderedPageBreaks,
         _composer = composer ?? LayoutComposer(),
         _extensions = OfficeExtensionSet(extensions),
         _renderer = renderer ??
@@ -87,7 +94,7 @@ class OfficeEditorView {
     host.addEventListener('paste', _paste);
     host.addEventListener('compositionstart', _compositionStart);
     host.addEventListener('compositionend', _compositionEnd);
-    if (virtualization != null) {
+    if (virtualization != null || onVisiblePageChange != null) {
       _scroll = _handleScroll;
       (_scrollContainer ?? host).addEventListener('scroll', _scroll!);
     }
@@ -100,8 +107,12 @@ class OfficeEditorView {
       if (syncSelectionFromDom()) onStateChange?.call(_state);
     };
     _adapter.document.addEventListener('selectionchange', _selectionChange!);
-    _compose();
-    _project();
+    measureOpenDocumentPhase<void>('compose', _compose);
+    // Resolve the current page against the existing projection before
+    // replacing it. Reading geometry immediately after render forces a full
+    // browser layout; the scroll handler keeps this cached value current.
+    _visiblePage = measureOpenDocumentPhase<int>('geometry', _visiblePageIndex);
+    measureOpenDocumentPhase<void>('project', () => _project(_visiblePage));
   }
 
   /// Monta um editor a partir do DOCUMENTO, instalando os plugins que as
@@ -119,20 +130,24 @@ class OfficeEditorView {
     PageGraphDomRenderer? renderer,
     OfficeVirtualization? virtualization,
     DomElement? scrollContainer,
+    bool honorRenderedPageBreaks = true,
     void Function(EditorState state)? onStateChange,
+    void Function(int pageIndex)? onVisiblePageChange,
   }) {
     final set = OfficeExtensionSet(extensions);
     return OfficeEditorView(
       host: host,
-      state: EditorState.create(
-          EditorStateConfig(doc: doc, plugins: set.plugins)),
+      state:
+          EditorState.create(EditorStateConfig(doc: doc, plugins: set.plugins)),
       adapter: adapter,
       composer: composer,
       renderer: renderer,
       extensions: extensions,
       virtualization: virtualization,
       scrollContainer: scrollContainer,
+      honorRenderedPageBreaks: honorRenderedPageBreaks,
       onStateChange: onStateChange,
+      onVisiblePageChange: onVisiblePageChange,
     );
   }
 
@@ -152,8 +167,13 @@ class OfficeEditorView {
   /// Notificação de mudança de estado (a aplicação persiste a partir daqui).
   final void Function(EditorState state)? onStateChange;
 
+  /// Notifica somente quando o topo do viewport cruza uma página. Isso
+  /// alimenta a barra de status sem atualizá-la a cada pixel de scroll.
+  final void Function(int pageIndex)? onVisiblePageChange;
+
   EditorState _state;
   late PageGraph _pageGraph;
+  bool _renderedPageBreakHintsValid;
   late DomEventListener _beforeInput;
   late DomEventListener _keyDown;
   late DomEventListener _copy;
@@ -167,10 +187,13 @@ class OfficeEditorView {
   DomEventListener? _selectionChange;
   bool _disposed = false;
   bool _composing = false;
+  int _visiblePage = 0;
   PageWindow? _window;
 
   EditorState get state => _state;
   PageGraph get pageGraph => _pageGraph;
+  bool get renderedPageBreakHintsValid => _renderedPageBreakHintsValid;
+  int get visiblePageIndex => _visiblePage;
   OfficeExtensionSet get extensions => _extensions;
 
   /// Roda um comando nomeado de extensão (o caminho da UI: botão de negrito,
@@ -215,6 +238,10 @@ class OfficeEditorView {
     if (_disposed) return;
     _state = _state.apply(transaction);
     if (transaction.docChanged) {
+      // `lastRenderedPageBreak` descreve o layout da última gravação feita
+      // pelo Word. Qualquer mutação do documento torna o conjunto inteiro
+      // obsoleto, inclusive mudanças de marca que não produzem StepMap.
+      _renderedPageBreakHintsValid = false;
       // Recomposição INCREMENTAL: as páginas antes da menor posição tocada
       // pela transação são reusadas. Digitar na página 180 de 200 custa as
       // páginas 180+, não as 200.
@@ -240,12 +267,15 @@ class OfficeEditorView {
     // apontar para uma projeção já substituída. Fora do host, ela não diz
     // nada sobre ESTE documento — mesma guarda do reconciliador.
     if (!_containsNode(host, native.startContainer)) return null;
-    final anchor = _positions.modelPositionAt(
-        native.startContainer, native.startOffset);
+    final anchor =
+        _positions.modelPositionAt(native.startContainer, native.startOffset);
     final head =
         _positions.modelPositionAt(native.endContainer, native.endOffset);
     if (anchor == null || head == null) return null;
-    return (from: anchor < head ? anchor : head, to: anchor < head ? head : anchor);
+    return (
+      from: anchor < head ? anchor : head,
+      to: anchor < head ? head : anchor
+    );
   }
 
   /// [ancestor] contém [node]? Igualdade de nó, nunca identidade — o
@@ -287,13 +317,24 @@ class OfficeEditorView {
 
   // -- laço -----------------------------------------------------------------
 
-  void _compose() => _pageGraph = _composer.compose(_state.doc);
+  void _compose() => _pageGraph = _composer.compose(
+        _state.doc,
+        honorRenderedPageBreaks: _renderedPageBreakHintsValid,
+      );
 
   /// Recompõe a partir da menor posição que a transação tocou.
   void _composeAfter(Transaction transaction) {
     final changedFrom = _changedFrom(transaction);
     if (changedFrom == null) {
-      _compose();
+      // AddMark/RemoveMark e passos de atributo mudam o documento sem mudar
+      // posições, portanto seus StepMaps são vazios. Voltar a `compose()`
+      // aqui reativaria os hints obsoletos; posição zero é o fallback global
+      // conservador do compositor incremental.
+      _pageGraph = _composer.composeIncremental(
+        _state.doc,
+        previous: _pageGraph,
+        changedFromDocPos: 0,
+      );
       return;
     }
     _pageGraph = _composer.composeIncremental(
@@ -317,8 +358,8 @@ class OfficeEditorView {
     return smallest;
   }
 
-  void _project() {
-    _window = _computeWindow();
+  void _project([int? visiblePage]) {
+    _window = _computeWindow(visiblePage ?? _visiblePage);
     _renderer.render(_pageGraph, host, window: _window);
   }
 
@@ -330,13 +371,13 @@ class OfficeEditorView {
   /// página, não estica a faixa: um caret na página 0 com o viewport na 150
   /// manteria 151 páginas montadas, e a virtualização não serviria para
   /// nada.
-  PageWindow? _computeWindow() {
+  PageWindow? _computeWindow([int? visiblePage]) {
     final policy = virtualization;
     if (policy == null) return null;
     final total = _pageGraph.pages.length;
     if (total == 0) return null;
 
-    final visible = _visiblePageIndex();
+    final visible = visiblePage ?? _visiblePageIndex();
     var first = visible - policy.radius;
     var last = visible + policy.radius;
     if (first < 0) first = 0;
@@ -352,21 +393,89 @@ class OfficeEditorView {
 
   /// Qual página está no topo do viewport.
   ///
-  /// Todas as páginas têm a mesma altura (a do setup), então a divisão
-  /// basta e não custa medir o DOM.
+  /// A geometria do DOM é autoritativa. Um DOCX pode trocar o tamanho da
+  /// folha entre seções; dividir o scroll pela altura da primeira página
+  /// acumula erro e passa a anunciar a página anterior em documentos longos.
+  /// A busca binária mede no máximo O(log n) folhas/placeholders e funciona
+  /// igualmente com a janela virtualizada, pois os placeholders preservam a
+  /// geometria real de cada página.
   int _visiblePageIndex() {
+    if (_pageGraph.pages.isEmpty) return 0;
     final container = _scrollContainer ?? host;
     final scrollTop = container.scrollTop;
-    if (scrollTop <= 0) return 0;
-    final pageHeightPx =
-        _pageGraph.pages.first.setup.heightTwips / 20.0 * _renderer.pxPerPt;
-    if (pageHeightPx <= 0) return 0;
-    return (scrollTop / pageHeightPx).floor();
+    if (scrollTop <= _renderer.scrollTopInsetPx) return 0;
+    final measured = _visiblePageIndexFromDom(container);
+    if (measured != null) return measured;
+
+    // Adaptadores sem layout (VM/fakes) não oferecem retângulos DOM. O
+    // fallback reproduz a projeção página a página, inclusive seções com
+    // alturas distintas, usando a mesma precisão serializada pelo renderer.
+    final relativeScroll =
+        scrollTop - _renderer.scrollTopInsetPx + _pageCrossingTolerancePx;
+    var nextPageTop = 0.0;
+    for (var index = 1; index < _pageGraph.pages.length; index++) {
+      final previous = _pageGraph.pages[index - 1];
+      final projectedHeight =
+          previous.setup.heightTwips / 20.0 * _renderer.pxPerPt;
+      nextPageTop +=
+          (projectedHeight * 100).round() / 100.0 + _renderer.pageGapPx;
+      if (relativeScroll < nextPageTop) return index - 1;
+    }
+    return _pageGraph.pages.length - 1;
+  }
+
+  static const double _pageCrossingTolerancePx = 1.0;
+
+  int? _visiblePageIndexFromDom(DomElement container) {
+    final pages = <DomElement>[];
+    for (final node in host.childNodes) {
+      if (node is DomElement && node.getAttribute('data-page') != null) {
+        pages.add(node);
+      }
+    }
+    if (pages.isEmpty) return null;
+
+    int pageNumberAt(int index) =>
+        int.tryParse(pages[index].getAttribute('data-page') ?? '') ?? index;
+    double? topAt(int index) {
+      final bounds =
+          _adapter.getElementBounds(pages[index], relativeTo: container);
+      final top = bounds?['top'];
+      return top is num ? top.toDouble() : null;
+    }
+
+    if (pages.length == 1) return pageNumberAt(0);
+    final firstTop = topAt(0);
+    final lastTop = topAt(pages.length - 1);
+    // O fake DOM devolve o mesmo retângulo para todos os elementos. Isso não
+    // é geometria utilizável e deve seguir para o fallback determinístico.
+    if (firstTop == null || lastTop == null || lastTop <= firstTop) return null;
+
+    var low = 0;
+    var high = pages.length - 1;
+    var visible = 0;
+    while (low <= high) {
+      final middle = low + ((high - low) >> 1);
+      final top = topAt(middle);
+      if (top == null) return null;
+      if (top <= _pageCrossingTolerancePx) {
+        visible = middle;
+        low = middle + 1;
+      } else {
+        high = middle - 1;
+      }
+    }
+    return pageNumberAt(visible).clamp(0, _pageGraph.pages.length - 1);
   }
 
   void _handleScroll(DomEvent event) {
     if (_disposed || _composing) return;
-    final next = _computeWindow();
+    final visible = _visiblePageIndex();
+    if (visible != _visiblePage) {
+      _visiblePage = visible;
+      onVisiblePageChange?.call(visible);
+    }
+    final next = _computeWindow(visible);
     if (next == null || next == _window) return;
     _renderer.render(_pageGraph, host, window: next);
     _window = next;
@@ -398,6 +507,18 @@ class OfficeEditorView {
     // palavra sendo composta.
     if (event.isComposing) return;
     syncSelectionFromDom();
+    // Dentro de tabela, Tab pertence ao documento: ele percorre as celulas
+    // editaveis. Na ultima celula mantemos o caret e cancelamos o default;
+    // criar uma linha implicitamente aqui seria uma mutacao estrutural
+    // arriscada e diferente entre browsers.
+    if (event.key == 'Tab' &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        _moveAcrossTableCell(backward: event.shiftKey)) {
+      event.preventDefault();
+      return;
+    }
     final handled = _extensions.handleKey(
       key: event.key,
       ctrl: event.ctrlKey,
@@ -469,9 +590,16 @@ class OfficeEditorView {
 
   void _handleCut(DomEvent event) {
     if (_disposed || event is! DomClipboardEvent) return;
+    syncSelectionFromDom();
+    final selection = _state.selection;
+    if (!selection.empty && !_isSafeCellRange(selection.from, selection.to)) {
+      // Nunca deixe o fallback nativo cortar o DOM projetado: uma seleção
+      // entre células destruiria wrappers de tabela sem transação válida.
+      event.preventDefault();
+      return;
+    }
     if (!_writeClipboard(event)) return;
     event.preventDefault();
-    final selection = _state.selection;
     dispatch(_state.tr..delete(selection.from, selection.to));
   }
 
@@ -480,6 +608,9 @@ class OfficeEditorView {
     // SEMPRE cancela: deixar o browser colar HTML arbitrário na projeção
     // escreveria no DOM um conteúdo que o modelo não conhece.
     event.preventDefault();
+    syncSelectionFromDom();
+    final selection = _state.selection;
+    if (!_isSafeCellRange(selection.from, selection.to)) return;
     final data = event.clipboardData;
     if (data == null) return;
     final slice = _clipboard.parse(
@@ -488,7 +619,6 @@ class OfficeEditorView {
       schema: _state.schema,
     );
     if (slice == null) return;
-    syncSelectionFromDom();
     dispatch(_state.tr..replaceSelection(slice));
   }
 
@@ -507,21 +637,50 @@ class OfficeEditorView {
     final action = _actionFor(event.inputType);
     if (action == null) return;
 
-    final range = readNativeSelection();
+    var range = readNativeSelection();
     if (range == null) return;
+
+    // Para apagamentos colapsados, getTargetRanges e a fonte mais fiel: o
+    // browser ja calculou o grafema, a palavra ou a linha visual atingida.
+    // Eventos sinteticos e alguns browsers nao o fornecem; nesses casos os
+    // fallbacks abaixo trabalham somente no textblock atual.
+    if (range.from == range.to && _isDeleteAction(action)) {
+      var targetWasProvided = false;
+      ({int from, int to})? targetRange;
+      for (final target in event.getTargetRanges()) {
+        if (target.collapsed) continue;
+        targetWasProvided = true;
+        targetRange = _modelRangeFor(target);
+        break;
+      }
+      if (targetWasProvided) {
+        // Um target range fora da projecao ou entre celulas e rejeitado; nao
+        // adivinhamos outro intervalo e arriscamos apagar estrutura.
+        if (targetRange == null) return;
+        range = targetRange;
+      } else if (action == OfficeInputAction.deleteWordBackward) {
+        final fallback = _wordBackwardRange(range.from);
+        if (fallback == null) return;
+        range = fallback;
+      } else if (action == OfficeInputAction.deleteSoftLineBackward) {
+        final fallback = _softLineBackwardRange(range.from);
+        if (fallback == null) return;
+        range = fallback;
+      }
+    }
 
     final transaction = _transactionFor(action, range, event.data);
     if (transaction != null) dispatch(transaction);
   }
 
-  static OfficeInputAction? _actionFor(String? inputType) => switch (inputType) {
+  static OfficeInputAction? _actionFor(String? inputType) =>
+      switch (inputType) {
         'insertText' => OfficeInputAction.insertText,
-        'insertParagraph' || 'insertLineBreak' =>
-          OfficeInputAction.insertParagraph,
-        'deleteContentBackward' ||
-        'deleteWordBackward' ||
-        'deleteSoftLineBackward' =>
-          OfficeInputAction.deleteBackward,
+        'insertParagraph' => OfficeInputAction.insertParagraph,
+        'insertLineBreak' => OfficeInputAction.insertLineBreak,
+        'deleteContentBackward' => OfficeInputAction.deleteBackward,
+        'deleteWordBackward' => OfficeInputAction.deleteWordBackward,
+        'deleteSoftLineBackward' => OfficeInputAction.deleteSoftLineBackward,
         'deleteContentForward' ||
         'deleteWordForward' ||
         'deleteContent' =>
@@ -538,33 +697,303 @@ class OfficeEditorView {
     final docSize = _state.doc.content.size;
     switch (action) {
       case OfficeInputAction.insertText:
+        if (!_isSafeCellRange(range.from, range.to)) return null;
         final text = data;
         if (text == null || text.isEmpty) return null;
         transaction.insertText(text, range.from, range.to);
       case OfficeInputAction.insertParagraph:
+        if (!_isSafeCellRange(range.from, range.to)) return null;
         if (range.from != range.to) transaction.delete(range.from, range.to);
         transaction.split(range.from);
-      case OfficeInputAction.deleteBackward:
+      case OfficeInputAction.insertLineBreak:
+        if (!_isSafeCellRange(range.from, range.to)) return null;
+        final type = _state.schema.nodes['hardBreak'];
+        if (type == null) return null;
+        final marks = _state.doc.resolve(range.from).marks();
+        transaction.replaceRangeWith(
+            range.from, range.to, type.create(null, null, marks));
+      case OfficeInputAction.deleteBackward ||
+            OfficeInputAction.deleteWordBackward ||
+            OfficeInputAction.deleteSoftLineBackward:
         if (range.from != range.to) {
+          if (!_isSafeCellRange(range.from, range.to)) return null;
           transaction.delete(range.from, range.to);
         } else {
           if (range.from <= 1) return null;
-          transaction.delete(range.from - 1, range.from);
+          if (_atProtectedCellBoundary(range.from, backward: true)) {
+            return null;
+          }
+          final deletion = _backwardVisibleUnitRange(range.from);
+          if (deletion == null ||
+              !_isSafeCellRange(deletion.from, deletion.to)) {
+            return null;
+          }
+          transaction.delete(deletion.from, deletion.to);
         }
       case OfficeInputAction.deleteForward:
         if (range.from != range.to) {
+          if (!_isSafeCellRange(range.from, range.to)) return null;
           transaction.delete(range.from, range.to);
         } else {
           if (range.to >= docSize) return null;
-          transaction.delete(range.to, range.to + 1);
+          if (_atProtectedCellBoundary(range.to, backward: false)) {
+            return null;
+          }
+          final deletion = _forwardVisibleUnitRange(range.to);
+          if (deletion == null ||
+              !_isSafeCellRange(deletion.from, deletion.to)) {
+            return null;
+          }
+          transaction.delete(deletion.from, deletion.to);
         }
     }
     // A seleção segue o mapeamento da própria transação (é o que mantém o
     // caret no lugar certo depois de uma edição que muda tamanhos).
     final mapped = transaction.mapping.map(range.from);
-    transaction.setSelection(
-        Selection.near(transaction.doc.resolve(_clamp(mapped, transaction.doc))));
+    transaction.setSelection(Selection.near(
+        transaction.doc.resolve(_clamp(mapped, transaction.doc))));
     return transaction;
+  }
+
+  static bool _isDeleteAction(OfficeInputAction action) =>
+      action == OfficeInputAction.deleteBackward ||
+      action == OfficeInputAction.deleteWordBackward ||
+      action == OfficeInputAction.deleteSoftLineBackward ||
+      action == OfficeInputAction.deleteForward;
+
+  ({int from, int to})? _modelRangeFor(DomNativeRange native) {
+    if (!_containsNode(host, native.startContainer) ||
+        !_containsNode(host, native.endContainer)) {
+      return null;
+    }
+    final anchor =
+        _positions.modelPositionAt(native.startContainer, native.startOffset);
+    final head =
+        _positions.modelPositionAt(native.endContainer, native.endOffset);
+    if (anchor == null || head == null || anchor == head) return null;
+    final range = (
+      from: anchor < head ? anchor : head,
+      to: anchor < head ? head : anchor,
+    );
+    return _isSafeCellRange(range.from, range.to) ? range : null;
+  }
+
+  /// Fallback de Ctrl+Backspace/Option+Backspace. Usa offsets UTF-16, como
+  /// as posicoes do modelo, e considera letras acentuadas/combining marks
+  /// parte da palavra (somente espaco e pontuacao separam palavras).
+  ({int from, int to})? _wordBackwardRange(int caret) {
+    final resolved = _state.doc.resolve(_clamp(caret, _state.doc));
+    if (!resolved.parent.inlineContent || resolved.parentOffset <= 0) {
+      return null;
+    }
+    final prefix = resolved.parent.textBetween(
+      0,
+      resolved.parentOffset,
+      leafText: _logicalLeafText,
+    );
+    var start = prefix.length;
+    while (start > 0 && _isSpace(prefix.substring(start - 1, start))) {
+      start--;
+    }
+    if (start > 0) {
+      final removeWord = !_isPunctuation(prefix.substring(start - 1, start));
+      while (start > 0) {
+        final character = prefix.substring(start - 1, start);
+        if (_isSpace(character) || (_isPunctuation(character) == removeWord)) {
+          break;
+        }
+        start--;
+      }
+      if (!removeWord) {
+        while (
+            start > 0 && _isPunctuation(prefix.substring(start - 1, start))) {
+          start--;
+        }
+      }
+    }
+    final from = resolved.start() + start;
+    if (from >= caret || !_isSafeCellRange(from, caret)) return null;
+    return (from: from, to: caret);
+  }
+
+  /// Fallback de deleteSoftLineBackward. Primeiro usa a linha visual
+  /// projetada (inclusive em wrap); sem uma ancora DOM valida, recua ate a
+  /// ultima quebra manual ou ao inicio do textblock.
+  ({int from, int to})? _softLineBackwardRange(int caret) {
+    var from = _visualLineStart(caret);
+    final resolved = _state.doc.resolve(_clamp(caret, _state.doc));
+    if (from == null || from < resolved.start() || from > caret) {
+      if (!resolved.parent.inlineContent) return null;
+      final prefix = resolved.parent.textBetween(
+        0,
+        resolved.parentOffset,
+        leafText: _logicalLeafText,
+      );
+      final breakAt = prefix.lastIndexOf('\n');
+      from = resolved.start() + (breakAt < 0 ? 0 : breakAt + 1);
+    }
+    if (from >= caret || !_isSafeCellRange(from, caret)) return null;
+    return (from: from, to: caret);
+  }
+
+  int? _visualLineStart(int caret) {
+    final native = _adapter.getNativeSelectionRange();
+    if (native == null) return null;
+    final line =
+        _ancestorWithClass(native.startContainer, '$officeCssPrefix-line');
+    final block = line == null
+        ? null
+        : _ancestorWithClass(line, '$officeCssPrefix-block');
+    if (line == null || block == null) return null;
+    final docPos = int.tryParse(block.getAttribute('data-doc-pos') ?? '');
+    final charStart = int.tryParse(line.getAttribute('data-char-start') ?? '');
+    if (docPos == null || charStart == null) return null;
+    final result = docPos + charStart;
+    return result <= caret ? result : null;
+  }
+
+  DomElement? _ancestorWithClass(DomNode node, String className) {
+    DomNode? current = node;
+    while (current != null) {
+      if (current is DomElement && current.classes.contains(className)) {
+        return current;
+      }
+      if (current == host) break;
+      current = current.parentNode;
+    }
+    return null;
+  }
+
+  static String? _logicalLeafText(PMNode node) =>
+      node.type.name == 'hardBreak' ? '\n' : '\u{fffc}';
+
+  static bool _isSpace(String character) =>
+      character.trim().isEmpty || character == '\u00a0';
+
+  static final RegExp _punctuation =
+      RegExp(r'''[.,;:!?…“”"'‘’()\[\]{}<>/\\|@#$%^&*+=~`—–-]''');
+
+  static bool _isPunctuation(String character) =>
+      _punctuation.hasMatch(character);
+
+  /// Localiza a tabela/celula MAIS interna que contem [position].
+  ({int tableStart, int cellStart, PMNode table, PMNode cell})? _tableContextAt(
+      int position) {
+    final resolved = _state.doc.resolve(_clamp(position, _state.doc));
+    int? cellDepth;
+    for (var depth = resolved.depth; depth > 0; depth--) {
+      final node = resolved.node(depth);
+      if (cellDepth == null && node.type.name == 'tableCell') {
+        cellDepth = depth;
+      } else if (cellDepth != null && node.type.name == 'table') {
+        return (
+          tableStart: resolved.before(depth),
+          cellStart: resolved.before(cellDepth),
+          table: node,
+          cell: resolved.node(cellDepth),
+        );
+      }
+    }
+    return null;
+  }
+
+  bool _isSafeCellRange(int from, int to) {
+    final left = _tableContextAt(from);
+    final right = _tableContextAt(to);
+    if (left == null && right == null) return true;
+    return left != null &&
+        right != null &&
+        left.tableStart == right.tableStart &&
+        left.cellStart == right.cellStart;
+  }
+
+  /// Backspace/Delete operam sobre a unidade VISÍVEL adjacente. Metadados
+  /// OOXML (`bookmark*`, proof/range markers) são atoms `opaqueInline`
+  /// escondidos e não podem desaparecer só porque o caret encostou neles.
+  ({int from, int to})? _backwardVisibleUnitRange(int caret) {
+    var end = _clamp(caret, _state.doc);
+    while (end > 1) {
+      final before = _state.doc.resolve(end).nodeBefore;
+      if (before?.type.name != 'opaqueInline') break;
+      end -= before!.nodeSize;
+    }
+    if (end <= 1) return null;
+    return (from: end - 1, to: end);
+  }
+
+  ({int from, int to})? _forwardVisibleUnitRange(int caret) {
+    final docSize = _state.doc.content.size;
+    var start = _clamp(caret, _state.doc);
+    while (start < docSize) {
+      final after = _state.doc.resolve(start).nodeAfter;
+      if (after?.type.name != 'opaqueInline') break;
+      start += after!.nodeSize;
+    }
+    if (start >= docSize) return null;
+    return (from: start, to: start + 1);
+  }
+
+  bool _atProtectedCellBoundary(int position, {required bool backward}) {
+    if (_tableContextAt(position) == null) return false;
+    final resolved = _state.doc.resolve(_clamp(position, _state.doc));
+    if (!resolved.parent.inlineContent) return true;
+    return backward
+        ? resolved.parentOffset == 0
+        : resolved.parentOffset == resolved.parent.content.size;
+  }
+
+  /// Move Tab/Shift+Tab entre celulas da tabela interna. Retorna true mesmo
+  /// nas bordas para que o browser nao tire o foco nem crie estrutura.
+  bool _moveAcrossTableCell({required bool backward}) {
+    final context = _tableContextAt(_state.selection.head);
+    if (context == null) return false;
+    final cells = <({int position, PMNode node})>[];
+    var rowOffset = 0;
+    for (final row in context.table.children) {
+      if (row.type.name != 'tableRow') {
+        rowOffset += row.nodeSize;
+        continue;
+      }
+      var cellOffset = 0;
+      for (final cell in row.children) {
+        final position = context.tableStart + 1 + rowOffset + 1 + cellOffset;
+        if (cell.type.name == 'tableCell' && !_isMergeContinuation(cell)) {
+          cells.add((position: position, node: cell));
+        }
+        cellOffset += cell.nodeSize;
+      }
+      rowOffset += row.nodeSize;
+    }
+    final current = cells
+        .indexWhere((candidate) => candidate.position == context.cellStart);
+    if (current < 0) return true;
+    final next = current + (backward ? -1 : 1);
+    if (next < 0 || next >= cells.length) return true;
+    final target = cells[next];
+    final found =
+        Selection.findFrom(_state.doc.resolve(target.position + 1), 1, true);
+    if (found == null) return true;
+    final targetContext = _tableContextAt(found.from);
+    if (targetContext == null || targetContext.cellStart != target.position) {
+      return true;
+    }
+    dispatch(_state.tr..setSelection(found));
+    return true;
+  }
+
+  static bool _isMergeContinuation(PMNode cell) {
+    for (final key in const ['word', 'cell']) {
+      final attrs = cell.attrs[key];
+      if (attrs is! Map) continue;
+      final value = attrs['vMerge'];
+      if (value is String && value.toLowerCase() == 'continue') return true;
+      if (value is Map &&
+          '${value['value'] ?? value['val'] ?? ''}'.toLowerCase() ==
+              'continue') {
+        return true;
+      }
+    }
+    return false;
   }
 
   static int _clamp(int position, PMNode doc) {

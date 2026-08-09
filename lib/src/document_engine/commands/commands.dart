@@ -8,7 +8,8 @@ class PlatformHelper {
 }
 
 /// Delete the selection, if there is one.
-bool deleteSelection(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool deleteSelection(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   if (state.selection.empty) return false;
   if (dispatch != null) dispatch(state.tr.deleteSelection().scrollIntoView());
   return true;
@@ -58,7 +59,8 @@ bool textblockAt(PMNode node, String side, [bool only = false]) {
 /// If the selection is empty and at the start of a textblock, try to
 /// reduce the distance between that block and the one before it—if
 /// there's a block directly before it that can be joined, join them.
-bool joinBackward(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool joinBackward(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   final $cursor = atBlockStart(state, view);
   if ($cursor == null) return false;
 
@@ -86,13 +88,16 @@ bool joinBackward(EditorState state, [void Function(Transaction tr)? dispatch, d
   if ($cursor.parent.content.size == 0 &&
       (textblockAt(before, "end") || NodeSelection.isSelectable(before))) {
     for (int depth = $cursor.depth;; depth--) {
-      final delStep = replaceStep(state.doc, $cursor.before(depth), $cursor.after(depth), Slice.empty);
-      if (delStep is ReplaceStep && delStep.slice.size < delStep.to - delStep.from) {
+      final delStep = replaceStep(
+          state.doc, $cursor.before(depth), $cursor.after(depth), Slice.empty);
+      if (delStep is ReplaceStep &&
+          delStep.slice.size < delStep.to - delStep.from) {
         if (dispatch != null) {
           final tr = state.tr;
           tr.step(delStep);
           tr.setSelection(textblockAt(before, "end")
-              ? Selection.findFrom(tr.doc.resolve(tr.mapping.map($cut.pos, -1)), -1)!
+              ? Selection.findFrom(
+                  tr.doc.resolve(tr.mapping.map($cut.pos, -1)), -1)!
               : NodeSelection.create(tr.doc, $cut.pos - before.nodeSize));
           dispatch(tr.scrollIntoView());
         }
@@ -115,10 +120,10 @@ bool joinBackward(EditorState state, [void Function(Transaction tr)? dispatch, d
   return false;
 }
 
-
 /// A more limited form of `joinBackward` that only tries to join the
 /// current textblock to the one before it.
-bool joinTextblockBackward(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool joinTextblockBackward(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   final $cursor = atBlockStart(state, view);
   if ($cursor == null) return false;
   final $cut = findCutBefore($cursor);
@@ -127,14 +132,16 @@ bool joinTextblockBackward(EditorState state, [void Function(Transaction tr)? di
 
 /// A more limited form of `joinForward` that only tries to join the
 /// current textblock to the one after it.
-bool joinTextblockForward(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool joinTextblockForward(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   final $cursor = atBlockEnd(state, view);
   if ($cursor == null) return false;
   final $cut = findCutAfter($cursor);
   return $cut != null ? joinTextblocksAround(state, $cut, dispatch) : false;
 }
 
-bool joinTextblocksAround(EditorState state, ResolvedPos $cut, [void Function(Transaction tr)? dispatch]) {
+bool joinTextblocksAround(EditorState state, ResolvedPos $cut,
+    [void Function(Transaction tr)? dispatch]) {
   PMNode before = $cut.nodeBefore!;
   PMNode beforeText = before;
   int beforePos = $cut.pos - 1;
@@ -158,7 +165,9 @@ bool joinTextblocksAround(EditorState state, ResolvedPos $cut, [void Function(Tr
   }
 
   final step = replaceStep(state.doc, beforePos, afterPos, Slice.empty);
-  if (step is! ReplaceStep || step.from != beforePos || step.slice.size >= afterPos - beforePos) return false;
+  if (step is! ReplaceStep ||
+      step.from != beforePos ||
+      step.slice.size >= afterPos - beforePos) return false;
 
   if (dispatch != null) {
     final tr = state.tr;
@@ -167,12 +176,12 @@ bool joinTextblocksAround(EditorState state, ResolvedPos $cut, [void Function(Tr
     dispatch(tr.scrollIntoView());
   }
   return true;
-
 }
 
 /// When the selection is empty and at the start of a textblock, select
 /// the node before that textblock, if possible.
-bool selectNodeBackward(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool selectNodeBackward(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   final head = state.selection.headRes;
   final empty = state.selection.empty;
   ResolvedPos? $cut = head;
@@ -196,7 +205,9 @@ bool selectNodeBackward(EditorState state, [void Function(Transaction tr)? dispa
   final node = $cut.nodeBefore;
   if (node == null || !NodeSelection.isSelectable(node)) return false;
   if (dispatch != null) {
-    dispatch(state.tr.setSelection(NodeSelection.create(state.doc, $cut.pos - node.nodeSize)).scrollIntoView());
+    dispatch(state.tr
+        .setSelection(NodeSelection.create(state.doc, $cut.pos - node.nodeSize))
+        .scrollIntoView());
   }
   return true;
 }
@@ -236,7 +247,8 @@ ResolvedPos? findCutAfter(ResolvedPos $pos) {
 /// If the selection is empty and the cursor is at the end of a
 /// textblock, try to reduce or remove the boundary between that block
 /// and the one after it.
-bool joinForward(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool joinForward(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   final $cursor = atBlockEnd(state, view);
   if ($cursor == null) return false;
 
@@ -248,8 +260,10 @@ bool joinForward(EditorState state, [void Function(Transaction tr)? dispatch, dy
 
   if ($cursor.parent.content.size == 0 &&
       (textblockAt(after, "start") || NodeSelection.isSelectable(after))) {
-    final delStep = replaceStep(state.doc, $cursor.before(), $cursor.after(), Slice.empty);
-    if (delStep is ReplaceStep && delStep.slice.size < delStep.to - delStep.from) {
+    final delStep =
+        replaceStep(state.doc, $cursor.before(), $cursor.after(), Slice.empty);
+    if (delStep is ReplaceStep &&
+        delStep.slice.size < delStep.to - delStep.from) {
       if (dispatch != null) {
         final tr = state.tr;
         tr.step(delStep);
@@ -276,7 +290,8 @@ bool joinForward(EditorState state, [void Function(Transaction tr)? dispatch, dy
 
 /// When the selection is empty and at the end of a textblock, select
 /// the node coming after that textblock, if possible.
-bool selectNodeForward(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool selectNodeForward(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   final head = state.selection.headRes;
   final empty = state.selection.empty;
   ResolvedPos? $cut = head;
@@ -309,7 +324,8 @@ bool selectNodeForward(EditorState state, [void Function(Transaction tr)? dispat
 /// Join the selected block or, if there is a text selection, the
 /// closest ancestor block of the selection that can be joined, with
 /// the sibling above it.
-bool joinUp(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool joinUp(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   final sel = state.selection;
   final nodeSel = sel is NodeSelection;
   int? point;
@@ -324,8 +340,8 @@ bool joinUp(EditorState state, [void Function(Transaction tr)? dispatch, dynamic
     final tr = state.tr;
     tr.join(point);
     if (nodeSel) {
-
-      tr.setSelection(NodeSelection.create(tr.doc, point - state.doc.resolve(point).nodeBefore!.nodeSize));
+      tr.setSelection(NodeSelection.create(
+          tr.doc, point - state.doc.resolve(point).nodeBefore!.nodeSize));
     }
     dispatch(tr.scrollIntoView());
   }
@@ -334,7 +350,8 @@ bool joinUp(EditorState state, [void Function(Transaction tr)? dispatch, dynamic
 
 /// Join the selected block, or the closest ancestor of the selection
 /// that can be joined, with the sibling after it.
-bool joinDown(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool joinDown(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   final sel = state.selection;
   int? point;
   if (sel is NodeSelection) {
@@ -354,7 +371,8 @@ bool joinDown(EditorState state, [void Function(Transaction tr)? dispatch, dynam
 
 /// Lift the selected block, or the closest ancestor block of the
 /// selection that can be lifted, out of its parent node.
-bool lift(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool lift(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   final $from = state.selection.$from;
   final $to = state.selection.$to;
   final range = $from.blockRange($to);
@@ -370,10 +388,12 @@ bool lift(EditorState state, [void Function(Transaction tr)? dispatch, dynamic v
 
 /// If the selection is in a node whose type has a truthy code spec,
 /// replace the selection with a newline character.
-bool newlineInCode(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool newlineInCode(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   final $head = state.selection.headRes;
   final $anchor = state.selection.anchorRes;
-  if ($head.parent.type.spec.code != true || !$head.sameParent($anchor)) return false;
+  if ($head.parent.type.spec.code != true || !$head.sameParent($anchor))
+    return false;
   if (dispatch != null) {
     final tr = state.tr;
     tr.insertText("\n");
@@ -392,10 +412,12 @@ NodeType? defaultBlockAt(ContentMatch match) {
 
 /// When the selection is in a node with a truthy code spec, create a
 /// default block after the code block, and move the cursor there.
-bool exitCode(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool exitCode(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   final $head = state.selection.headRes;
   final $anchor = state.selection.anchorRes;
-  if ($head.parent.type.spec.code != true || !$head.sameParent($anchor)) return false;
+  if ($head.parent.type.spec.code != true || !$head.sameParent($anchor))
+    return false;
   final above = $head.node(-1);
   final after = $head.indexAfter(-1);
   final type = defaultBlockAt(above.contentMatchAt(after));
@@ -412,15 +434,21 @@ bool exitCode(EditorState state, [void Function(Transaction tr)? dispatch, dynam
 
 /// If a block node is selected, create an empty paragraph before (if
 /// it is its parent's first child) or after it.
-bool createParagraphNear(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool createParagraphNear(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   final sel = state.selection;
   final $from = sel.$from;
   final $to = sel.$to;
-  if (sel is AllSelection || $from.parent.inlineContent || $to.parent.inlineContent) return false;
+  if (sel is AllSelection ||
+      $from.parent.inlineContent ||
+      $to.parent.inlineContent) return false;
   final type = defaultBlockAt($to.parent.contentMatchAt($to.indexAfter()));
   if (type == null || !type.isTextblock) return false;
   if (dispatch != null) {
-    final side = ($from.parentOffset == 0 && $to.index() < $to.parent.childCount ? $from : $to).pos;
+    final side = ($from.parentOffset == 0 && $to.index() < $to.parent.childCount
+            ? $from
+            : $to)
+        .pos;
     final tr = state.tr;
     tr.insert(side, type.createAndFill()!);
     tr.setSelection(TextSelection.create(tr.doc, side + 1));
@@ -431,7 +459,8 @@ bool createParagraphNear(EditorState state, [void Function(Transaction tr)? disp
 
 /// If the cursor is in an empty textblock that can be lifted, lift the
 /// block.
-bool liftEmptyBlock(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool liftEmptyBlock(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   final selection = state.selection;
   if (selection is! TextSelection) return false;
   final $cursor = selection.$cursor;
@@ -461,7 +490,8 @@ bool liftEmptyBlock(EditorState state, [void Function(Transaction tr)? dispatch,
 /// Create a variant of `splitBlock` that uses a custom function to
 /// determine the type of the newly split off block.
 Command splitBlockAs([
-  Map<String, dynamic>? Function(PMNode node, bool atEnd, ResolvedPos $pos)? splitNode,
+  Map<String, dynamic>? Function(PMNode node, bool atEnd, ResolvedPos $pos)?
+      splitNode,
 ]) {
   return (state, [dispatch, view]) {
     final sel = state.selection;
@@ -469,7 +499,8 @@ Command splitBlockAs([
     final $to = sel.$to;
 
     if (sel is NodeSelection && sel.node.isBlock) {
-      if ($from.parentOffset == 0 || !canSplit(state.doc, $from.pos)) return false;
+      if ($from.parentOffset == 0 || !canSplit(state.doc, $from.pos))
+        return false;
       if (dispatch != null) {
         final tr = state.tr;
         tr.split($from.pos);
@@ -477,7 +508,6 @@ Command splitBlockAs([
       }
       return true;
     }
-
 
     if ($from.depth == 0) return false;
     final List<Wrapping?> types = [];
@@ -491,10 +521,15 @@ Command splitBlockAs([
       if (node.isBlock) {
         atEnd = $from.end(d) == $from.pos + ($from.depth - d);
         atStart = $from.start(d) == $from.pos - ($from.depth - d);
-        deflt = defaultBlockAt($from.node(d - 1).contentMatchAt($from.indexAfter(d - 1)));
-        final splitTypeInfo = splitNode != null ? splitNode($to.parent, atEnd, $from) : null;
+        deflt = defaultBlockAt(
+            $from.node(d - 1).contentMatchAt($from.indexAfter(d - 1)));
+        final splitTypeInfo =
+            splitNode != null ? splitNode($to.parent, atEnd, $from) : null;
         if (splitTypeInfo != null) {
-          types.insert(0, Wrapping(splitTypeInfo['type'] as NodeType, splitTypeInfo['attrs'] as Map<String, dynamic>?));
+          types.insert(
+              0,
+              Wrapping(splitTypeInfo['type'] as NodeType,
+                  splitTypeInfo['attrs'] as Map<String, dynamic>?));
         } else if (atEnd && deflt != null) {
           types.insert(0, Wrapping(deflt, null));
         } else {
@@ -525,7 +560,10 @@ Command splitBlockAs([
     if (!atEnd && atStart && $from.node(splitDepth).type != deflt) {
       final first = tr.mapping.map($from.before(splitDepth));
       final $first = tr.doc.resolve(first);
-      if (deflt != null && $from.node(splitDepth - 1).canReplaceWith($first.index(), $first.index() + 1, deflt)) {
+      if (deflt != null &&
+          $from
+              .node(splitDepth - 1)
+              .canReplaceWith($first.index(), $first.index() + 1, deflt)) {
         tr.setNodeMarkup(tr.mapping.map($from.before(splitDepth)), deflt);
       }
     }
@@ -541,17 +579,27 @@ final Command splitBlock = splitBlockAs();
 
 /// Acts like `splitBlock`, but without resetting the set of active
 /// marks at the cursor.
-bool splitBlockKeepMarks(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
-  return splitBlock(state, dispatch != null ? (tr) {
-    final marks = state.storedMarks ?? (state.selection.$to.parentOffset > 0 ? state.selection.$from.marks() : null);
-    if (marks != null) tr.ensureMarks(marks);
-    dispatch(tr);
-  } : null, view);
+bool splitBlockKeepMarks(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
+  return splitBlock(
+      state,
+      dispatch != null
+          ? (tr) {
+              final marks = state.storedMarks ??
+                  (state.selection.$to.parentOffset > 0
+                      ? state.selection.$from.marks()
+                      : null);
+              if (marks != null) tr.ensureMarks(marks);
+              dispatch(tr);
+            }
+          : null,
+      view);
 }
 
 /// Move the selection to the node wrapping the current selection, if
 /// any. (Will not select the document node.)
-bool selectParentNode(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool selectParentNode(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   final $from = state.selection.$from;
   final to = state.selection.to;
   final same = $from.sharedDepth(to);
@@ -566,7 +614,8 @@ bool selectParentNode(EditorState state, [void Function(Transaction tr)? dispatc
 }
 
 /// Select the whole document.
-bool selectAll(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]) {
+bool selectAll(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]) {
   if (dispatch != null) {
     final tr = state.tr;
     tr.setSelection(AllSelection(state.doc));
@@ -575,11 +624,14 @@ bool selectAll(EditorState state, [void Function(Transaction tr)? dispatch, dyna
   return true;
 }
 
-bool joinMaybeClear(EditorState state, ResolvedPos $pos, void Function(Transaction tr)? dispatch) {
+bool joinMaybeClear(EditorState state, ResolvedPos $pos,
+    void Function(Transaction tr)? dispatch) {
   final before = $pos.nodeBefore;
   final after = $pos.nodeAfter;
   final index = $pos.index();
-  if (before == null || after == null || !before.type.compatibleContent(after.type)) return false;
+  if (before == null ||
+      after == null ||
+      !before.type.compatibleContent(after.type)) return false;
   if (before.content.size == 0 && $pos.parent.canReplace(index - 1, index)) {
     if (dispatch != null) {
       final tr = state.tr;
@@ -588,7 +640,8 @@ bool joinMaybeClear(EditorState state, ResolvedPos $pos, void Function(Transacti
     }
     return true;
   }
-  if (!$pos.parent.canReplace(index, index + 1) || !(after.isTextblock || canJoin(state.doc, $pos.pos))) {
+  if (!$pos.parent.canReplace(index, index + 1) ||
+      !(after.isTextblock || canJoin(state.doc, $pos.pos))) {
     return false;
   }
   if (dispatch != null) {
@@ -599,13 +652,16 @@ bool joinMaybeClear(EditorState state, ResolvedPos $pos, void Function(Transacti
   return true;
 }
 
-bool deleteBarrier(EditorState state, ResolvedPos $cut, void Function(Transaction tr)? dispatch, int dir) {
+bool deleteBarrier(EditorState state, ResolvedPos $cut,
+    void Function(Transaction tr)? dispatch, int dir) {
   final before = $cut.nodeBefore!;
   final after = $cut.nodeAfter!;
-  final isolated = before.type.spec.isolating == true || after.type.spec.isolating == true;
+  final isolated =
+      before.type.spec.isolating == true || after.type.spec.isolating == true;
   if (!isolated && joinMaybeClear(state, $cut, dispatch)) return true;
 
-  final canDelAfter = !isolated && $cut.parent.canReplace($cut.index(), $cut.index() + 1);
+  final canDelAfter =
+      !isolated && $cut.parent.canReplace($cut.index(), $cut.index() + 1);
   if (canDelAfter) {
     final m = before.contentMatchAt(before.childCount);
     final w = m.findWrapping(after.type);
@@ -618,9 +674,11 @@ bool deleteBarrier(EditorState state, ResolvedPos $cut, void Function(Transactio
         }
         wrap = Fragment.from(before.copy(wrap));
         final tr = state.tr;
-        tr.step(ReplaceAroundStep($cut.pos - 1, end, $cut.pos, end, Slice(wrap, 1, 0), w.length, true));
+        tr.step(ReplaceAroundStep($cut.pos - 1, end, $cut.pos, end,
+            Slice(wrap, 1, 0), w.length, true));
         final $joinAt = tr.doc.resolve(end + 2 * w.length);
-        if ($joinAt.nodeAfter != null && $joinAt.nodeAfter!.type == before.type &&
+        if ($joinAt.nodeAfter != null &&
+            $joinAt.nodeAfter!.type == before.type &&
             canJoin(tr.doc, $joinAt.pos)) {
           tr.join($joinAt.pos);
         }
@@ -630,9 +688,11 @@ bool deleteBarrier(EditorState state, ResolvedPos $cut, void Function(Transactio
     }
   }
 
-
-  final selAfter = after.type.spec.isolating == true || (dir > 0 && isolated) ? null : Selection.findFrom($cut, 1);
-  final range = selAfter != null ? selAfter.$from.blockRange(selAfter.$to) : null;
+  final selAfter = after.type.spec.isolating == true || (dir > 0 && isolated)
+      ? null
+      : Selection.findFrom($cut, 1);
+  final range =
+      selAfter != null ? selAfter.$from.blockRange(selAfter.$to) : null;
   final target = range != null ? liftTarget(range) : null;
   if (target != null && target >= $cut.depth) {
     if (dispatch != null) {
@@ -643,7 +703,9 @@ bool deleteBarrier(EditorState state, ResolvedPos $cut, void Function(Transactio
     return true;
   }
 
-  if (canDelAfter && textblockAt(after, "start", true) && textblockAt(before, "end")) {
+  if (canDelAfter &&
+      textblockAt(after, "start", true) &&
+      textblockAt(before, "end")) {
     PMNode at = before;
     final List<PMNode> wrap = [];
     while (true) {
@@ -664,9 +726,14 @@ bool deleteBarrier(EditorState state, ResolvedPos $cut, void Function(Transactio
           end = Fragment.from(wrap[i].copy(end));
         }
         final tr = state.tr;
-        tr.step(ReplaceAroundStep($cut.pos - wrap.length, $cut.pos + after.nodeSize,
-            $cut.pos + afterDepth, $cut.pos + after.nodeSize - afterDepth,
-            Slice(end, wrap.length, 0), 0, true));
+        tr.step(ReplaceAroundStep(
+            $cut.pos - wrap.length,
+            $cut.pos + after.nodeSize,
+            $cut.pos + afterDepth,
+            $cut.pos + after.nodeSize - afterDepth,
+            Slice(end, wrap.length, 0),
+            0,
+            true));
         dispatch(tr.scrollIntoView());
       }
       return true;
@@ -705,7 +772,8 @@ Command wrapIn(NodeType nodeType, [Map<String, dynamic>? attrs]) {
     final $from = state.selection.$from;
     final $to = state.selection.$to;
     final range = $from.blockRange($to);
-    final List<Wrapping>? wrapping = range != null ? findWrapping(range, nodeType, attrs) : null;
+    final List<Wrapping>? wrapping =
+        range != null ? findWrapping(range, nodeType, attrs) : null;
     if (wrapping == null) return false;
     if (dispatch != null) {
       final tr = state.tr;
@@ -718,15 +786,44 @@ Command wrapIn(NodeType nodeType, [Map<String, dynamic>? attrs]) {
 
 /// Returns a command that tries to set the selected textblocks to the
 /// given node type with the given attributes.
-Command setBlockType(NodeType nodeType, [Map<String, dynamic>? attrs]) {
+/// Changes selected text blocks while retaining attributes understood by the
+/// destination type.
+///
+/// Office blocks carry stable source ids and preserved Word properties in
+/// attributes such as `id`, `word`, and `style`. Replacing the attribute map
+/// wholesale when turning a paragraph into a heading/list item would detach
+/// that block from its source OOXML and flatten all paragraph properties on
+/// save. Explicit [attrs] still win; compatible attributes that were not
+/// mentioned survive the type change.
+///
+/// [attrs] may also be a per-node builder. This is useful for commands such
+/// as "Normal" that need to update `word.styleId` without applying one
+/// paragraph's metadata to every block in a multi-paragraph selection.
+Command setBlockType(NodeType nodeType, [dynamic attrs]) {
   return (state, [dispatch, view]) {
+    Map<String, dynamic> attrsFor(PMNode node) {
+      final explicit = attrs is Function ? attrs(node) : attrs;
+      final result = <String, dynamic>{};
+      for (final name in nodeType.attrs.keys) {
+        if (node.attrs.containsKey(name)) result[name] = node.attrs[name];
+      }
+      if (explicit is Map) {
+        for (final entry in explicit.entries) {
+          result['${entry.key}'] = entry.value;
+        }
+      }
+      return result;
+    }
+
     bool applicable = false;
     for (int i = 0; i < state.selection.ranges.length && !applicable; i++) {
       final from = state.selection.ranges[i].fromRes.pos;
       final to = state.selection.ranges[i].toRes.pos;
       state.doc.nodesBetween(from, to, (node, pos, parent, index) {
         if (applicable) return false;
-        if (!node.isTextblock || node.hasMarkup(nodeType, attrs)) return true;
+        if (!node.isTextblock || node.hasMarkup(nodeType, attrsFor(node))) {
+          return true;
+        }
         if (node.type == nodeType) {
           applicable = true;
         } else {
@@ -743,7 +840,7 @@ Command setBlockType(NodeType nodeType, [Map<String, dynamic>? attrs]) {
       for (int i = 0; i < state.selection.ranges.length; i++) {
         final from = state.selection.ranges[i].fromRes.pos;
         final to = state.selection.ranges[i].toRes.pos;
-        tr.setBlockType(from, to, nodeType, attrs);
+        tr.setBlockType(from, to, nodeType, attrsFor);
       }
       dispatch(tr.scrollIntoView());
     }
@@ -751,13 +848,21 @@ Command setBlockType(NodeType nodeType, [Map<String, dynamic>? attrs]) {
   };
 }
 
-bool markApplies(PMNode doc, List<SelectionRange> ranges, MarkType type, bool enterAtoms) {
+bool markApplies(
+    PMNode doc, List<SelectionRange> ranges, MarkType type, bool enterAtoms) {
   for (int i = 0; i < ranges.length; i++) {
     final $from = ranges[i].fromRes;
     final $to = ranges[i].toRes;
-    bool can = $from.depth == 0 ? doc.inlineContent && doc.type.allowsMarkType(type) : false;
+    bool can = $from.depth == 0
+        ? doc.inlineContent && doc.type.allowsMarkType(type)
+        : false;
     doc.nodesBetween($from.pos, $to.pos, (node, pos, parent, index) {
-      if (can || (!enterAtoms && node.isAtom && node.isInline && pos >= $from.pos && pos + node.nodeSize <= $to.pos)) {
+      if (can ||
+          (!enterAtoms &&
+              node.isAtom &&
+              node.isInline &&
+              pos >= $from.pos &&
+              pos + node.nodeSize <= $to.pos)) {
         return false;
       }
       can = node.inlineContent && node.type.allowsMarkType(type);
@@ -774,7 +879,11 @@ List<SelectionRange> removeInlineAtoms(List<SelectionRange> ranges) {
     ResolvedPos $from = ranges[i].fromRes;
     final ResolvedPos $to = ranges[i].toRes;
     $from.doc.nodesBetween($from.pos, $to.pos, (node, pos, parent, index) {
-      if (node.isAtom && node.content.size > 0 && node.isInline && pos >= $from.pos && pos + node.nodeSize <= $to.pos) {
+      if (node.isAtom &&
+          node.content.size > 0 &&
+          node.isInline &&
+          pos >= $from.pos &&
+          pos + node.nodeSize <= $to.pos) {
         if (pos + 1 > $from.pos) {
           result.add(SelectionRange($from, $from.doc.resolve(pos + 1)));
         }
@@ -791,7 +900,8 @@ List<SelectionRange> removeInlineAtoms(List<SelectionRange> ranges) {
 }
 
 /// Create a command function that toggles the given mark with the given attributes.
-Command toggleMark(MarkType markType, [Map<String, dynamic>? attrs, Map<String, dynamic>? options]) {
+Command toggleMark(MarkType markType,
+    [Map<String, dynamic>? attrs, Map<String, dynamic>? options]) {
   final removeWhenPresent = (options?['removeWhenPresent'] ?? true) as bool;
   final enterAtoms = (options?['enterInlineAtoms'] ?? true) as bool;
   final dropSpace = !(options?['includeWhitespace'] ?? false);
@@ -800,7 +910,8 @@ Command toggleMark(MarkType markType, [Map<String, dynamic>? attrs, Map<String, 
     final empty = selection.empty;
     final $cursor = selection is TextSelection ? selection.$cursor : null;
     final ranges = selection.ranges;
-    if ((empty && $cursor == null) || !markApplies(state.doc, ranges, markType, enterAtoms)) return false;
+    if ((empty && $cursor == null) ||
+        !markApplies(state.doc, ranges, markType, enterAtoms)) return false;
     if (dispatch != null) {
       if ($cursor != null) {
         final tr = state.tr;
@@ -816,14 +927,22 @@ Command toggleMark(MarkType markType, [Map<String, dynamic>? attrs, Map<String, 
         if (!enterAtoms) resolvedRanges = removeInlineAtoms(ranges);
         final tr = state.tr;
         if (removeWhenPresent) {
-          add = !resolvedRanges.any((r) => state.doc.rangeHasMark(r.fromRes.pos, r.toRes.pos, markType));
+          add = !resolvedRanges.any((r) =>
+              state.doc.rangeHasMark(r.fromRes.pos, r.toRes.pos, markType));
         } else {
           add = !resolvedRanges.every((r) {
             bool missing = false;
-            tr.doc.nodesBetween(r.fromRes.pos, r.toRes.pos, (node, pos, parent, index) {
+            tr.doc.nodesBetween(r.fromRes.pos, r.toRes.pos,
+                (node, pos, parent, index) {
               if (missing) return false;
-              missing = markType.isInSet(node.marks) == null && parent != null && parent.type.allowsMarkType(markType) &&
-                !(node.isText && node.text != null && RegExp(r'^\s*$').hasMatch(node.text!.substring(max(0, r.fromRes.pos - pos), min(node.nodeSize, r.toRes.pos - pos))));
+              missing = markType.isInSet(node.marks) == null &&
+                  parent != null &&
+                  parent.type.allowsMarkType(markType) &&
+                  !(node.isText &&
+                      node.text != null &&
+                      RegExp(r'^\s*$').hasMatch(node.text!.substring(
+                          max(0, r.fromRes.pos - pos),
+                          min(node.nodeSize, r.toRes.pos - pos))));
               return true;
             });
             return !missing;
@@ -839,8 +958,12 @@ Command toggleMark(MarkType markType, [Map<String, dynamic>? attrs, Map<String, 
             int to = $to.pos;
             final start = $from.nodeAfter;
             final end = $to.nodeBefore;
-            final spaceStart = (dropSpace && start != null && start.isText) ? RegExp(r'^\s*').firstMatch(start.text!)![0]!.length : 0;
-            final spaceEnd = (dropSpace && end != null && end.isText) ? RegExp(r'\s*$').firstMatch(end.text!)![0]!.length : 0;
+            final spaceStart = (dropSpace && start != null && start.isText)
+                ? RegExp(r'^\s*').firstMatch(start.text!)![0]!.length
+                : 0;
+            final spaceEnd = (dropSpace && end != null && end.isText)
+                ? RegExp(r'\s*$').firstMatch(end.text!)![0]!.length
+                : 0;
             if (from + spaceStart < to) {
               from += spaceStart;
               to -= spaceEnd;
@@ -855,8 +978,9 @@ Command toggleMark(MarkType markType, [Map<String, dynamic>? attrs, Map<String, 
   };
 }
 
-
-void Function(Transaction tr) wrapDispatchForJoin(void Function(Transaction tr) dispatch, bool Function(PMNode a, PMNode b) isJoinable) {
+void Function(Transaction tr) wrapDispatchForJoin(
+    void Function(Transaction tr) dispatch,
+    bool Function(PMNode a, PMNode b) isJoinable) {
   return (tr) {
     if (!tr.isGeneric) return dispatch(tr);
 
@@ -928,12 +1052,15 @@ Command chainCommands(List<Command> commands) {
   };
 }
 
-final Command backspaceCommand = chainCommands([deleteSelection, joinBackward, selectNodeBackward]);
-final Command deleteCommand = chainCommands([deleteSelection, joinForward, selectNodeForward]);
+final Command backspaceCommand =
+    chainCommands([deleteSelection, joinBackward, selectNodeBackward]);
+final Command deleteCommand =
+    chainCommands([deleteSelection, joinForward, selectNodeForward]);
 
 /// A basic keymap containing bindings not specific to any schema.
 final Map<String, Command> pcBaseKeymap = {
-  "Enter": chainCommands([newlineInCode, createParagraphNear, liftEmptyBlock, splitBlock]),
+  "Enter": chainCommands(
+      [newlineInCode, createParagraphNear, liftEmptyBlock, splitBlock]),
   "Mod-Enter": exitCode,
   "Backspace": backspaceCommand,
   "Mod-Backspace": backspaceCommand,
@@ -958,4 +1085,5 @@ final Map<String, Command> macBaseKeymap = {
 
 /// Depending on the detected platform (via PlatformHelper.isMac), this holds
 /// pcBaseKeymap or macBaseKeymap.
-Map<String, Command> get baseKeymap => PlatformHelper.isMac ? macBaseKeymap : pcBaseKeymap;
+Map<String, Command> get baseKeymap =>
+    PlatformHelper.isMac ? macBaseKeymap : pcBaseKeymap;

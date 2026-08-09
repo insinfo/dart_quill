@@ -605,7 +605,7 @@ class HtmlDomFile implements DomFile {
   String get type => _native.type;
 }
 
-class HtmlDomAdapter implements DomAdapter {
+class HtmlDomAdapter implements DomAdapter, DomCooperativeDownloadAdapter {
   @override
   late final DomDocument document;
 
@@ -717,14 +717,76 @@ class HtmlDomAdapter implements DomAdapter {
 
   @override
   void downloadBytes(String filename, String mimeType, List<int> bytes) {
-    final blob = web.Blob([Uint8List.fromList(bytes).toJS].toJS,
-        web.BlobPropertyBag(type: mimeType));
+    // PDF/DOCX exporters already return a Uint8List. Re-copying a large
+    // document here doubles the peak hand-off allocation and can trigger a
+    // major browser GC immediately before the download starts.
+    final typedBytes = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
+    final blob =
+        web.Blob([typedBytes.toJS].toJS, web.BlobPropertyBag(type: mimeType));
+    _downloadBlob(filename, blob);
+  }
+
+  @override
+  Future<void> downloadBytesCooperatively(
+      String filename, String mimeType, List<int> bytes,
+      {Map<String, int>? timings}) async {
+    final typedBytes = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
+    const chunkBytes = 16 * 1024;
+    final options = web.BlobPropertyBag(type: mimeType);
+    web.Blob? blob;
+    var chunks = 0;
+    var maxChunkUs = 0;
+    var maxChunkIndex = 0;
+    if (typedBytes.isEmpty) {
+      final chunkWatch = Stopwatch()..start();
+      blob = web.Blob([typedBytes.toJS].toJS, options);
+      chunkWatch.stop();
+      maxChunkUs = chunkWatch.elapsedMicroseconds;
+      chunks = 1;
+    } else {
+      for (var offset = 0; offset < typedBytes.length; offset += chunkBytes) {
+        final end = (offset + chunkBytes).clamp(0, typedBytes.length);
+        final view = Uint8List.sublistView(typedBytes, offset, end);
+        final previous = blob;
+        final chunkWatch = Stopwatch()..start();
+        blob = previous == null
+            ? web.Blob([view.toJS].toJS, options)
+            : web.Blob(<web.BlobPart>[previous, view.toJS].toJS, options);
+        chunkWatch.stop();
+        chunks++;
+        if (chunkWatch.elapsedMicroseconds > maxChunkUs) {
+          maxChunkUs = chunkWatch.elapsedMicroseconds;
+          maxChunkIndex = chunks - 1;
+        }
+        if (end < typedBytes.length) {
+          // Each turn adds only the next chunk. A Blob used as a BlobPart is
+          // concatenated by immutable backing-store reference, so earlier
+          // bytes are not recopied at every step.
+          await Future<void>.delayed(Duration.zero);
+        }
+      }
+    }
+    timings?['downloadChunks'] = chunks;
+    timings?['downloadChunkMaxUs'] = maxChunkUs;
+    timings?['downloadChunkMaxIndex'] = maxChunkIndex;
+    // Keep the final chunk and URL/anchor creation in distinct tasks.
+    await Future<void>.delayed(Duration.zero);
+    final linkWatch = Stopwatch()..start();
+    _downloadBlob(filename, blob!);
+    linkWatch.stop();
+    timings?['downloadLinkUs'] = linkWatch.elapsedMicroseconds;
+  }
+
+  void _downloadBlob(String filename, web.Blob blob) {
     final url = web.URL.createObjectURL(blob);
     final anchor = web.document.createElement('a') as web.HTMLAnchorElement
       ..href = url
       ..download = filename;
     anchor.click();
-    web.URL.revokeObjectURL(url);
+    // Revoking synchronously can both race the browser's download consumer
+    // and charge native Blob cleanup to the user's click task. Keep the URL
+    // alive through the hand-off turn, then release it promptly.
+    Timer.run(() => web.URL.revokeObjectURL(url));
   }
 
   @override

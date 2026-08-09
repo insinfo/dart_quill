@@ -48,6 +48,16 @@ class WpSpacing {
       lineRule: el.getAttribute('w:lineRule'),
     );
   }
+
+  /// OOXML paragraph properties cascade per attribute. A direct
+  /// `<w:spacing w:line="...">` must not erase `before`/`after` inherited
+  /// from the paragraph style.
+  WpSpacing mergedWith(WpSpacing other) => WpSpacing(
+        beforeTwips: other.beforeTwips ?? beforeTwips,
+        afterTwips: other.afterTwips ?? afterTwips,
+        line: other.line ?? line,
+        lineRule: other.lineRule ?? lineRule,
+      );
 }
 
 /// `<w:ind>` (twips).
@@ -72,6 +82,13 @@ class WpIndent {
       hangingTwips: _intVal(el, 'w:hanging'),
     );
   }
+
+  WpIndent mergedWith(WpIndent other) => WpIndent(
+        leftTwips: other.leftTwips ?? leftTwips,
+        rightTwips: other.rightTwips ?? rightTwips,
+        firstLineTwips: other.firstLineTwips ?? firstLineTwips,
+        hangingTwips: other.hangingTwips ?? hangingTwips,
+      );
 }
 
 /// `<w:tab>` dentro de `<w:tabs>` (tab stop).
@@ -161,8 +178,10 @@ class WpRunProperties {
   final String? styleId; // w:rStyle
   final String? fontAscii;
   final String? fontHAnsi;
+  final String? fontEastAsia;
   final String? fontCs;
   final bool? bold;
+  final bool? boldCs;
   final bool? italic;
   final String? underline; // single | none | ...
   final bool? strike;
@@ -174,12 +193,20 @@ class WpRunProperties {
   final WpShading? shading;
   final String? vertAlign; // superscript | subscript | baseline
 
+  /// Espaçamento adicional entre caracteres (`w:rPr/w:spacing/@w:val`).
+  ///
+  /// A unidade OOXML é twip e o valor é assinado: negativo comprime, zero
+  /// remove um valor herdado e positivo expande o avanço dos caracteres.
+  final int? spacingTwips;
+
   const WpRunProperties({
     this.styleId,
     this.fontAscii,
     this.fontHAnsi,
+    this.fontEastAsia,
     this.fontCs,
     this.bold,
+    this.boldCs,
     this.italic,
     this.underline,
     this.strike,
@@ -190,6 +217,7 @@ class WpRunProperties {
     this.highlight,
     this.shading,
     this.vertAlign,
+    this.spacingTwips,
   });
 
   static WpRunProperties? fromXml(XmlElement? el) {
@@ -199,8 +227,10 @@ class WpRunProperties {
       styleId: _val(el.firstChild('w:rStyle')),
       fontAscii: rFonts?.getAttribute('w:ascii'),
       fontHAnsi: rFonts?.getAttribute('w:hAnsi'),
+      fontEastAsia: rFonts?.getAttribute('w:eastAsia'),
       fontCs: rFonts?.getAttribute('w:cs'),
       bold: _onOff(el.firstChild('w:b')),
+      boldCs: _onOff(el.firstChild('w:bCs')),
       italic: _onOff(el.firstChild('w:i')),
       underline: _val(el.firstChild('w:u')),
       strike: _onOff(el.firstChild('w:strike')),
@@ -211,6 +241,7 @@ class WpRunProperties {
       highlight: _val(el.firstChild('w:highlight')),
       shading: WpShading.fromXml(el.firstChild('w:shd')),
       vertAlign: _val(el.firstChild('w:vertAlign')),
+      spacingTwips: _intVal(el.firstChild('w:spacing')),
     );
   }
 
@@ -219,8 +250,10 @@ class WpRunProperties {
         styleId: other.styleId ?? styleId,
         fontAscii: other.fontAscii ?? fontAscii,
         fontHAnsi: other.fontHAnsi ?? fontHAnsi,
+        fontEastAsia: other.fontEastAsia ?? fontEastAsia,
         fontCs: other.fontCs ?? fontCs,
         bold: other.bold ?? bold,
+        boldCs: other.boldCs ?? boldCs,
         italic: other.italic ?? italic,
         underline: other.underline ?? underline,
         strike: other.strike ?? strike,
@@ -231,6 +264,7 @@ class WpRunProperties {
         highlight: other.highlight ?? highlight,
         shading: other.shading ?? shading,
         vertAlign: other.vertAlign ?? vertAlign,
+        spacingTwips: other.spacingTwips ?? spacingTwips,
       );
 }
 
@@ -241,9 +275,30 @@ class WpRunProperties {
 class WpNumPr {
   /// `numId=0` remove numeração herdada do estilo.
   final int? numId;
-  final int ilvl;
 
-  const WpNumPr({this.numId, this.ilvl = 0});
+  /// Nível explicitamente declarado em ESTE ponto da cascata.
+  ///
+  /// `null` é diferente de zero: ausente herda o nível do estilo-base;
+  /// zero explícito seleciona o primeiro nível. Essa distinção é necessária
+  /// porque o Word frequentemente separa os dois campos, por exemplo
+  /// `numId` no estilo-pai e somente `ilvl` no estilo-filho.
+  final int? _ilvl;
+
+  const WpNumPr({this.numId, int? ilvl}) : _ilvl = ilvl;
+
+  /// Nível efetivo para os consumidores de numeração (`0` é o default
+  /// OOXML), mantendo a API histórica não-nullable.
+  int get ilvl => _ilvl ?? 0;
+
+  /// Se `w:ilvl` foi realmente declarado neste ponto da cascata.
+  bool get hasIlvl => _ilvl != null;
+
+  int? get declaredIlvl => _ilvl;
+
+  WpNumPr mergedWith(WpNumPr other) => WpNumPr(
+        numId: other.numId ?? numId,
+        ilvl: other.declaredIlvl ?? declaredIlvl,
+      );
 }
 
 class WpParagraphProperties {
@@ -260,6 +315,8 @@ class WpParagraphProperties {
   final bool? pageBreakBefore;
   final bool? widowControl;
   final bool? contextualSpacing;
+  final bool? autoSpaceDN;
+  final bool? suppressAutoHyphens;
   final int? outlineLvl;
 
   /// rPr da marca de parágrafo (formata o pilcrow; útil para parágrafo vazio).
@@ -285,6 +342,8 @@ class WpParagraphProperties {
     this.pageBreakBefore,
     this.widowControl,
     this.contextualSpacing,
+    this.autoSpaceDN,
+    this.suppressAutoHyphens,
     this.outlineLvl,
     this.markRunProperties,
   });
@@ -296,7 +355,7 @@ class WpParagraphProperties {
     if (numPrEl != null) {
       numPr = WpNumPr(
         numId: _intVal(numPrEl.firstChild('w:numId')),
-        ilvl: _intVal(numPrEl.firstChild('w:ilvl')) ?? 0,
+        ilvl: _intVal(numPrEl.firstChild('w:ilvl')),
       );
     }
     List<WpTabStop>? tabs;
@@ -325,6 +384,8 @@ class WpParagraphProperties {
       pageBreakBefore: _onOff(el.firstChild('w:pageBreakBefore')),
       widowControl: _onOff(el.firstChild('w:widowControl')),
       contextualSpacing: _onOff(el.firstChild('w:contextualSpacing')),
+      autoSpaceDN: _onOff(el.firstChild('w:autoSpaceDN')),
+      suppressAutoHyphens: _onOff(el.firstChild('w:suppressAutoHyphens')),
       outlineLvl: _intVal(el.firstChild('w:outlineLvl')),
       markRunProperties: WpRunProperties.fromXml(el.firstChild('w:rPr')),
       sectionBreak: WpSectionProperties.fromXml(el.firstChild('w:sectPr')),
@@ -336,10 +397,22 @@ class WpParagraphProperties {
   WpParagraphProperties mergedWith(WpParagraphProperties other) =>
       WpParagraphProperties(
         styleId: other.styleId ?? styleId,
-        numPr: other.numPr ?? numPr,
+        numPr: numPr == null
+            ? other.numPr
+            : other.numPr == null
+                ? numPr
+                : numPr!.mergedWith(other.numPr!),
         jc: other.jc ?? jc,
-        spacing: other.spacing ?? spacing,
-        indent: other.indent ?? indent,
+        spacing: spacing == null
+            ? other.spacing
+            : other.spacing == null
+                ? spacing
+                : spacing!.mergedWith(other.spacing!),
+        indent: indent == null
+            ? other.indent
+            : other.indent == null
+                ? indent
+                : indent!.mergedWith(other.indent!),
         tabs: other.tabs ?? tabs,
         shading: other.shading ?? shading,
         borders: other.borders ?? borders,
@@ -348,6 +421,8 @@ class WpParagraphProperties {
         pageBreakBefore: other.pageBreakBefore ?? pageBreakBefore,
         widowControl: other.widowControl ?? widowControl,
         contextualSpacing: other.contextualSpacing ?? contextualSpacing,
+        autoSpaceDN: other.autoSpaceDN ?? autoSpaceDN,
+        suppressAutoHyphens: other.suppressAutoHyphens ?? suppressAutoHyphens,
         outlineLvl: other.outlineLvl ?? outlineLvl,
         markRunProperties: other.markRunProperties ?? markRunProperties,
       );
@@ -400,12 +475,14 @@ class WpDrawing extends WpRunContent {
 
 class WpFieldChar extends WpRunContent {
   final String fldCharType; // begin | separate | end
-  WpFieldChar(this.fldCharType);
+  final String? rawXml;
+  WpFieldChar(this.fldCharType, {this.rawXml});
 }
 
 class WpInstrText extends WpRunContent {
   final String text;
-  WpInstrText(this.text);
+  final String? rawXml;
+  WpInstrText(this.text, {this.rawXml});
 }
 
 /// Conteúdo de run não mapeado — preservado como XML bruto (D1).
@@ -422,10 +499,21 @@ class WpPreservedRunContent extends WpRunContent {
 class WpTextBox extends WpRunContent {
   /// Alinhamento horizontal da âncora: 'left' | 'center' | 'right' | null.
   final String? positionHAlign;
+
+  /// Referencial vertical de `wp:positionV/@relativeFrom`.
+  ///
+  /// Em particular, `paragraph` usa a linha/grade do parágrafo âncora ao
+  /// calcular a exclusão de `wrapTopAndBottom`; não é equivalente a `page`
+  /// ou `margin`.
+  final String? positionVRelativeFrom;
   final int? offsetXEmu;
   final int? offsetYEmu;
   final int? extentCxEmu;
   final int? extentCyEmu;
+  final int? insetLeftEmu;
+  final int? insetTopEmu;
+  final int? insetRightEmu;
+  final int? insetBottomEmu;
   final int? borderWidthEmu;
   final String? borderColorHex; // sem '#'
   final String? fillColorHex; // sem '#'
@@ -434,10 +522,15 @@ class WpTextBox extends WpRunContent {
 
   WpTextBox({
     this.positionHAlign,
+    this.positionVRelativeFrom,
     this.offsetXEmu,
     this.offsetYEmu,
     this.extentCxEmu,
     this.extentCyEmu,
+    this.insetLeftEmu,
+    this.insetTopEmu,
+    this.insetRightEmu,
+    this.insetBottomEmu,
     this.borderWidthEmu,
     this.borderColorHex,
     this.fillColorHex,
@@ -475,8 +568,15 @@ class WpHyperlink extends WpInline {
 class WpSimpleField extends WpInline {
   final String instruction;
   final List<WpRun> runs;
+  final String? fieldLockValue;
+  final String? dirtyValue;
 
-  WpSimpleField({required this.instruction, required this.runs});
+  WpSimpleField({
+    required this.instruction,
+    required this.runs,
+    this.fieldLockValue,
+    this.dirtyValue,
+  });
 }
 
 /// Inline não mapeado (bookmarks, proofErr, AlternateContent...) — preservado.
@@ -492,14 +592,62 @@ class WpPreservedInline extends WpInline {
 
 sealed class WpBlock {}
 
+/// Atributos seguros do elemento `<w:p>` que continuam pertencendo ao
+/// paragrafo quando apenas o seu conteudo e regenerado.
+///
+/// Eles ficam tipados e separados de [WpParagraph.sourceXml]: o writer pode
+/// emitir estes metadados sobre runs/texto NOVOS sem reaproveitar o XML (e,
+/// portanto, sem ressuscitar o texto antigo).
+class WpParagraphAttributes {
+  static const revisionAttributeNames = <String>[
+    'w:rsidRPr',
+    'w:rsidR',
+    'w:rsidDel',
+    'w:rsidP',
+    'w:rsidRDefault',
+  ];
+
+  final String? paraId;
+  final String? textId;
+  final Map<String, String> revisionIds;
+
+  const WpParagraphAttributes({
+    this.paraId,
+    this.textId,
+    this.revisionIds = const {},
+  });
+
+  bool get isEmpty => paraId == null && textId == null && revisionIds.isEmpty;
+
+  static WpParagraphAttributes? fromXml(XmlElement element) {
+    final revisionIds = <String, String>{};
+    for (final name in revisionAttributeNames) {
+      final value = element.getAttribute(name);
+      if (value != null) revisionIds[name] = value;
+    }
+    final result = WpParagraphAttributes(
+      paraId: element.getAttribute('w14:paraId'),
+      textId: element.getAttribute('w14:textId'),
+      revisionIds: revisionIds,
+    );
+    return result.isEmpty ? null : result;
+  }
+}
+
 class WpParagraph extends WpBlock {
   final WpParagraphProperties? properties;
+  final WpParagraphAttributes? attributes;
   final List<WpInline> inlines;
 
   /// Hash do XML original do parágrafo (passthrough por parágrafo na F3).
   final String? sourceXml;
 
-  WpParagraph({this.properties, required this.inlines, this.sourceXml});
+  WpParagraph({
+    this.properties,
+    this.attributes,
+    required this.inlines,
+    this.sourceXml,
+  });
 
   String get text => inlines
       .map((inline) => switch (inline) {
@@ -540,6 +688,28 @@ class WpTableWidth {
   }
 }
 
+/// Cell margins declared by `<w:tblCellMar>` or `<w:tcMar>`.
+class WpCellMargins {
+  final WpTableWidth? top;
+  final WpTableWidth? left;
+  final WpTableWidth? bottom;
+  final WpTableWidth? right;
+
+  const WpCellMargins({this.top, this.left, this.bottom, this.right});
+
+  static WpCellMargins? fromXml(XmlElement? el) {
+    if (el == null) return null;
+    return WpCellMargins(
+      top: WpTableWidth.fromXml(el.firstChild('w:top')),
+      left: WpTableWidth.fromXml(
+          el.firstChild('w:left') ?? el.firstChild('w:start')),
+      bottom: WpTableWidth.fromXml(el.firstChild('w:bottom')),
+      right: WpTableWidth.fromXml(
+          el.firstChild('w:right') ?? el.firstChild('w:end')),
+    );
+  }
+}
+
 class WpTableProperties {
   final String? styleId; // w:tblStyle
   final WpTableWidth? width;
@@ -547,6 +717,8 @@ class WpTableProperties {
   final WpBorders? borders; // w:tblBorders
   final int? indentTwips; // w:tblInd
   final String? layout; // fixed | autofit
+  final WpCellMargins? cellMargins;
+  final String? tableLookXml;
 
   const WpTableProperties(
       {this.styleId,
@@ -554,7 +726,9 @@ class WpTableProperties {
       this.jc,
       this.borders,
       this.indentTwips,
-      this.layout});
+      this.layout,
+      this.cellMargins,
+      this.tableLookXml});
 
   static WpTableProperties? fromXml(XmlElement? el) {
     if (el == null) return null;
@@ -565,6 +739,11 @@ class WpTableProperties {
       borders: WpBorders.fromXml(el.firstChild('w:tblBorders')),
       indentTwips: _intVal(el.firstChild('w:tblInd'), 'w:w'),
       layout: el.firstChild('w:tblLayout')?.getAttribute('w:type'),
+      cellMargins: WpCellMargins.fromXml(el.firstChild('w:tblCellMar')),
+      // tblLook carries vendor-extensible conditional-style flags. There is
+      // no editor UI for them, so preserving the element is safer than
+      // flattening a subset and changing the table style after a cell edit.
+      tableLookXml: el.firstChild('w:tblLook')?.toXmlString(),
     );
   }
 }
@@ -574,12 +753,22 @@ class WpTableRowProperties {
   final String? heightRule; // atLeast | exact
   final bool tblHeader; // repete em cada página
   final bool cantSplit;
+  final int? gridBefore;
+  final int? gridAfter;
+  final WpTableWidth? widthBefore;
+  final WpTableWidth? widthAfter;
+  final String? jc;
 
   const WpTableRowProperties(
       {this.heightTwips,
       this.heightRule,
       this.tblHeader = false,
-      this.cantSplit = false});
+      this.cantSplit = false,
+      this.gridBefore,
+      this.gridAfter,
+      this.widthBefore,
+      this.widthAfter,
+      this.jc});
 
   static WpTableRowProperties? fromXml(XmlElement? el) {
     if (el == null) return null;
@@ -589,6 +778,11 @@ class WpTableRowProperties {
       heightRule: trHeight?.getAttribute('w:hRule'),
       tblHeader: _onOff(el.firstChild('w:tblHeader')) ?? false,
       cantSplit: _onOff(el.firstChild('w:cantSplit')) ?? false,
+      gridBefore: _intVal(el.firstChild('w:gridBefore')),
+      gridAfter: _intVal(el.firstChild('w:gridAfter')),
+      widthBefore: WpTableWidth.fromXml(el.firstChild('w:wBefore')),
+      widthAfter: WpTableWidth.fromXml(el.firstChild('w:wAfter')),
+      jc: _val(el.firstChild('w:jc')),
     );
   }
 }
@@ -602,6 +796,9 @@ class WpTableCellProperties {
   final WpBorders? borders; // w:tcBorders
   final WpShading? shading;
   final String? vAlign; // top | center | bottom
+  final WpCellMargins? margins;
+  final bool? noWrap;
+  final bool? hideMark;
 
   const WpTableCellProperties(
       {this.width,
@@ -609,7 +806,10 @@ class WpTableCellProperties {
       this.vMerge,
       this.borders,
       this.shading,
-      this.vAlign});
+      this.vAlign,
+      this.margins,
+      this.noWrap,
+      this.hideMark});
 
   static WpTableCellProperties? fromXml(XmlElement? el) {
     if (el == null) return null;
@@ -621,22 +821,52 @@ class WpTableCellProperties {
       borders: WpBorders.fromXml(el.firstChild('w:tcBorders')),
       shading: WpShading.fromXml(el.firstChild('w:shd')),
       vAlign: _val(el.firstChild('w:vAlign')),
+      margins: WpCellMargins.fromXml(el.firstChild('w:tcMar')),
+      noWrap: _onOff(el.firstChild('w:noWrap')),
+      hideMark: _onOff(el.firstChild('w:hideMark')),
     );
   }
+}
+
+/// Slot de filho direto de `<w:tbl>`.
+///
+/// Propriedades, grid e linhas continuam tipados/editáveis. Apenas filhos que
+/// o modelo não entende carregam XML bruto, no mesmo slot relativo em que
+/// apareceram (por exemplo, um `bookmarkEnd` depois da última linha).
+enum WpTableChildTokenKind { properties, grid, row, preserved }
+
+class WpTableChildToken {
+  final WpTableChildTokenKind kind;
+  final String? qname;
+  final String? xml;
+
+  const WpTableChildToken._(this.kind, {this.qname, this.xml});
+
+  const WpTableChildToken.properties()
+      : this._(WpTableChildTokenKind.properties);
+
+  const WpTableChildToken.grid() : this._(WpTableChildTokenKind.grid);
+
+  const WpTableChildToken.row() : this._(WpTableChildTokenKind.row);
+
+  const WpTableChildToken.preserved(String qname, String xml)
+      : this._(WpTableChildTokenKind.preserved, qname: qname, xml: xml);
 }
 
 class WpTableCell {
   final WpTableCellProperties? properties;
   final List<WpBlock> blocks;
+  final String? sourceXml;
 
-  WpTableCell({this.properties, required this.blocks});
+  WpTableCell({this.properties, required this.blocks, this.sourceXml});
 }
 
 class WpTableRow {
   final WpTableRowProperties? properties;
   final List<WpTableCell> cells;
+  final String? sourceXml;
 
-  WpTableRow({this.properties, required this.cells});
+  WpTableRow({this.properties, required this.cells, this.sourceXml});
 }
 
 class WpTable extends WpBlock {
@@ -645,6 +875,7 @@ class WpTable extends WpBlock {
   /// Larguras do `<w:tblGrid>` em twips.
   final List<int> gridColumnsTwips;
   final List<WpTableRow> rows;
+  final List<WpTableChildToken> childOrder;
 
   /// XML original da tabela (passthrough D1 quando intocada; `null` para
   /// tabelas novas/regeneradas).
@@ -654,6 +885,7 @@ class WpTable extends WpBlock {
       {this.properties,
       required this.gridColumnsTwips,
       required this.rows,
+      this.childOrder = const [],
       this.sourceXml});
 }
 
@@ -686,9 +918,19 @@ class WpSectionProperties {
   final int? headerDistanceTwips;
   final int? footerDistanceTwips;
   final int? gutterTwips;
+  final String? documentGridType;
+  final int? documentGridLinePitchTwips;
   final bool titlePage; // w:titlePg — header/footer "first" ativo
   final List<WpHeaderFooterReference> headerReferences;
   final List<WpHeaderFooterReference> footerReferences;
+
+  /// Whether the editable page geometry must be overlaid on [sourceXml].
+  ///
+  /// Keeping the source section while this flag is true lets the writer
+  /// update only `pgSz`/the editable `pgMar` attributes and retain ordered
+  /// ancillary children such as `cols`, `type`, `pgNumType`, printer
+  /// settings and vendor extensions.
+  final bool geometryOverridden;
 
   /// XML original do `<w:sectPr>` (re-emitido byte a byte no save).
   final String? sourceXml;
@@ -704,9 +946,12 @@ class WpSectionProperties {
     this.headerDistanceTwips,
     this.footerDistanceTwips,
     this.gutterTwips,
+    this.documentGridType,
+    this.documentGridLinePitchTwips,
     this.titlePage = false,
     this.headerReferences = const [],
     this.footerReferences = const [],
+    this.geometryOverridden = false,
     this.sourceXml,
   });
 
@@ -732,6 +977,9 @@ class WpSectionProperties {
       headerDistanceTwips: _intVal(pgMar, 'w:header'),
       footerDistanceTwips: _intVal(pgMar, 'w:footer'),
       gutterTwips: _intVal(pgMar, 'w:gutter'),
+      documentGridType: el.firstChild('w:docGrid')?.getAttribute('w:type'),
+      documentGridLinePitchTwips:
+          _intVal(el.firstChild('w:docGrid'), 'w:linePitch'),
       titlePage: _onOff(el.firstChild('w:titlePg')) ?? false,
       headerReferences: refs('w:headerReference'),
       footerReferences: refs('w:footerReference'),
@@ -796,11 +1044,13 @@ class WpHeaderFooter {
 /// `word/settings.xml` (subset relevante ao corpus).
 class WpSettings {
   final bool autoHyphenation;
+  final int hyphenationZoneTwips;
   final bool evenAndOddHeaders;
   final int defaultTabStopTwips;
 
   const WpSettings({
     this.autoHyphenation = false,
+    this.hyphenationZoneTwips = 360,
     this.evenAndOddHeaders = false,
     this.defaultTabStopTwips = 708,
   });
@@ -809,6 +1059,8 @@ class WpSettings {
     if (root == null) return const WpSettings();
     return WpSettings(
       autoHyphenation: _onOff(root.firstChild('w:autoHyphenation')) ?? false,
+      hyphenationZoneTwips:
+          _intVal(root.firstChild('w:hyphenationZone')) ?? 360,
       evenAndOddHeaders:
           _onOff(root.firstChild('w:evenAndOddHeaders')) ?? false,
       defaultTabStopTwips: _intVal(root.firstChild('w:defaultTabStop')) ?? 708,

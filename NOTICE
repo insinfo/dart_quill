@@ -20,6 +20,11 @@ Resumo:
   lib/assets/office_word_icons.css) é derivada dos SVGs oficiais da ribbon
   e permanece sob CC BY-SA 4.0.
 
+- Métricas de avanço derivadas de Carlito Regular
+  (https://github.com/google/fonts/tree/main/ofl/carlito) — SIL Open Font
+  License 1.1. Copyright 2013 The Carlito Project Authors; Reserved Font Name
+  “Carlito”. O pacote não redistribui o binário da fonte.
+
 Nenhum CÓDIGO, bundle ou outro ativo de projetos AGPL
 (ONLYOFFICE/DocumentServer — dos quais somente os ícones CC BY-SA 4.0 acima
 foram incorporados —, iText) ou proprietários (capturas do Word Online) está

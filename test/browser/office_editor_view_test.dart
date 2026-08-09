@@ -82,21 +82,34 @@ void main() {
         position.node, position.offset, position.node, position.offset);
   }
 
-  String docText(OfficeEditorView view) =>
-      view.state.doc.textBetween(0, view.state.doc.content.size,
-          blockSeparator: ' ');
+  void selectRange(int from, int to) {
+    const map = OfficeDomPositionMap();
+    final start = map.domPositionFor(host, from)!;
+    final end = map.domPositionFor(host, to)!;
+    focusSurface();
+    adapter.setSelectionByNodes(
+      start.node,
+      start.offset,
+      end.node,
+      end.offset,
+    );
+  }
+
+  String docText(OfficeEditorView view) => view.state.doc
+      .textBetween(0, view.state.doc.content.size, blockSeparator: ' ');
 
   /// Editor com as extensões padrão (histórico, keymap, marcas).
-  OfficeEditorView mountWithExtensions(PMNode doc) => view =
-      OfficeEditorView.withExtensions(
+  OfficeEditorView mountWithExtensions(PMNode doc) =>
+      view = OfficeEditorView.withExtensions(
           host: host,
           doc: doc,
           adapter: adapter,
           extensions: officeDefaultExtensions(schema));
 
   /// Dispara um keydown REAL na superfície focada.
-  void pressKey(String key, {bool ctrl = false, bool shift = false}) {
-    focusSurface().dispatchEvent(web.KeyboardEvent(
+  web.KeyboardEvent pressKey(String key,
+      {bool ctrl = false, bool shift = false}) {
+    final event = web.KeyboardEvent(
         'keydown',
         web.KeyboardEventInit(
           key: key,
@@ -104,7 +117,9 @@ void main() {
           shiftKey: shift,
           bubbles: true,
           cancelable: true,
-        )));
+        ));
+    focusSurface().dispatchEvent(event);
+    return event;
   }
 
   test('digitar insere no modelo e a projeção acompanha', () {
@@ -145,6 +160,127 @@ void main() {
 
     expect(docText(view), contains('abc'));
     expect(docText(view), isNot(contains('abcd')));
+  });
+
+  test('Shift+Enter insere hardBreak sem dividir o parágrafo', () {
+    final view = mount(docOf([paragraph('antesdepois')]));
+    caretAt(view, 1 + 5);
+
+    final event = sendInput('insertLineBreak');
+
+    expect(event.defaultPrevented, isTrue);
+    expect(view.state.doc.childCount, 1);
+    expect(view.state.doc.child(0).child(1).type.name, 'hardBreak');
+    expect(view.state.selection.from, 1 + 5 + 1);
+  });
+
+  test('deleteWordBackward preserva fronteira de palavra acentuada', () {
+    final view = mount(docOf([paragraph('ação útil')]));
+    caretAt(view, 1 + 'ação útil'.length);
+
+    sendInput('deleteWordBackward');
+
+    expect(docText(view), 'ação ');
+  });
+
+  test('Tab real percorre células e não cria linha na última', () {
+    PMNode cell(String value) => schema.node(
+          'tableCell',
+          null,
+          Fragment.from([paragraph(value)]),
+        );
+    final table = schema.node(
+      'table',
+      null,
+      Fragment.from([
+        schema.node(
+          'tableRow',
+          null,
+          Fragment.from([cell('A'), cell('B')]),
+        ),
+      ]),
+    );
+    final view = mount(docOf([table]));
+    final starts = <int>[];
+    view.state.doc.descendants((node, position, parent, index) {
+      if (node.type.name != 'tableCell') return true;
+      starts.add(position + 2);
+      return false;
+    });
+
+    caretAt(view, starts.first);
+    final next = pressKey('Tab');
+    expect(next.defaultPrevented, isTrue);
+    expect(view.state.selection.from, starts.last);
+
+    final before = view.state.doc;
+    final last = pressKey('Tab');
+    expect(last.defaultPrevented, isTrue);
+    expect(view.state.doc.eq(before), isTrue);
+    expect(view.state.selection.from, starts.last);
+  });
+
+  test('input, Enter, cut e paste rejeitam seleção real entre células', () {
+    PMNode cell(String value) => schema.node(
+          'tableCell',
+          null,
+          Fragment.from([paragraph(value)]),
+        );
+    final table = schema.node(
+      'table',
+      null,
+      Fragment.from([
+        schema.node(
+          'tableRow',
+          null,
+          Fragment.from([cell('alpha'), cell('beta')]),
+        ),
+      ]),
+    );
+    final view = mount(docOf([table]));
+    final starts = <int>[];
+    view.state.doc.descendants((node, position, parent, index) {
+      if (node.type.name != 'tableCell') return true;
+      starts.add(position + 2);
+      return false;
+    });
+    final before = view.state.doc;
+
+    selectRange(starts.first + 1, starts.last + 1);
+    expect(sendInput('insertText', data: 'X').defaultPrevented, isTrue);
+    expect(view.state.doc.eq(before), isTrue);
+
+    selectRange(starts.first + 1, starts.last + 1);
+    expect(sendInput('insertParagraph').defaultPrevented, isTrue);
+    expect(view.state.doc.eq(before), isTrue);
+
+    selectRange(starts.first + 1, starts.last + 1);
+    final cut = web.ClipboardEvent(
+      'cut',
+      web.ClipboardEventInit(
+        clipboardData: web.DataTransfer(),
+        bubbles: true,
+        cancelable: true,
+      ),
+    );
+    focusSurface().dispatchEvent(cut);
+    expect(cut.defaultPrevented, isTrue);
+    expect(view.state.doc.eq(before), isTrue);
+
+    selectRange(starts.first + 1, starts.last + 1);
+    final pasteData = web.DataTransfer()..setData('text/plain', 'X');
+    final paste = web.ClipboardEvent(
+      'paste',
+      web.ClipboardEventInit(
+        clipboardData: pasteData,
+        bubbles: true,
+        cancelable: true,
+      ),
+    );
+    focusSurface().dispatchEvent(paste);
+    expect(paste.defaultPrevented, isTrue);
+    expect(view.state.doc.eq(before), isTrue);
+    expect(view.state.doc.child(0).child(0).childCount, 2);
   });
 
   test('digitar sobre uma seleção substitui o intervalo', () {
@@ -257,8 +393,7 @@ void main() {
     caretAt(view, 1 + 2);
 
     final surface = focusSurface();
-    surface.dispatchEvent(web.CompositionEvent(
-        'compositionstart',
+    surface.dispatchEvent(web.CompositionEvent('compositionstart',
         web.CompositionEventInit(bubbles: true, cancelable: true)));
     expect(view.isComposing, isTrue);
 
@@ -270,15 +405,84 @@ void main() {
     adapter.setSelectionByNodes(
         position.node, position.offset, position.node, position.offset);
 
-    surface.dispatchEvent(web.CompositionEvent(
-        'compositionend',
-        web.CompositionEventInit(
-            data: 'fé', bubbles: true, cancelable: true)));
+    surface.dispatchEvent(web.CompositionEvent('compositionend',
+        web.CompositionEventInit(data: 'fé', bubbles: true, cancelable: true)));
 
     expect(view.isComposing, isFalse);
     expect(docText(view), 'café',
         reason: 'o que o browser escreveu tem de voltar para o MODELO');
     expect(hostElement.textContent, contains('café'));
+  });
+
+  test('IME numa continuação de página preserva o restante do parágrafo', () {
+    const source =
+        'prefixo preservado antes da quebra de página e muitas palavras para '
+        'forçar o mesmo parágrafo a continuar em outra folha sem criar um '
+        'segundo bloco no modelo; esta segunda parte também precisa continuar '
+        'intacta depois que o IME acrescentar um caractere na linha projetada.';
+    final block = schema.node(
+      'paragraph',
+      {
+        'style': const {
+          'lineTwips': 200,
+          'lineRule': 'exact',
+          'widowControl': false,
+        }
+      },
+      Fragment.from([schema.text(source)]),
+    );
+    final state = EditorState.create(EditorStateConfig(doc: docOf([block])));
+    view = OfficeEditorView(
+      host: host,
+      state: state,
+      adapter: adapter,
+      composer: LayoutComposer(
+        setup: const PageSetupTwips(
+          widthTwips: 2500,
+          heightTwips: 800,
+          marginTopTwips: 0,
+          marginRightTwips: 0,
+          marginBottomTwips: 0,
+          marginLeftTwips: 0,
+        ),
+      ),
+    );
+    final current = view!;
+    expect(current.pageGraph.pages.length, greaterThan(1));
+    final continuation = host.querySelector('[data-continues-from="true"]')!;
+    final line = continuation.querySelector('.dq-office-line')!;
+    final run = line
+        .querySelectorAll('.dq-office-run')
+        .where((candidate) =>
+            candidate.getAttribute('data-model-length') != '0' &&
+            (candidate.textContent ?? '').isNotEmpty)
+        .last;
+    final textNode = run.firstChild!;
+    final rawText = (textNode as dynamic).node as web.Text;
+    final charEnd = int.parse(line.getAttribute('data-char-end')!);
+    final expected = '${source.substring(0, charEnd)}X'
+        '${source.substring(charEnd)}';
+
+    final surface = focusSurface();
+    surface.dispatchEvent(web.CompositionEvent(
+      'compositionstart',
+      web.CompositionEventInit(bubbles: true, cancelable: true),
+    ));
+    rawText.data = '${rawText.data}X';
+    adapter.setSelectionByNodes(
+      textNode,
+      rawText.data.length,
+      textNode,
+      rawText.data.length,
+    );
+    surface.dispatchEvent(web.CompositionEvent(
+      'compositionend',
+      web.CompositionEventInit(data: 'X', bubbles: true, cancelable: true),
+    ));
+
+    expect(current.state.doc.child(0).textContent, expected);
+    expect(current.state.doc.child(0).textContent,
+        startsWith('prefixo preservado'));
   });
 
   test('dispose solta o listener: digitar depois não muda mais nada', () {

@@ -22,6 +22,7 @@
 library;
 
 import '../../platform/dom.dart';
+import '../../office/document/fonts/font_registry.dart';
 import 'page_graph.dart';
 
 /// Prefixo de TODAS as classes emitidas (isolamento de CSS).
@@ -73,6 +74,8 @@ class PageGraphDomRenderer {
     required this.document,
     this.pxPerPt = 96 / 72,
     this.editable = false,
+    this.pageGapPx = 0,
+    this.scrollTopInsetPx = 0,
   });
 
   final DomDocument document;
@@ -84,6 +87,11 @@ class PageGraphDomRenderer {
   /// (beforeinput/IME/seleção) é a Fase 2 completa; aqui a superfície já
   /// nasce com o atributo certo para o hardening começar.
   final bool editable;
+
+  /// Geometria externa da projeção, usada pela virtualização para mapear
+  /// `scrollTop` em página sem medir o DOM a cada evento.
+  final double pageGapPx;
+  final double scrollTopInsetPx;
 
   double _px(int twips) => twips / 20.0 * pxPerPt;
 
@@ -119,7 +127,7 @@ class PageGraphDomRenderer {
     element.setAttribute(
         'style',
         'width:${_n(_px(page.setup.widthTwips))}px;'
-        'height:${_n(_px(page.setup.heightTwips))}px;');
+            'height:${_n(_px(page.setup.heightTwips))}px;');
     return element;
   }
 
@@ -131,8 +139,8 @@ class PageGraphDomRenderer {
     pageElement.setAttribute(
         'style',
         'position:relative;'
-        'width:${_n(_px(setup.widthTwips))}px;'
-        'height:${_n(_px(setup.heightTwips))}px;');
+            'width:${_n(_px(setup.widthTwips))}px;'
+            'height:${_n(_px(setup.heightTwips))}px;');
 
     final content = document.createElement('div');
     content.classes.add('$officeCssPrefix-page-content');
@@ -145,22 +153,27 @@ class PageGraphDomRenderer {
     content.setAttribute(
         'style',
         'position:absolute;'
-        'left:${_n(_px(setup.marginLeftTwips))}px;'
-        'top:${_n(_px(setup.marginTopTwips))}px;'
-        'width:${_n(_px(setup.contentWidthTwips))}px;'
-        'height:${_n(_px(setup.contentHeightTwips))}px;');
-    pageElement.append(content);
-
+            'left:${_n(_px(setup.marginLeftTwips))}px;'
+            'top:${_n(_px(setup.marginTopTwips))}px;'
+            'width:${_n(_px(setup.contentWidthTwips))}px;'
+            'height:${_n(_px(setup.contentHeightTwips))}px;');
     // Cabeçalho e rodapé ficam FORA do content box, nos boxes de margem, e
     // são explicitamente NÃO editáveis: a mesma região aparece em todas as
     // páginas, e deixar editar aqui criaria N edições concorrentes do mesmo
     // nó. A edição acontece numa região autoritativa própria.
     if (page.header.isNotEmpty) {
-      pageElement.append(_renderRegion(page.header, page.setup, isHeader: true));
+      pageElement
+          .append(_renderRegion(page.header, page.setup, isHeader: true));
     }
     if (page.footer.isNotEmpty) {
-      pageElement.append(_renderRegion(page.footer, page.setup, isHeader: false));
+      pageElement
+          .append(_renderRegion(page.footer, page.setup, isHeader: false));
     }
+
+    // O corpo vem depois na ordem de pintura. Imagens opacas do timbre podem
+    // invadir a margem do texto sem apagar seus glifos; objetos realmente
+    // flutuantes (como textBox) mantêm o z-index explícito e continuam acima.
+    pageElement.append(content);
 
     for (final fragment in page.fragments) {
       switch (fragment) {
@@ -186,18 +199,17 @@ class PageGraphDomRenderer {
     // de lista. Um leitor de tela não deve ouvir o timbre 200 vezes.
     element.setAttribute('aria-hidden', 'true');
 
-    final height =
-        fragments.fold<int>(0, (sum, f) => sum + f.heightTwips);
+    final height = fragments.fold<int>(0, (sum, f) => sum + f.heightTwips);
     final top = isHeader
         ? setup.headerDistanceTwips
         : setup.heightTwips - setup.footerDistanceTwips - height;
     element.setAttribute(
         'style',
         'position:absolute;'
-        'left:${_n(_px(setup.marginLeftTwips))}px;'
-        'top:${_n(_px(top))}px;'
-        'width:${_n(_px(setup.contentWidthTwips))}px;'
-        'height:${_n(_px(height))}px;');
+            'left:${_n(_px(setup.marginLeftTwips))}px;'
+            'top:${_n(_px(top))}px;'
+            'width:${_n(_px(setup.contentWidthTwips))}px;'
+            'height:${_n(_px(height))}px;');
 
     for (final fragment in fragments) {
       element.append(_renderBlock(fragment,
@@ -209,35 +221,134 @@ class PageGraphDomRenderer {
   DomElement _renderTable(TableFragment fragment) {
     final element = document.createElement('div');
     element.classes.add('$officeCssPrefix-table');
-    _anchor(element, fragment);
+    element.setAttribute('role', 'table');
+    _nodeAnchor(
+        element, fragment.docPos, fragment.nodeId ?? fragment.sourceTableId);
+    _docRange(element, fragment.docFrom, fragment.docTo);
+    _sourceIdentity(element, tableId: fragment.sourceTableId);
+    var tableWidth = 0;
+    for (final row in fragment.rows) {
+      for (final cell in row.cells) {
+        final right = cell.xTwips + cell.widthTwips;
+        if (right > tableWidth) tableWidth = right;
+      }
+    }
     element.setAttribute(
         'style',
         'position:absolute;left:0;'
-        'top:${_n(_px(fragment.yTwips))}px;'
-        'height:${_n(_px(fragment.heightTwips))}px;');
+            'top:${_n(_px(fragment.yTwips))}px;'
+            'width:${_n(_px(tableWidth))}px;'
+            'height:${_n(_px(fragment.heightTwips))}px;');
 
     var y = 0;
     for (final row in fragment.rows) {
       final rowElement = document.createElement('div');
       rowElement.classes.add('$officeCssPrefix-table-row');
+      rowElement.setAttribute('role', 'row');
+      rowElement.setAttribute('data-height-twips', '${row.heightTwips}');
+      _docRange(rowElement, row.docFrom, row.docTo);
+      _sourceIdentity(
+        rowElement,
+        tableId: row.sourceTableId,
+        rowId: row.sourceRowId,
+        rowIndex: row.sourceRowIndex,
+      );
+      if (!row.isRepeatedHeader) {
+        _nodeAnchor(rowElement, row.docPos, row.nodeId ?? row.sourceRowId);
+      } else {
+        rowElement.classes.add('$officeCssPrefix-table-row-repeated-header');
+        rowElement.setAttribute('data-repeated-header', 'true');
+        rowElement.setAttribute('contenteditable', 'false');
+        rowElement.setAttribute('aria-hidden', 'true');
+      }
+      if (row.heightRule != null) {
+        rowElement.setAttribute('data-height-rule', row.heightRule!);
+      }
+      if (row.cantSplit) rowElement.setAttribute('data-cant-split', 'true');
+      if (row.repeatHeader) {
+        rowElement.setAttribute('data-repeat-header', 'true');
+      }
+      if (row.continuesFromPreviousPage) {
+        rowElement.setAttribute('data-continues-from', 'true');
+      }
+      if (row.continuesOnNextPage) {
+        rowElement.setAttribute('data-continues-on', 'true');
+      }
+      if (row.gridBefore > 0) {
+        rowElement.setAttribute('data-grid-before', '${row.gridBefore}');
+      }
+      if (row.gridAfter > 0) {
+        rowElement.setAttribute('data-grid-after', '${row.gridAfter}');
+      }
       rowElement.setAttribute(
           'style',
           'position:absolute;left:0;'
-          'top:${_n(_px(y))}px;'
-          'height:${_n(_px(row.heightTwips))}px;');
+              'top:${_n(_px(y))}px;'
+              'height:${_n(_px(row.heightTwips))}px;');
       for (final cell in row.cells) {
         final cellElement = document.createElement('div');
         cellElement.classes.add('$officeCssPrefix-table-cell');
+        cellElement.setAttribute('role', 'cell');
+        _docRange(cellElement, cell.docFrom, cell.docTo);
+        _sourceIdentity(
+          cellElement,
+          tableId: cell.sourceTableId,
+          rowId: cell.sourceRowId,
+          cellId: cell.sourceCellId,
+          rowIndex: cell.sourceRowIndex,
+          cellIndex: cell.sourceCellIndex,
+        );
+        if (!row.isRepeatedHeader) {
+          _nodeAnchor(
+              cellElement, cell.docPos, cell.nodeId ?? cell.sourceCellId);
+        }
+        if (cell.columnSpan > 1) {
+          cellElement.setAttribute('colspan', '${cell.columnSpan}');
+          cellElement.setAttribute('aria-colspan', '${cell.columnSpan}');
+        }
+        if (cell.rowSpan > 1) {
+          cellElement.setAttribute('rowspan', '${cell.rowSpan}');
+          cellElement.setAttribute('aria-rowspan', '${cell.rowSpan}');
+        }
+        cellElement.setAttribute('data-column', '${cell.columnIndex}');
+        cellElement.setAttribute(
+            'data-vertical-align', cell.verticalAlign.name);
+        cellElement.setAttribute(
+            'data-margin-top-twips', '${cell.marginTopTwips}');
+        cellElement.setAttribute(
+            'data-margin-right-twips', '${cell.marginRightTwips}');
+        cellElement.setAttribute(
+            'data-margin-bottom-twips', '${cell.marginBottomTwips}');
+        cellElement.setAttribute(
+            'data-margin-left-twips', '${cell.marginLeftTwips}');
+        if (cell.isMergeContinuation) {
+          cellElement.classes
+              .add('$officeCssPrefix-table-cell-merge-continuation');
+          cellElement.setAttribute('data-vmerge', 'continue');
+          cellElement.setAttribute('aria-hidden', 'true');
+          cellElement.setAttribute('contenteditable', 'false');
+          cellElement.setAttribute('style', 'display:none;');
+          rowElement.append(cellElement);
+          continue;
+        }
+        final background = cell.backgroundColor == null
+            ? ''
+            : 'background-color:${cell.backgroundColor};';
         cellElement.setAttribute(
             'style',
             'position:absolute;'
-            'left:${_n(_px(cell.xTwips))}px;top:0;'
-            'width:${_n(_px(cell.widthTwips))}px;'
-            'height:${_n(_px(row.heightTwips))}px;'
-            'border:1px solid #000;box-sizing:border-box;');
+                'left:${_n(_px(cell.xTwips))}px;top:0;'
+                'width:${_n(_px(cell.widthTwips))}px;'
+                'height:${_n(_px(cell.heightTwips))}px;'
+                '$background'
+                '${_bordersCss(cell.borders)}'
+                'box-sizing:border-box;');
         for (final block in cell.blocks) {
           cellElement.append(_renderBlock(block,
-              availableTwips: cell.widthTwips, withMarker: false));
+              availableTwips: cell.widthTwips,
+              withMarker: true,
+              topOffsetTwips: cell.contentOffsetTwips,
+              projectedCopy: row.isRepeatedHeader));
         }
         rowElement.append(cellElement);
       }
@@ -251,11 +362,13 @@ class PageGraphDomRenderer {
     BlockFragment fragment, {
     required int availableTwips,
     required bool withMarker,
+    int topOffsetTwips = 0,
+    bool projectedCopy = false,
   }) {
     final element = document.createElement('div');
     element.classes.add('$officeCssPrefix-block');
     element.classes.add('$officeCssPrefix-block-${fragment.kind}');
-    _anchor(element, fragment);
+    if (!projectedCopy) _anchor(element, fragment);
     if (fragment.continuesFromPreviousPage) {
       element.setAttribute('data-continues-from', 'true');
     }
@@ -265,10 +378,22 @@ class PageGraphDomRenderer {
     element.setAttribute(
         'style',
         'position:absolute;'
-        'left:${_n(_px(fragment.indentTwips))}px;'
-        'top:${_n(_px(fragment.yTwips))}px;'
-        'width:${_n(_px(availableTwips - fragment.indentTwips))}px;'
-        'height:${_n(_px(fragment.heightTwips))}px;');
+            'left:${_n(_px(fragment.indentTwips))}px;'
+            'top:${_n(_px(fragment.yTwips + topOffsetTwips))}px;'
+            'width:${_n(_px(availableTwips - fragment.indentTwips))}px;'
+            'height:${_n(_px(fragment.heightTwips))}px;');
+
+    // Lossless OOXML range markers (`bookmarkEnd`, comment/permission
+    // ranges, proof metadata) are represented by zero-height opaque block
+    // fragments.  They retain their source anchor for round-trip/mapping,
+    // but must not expose the generic empty-paragraph caret target.
+    if (fragment.kind == 'opaque' && fragment.heightTwips == 0) {
+      element.setAttribute('contenteditable', 'false');
+      element.setAttribute('aria-hidden', 'true');
+      element.setAttribute(
+          'style', '${element.getAttribute('style')}display:none;');
+      return element;
+    }
 
     if (withMarker && fragment.marker != null) {
       final marker = document.createElement('span');
@@ -277,8 +402,27 @@ class PageGraphDomRenderer {
       // texto do documento): fora da edição e da árvore de acessibilidade.
       marker.setAttribute('contenteditable', 'false');
       marker.setAttribute('aria-hidden', 'true');
-      marker.setAttribute('style',
-          'position:absolute;right:100%;padding-right:4px;white-space:pre;');
+      final firstLine = fragment.lines.isEmpty ? null : fragment.lines.first;
+      final markerStyle = fragment.markerStyle ??
+          (firstLine == null || firstLine.segments.isEmpty
+              ? null
+              : firstLine.segments.first.style) ??
+          const ResolvedRunStyle(family: 'Arial', sizePt: 12);
+      final markerLineHeight = firstLine?.heightTwips ??
+          (fragment.heightTwips -
+              fragment.spaceBeforeTwips -
+              fragment.spaceAfterTwips);
+      marker.setAttribute(
+          'style',
+          'position:absolute;'
+              'left:${_n(_px(fragment.markerPositionTwips - fragment.indentTwips))}px;'
+              'top:${_n(_px(fragment.spaceBeforeTwips))}px;'
+              'height:${_n(_px(markerLineHeight))}px;'
+              'line-height:${_n(_px(markerLineHeight))}px;'
+              'font-family:${_cssFontFamily(markerStyle.family)};'
+              'font-size:${_n(markerStyle.sizePt * pxPerPt)}px;'
+              'font-weight:${markerStyle.bold ? 'bold' : 'normal'};'
+              'color:${markerStyle.color};white-space:pre;');
       marker.appendText(fragment.marker!);
       element.append(marker);
     }
@@ -288,6 +432,9 @@ class PageGraphDomRenderer {
     // e o resultado de todo Enter. Sem este alvo, o mapa de posições não
     // tem âncora e o editor não consegue nem começar a digitar.
     if (fragment.lines.isEmpty) {
+      final blankHeight = fragment.heightTwips -
+          fragment.spaceBeforeTwips -
+          fragment.spaceAfterTwips;
       final empty = document.createElement('div');
       empty.classes.add('$officeCssPrefix-line');
       empty.classes.add('$officeCssPrefix-line-empty');
@@ -295,15 +442,16 @@ class PageGraphDomRenderer {
       empty.setAttribute('data-char-end', '0');
       empty.setAttribute(
           'style',
-          'position:absolute;left:0;right:0;top:0;'
-          'height:${_n(_px(fragment.heightTwips))}px;'
-          'line-height:${_n(_px(fragment.heightTwips))}px;'
-          'white-space:pre;');
+          'position:absolute;left:0;right:0;'
+              'top:${_n(_px(fragment.spaceBeforeTwips))}px;'
+              'height:${_n(_px(blankHeight))}px;'
+              'line-height:${_n(_px(blankHeight))}px;'
+              'white-space:pre;');
       element.append(empty);
       return element;
     }
 
-    var y = 0;
+    var y = fragment.spaceBeforeTwips;
     for (final line in fragment.lines) {
       final lineElement = document.createElement('div');
       lineElement.classes.add('$officeCssPrefix-line');
@@ -312,15 +460,37 @@ class PageGraphDomRenderer {
       lineElement.setAttribute(
           'style',
           'position:absolute;'
-          'left:${_n(_px(line.indentTwips))}px;'
-          'right:${_n(_px(fragment.rightIndentTwips))}px;'
-          'top:${_n(_px(y))}px;'
-          'height:${_n(_px(line.heightTwips))}px;'
-          'line-height:${_n(_px(line.heightTwips))}px;'
-          'white-space:pre;'
-          'text-align:${_alignCss(fragment.align)};');
+              'left:${_n(_px(line.indentTwips))}px;'
+              'right:${_n(_px(fragment.rightIndentTwips))}px;'
+              'top:${_n(_px(y))}px;'
+              'height:${_n(_px(line.heightTwips))}px;'
+              'line-height:${_n(_px(line.heightTwips))}px;'
+              'word-spacing:${_n(line.wordSpacingTwips / 20 * pxPerPt)}px;'
+              'white-space:pre;'
+              'text-align:${_alignCss(fragment.align)};');
       for (final segment in line.segments) {
-        lineElement.append(_renderSegment(segment));
+        if (segment.textBox != null) {
+          element.append(_renderTextBox(
+            segment,
+            lineTopTwips: y,
+            lineIndentTwips: line.indentTwips,
+            blockWidthTwips: availableTwips - fragment.indentTwips,
+            rightIndentTwips: fragment.rightIndentTwips,
+          ));
+          // The floating visual lives at block level, but its anchor still
+          // occupies one inline model position at this exact place in the
+          // line. Keeping an inert zero-size sibling is the only way the DOM
+          // position map can distinguish text-before from text-after.
+          final anchor = document.createElement('span');
+          anchor.classes.add('$officeCssPrefix-text-box-anchor');
+          anchor.setAttribute('contenteditable', 'false');
+          anchor.setAttribute('aria-hidden', 'true');
+          anchor.setAttribute('data-model-length', '1');
+          anchor.setAttribute('style', 'display:none;');
+          lineElement.append(anchor);
+        } else {
+          lineElement.append(_renderSegment(segment));
+        }
       }
       element.append(lineElement);
       y += line.heightTwips;
@@ -330,23 +500,69 @@ class PageGraphDomRenderer {
 
   DomElement _renderSegment(LineSegment segment) {
     final style = segment.style;
+    if (segment.hardBreak) {
+      final br = document.createElement('br');
+      br.classes.add('$officeCssPrefix-hard-break');
+      br.setAttribute('data-model-length', '1');
+      return br;
+    }
+    if (segment.isOpaqueInline) {
+      final hidden = document.createElement('span');
+      hidden.classes.add('$officeCssPrefix-opaque-inline');
+      hidden.setAttribute('contenteditable', 'false');
+      hidden.setAttribute('aria-hidden', 'true');
+      hidden.setAttribute('data-model-length', '1');
+      hidden.setAttribute('style', 'display:none;');
+      return hidden;
+    }
+    if (segment.isTab) {
+      final tab = document.createElement('span');
+      tab.classes.add('$officeCssPrefix-tab');
+      tab.setAttribute('data-model-length', '1');
+      if (segment.tabLeader != null) {
+        tab.setAttribute('data-leader', segment.tabLeader!);
+      }
+      final leaderCss = switch (segment.tabLeader?.toLowerCase()) {
+        'underscore' => 'border-bottom:1px solid currentColor;',
+        'dot' || 'middledot' => 'border-bottom:1px dotted currentColor;',
+        'hyphen' => 'border-bottom:1px dashed currentColor;',
+        _ => '',
+      };
+      tab.setAttribute(
+          'style',
+          'display:inline-block;overflow:hidden;vertical-align:baseline;'
+              'width:${_n(_px(segment.widthTwips))}px;'
+              'height:1em;white-space:pre;$leaderCss');
+      // Um caractere lógico mantém o offset DOM/modelo; a largura visual é
+      // inteiramente governada pelo stop calculado acima.
+      tab.appendText('\t');
+      return tab;
+    }
     if (segment.imageSrc != null) {
       final image = document.createElement('img');
       image.classes.add('$officeCssPrefix-image');
       image.setAttribute('src', segment.imageSrc!);
+      image.setAttribute('data-model-length', '1');
       image.setAttribute(
           'style',
           'display:inline-block;vertical-align:middle;'
-          'width:${_n(_px(segment.widthTwips))}px;'
-          'height:${_n(_px(segment.imageHeightTwips ?? segment.widthTwips))}px;');
+              'width:${_n(_px(segment.widthTwips))}px;'
+              'height:${_n(_px(segment.imageHeightTwips ?? segment.widthTwips))}px;');
       return image;
     }
     final span = document.createElement('span');
     span.classes.add('$officeCssPrefix-run');
+    if (segment.isDiscretionaryHyphen) {
+      span.classes.add('$officeCssPrefix-discretionary-hyphen');
+      span.setAttribute('contenteditable', 'false');
+      span.setAttribute('aria-hidden', 'true');
+      span.setAttribute('data-model-length', '0');
+    }
     final css = StringBuffer()
       ..write('font-family:${_cssFontFamily(style.family)};')
       ..write('font-size:${_n(style.sizePt * pxPerPt)}px;')
-      ..write('color:${style.color};');
+      ..write('color:${style.color};')
+      ..write('letter-spacing:${_n(_px(style.letterSpacingTwips))}px;');
     if (style.bold) css.write('font-weight:bold;');
     if (style.italic) css.write('font-style:italic;');
     if (style.underline && style.strike) {
@@ -364,10 +580,130 @@ class PageGraphDomRenderer {
     return span;
   }
 
+  DomElement _renderTextBox(
+    LineSegment segment, {
+    required int lineTopTwips,
+    required int lineIndentTwips,
+    required int blockWidthTwips,
+    required int rightIndentTwips,
+  }) {
+    final box = segment.textBox!;
+    final width = box.widthTwips > 0 ? box.widthTwips : 1;
+    final height = box.heightTwips > 0 ? box.heightTwips : 1;
+    final usable = blockWidthTwips - rightIndentTwips;
+    final left = switch (box.positionHAlign?.toLowerCase()) {
+      'center' => (usable - width) ~/ 2 + box.offsetXTwips,
+      'right' => usable - width + box.offsetXTwips,
+      _ => lineIndentTwips + box.offsetXTwips,
+    };
+    final element = document.createElement('div');
+    element.classes.add('$officeCssPrefix-text-box');
+    element.setAttribute('contenteditable', 'false');
+    element.setAttribute('data-model-length', '1');
+    element.setAttribute('data-position-h-align', box.positionHAlign ?? 'left');
+    final background =
+        box.backgroundColor == null ? '' : 'background:${box.backgroundColor};';
+    final border = box.borderWidthTwips > 0
+        ? 'border:${_n(_px(box.borderWidthTwips))}px solid ${box.borderColor};'
+        : 'border:none;';
+    final style = segment.style;
+    element.setAttribute(
+        'style',
+        'position:absolute;z-index:1;box-sizing:border-box;overflow:hidden;'
+            'left:${_n(_px(left))}px;'
+            'top:${_n(_px(lineTopTwips + box.offsetYTwips))}px;'
+            'width:${_n(_px(width))}px;height:${_n(_px(height))}px;'
+            'white-space:pre-wrap;'
+            'font-family:${_cssFontFamily(style.family)};'
+            'font-size:${_n(style.sizePt * pxPerPt)}px;'
+            'line-height:${_n(style.sizePt * pxPerPt * 1.15)}px;'
+            'color:${style.color};$background$border');
+    if (box.contentBlocks.isEmpty) {
+      // Compatibilidade com snapshots anteriores à projeção rica.
+      element.appendText(box.text);
+      return element;
+    }
+
+    final rawInnerWidth = width - box.insetLeftTwips - box.insetRightTwips;
+    final rawInnerHeight = height - box.insetTopTwips - box.insetBottomTwips;
+    final innerWidth = rawInnerWidth > 0 ? rawInnerWidth : 1;
+    final innerHeight = rawInnerHeight > 0 ? rawInnerHeight : 1;
+    final content = document.createElement('div');
+    content.classes.add('$officeCssPrefix-text-box-content');
+    content.setAttribute('aria-hidden', 'true');
+    content.setAttribute(
+        'style',
+        'position:absolute;overflow:hidden;'
+            'left:${_n(_px(box.insetLeftTwips))}px;'
+            'top:${_n(_px(box.insetTopTwips))}px;'
+            'width:${_n(_px(innerWidth))}px;'
+            'height:${_n(_px(innerHeight))}px;');
+    for (final block in box.contentBlocks) {
+      content.append(_renderBlock(
+        block,
+        availableTwips: innerWidth,
+        withMarker: true,
+        projectedCopy: true,
+      ));
+    }
+    element.append(content);
+    return element;
+  }
+
   void _anchor(DomElement element, PageFragment fragment) {
-    element.setAttribute('data-doc-pos', '${fragment.docPos}');
-    final nodeId = fragment.nodeId;
+    _nodeAnchor(element, fragment.docPos, fragment.nodeId);
+  }
+
+  void _nodeAnchor(DomElement element, int docPos, String? nodeId) {
+    element.setAttribute('data-doc-pos', '$docPos');
     if (nodeId != null) element.setAttribute('data-node-id', nodeId);
+  }
+
+  void _docRange(DomElement element, int from, int to) {
+    element.setAttribute('data-doc-from', '$from');
+    element.setAttribute('data-doc-to', '$to');
+  }
+
+  void _sourceIdentity(
+    DomElement element, {
+    String? tableId,
+    String? rowId,
+    String? cellId,
+    int? rowIndex,
+    int? cellIndex,
+  }) {
+    if (tableId != null) element.setAttribute('data-source-table', tableId);
+    if (rowId != null) element.setAttribute('data-source-row', rowId);
+    if (cellId != null) element.setAttribute('data-source-cell', cellId);
+    if (rowIndex != null) {
+      element.setAttribute('data-source-row-index', '$rowIndex');
+    }
+    if (cellIndex != null) {
+      element.setAttribute('data-source-cell-index', '$cellIndex');
+    }
+  }
+
+  String _bordersCss(TableCellBorders borders) {
+    final sides = [borders.top, borders.right, borders.bottom, borders.left];
+    final first = sides.first;
+    if (first != null && sides.every((border) => _sameBorder(border, first))) {
+      return 'border:${_borderCssValue(first)};';
+    }
+    return 'border-top:${_borderCssValue(borders.top)};'
+        'border-right:${_borderCssValue(borders.right)};'
+        'border-bottom:${_borderCssValue(borders.bottom)};'
+        'border-left:${_borderCssValue(borders.left)};';
+  }
+
+  bool _sameBorder(TableBorder? a, TableBorder b) =>
+      a != null &&
+      a.style == b.style &&
+      a.widthTwips == b.widthTwips &&
+      a.color == b.color;
+
+  String _borderCssValue(TableBorder? border) {
+    if (border == null || !border.isVisible) return '0 none transparent';
+    return '${_n(_px(border.widthTwips))}px ${border.style} ${border.color}';
   }
 
   static String _alignCss(LayoutAlign align) => switch (align) {
@@ -377,7 +713,42 @@ class PageGraphDomRenderer {
         LayoutAlign.left => 'left',
       };
 
-  /// Uma família com espaço precisa de aspas no CSS; o resto passa direto.
-  static String _cssFontFamily(String family) =>
-      family.contains(' ') ? "'$family'" : family;
+  /// Mantém a família pedida como primeira opção, mas declara também a fonte
+  /// metricamente equivalente usada pelo compositor e um fallback genérico.
+  /// Sem a pilha explícita, Chrome escolhe serif para famílias DOCX ausentes,
+  /// embora o PageGraph tenha sido medido com uma substituta compatível
+  /// (caso real Ecofont -> Calibri/Carlito).
+  static String _cssFontFamily(String family) {
+    final requestedKey = family.trim().toLowerCase();
+    final fallbacks = FontRegistry.instance.fallbackFamilyStack(family);
+    final fallbackKey = fallbacks.last.toLowerCase();
+    final stack = <String>[];
+    // Uma família genérica não é uma fonte concreta. A equivalente métrica
+    // precisa vir antes dela (`Courier New, monospace`, por exemplo).
+    if (requestedKey != 'serif' &&
+        requestedKey != 'sans-serif' &&
+        requestedKey != 'monospace') {
+      stack.add(_cssFontName(family));
+    }
+    for (final fallback in fallbacks) {
+      final key = fallback.toLowerCase();
+      if (key != requestedKey &&
+          !stack.any((candidate) =>
+              candidate.replaceAll("'", '').toLowerCase() == key)) {
+        stack.add(_cssFontName(fallback));
+      }
+    }
+    stack.add(switch (fallbackKey) {
+      'times new roman' => 'serif',
+      'courier new' => 'monospace',
+      _ => 'sans-serif',
+    });
+    return stack.join(',');
+  }
+
+  static String _cssFontName(String family) {
+    final escaped =
+        family.trim().replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+    return escaped.contains(' ') ? "'$escaped'" : escaped;
+  }
 }

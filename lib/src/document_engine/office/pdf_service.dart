@@ -100,8 +100,12 @@ class OfficePdfService {
       baseFontSizePt: baseFontSizePt,
       fonts: fonts,
       // O timbre e a numeração de página fazem parte do documento assinado.
-      header: OfficeDocxCodec.regionOf(snapshot.headers, schema),
-      footer: OfficeDocxCodec.regionOf(snapshot.footers, schema),
+      headerVariants:
+          OfficeDocxCodec.regionVariantsOf(snapshot.headers, schema),
+      footerVariants:
+          OfficeDocxCodec.regionVariantsOf(snapshot.footers, schema),
+      titlePage: OfficeDocxCodec.titlePageOf(snapshot),
+      evenAndOddHeaders: OfficeDocxCodec.evenAndOddHeadersOf(snapshot),
     ).compose(PMNode.fromJSON(schema, snapshot.body));
     return fromPageGraph(graph);
   }
@@ -136,6 +140,20 @@ class OfficePdfService {
   /// que já tem, e o PDF sai da mesma composição, sem recompor nada.
   OfficePdfResult fromPageGraph(PageGraph graph) => OfficePdfResult(
         bytes: PageGraphPdfRenderer(title: title, fonts: fonts).render(graph),
+        pageCount: graph.pages.length,
+        diagnostics: graph.diagnostics,
+      );
+
+  /// A mesma projeção, cedendo periodicamente o isolate para manter a UI
+  /// responsiva durante PDFs extensos. O grafo já está pronto e os bytes são
+  /// semanticamente idênticos aos de [fromPageGraph].
+  Future<OfficePdfResult> fromPageGraphAsync(
+    PageGraph graph, {
+    Map<String, int>? timings,
+  }) async =>
+      OfficePdfResult(
+        bytes: await PageGraphPdfRenderer(title: title, fonts: fonts)
+            .renderAsync(graph, timings: timings),
         pageCount: graph.pages.length,
         diagnostics: graph.diagnostics,
       );

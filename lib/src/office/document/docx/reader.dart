@@ -101,10 +101,77 @@ String _buildWordDefaultStyles() {
 /// Reader DOCX → modelo tipado.
 class DocxReader {
   final List<String> _notes = [];
+  final bool _captureSourceXml;
+  final Map<String, int>? _timings;
 
-  DocxReader._();
+  DocxReader._({
+    required bool captureSourceXml,
+    Map<String, int>? timings,
+  })  : _captureSourceXml = captureSourceXml,
+        _timings = timings;
 
-  static DocxFile read(Uint8List bytes) => DocxReader._()._read(bytes);
+  /// [timings] is an opt-in diagnostic sink, in microseconds. Production
+  /// callers pay no stopwatch/logging cost when it is omitted.
+  static DocxFile read(
+    Uint8List bytes, {
+    bool captureSourceXml = true,
+    Map<String, int>? timings,
+  }) {
+    final watch = timings == null ? null : (Stopwatch()..start());
+    final file = DocxReader._(
+      captureSourceXml: captureSourceXml,
+      timings: timings,
+    )._read(bytes);
+    if (watch != null) {
+      watch.stop();
+      timings!['totalUs'] = watch.elapsedMicroseconds;
+    }
+    return file;
+  }
+
+  /// Variante cooperativa para a thread principal do browser.
+  ///
+  /// Cada parser continua sendo exatamente o mesmo do caminho síncrono, mas
+  /// ZIP, XML principal, body, estilos, numeração, settings e regiões ficam em
+  /// tarefas separadas. Isso evita somar todos os custos num único long task;
+  /// [read] permanece a API de baixa latência para VM e persistência.
+  static Future<DocxFile> readAsync(
+    Uint8List bytes, {
+    bool captureSourceXml = true,
+    Map<String, int>? timings,
+  }) async {
+    final watch = timings == null ? null : (Stopwatch()..start());
+    final file = await DocxReader._(
+      captureSourceXml: captureSourceXml,
+      timings: timings,
+    )._readAsync(bytes);
+    if (watch != null) {
+      watch.stop();
+      timings!['totalUs'] = watch.elapsedMicroseconds;
+    }
+    return file;
+  }
+
+  T _measure<T>(String name, T Function() operation) {
+    final timings = _timings;
+    if (timings == null) return operation();
+    final watch = Stopwatch()..start();
+    final result = operation();
+    watch.stop();
+    timings[name] = watch.elapsedMicroseconds;
+    return result;
+  }
+
+  Future<T> _measureAsync<T>(
+      String name, Future<T> Function() operation) async {
+    final timings = _timings;
+    if (timings == null) return operation();
+    final watch = Stopwatch()..start();
+    final result = await operation();
+    watch.stop();
+    timings[name] = watch.elapsedMicroseconds;
+    return result;
+  }
 
   /// Cria um DOCX mínimo e válido para exportar documentos iniciados no
   /// editor, sem exigir que o usuário tenha aberto previamente um template.
@@ -139,14 +206,17 @@ class DocxReader {
   }
 
   DocxFile _read(Uint8List bytes) {
-    final package = OpcPackage.decode(bytes);
+    final package = _measure('opcDecodeUs', () => OpcPackage.decode(bytes));
     final mainPart = package.mainDocumentPartName;
 
     final documentXml = package.partString(mainPart);
     if (documentXml == null) {
       throw FormatException('Parte principal ausente: $mainPart');
     }
-    final documentRoot = XmlDocument.parse(documentXml).rootElement;
+    final documentRoot = _measure(
+      'documentXmlParseUs',
+      () => XmlDocument.parse(documentXml).rootElement,
+    );
     final bodyEl = documentRoot.firstChild('w:body');
     if (bodyEl == null) {
       throw const FormatException('document.xml sem <w:body>.');
@@ -164,48 +234,186 @@ class DocxReader {
     final bodyPrefix = documentXml.substring(0, bodyOpen + '<w:body>'.length);
     final bodySuffix = documentXml.substring(bodyClose);
 
-    final section = WpSectionProperties.fromXml(bodyEl.firstChild('w:sectPr'));
-    final body = _parseBlocks(bodyEl, skip: const {'w:sectPr'});
+    final section = _measure(
+      'sectionParseUs',
+      () => WpSectionProperties.fromXml(bodyEl.firstChild('w:sectPr')),
+    );
+    final body = _measure(
+      'bodyParseUs',
+      () => _parseBlocks(bodyEl, skip: const {'w:sectPr'}),
+    );
 
-    final styles = _parsePart(package, 'word/styles.xml', WpStyleSheet.parse,
-        orElse: WpStyleSheet.new);
-    final numbering = _parsePart(
-        package, 'word/numbering.xml', WpNumbering.parse,
-        orElse: WpNumbering.new);
-    final settingsXml = package.partString('word/settings.xml');
-    final settings = WpSettings.fromXml(settingsXml == null
-        ? null
-        : XmlDocument.parse(settingsXml).rootElement);
+    final styles = _measure(
+      'stylesParseUs',
+      () => _parsePart(
+        package,
+        'word/styles.xml',
+        WpStyleSheet.parse,
+        orElse: WpStyleSheet.new,
+      ),
+    );
+    final numbering = _measure(
+      'numberingParseUs',
+      () => _parsePart(
+        package,
+        'word/numbering.xml',
+        WpNumbering.parse,
+        orElse: WpNumbering.new,
+      ),
+    );
+    final settings = _measure('settingsParseUs', () {
+      final settingsXml = package.partString('word/settings.xml');
+      return WpSettings.fromXml(settingsXml == null
+          ? null
+          : XmlDocument.parse(settingsXml).rootElement);
+    });
 
     final headers = <String, WpHeaderFooter>{};
     final footers = <String, WpHeaderFooter>{};
-    if (section != null) {
-      final rels = package.relationshipsFor(mainPart);
-      for (final (refs, into, rootName) in [
-        (section.headerReferences, headers, 'w:hdr'),
-        (section.footerReferences, footers, 'w:ftr'),
-      ]) {
-        for (final ref in refs) {
-          final rel = rels.byId(ref.relId);
-          if (rel == null) {
-            _notes.add('referência de header/footer sem rel: ${ref.relId}');
-            continue;
+    _measure('regionsParseUs', () {
+      if (section != null) {
+        final rels = package.relationshipsFor(mainPart);
+        for (final (refs, into, rootName) in [
+          (section.headerReferences, headers, 'w:hdr'),
+          (section.footerReferences, footers, 'w:ftr'),
+        ]) {
+          for (final ref in refs) {
+            final rel = rels.byId(ref.relId);
+            if (rel == null) {
+              _notes.add('referência de header/footer sem rel: ${ref.relId}');
+              continue;
+            }
+            final partName = package.resolveTarget(mainPart, rel.target);
+            final xml = package.partString(partName);
+            if (xml == null) {
+              _notes.add('parte de header/footer ausente: $partName');
+              continue;
+            }
+            final root = XmlDocument.parse(xml).rootElement;
+            if (root.qname != rootName) {
+              _notes.add('raiz inesperada em $partName: ${root.qname}');
+            }
+            into[ref.type] =
+                WpHeaderFooter(partName: partName, blocks: _parseBlocks(root));
           }
-          final partName = package.resolveTarget(mainPart, rel.target);
-          final xml = package.partString(partName);
-          if (xml == null) {
-            _notes.add('parte de header/footer ausente: $partName');
-            continue;
-          }
-          final root = XmlDocument.parse(xml).rootElement;
-          if (root.qname != rootName) {
-            _notes.add('raiz inesperada em $partName: ${root.qname}');
-          }
-          into[ref.type] =
-              WpHeaderFooter(partName: partName, blocks: _parseBlocks(root));
         }
       }
+    });
+
+    return DocxFile(
+      package: package,
+      document: WpDocumentModel(body: body, section: section),
+      styles: styles,
+      numbering: numbering,
+      settings: settings,
+      mainPartName: mainPart,
+      documentBodyPrefix: bodyPrefix,
+      documentBodySuffix: bodySuffix,
+      headersByType: headers,
+      footersByType: footers,
+      fidelityNotes: _notes,
+    );
+  }
+
+  Future<DocxFile> _readAsync(Uint8List bytes) async {
+    final package = _measure('opcDecodeUs', () => OpcPackage.decode(bytes));
+    await Future<void>.delayed(Duration.zero);
+    final mainPart = package.mainDocumentPartName;
+
+    final documentXml = package.partString(mainPart);
+    if (documentXml == null) {
+      throw FormatException('Parte principal ausente: $mainPart');
     }
+    final documentRoot = await _measureAsync(
+      'documentXmlParseUs',
+      () async => (await XmlDocument.parseAsync(documentXml)).rootElement,
+    );
+    await Future<void>.delayed(Duration.zero);
+    final bodyEl = documentRoot.firstChild('w:body');
+    if (bodyEl == null) {
+      throw const FormatException('document.xml sem <w:body>.');
+    }
+
+    final bodyOpen = documentXml.indexOf('<w:body>');
+    final bodyClose = documentXml.lastIndexOf('</w:body>');
+    if (bodyOpen < 0 || bodyClose < 0) {
+      throw const FormatException(
+          'document.xml com <w:body> em formato não suportado.');
+    }
+    final bodyPrefix = documentXml.substring(0, bodyOpen + '<w:body>'.length);
+    final bodySuffix = documentXml.substring(bodyClose);
+
+    final section = _measure(
+      'sectionParseUs',
+      () => WpSectionProperties.fromXml(bodyEl.firstChild('w:sectPr')),
+    );
+    await Future<void>.delayed(Duration.zero);
+    final body = _measure(
+      'bodyParseUs',
+      () => _parseBlocks(bodyEl, skip: const {'w:sectPr'}),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final styles = _measure(
+      'stylesParseUs',
+      () => _parsePart(
+        package,
+        'word/styles.xml',
+        WpStyleSheet.parse,
+        orElse: WpStyleSheet.new,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    final numbering = _measure(
+      'numberingParseUs',
+      () => _parsePart(
+        package,
+        'word/numbering.xml',
+        WpNumbering.parse,
+        orElse: WpNumbering.new,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    final settings = _measure('settingsParseUs', () {
+      final settingsXml = package.partString('word/settings.xml');
+      return WpSettings.fromXml(settingsXml == null
+          ? null
+          : XmlDocument.parse(settingsXml).rootElement);
+    });
+    await Future<void>.delayed(Duration.zero);
+
+    final headers = <String, WpHeaderFooter>{};
+    final footers = <String, WpHeaderFooter>{};
+    _measure('regionsParseUs', () {
+      if (section != null) {
+        final rels = package.relationshipsFor(mainPart);
+        for (final (refs, into, rootName) in [
+          (section.headerReferences, headers, 'w:hdr'),
+          (section.footerReferences, footers, 'w:ftr'),
+        ]) {
+          for (final ref in refs) {
+            final rel = rels.byId(ref.relId);
+            if (rel == null) {
+              _notes.add('referência de header/footer sem rel: ${ref.relId}');
+              continue;
+            }
+            final partName = package.resolveTarget(mainPart, rel.target);
+            final xml = package.partString(partName);
+            if (xml == null) {
+              _notes.add('parte de header/footer ausente: $partName');
+              continue;
+            }
+            final root = XmlDocument.parse(xml).rootElement;
+            if (root.qname != rootName) {
+              _notes.add('raiz inesperada em $partName: ${root.qname}');
+            }
+            into[ref.type] =
+                WpHeaderFooter(partName: partName, blocks: _parseBlocks(root));
+          }
+        }
+      }
+    });
+    await Future<void>.delayed(Duration.zero);
 
     return DocxFile(
       package: package,
@@ -268,6 +476,8 @@ class DocxReader {
         case 'w:fldSimple':
           inlines.add(WpSimpleField(
             instruction: child.getAttribute('w:instr') ?? '',
+            fieldLockValue: child.getAttribute('w:fldLock'),
+            dirtyValue: child.getAttribute('w:dirty'),
             runs: [
               for (final run in child.childrenNamed('w:r')) _parseRun(run)
             ],
@@ -277,7 +487,11 @@ class DocxReader {
       }
     }
     return WpParagraph(
-        properties: properties, inlines: inlines, sourceXml: el.toXmlString());
+      properties: properties,
+      attributes: WpParagraphAttributes.fromXml(el),
+      inlines: inlines,
+      sourceXml: _captureSourceXml ? el.toXmlString() : null,
+    );
   }
 
   WpRun _parseRun(XmlElement el) {
@@ -307,12 +521,19 @@ class DocxReader {
         case 'w:drawing':
           content.add(_parseDrawing(child));
         case 'w:fldChar':
-          content
-              .add(WpFieldChar(child.getAttribute('w:fldCharType') ?? 'begin'));
+          content.add(WpFieldChar(
+            child.getAttribute('w:fldCharType') ?? 'begin',
+            rawXml: child.toXmlString(),
+          ));
         case 'w:instrText':
-          content.add(WpInstrText(child.text));
+          content.add(WpInstrText(child.text, rawXml: child.toXmlString()));
         case 'w:lastRenderedPageBreak':
-          break; // marcador transiente do Word — recalculado pelo layout
+          // Cache de paginação do último layout do Word. Ele não é conteúdo
+          // nem uma quebra manual, mas sua posição inline é a única pista
+          // exata para reconstruir a fronteira original no primeiro render.
+          // Preserve-o como run content opaco; o codec decide se o conjunto
+          // é confiável e o writer o remove assim que o documento é editado.
+          content.add(WpPreservedRunContent(child.qname, child.toXmlString()));
         case 'mc:AlternateContent':
           // Shape com caixa de texto (carimbo). Se não for, cai no preserved.
           final tb = _parseTextBox(child);
@@ -342,7 +563,7 @@ class DocxReader {
     }
     if (txbx == null) return null;
 
-    String? hAlign;
+    String? hAlign, vRelativeFrom;
     int? offX, offY, cx, cy;
     XmlElement? anchor;
     for (final a in el.descendantsNamed('wp:anchor')) {
@@ -354,10 +575,20 @@ class DocxReader {
       hAlign = posH?.firstChild('wp:align')?.text.trim();
       offX = int.tryParse(posH?.firstChild('wp:posOffset')?.text.trim() ?? '');
       final posV = anchor.firstChild('wp:positionV');
+      vRelativeFrom = posV?.getAttribute('relativeFrom');
       offY = int.tryParse(posV?.firstChild('wp:posOffset')?.text.trim() ?? '');
       final extent = anchor.firstChild('wp:extent');
       cx = int.tryParse(extent?.getAttribute('cx') ?? '');
       cy = int.tryParse(extent?.getAttribute('cy') ?? '');
+    }
+
+    int? insetLeft, insetTop, insetRight, insetBottom;
+    final bodyPr = wsp.firstChild('wps:bodyPr');
+    if (bodyPr != null) {
+      insetLeft = int.tryParse(bodyPr.getAttribute('lIns') ?? '');
+      insetTop = int.tryParse(bodyPr.getAttribute('tIns') ?? '');
+      insetRight = int.tryParse(bodyPr.getAttribute('rIns') ?? '');
+      insetBottom = int.tryParse(bodyPr.getAttribute('bIns') ?? '');
     }
 
     int? borderW;
@@ -380,10 +611,15 @@ class DocxReader {
 
     return WpTextBox(
       positionHAlign: hAlign,
+      positionVRelativeFrom: vRelativeFrom,
       offsetXEmu: offX,
       offsetYEmu: offY,
       extentCxEmu: cx,
       extentCyEmu: cy,
+      insetLeftEmu: insetLeft,
+      insetTopEmu: insetTop,
+      insetRightEmu: insetRight,
+      insetBottomEmu: insetBottom,
       borderWidthEmu: borderW,
       borderColorHex: borderColor,
       fillColorHex: fillColor,
@@ -420,25 +656,34 @@ class DocxReader {
     WpTableProperties? properties;
     final grid = <int>[];
     final rows = <WpTableRow>[];
+    final childOrder = <WpTableChildToken>[];
     for (final child in el.childElements) {
       switch (child.qname) {
         case 'w:tblPr':
           properties = WpTableProperties.fromXml(child);
+          childOrder.add(const WpTableChildToken.properties());
         case 'w:tblGrid':
           for (final col in child.childrenNamed('w:gridCol')) {
             grid.add(int.tryParse(col.getAttribute('w:w') ?? '') ?? 0);
           }
+          childOrder.add(const WpTableChildToken.grid());
         case 'w:tr':
           rows.add(_parseRow(child));
+          childOrder.add(const WpTableChildToken.row());
         case _:
-          _notes.add('filho de tabela ignorado: ${child.qname}');
+          _notes.add('filho de tabela preservado: ${child.qname}');
+          childOrder.add(WpTableChildToken.preserved(
+            child.qname,
+            child.toXmlString(),
+          ));
       }
     }
     return WpTable(
         properties: properties,
         gridColumnsTwips: grid,
         rows: rows,
-        sourceXml: el.toXmlString());
+        childOrder: childOrder,
+        sourceXml: _captureSourceXml ? el.toXmlString() : null);
   }
 
   WpTableRow _parseRow(XmlElement el) {
@@ -457,6 +702,7 @@ class DocxReader {
           cells.add(WpTableCell(
             properties: tcPr,
             blocks: _parseBlocks(child, skip: const {'w:tcPr'}),
+            sourceXml: _captureSourceXml ? child.toXmlString() : null,
           ));
         case 'w:tblPrEx':
           _notes.add('tblPrEx ignorado em linha de tabela');
@@ -464,6 +710,10 @@ class DocxReader {
           _notes.add('filho de linha ignorado: ${child.qname}');
       }
     }
-    return WpTableRow(properties: properties, cells: cells);
+    return WpTableRow(
+      properties: properties,
+      cells: cells,
+      sourceXml: _captureSourceXml ? el.toXmlString() : null,
+    );
   }
 }

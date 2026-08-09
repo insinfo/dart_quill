@@ -98,11 +98,11 @@ void main() {
     PMNode docOf(List<PMNode> blocks) =>
         schema.node('doc', null, Fragment.from(blocks));
 
-    PMNode paragraph(String text) => schema.node(
-        'paragraph', null, Fragment.from([schema.text(text)]));
+    PMNode paragraph(String text) =>
+        schema.node('paragraph', null, Fragment.from([schema.text(text)]));
 
-    OfficeEditorView mount(List<PMNode> blocks) => view =
-        OfficeEditorView.withExtensions(
+    OfficeEditorView mount(List<PMNode> blocks) =>
+        view = OfficeEditorView.withExtensions(
             host: host,
             doc: docOf(blocks),
             adapter: adapter,
@@ -110,6 +110,31 @@ void main() {
 
     String textOf(OfficeEditorView view) => view.state.doc
         .textBetween(0, view.state.doc.content.size, blockSeparator: ' ');
+
+    ({DomElement block, DomElement line}) projectedLine({
+      required int docPos,
+      required int charStart,
+      required int charEnd,
+    }) {
+      final block = adapter.document.createElement('div');
+      block.classes.add('dq-office-block');
+      block.setAttribute('data-doc-pos', '$docPos');
+      final line = adapter.document.createElement('div');
+      line.classes.add('dq-office-line');
+      line.setAttribute('data-char-start', '$charStart');
+      line.setAttribute('data-char-end', '$charEnd');
+      block.append(line);
+      host.append(block);
+      return (block: block, line: line);
+    }
+
+    DomText runText(DomElement line, String text) {
+      final run = adapter.document.createElement('span');
+      run.classes.add('dq-office-run');
+      run.appendText(text);
+      line.append(run);
+      return run.firstChild! as DomText;
+    }
 
     void caretAt(int modelPosition) {
       const map = OfficeDomPositionMap();
@@ -119,8 +144,7 @@ void main() {
     }
 
     void fire(String type) {
-      (host as FakeDomElement).dispatchEvent(
-          type, FakeDomEvent(type, host));
+      (host as FakeDomElement).dispatchEvent(type, FakeDomEvent(type, host));
     }
 
     /// Simula o que o BROWSER faz durante a composição: escreve direto no nó
@@ -133,6 +157,104 @@ void main() {
           text +
           node.data.substring(position.offset);
     }
+
+    test('fragmento de continuação reconcilia só sua faixa do parágrafo', () {
+      const prefix = 'prefixo ';
+      const continuation = 'segunda metade';
+      final doc = docOf([paragraph('$prefix$continuation')]);
+      final state = EditorState.create(EditorStateConfig(doc: doc));
+      final projection = projectedLine(
+        docPos: 1,
+        charStart: prefix.length,
+        charEnd: prefix.length + continuation.length,
+      );
+      final text = runText(projection.line, '${continuation}X');
+
+      final transaction = reconciler.reconcile(
+        host: host,
+        node: text,
+        state: state,
+      );
+
+      expect(transaction, isNotNull);
+      final after = state.apply(transaction!);
+      expect(after.doc.child(0).textContent, '${prefix}${continuation}X',
+          reason: 'o prefixo que vive em outra página não pode ser truncado');
+    });
+
+    test('hífen discricionário visual nunca vira texto do modelo', () {
+      const source = 'palavra';
+      final doc = docOf([paragraph(source)]);
+      final state = EditorState.create(EditorStateConfig(doc: doc));
+      final projection = projectedLine(
+        docPos: 1,
+        charStart: 0,
+        charEnd: source.length,
+      );
+      runText(projection.line, 'pala');
+      final hyphen = adapter.document.createElement('span');
+      hyphen.classes.add('dq-office-discretionary-hyphen');
+      hyphen.setAttribute('contenteditable', 'false');
+      hyphen.setAttribute('data-model-length', '0');
+      hyphen.appendText('-');
+      projection.line.append(hyphen);
+      final tail = runText(projection.line, 'vraX');
+
+      final transaction = reconciler.reconcile(
+        host: host,
+        node: tail,
+        state: state,
+      );
+
+      final after = state.apply(transaction!);
+      expect(after.doc.child(0).textContent, 'palavraX');
+      expect(after.doc.child(0).textContent, isNot(contains('-')));
+    });
+
+    test('textBox visual é ignorado e seu atom preserva o offset', () {
+      final textBox = schema.node('textBox', {
+        'text': 'RÓTULO VISUAL',
+        'width': 400,
+        'height': 200,
+        'offsetX': 0,
+        'offsetY': 0,
+      });
+      final block = schema.node(
+        'paragraph',
+        null,
+        Fragment.from([schema.text('A'), textBox, schema.text('B')]),
+      );
+      final state = EditorState.create(EditorStateConfig(doc: docOf([block])));
+      final projection = projectedLine(
+        docPos: 1,
+        charStart: 0,
+        charEnd: block.content.size,
+      );
+      final visual = adapter.document.createElement('div');
+      visual.classes.add('dq-office-text-box');
+      visual.setAttribute('contenteditable', 'false');
+      visual.setAttribute('data-model-length', '1');
+      visual.appendText('RÓTULO VISUAL');
+      projection.block.insertBefore(visual, projection.line);
+      runText(projection.line, 'A');
+      final anchor = adapter.document.createElement('span');
+      anchor.classes.add('dq-office-text-box-anchor');
+      anchor.setAttribute('contenteditable', 'false');
+      anchor.setAttribute('data-model-length', '1');
+      projection.line.append(anchor);
+      final tail = runText(projection.line, 'BX');
+
+      final transaction = reconciler.reconcile(
+        host: host,
+        node: tail,
+        state: state,
+      );
+
+      final after = state.apply(transaction!);
+      expect(after.doc.child(0).textContent, 'ABX');
+      expect(after.doc.child(0).child(1).type.name, 'textBox');
+      expect(after.doc.textContent, isNot(contains('RÓTULO VISUAL')));
+    });
 
     test('compositionstart marca composição e trava a reprojeção', () {
       final view = mount([paragraph('base')]);

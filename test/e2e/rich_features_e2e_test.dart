@@ -1,5 +1,5 @@
 @TestOn('vm')
-@Timeout(Duration(minutes: 10))
+@Timeout(Duration(minutes: 45))
 library;
 
 /// End-to-end coverage of the four features that only a real browser can

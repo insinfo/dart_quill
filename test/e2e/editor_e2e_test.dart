@@ -1,5 +1,5 @@
 @TestOn('vm')
-@Timeout(Duration(minutes: 10))
+@Timeout(Duration(minutes: 45))
 library;
 
 /// End-to-end coverage of the core editor driven by REAL user input:

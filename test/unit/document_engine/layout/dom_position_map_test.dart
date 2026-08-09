@@ -34,8 +34,13 @@ void main() {
   PMNode paragraph(String text) =>
       schema.node('paragraph', null, Fragment.from([schema.text(text)]));
 
-  PageGraph project(PMNode doc, {PageWindow? window}) {
-    final graph = LayoutComposer().compose(doc);
+  PageGraph project(
+    PMNode doc, {
+    PageWindow? window,
+    PMNode? header,
+    PMNode? footer,
+  }) {
+    final graph = LayoutComposer(header: header, footer: footer).compose(doc);
     PageGraphDomRenderer(document: document)
         .render(graph, host, window: window);
     return graph;
@@ -62,13 +67,12 @@ void main() {
       expect(map.domPositionFor(host, 9999), isNull);
     });
 
-    test('posição em página NÃO montada devolve null (contrato da janela)',
-        () {
+    test('posição em página NÃO montada devolve null (contrato da janela)', () {
       final blocks = [
         for (var i = 0; i < 200; i++) paragraph('Parágrafo $i do documento.')
       ];
-      final graph =
-          project(docOf(blocks), window: const PageWindow(firstPage: 0, lastPage: 0));
+      final graph = project(docOf(blocks),
+          window: const PageWindow(firstPage: 0, lastPage: 0));
       expect(graph.pages.length, greaterThan(1));
 
       final onSecondPage = graph.positionMap.entries
@@ -78,6 +82,41 @@ void main() {
           reason: 'o chamador monta a janela e tenta de novo');
       expect(map.domPositionFor(host, 1), isNotNull,
           reason: 'a página montada continua respondendo');
+    });
+
+    test('header/footer com docPos negativo nunca capturam o caret do corpo',
+        () {
+      project(
+        docOf([paragraph('abc')]),
+        header: docOf([paragraph('CABEÇALHO MUITO LONGO')]),
+        footer: docOf([paragraph('RODAPÉ MUITO LONGO')]),
+      );
+
+      final bodyCaret = map.domPositionFor(host, 1)!;
+      DomNode? ancestor = bodyCaret.node;
+      var inBody = false;
+      var inRegion = false;
+      while (ancestor != null) {
+        if (ancestor is DomElement) {
+          inBody |= ancestor.classes.contains('dq-office-page-content');
+          inRegion |= ancestor.classes.contains('dq-office-header') ||
+              ancestor.classes.contains('dq-office-footer');
+        }
+        ancestor = ancestor.parentNode;
+      }
+      expect(inBody, isTrue);
+      expect(inRegion, isFalse);
+
+      final headerText = host
+          .querySelector('.dq-office-header')!
+          .querySelector('.dq-office-run')!
+          .firstChild!;
+      final footerText = host
+          .querySelector('.dq-office-footer')!
+          .querySelector('.dq-office-run')!
+          .firstChild!;
+      expect(map.modelPositionAt(headerText, 0), isNull);
+      expect(map.modelPositionAt(footerText, 0), isNull);
     });
   });
 
@@ -165,10 +204,127 @@ void main() {
     });
   });
 
+  group('atoms inline sem textContent', () {
+    PMNode image() => schema.node('image', {
+          'src': 'data:image/png;base64,AA==',
+          'width': 20,
+          'height': 20,
+        });
+    PMNode hardBreak() => schema.node('hardBreak', {'breakType': null}, null);
+    PMNode opaque() => schema.node('opaqueInline', {
+          'insert': {'qname': 'w:bookmarkStart', 'officeXml': '<w:x/>'}
+        });
+    PMNode textBox() => schema.node('textBox', {
+          'text': 'texto visual que não pertence ao fluxo',
+          'width': 400,
+          'height': 200,
+          'offsetX': 0,
+          'offsetY': 0,
+        });
+
+    final cases = <({String name, PMNode Function() atom, String selector})>[
+      (name: 'imagem', atom: image, selector: '.dq-office-image'),
+      (name: 'hardBreak', atom: hardBreak, selector: '.dq-office-hard-break'),
+      (
+        name: 'opaqueInline',
+        atom: opaque,
+        selector: '.dq-office-opaque-inline'
+      ),
+      (name: 'textBox', atom: textBox, selector: '.dq-office-text-box-anchor'),
+    ];
+
+    for (final atomCase in cases) {
+      test('${atomCase.name}: texto + atom + texto é bidirecional', () {
+        final block = schema.node(
+          'paragraph',
+          null,
+          Fragment.from([
+            schema.text('A'),
+            atomCase.atom(),
+            schema.text('B'),
+          ]),
+        );
+        project(docOf([block]));
+
+        // Conteúdo do parágrafo: A(1), atom(1), B(1). Todas as quatro
+        // fronteiras de caret precisam fazer round-trip.
+        for (var modelPosition = 1; modelPosition <= 4; modelPosition++) {
+          final dom = map.domPositionFor(host, modelPosition);
+          expect(dom, isNotNull,
+              reason: '${atomCase.name}: posição $modelPosition sem DOM');
+          expect(
+            map.modelPositionAt(dom!.node, dom.offset),
+            modelPosition,
+            reason: '${atomCase.name}: deriva em $modelPosition',
+          );
+        }
+
+        final atom = host.querySelector(atomCase.selector)!;
+        expect(atom.getAttribute('data-model-length'), '1');
+        final line = atom.parentNode! as DomElement;
+        final atomIndex = line.childNodes.indexWhere((node) => node == atom);
+        expect(atomIndex, greaterThanOrEqualTo(0));
+        expect(map.modelPositionAt(line, atomIndex), 2,
+            reason: 'fronteira imediatamente antes do atom');
+        expect(map.modelPositionAt(line, atomIndex + 1), 3,
+            reason: 'fronteira imediatamente depois do atom');
+        expect(map.modelPositionAt(atom, 0), 2);
+        expect(map.modelPositionAt(atom, 1), 3);
+
+        final textAfter =
+            host.querySelectorAll('.dq-office-run').last.firstChild!;
+        expect(map.modelPositionAt(textAfter, 0), 3,
+            reason: 'o texto posterior não pode perder a posição do atom');
+      });
+    }
+
+    test('vários atoms consecutivos mantêm cada fronteira e uma seleção', () {
+      final block = schema.node(
+        'paragraph',
+        null,
+        Fragment.from([
+          schema.text('A'),
+          image(),
+          opaque(),
+          textBox(),
+          schema.text('B'),
+        ]),
+      );
+      project(docOf([block]));
+
+      // A + 3 atoms + B = cinco unidades, seis posições de caret.
+      for (var modelPosition = 1; modelPosition <= 6; modelPosition++) {
+        final dom = map.domPositionFor(host, modelPosition)!;
+        expect(map.modelPositionAt(dom.node, dom.offset), modelPosition,
+            reason: 'round-trip falhou entre atoms em $modelPosition');
+      }
+
+      final selectionFrom = map.domPositionFor(host, 2)!;
+      final selectionTo = map.domPositionFor(host, 5)!;
+      expect(map.modelPositionAt(selectionFrom.node, selectionFrom.offset), 2);
+      expect(map.modelPositionAt(selectionTo.node, selectionTo.offset), 5);
+
+      final line = host.querySelector('.dq-office-line')!;
+      final atomIndexes = <int>[
+        for (var i = 0; i < line.childNodes.length; i++)
+          if (line.childNodes[i] is DomElement &&
+              (line.childNodes[i] as DomElement)
+                      .getAttribute('data-model-length') ==
+                  '1')
+            i,
+      ];
+      expect(atomIndexes, hasLength(3));
+      for (var i = 0; i < atomIndexes.length; i++) {
+        expect(map.modelPositionAt(line, atomIndexes[i]), 2 + i);
+        expect(map.modelPositionAt(line, atomIndexes[i] + 1), 3 + i);
+      }
+    });
+  });
+
   group('âncoras auxiliares', () {
     test('nodeIdOf devolve o id estável do bloco', () {
-      final block = schema.node('paragraph', {'id': 'p-7'},
-          Fragment.from([schema.text('texto')]));
+      final block = schema.node(
+          'paragraph', {'id': 'p-7'}, Fragment.from([schema.text('texto')]));
       project(docOf([block]));
       final position = map.domPositionFor(host, 1)!;
       expect(map.nodeIdOf(position.node), 'p-7');

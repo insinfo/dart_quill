@@ -53,6 +53,19 @@ sob CC BY-SA 4.0, com atribuição no cabeçalho do CSS. O asset é opcional e
 substituível: o componente só referencia classes `dq-icon-*`, e quem
 preferir outra iconografia troca o stylesheet sem tocar no código.
 
+## Métricas tipográficas incorporadas
+
+| Componente | Upstream fixado | SHA-256 do arquivo-fonte | Licença | Onde neste repositório |
+|---|---|---|---|---|
+| Carlito Regular | <https://github.com/google/fonts/blob/2d85e20401920891efb7cd6272d6339685df2820/ofl/carlito/Carlito-Regular.ttf> | `f6418f708baede9789daef5d458c0f53d2a888af9820e8062934e504fedc6595` | SIL Open Font License 1.1 | avanços compactos em `lib/src/office/document/fonts/metrics_data.dart`, gerados por `tool/gen_font_metrics.dart` |
+
+O binário Carlito **não** é distribuído. Somente os avanços necessários ao
+layout são gerados da fonte OFL; a caixa vertical da face de compatibilidade é
+normalizada para 1,15 em pelo gerador. Carlito é usada como substituta métrica
+de Calibri quando o documento declara essa família e não fornece uma face.
+Copyright 2013 The Carlito Project Authors, com Reserved Font Name “Carlito”.
+O texto integral da SIL OFL 1.1 acompanha a fonte no [upstream fixado](https://github.com/google/fonts/blob/2d85e20401920891efb7cd6272d6339685df2820/ofl/carlito/OFL.txt).
+
 ## Fontes examinadas apenas em auditoria — nenhum CÓDIGO incorporado
 
 Conforme o §16 do plano: ONLYOFFICE/EuroOffice DocumentServer (AGPL-3.0 —

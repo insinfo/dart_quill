@@ -19,36 +19,150 @@ import 'package:shelf_static/shelf_static.dart';
 
 /// A running demo app under Puppeteer control.
 class E2eApp {
-  E2eApp._(this._server, this._browser, this.page);
+  E2eApp._(this._server, this._browser, this.page, this._sessionLease);
 
   final HttpServer _server;
   final Browser _browser;
   final Page page;
+  final ServerSocket _sessionLease;
+  Future<void>? _stopFuture;
 
   static const _buildDir = 'build/e2e';
+  static const _sessionLeasePortEnvironment =
+      'DART_QUILL_E2E_LOCK_PORT';
+  static const _defaultSessionLeasePort = 45873;
+  static const _sessionLeaseWait = Duration(minutes: 35);
+  static const _sessionLeasePoll = Duration(milliseconds: 250);
 
   /// Builds (once per process, serialized across processes), serves and opens
   /// the demo.
   static Future<E2eApp> start() async {
-    await _build();
-    final handler = createStaticHandler(
-      Directory(_buildDir).absolute.path,
-      defaultDocument: 'index.html',
-    );
-    final server = await shelf_io.serve(handler, InternetAddress.loopbackIPv4, 0);
-    final browser = await puppeteer.launch(
-      headless: true,
-      args: const ['--no-sandbox'],
-    );
-    final page = await browser.newPage();
-    await page.setViewport(DeviceViewport(width: 1280, height: 900));
-    await page.goto('http://127.0.0.1:${server.port}', wait: Until.networkIdle);
-    return E2eApp._(server, browser, page);
+    final sessionLease = await _acquireSessionLease();
+
+    HttpServer? server;
+    Browser? browser;
+    try {
+      await _build();
+      final handler = createStaticHandler(
+        Directory(_buildDir).absolute.path,
+        defaultDocument: 'index.html',
+      );
+      server = await shelf_io.serve(handler, InternetAddress.loopbackIPv4, 0);
+      browser = await puppeteer.launch(
+        headless: true,
+        args: const ['--no-sandbox'],
+      );
+      final page = await browser.newPage();
+      await page.setViewport(DeviceViewport(width: 1280, height: 900));
+      await page.goto(
+        'http://127.0.0.1:${server.port}',
+        wait: Until.networkIdle,
+      );
+      return E2eApp._(server, browser, page, sessionLease);
+    } catch (_) {
+      if (browser != null) {
+        try {
+          await _closeBrowser(browser);
+        } catch (_) {
+          // Preserve the startup failure; cleanup is best effort here.
+        }
+      }
+      if (server != null) {
+        try {
+          await server
+              .close(force: true)
+              .timeout(const Duration(seconds: 5));
+        } catch (_) {
+          // Preserve the startup failure; cleanup is best effort here.
+        }
+      }
+      try {
+        await sessionLease.close().timeout(const Duration(seconds: 5));
+      } catch (_) {
+        // Preserve the startup failure; cleanup is best effort here.
+      }
+      rethrow;
+    }
   }
 
-  Future<void> stop() async {
-    await _browser.close();
-    await _server.close(force: true);
+  Future<void> stop() => _stopFuture ??= _stopOnce();
+
+  Future<void> _stopOnce() async {
+    Object? firstError;
+    StackTrace? firstStackTrace;
+
+    Future<void> attempt(Future<void> Function() action) async {
+      try {
+        await action();
+      } catch (error, stackTrace) {
+        firstError ??= error;
+        firstStackTrace ??= stackTrace;
+      }
+    }
+
+    await attempt(() => _closeBrowser(_browser));
+    await attempt(() async {
+      await _server.close(force: true).timeout(const Duration(seconds: 5));
+    });
+    await attempt(() async {
+      await _sessionLease.close().timeout(const Duration(seconds: 5));
+    });
+
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError!, firstStackTrace!);
+    }
+  }
+
+  static Future<ServerSocket> _acquireSessionLease() async {
+    final configured =
+        Platform.environment[_sessionLeasePortEnvironment]?.trim();
+    final port = configured == null || configured.isEmpty
+        ? _defaultSessionLeasePort
+        : int.tryParse(configured);
+    if (port == null || port < 1024 || port > 65535) {
+      throw StateError(
+        '$_sessionLeasePortEnvironment must be a port from 1024 to 65535',
+      );
+    }
+
+    final wait = Stopwatch()..start();
+    SocketException? lastError;
+    while (wait.elapsed < _sessionLeaseWait) {
+      try {
+        return await ServerSocket.bind(
+          InternetAddress.loopbackIPv4,
+          port,
+          shared: false,
+        );
+      } on SocketException catch (error) {
+        final code = error.osError?.errorCode;
+        if (code != 10048 && code != 98 && code != 48) rethrow;
+        lastError = error;
+        await Future<void>.delayed(_sessionLeasePoll);
+      }
+    }
+    throw TimeoutException(
+      'Timed out waiting for the browser E2E session lease on '
+      '127.0.0.1:$port. Last bind error: $lastError',
+      _sessionLeaseWait,
+    );
+  }
+
+  static Future<void> _closeBrowser(Browser browser) async {
+    try {
+      await browser.close().timeout(const Duration(seconds: 15));
+    } catch (_) {
+      final process = browser.process;
+      if (process != null) {
+        process.kill();
+        try {
+          await process.exitCode.timeout(const Duration(seconds: 5));
+        } catch (_) {
+          // The original close failure is the actionable error.
+        }
+      }
+      rethrow;
+    }
   }
 
   /// `webdev build`, guarded by an inter-process lock: `dart test` runs test
@@ -58,7 +172,12 @@ class E2eApp {
     final lockFile = File('build/.e2e_build.lock')
       ..parent.createSync(recursive: true);
     final lock = lockFile.openSync(mode: FileMode.write);
-    lock.lockSync(FileLock.blockingExclusive);
+    try {
+      lock.lockSync(FileLock.blockingExclusive);
+    } catch (_) {
+      lock.closeSync();
+      rethrow;
+    }
     try {
       for (var attempt = 0; attempt < 2; attempt++) {
         final build = await Process.run(
@@ -86,8 +205,11 @@ class E2eApp {
         }
       }
     } finally {
-      lock.unlockSync();
-      lock.closeSync();
+      try {
+        lock.unlockSync();
+      } finally {
+        lock.closeSync();
+      }
     }
   }
 

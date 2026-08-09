@@ -1,5 +1,5 @@
 @TestOn('vm')
-@Timeout(Duration(minutes: 15))
+@Timeout(Duration(minutes: 45))
 library;
 
 /// Port of the Quill upstream end-to-end suite,

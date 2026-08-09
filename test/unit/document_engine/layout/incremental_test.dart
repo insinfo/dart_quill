@@ -15,11 +15,48 @@ import 'package:dart_quill/dart_quill_office.dart';
 void main() {
   final schema = officeQuillSchema();
 
-  PMNode paragraph(String text) => schema.node(
-      'paragraph', null, Fragment.from([schema.text(text)]));
+  PMNode paragraph(String text) =>
+      schema.node('paragraph', null, Fragment.from([schema.text(text)]));
 
   PMNode docOf(List<PMNode> blocks) =>
       schema.node('doc', null, Fragment.from(blocks));
+
+  PMNode tableDocument(int rows, {bool invalidVerticalMerge = false}) {
+    PMNode cell(int index, String side) => schema.node(
+          'tableCell',
+          {
+            'id': 'c-$index-$side',
+            if (invalidVerticalMerge && index == 0 && side == 'a')
+              'word': {'vMerge': 'continue'},
+          },
+          Fragment.from([
+            paragraph('Linha $index, célula $side com texto para medir.'),
+          ]),
+        );
+
+    final table = schema.node(
+      'table',
+      {
+        'id': 'table-$rows-$invalidVerticalMerge',
+        'colWidths': [3200, 3200],
+        'word': {
+          'borders': {
+            'insideH': {'val': 'single', 'sizeEighths': 4},
+            'insideV': {'val': 'single', 'sizeEighths': 4},
+          },
+        },
+      },
+      Fragment.from([
+        for (var index = 0; index < rows; index++)
+          schema.node(
+            'tableRow',
+            {'id': 'r-$index'},
+            Fragment.from([cell(index, 'a'), cell(index, 'b')]),
+          ),
+      ]),
+    );
+    return docOf([table]);
+  }
 
   PMNode longDoc(int blocks, {String? changeAt, int? changeIndex}) => docOf([
         for (var i = 0; i < blocks; i++)
@@ -51,6 +88,48 @@ void main() {
           for (var l = 0; l < ef.lines.length; l++) {
             expect(af.lines[l].charStart, ef.lines[l].charStart);
             expect(af.lines[l].charEnd, ef.lines[l].charEnd);
+          }
+        } else if (af is TableFragment && ef is TableFragment) {
+          expect(af.rows.length, ef.rows.length,
+              reason: 'rows na página $p, fragmento $f');
+          for (var r = 0; r < ef.rows.length; r++) {
+            final ar = af.rows[r];
+            final er = ef.rows[r];
+            expect(ar.docPos, er.docPos);
+            expect(ar.docPosEnd, er.docPosEnd);
+            expect(ar.heightTwips, er.heightTwips);
+            expect(ar.continuesFromPreviousPage, er.continuesFromPreviousPage);
+            expect(ar.continuesOnNextPage, er.continuesOnNextPage);
+            expect(ar.cells.length, er.cells.length);
+            for (var c = 0; c < er.cells.length; c++) {
+              final ac = ar.cells[c];
+              final ec = er.cells[c];
+              expect(ac.docPos, ec.docPos);
+              expect(ac.docPosEnd, ec.docPosEnd);
+              expect(ac.xTwips, ec.xTwips);
+              expect(ac.widthTwips, ec.widthTwips);
+              expect(ac.heightTwips, ec.heightTwips);
+              expect(ac.contentHeightTwips, ec.contentHeightTwips);
+              expect(ac.columnIndex, ec.columnIndex);
+              expect(ac.columnSpan, ec.columnSpan);
+              expect(ac.rowSpan, ec.rowSpan);
+              expect(ac.isMergeContinuation, ec.isMergeContinuation);
+              expect(ac.contentOffsetTwips, ec.contentOffsetTwips);
+              expect(ac.blocks.length, ec.blocks.length);
+              for (var b = 0; b < ec.blocks.length; b++) {
+                final ab = ac.blocks[b];
+                final eb = ec.blocks[b];
+                expect(ab.docPos, eb.docPos);
+                expect(ab.yTwips, eb.yTwips);
+                expect(ab.heightTwips, eb.heightTwips);
+                expect(ab.lines.length, eb.lines.length);
+                for (var l = 0; l < eb.lines.length; l++) {
+                  expect(ab.lines[l].charStart, eb.lines[l].charStart);
+                  expect(ab.lines[l].charEnd, eb.lines[l].charEnd);
+                  expect(ab.lines[l].widthTwips, eb.lines[l].widthTwips);
+                }
+              }
+            }
           }
         }
       }
@@ -169,8 +248,8 @@ void main() {
 
     test('documento com tabela: incremental == completa', () {
       final composer = LayoutComposer();
-      PMNode cell(String text) => schema.node(
-          'tableCell', null, Fragment.from([paragraph(text)]));
+      PMNode cell(String text) =>
+          schema.node('tableCell', null, Fragment.from([paragraph(text)]));
       PMNode row(int i) => schema.node(
           'tableRow', null, Fragment.from([cell('a$i'), cell('b$i')]));
       final table = schema.node(
@@ -198,8 +277,7 @@ void main() {
     test('listas ordenadas: o carry da numeração sobrevive ao reuso', () {
       final composer = LayoutComposer();
       PMNode item(String text) => schema.node(
-          'listItem', {'kind': 'ordered'},
-          Fragment.from([schema.text(text)]));
+          'listItem', {'kind': 'ordered'}, Fragment.from([schema.text(text)]));
 
       final before = docOf([for (var i = 0; i < 90; i++) item('item $i')]);
       final graph = composer.compose(before);
@@ -213,6 +291,60 @@ void main() {
             previous: graph, changedFromDocPos: _startOfBlock(after, 80)),
         LayoutComposer().compose(after),
       );
+    });
+
+    test('retomada preserva supressão de spaceBefore no topo da página', () {
+      PMNode exact(String text, {int before = 0, required int height}) =>
+          schema.node(
+              'paragraph',
+              {
+                'style': {
+                  'lineTwips': height,
+                  'lineRule': 'exact',
+                  'spaceBeforeTwips': before,
+                  'spaceAfterTwips': 0,
+                  'widowControl': false,
+                }
+              },
+              Fragment.from([schema.text(text)]));
+      const setup = PageSetupTwips(
+        widthTwips: 5000,
+        heightTwips: 400,
+        marginTopTwips: 0,
+        marginRightTwips: 0,
+        marginBottomTwips: 0,
+        marginLeftTwips: 0,
+      );
+      final composer = LayoutComposer(setup: setup);
+      final before = docOf([
+        exact('p0', height: 300),
+        exact('p1', before: 120, height: 200),
+        exact('p2', height: 200),
+      ]);
+      final graph = composer.compose(before);
+      expect(graph.pages, hasLength(2));
+      expect(graph.pages[1].signature.suppressSpaceBeforeAtPageTop, isTrue);
+      expect((graph.pages[1].fragments.first as BlockFragment).spaceBeforeTwips,
+          0);
+
+      final after = docOf([
+        before.child(0),
+        before.child(1),
+        exact('P2', height: 200),
+      ]);
+      final incremental = composer.composeIncremental(
+        after,
+        previous: graph,
+        changedFromDocPos: _startOfBlock(after, 2),
+      );
+      final complete = LayoutComposer(setup: setup).compose(after);
+
+      expectSameGraph(incremental, complete);
+      expect(incremental.pages, hasLength(2));
+      expect(
+          (incremental.pages[1].fragments.first as BlockFragment)
+              .spaceBeforeTwips,
+          0);
     });
   });
 
@@ -252,9 +384,9 @@ void main() {
       // Edição que NÃO muda o tamanho: o sufixo tem de ser reusado sem nem
       // precisar deslocar.
       final blocks = [for (var i = 0; i < 400; i++) before.child(i)];
-      blocks[0] = paragraph(
-          'Parágrafo 0 com texto suficiente para ocupar espaço real '
-          'na página e forçar a composição a trabalhar de VERDADE.');
+      blocks[0] =
+          paragraph('Parágrafo 0 com texto suficiente para ocupar espaço real '
+              'na página e forçar a composição a trabalhar de VERDADE.');
       final after = docOf(blocks);
 
       final next = composer.composeIncremental(after,
@@ -309,6 +441,47 @@ void main() {
           reason: 'a segunda passada tem de ser 100% cache');
     });
 
+    test('duas instâncias podem compartilhar as medições', () {
+      final measurements = LayoutMeasurementCache();
+      final doc = longDoc(300);
+
+      final first = LayoutComposer(measurementCache: measurements);
+      final firstGraph = first.compose(doc);
+      final afterFirst = measurements.length;
+      expect(afterFirst, greaterThan(0));
+
+      final second = LayoutComposer(measurementCache: measurements);
+      final secondGraph = second.compose(doc);
+      expect(measurements.length, afterFirst,
+          reason: 'remontar o editor não deve medir de novo o mesmo texto');
+      expectSameGraph(secondGraph, firstGraph);
+    });
+
+    test('pré-aquecimento cooperativo deixa a composição 100% no cache',
+        () async {
+      final measurements = LayoutMeasurementCache();
+      final composer = LayoutComposer(measurementCache: measurements);
+      final doc = longDoc(300);
+
+      final yields = await composer.prewarmMeasurementsAsync(
+        [doc],
+        sliceBudgetMicroseconds: 1,
+      );
+      final afterWarmup = measurements.length;
+      expect(yields, greaterThan(0));
+      expect(afterWarmup, greaterThan(0));
+
+      composer.compose(doc);
+      expect(measurements.length, afterWarmup,
+          reason: 'texto simples já deve chegar completamente medido');
+    });
+
+    test('o limite é aplicado durante a própria composição', () {
+      final measurements = LayoutMeasurementCache(maxEntries: 12);
+      LayoutComposer(measurementCache: measurements).compose(longDoc(300));
+      expect(measurements.length, lessThanOrEqualTo(12));
+    });
+
     test('o cache reaproveita palavras repetidas entre blocos', () {
       final composer = LayoutComposer();
       // 200 blocos com o MESMO texto: as medições distintas têm de ser
@@ -317,6 +490,178 @@ void main() {
           [for (var i = 0; i < 200; i++) paragraph('texto exatamente igual')]));
       expect(composer.measurementCacheSize, lessThan(50),
           reason: 'medir a mesma palavra 200 vezes seria o desperdício');
+    });
+  });
+
+  group('pré-composição cooperativa de tabelas', () {
+    test('aquece por linha e preserva exatamente o mesmo PageGraph', () async {
+      final cache = LayoutTableCache();
+      final composer = LayoutComposer(tableCache: cache);
+      final doc = tableDocument(180);
+      final timings = <String, int>{};
+
+      final yields = await composer.prewarmTableLayoutsAsync(
+        doc,
+        sliceBudgetMicroseconds: 1,
+        timings: timings,
+      );
+
+      expect(yields, greaterThan(0));
+      expect(timings['tableRowCount'], 180);
+      expect(cache.length, 1);
+      expect(cache.rowCount, 180);
+      final first = composer.compose(doc);
+      final second = composer.compose(doc);
+      final fresh = LayoutComposer().compose(doc);
+      expectSameGraph(first, fresh);
+      expectSameGraph(second, fresh);
+    });
+
+    test('cache hit reaplica warnings da construção', () async {
+      final cache = LayoutTableCache();
+      final doc = tableDocument(2, invalidVerticalMerge: true);
+      final warm = LayoutComposer(tableCache: cache);
+      await warm.prewarmTableLayoutsAsync(doc, sliceBudgetMicroseconds: 1);
+
+      final graph = LayoutComposer(tableCache: cache).compose(doc);
+      expect(
+        graph.diagnostics.warnings,
+        contains(contains('vMerge continue sem restart')),
+      );
+    });
+
+    test('split interno de row não altera a geometria canônica em cache',
+        () async {
+      final longText = List<String>.generate(
+        180,
+        (index) => 'palavra$index',
+      ).join(' ');
+      final cell = schema.node(
+        'tableCell',
+        {'id': 'split-cell'},
+        Fragment.from([paragraph(longText)]),
+      );
+      final table = schema.node(
+        'table',
+        {
+          'id': 'split-table',
+          'colWidths': [2800]
+        },
+        Fragment.from([
+          schema.node(
+            'tableRow',
+            {'id': 'split-row'},
+            Fragment.from([cell]),
+          ),
+        ]),
+      );
+      final doc = docOf([table]);
+      const setup = PageSetupTwips(
+        widthTwips: 4000,
+        heightTwips: 3000,
+        marginTopTwips: 200,
+        marginRightTwips: 200,
+        marginBottomTwips: 200,
+        marginLeftTwips: 200,
+      );
+      final cache = LayoutTableCache();
+      final composer = LayoutComposer(setup: setup, tableCache: cache);
+      await composer.prewarmTableLayoutsAsync(doc);
+
+      final first = composer.compose(doc);
+      expect(first.pages.length, greaterThan(1));
+      expect(
+        first.pages.first.fragments
+            .whereType<TableFragment>()
+            .single
+            .rows
+            .last
+            .continuesOnNextPage,
+        isTrue,
+      );
+      final second = composer.compose(doc);
+      final fresh = LayoutComposer(setup: setup).compose(doc);
+      expectSameGraph(first, fresh);
+      expectSameGraph(second, fresh);
+    });
+
+    test('editar uma célula reutiliza as linhas das demais células', () async {
+      final tableCache = LayoutTableCache();
+      final lineCache = LayoutTableLineCache();
+      final composer = LayoutComposer(
+        tableCache: tableCache,
+        tableLineCache: lineCache,
+      );
+      final original = tableDocument(180);
+      await composer.prewarmTableLayoutsAsync(original);
+      final originalGraph = composer.compose(original);
+      final hitsBefore = lineCache.hitCount;
+
+      final oldTable = original.child(0);
+      final oldRow = oldTable.child(90);
+      final oldCell = oldRow.child(0);
+      final changedCell = oldCell.copy(Fragment.from([
+        paragraph('Célula realmente alterada pelo usuário.'),
+      ]));
+      final changedRow = oldRow.copy(Fragment.from([
+        changedCell,
+        oldRow.child(1),
+      ]));
+      final changedTable = oldTable.copy(Fragment.from([
+        for (var index = 0; index < oldTable.childCount; index++)
+          index == 90 ? changedRow : oldTable.child(index),
+      ]));
+      final edited = docOf([changedTable]);
+
+      final actual = composer.compose(
+        edited,
+        honorRenderedPageBreaks: false,
+      );
+      final reused = lineCache.hitCount - hitsBefore;
+      expect(reused, greaterThanOrEqualTo(359),
+          reason: 'só o parágrafo editado deve perder a identidade/cache');
+      expectSameGraph(
+        actual,
+        LayoutComposer().compose(
+          edited,
+          honorRenderedPageBreaks: false,
+        ),
+      );
+      expect(originalGraph.pages, isNotEmpty);
+    });
+
+    test('usa a largura da seção ativa em vez do setup padrão', () async {
+      const narrow = PageSetupTwips(widthTwips: 8000);
+      const wide = PageSetupTwips(widthTwips: 16000);
+      final endSection = schema.node(
+        'paragraph',
+        {
+          'style': {'sectionBreak': true}
+        },
+        Fragment.from([schema.text('fim')]),
+      );
+      final table = tableDocument(3).child(0);
+      final doc = docOf([endSection, table]);
+      final cache = LayoutTableCache();
+      final composer = LayoutComposer(
+        sections: const [narrow, wide],
+        tableCache: cache,
+      );
+
+      await composer.prewarmTableLayoutsAsync(doc);
+      expect(cache.length, 1);
+      composer.compose(doc);
+      expect(cache.length, 1,
+          reason: 'um miss aqui denunciaria warmup com largura da seção 1');
+    });
+
+    test('cache é limitado pela quantidade total de rows', () async {
+      final cache = LayoutTableCache(maxEntries: 8, maxRows: 20);
+      final composer = LayoutComposer(tableCache: cache);
+      await composer.prewarmTableLayoutsAsync(tableDocument(12));
+      await composer.prewarmTableLayoutsAsync(tableDocument(14));
+      expect(cache.length, 1);
+      expect(cache.rowCount, 14);
     });
   });
 }

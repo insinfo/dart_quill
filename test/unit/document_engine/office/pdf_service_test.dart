@@ -18,8 +18,8 @@ import 'package:dart_quill/dart_quill_office.dart';
 void main() {
   final schema = officeQuillSchema();
 
-  PMNode paragraph(String text) => schema.node(
-      'paragraph', null, Fragment.from([schema.text(text)]));
+  PMNode paragraph(String text) =>
+      schema.node('paragraph', null, Fragment.from([schema.text(text)]));
 
   PMNode docOf(List<PMNode> blocks) =>
       schema.node('doc', null, Fragment.from(blocks));
@@ -68,6 +68,31 @@ void main() {
           reason: 'compor de novo não pode mudar o resultado');
     });
 
+    test('renderer cooperativo gera os mesmos bytes e cede entre páginas',
+        () async {
+      final doc = docOf([
+        for (var i = 0; i < 220; i++)
+          paragraph('Linha cooperativa $i com conteúdo para várias páginas.'),
+      ]);
+      final graph = LayoutComposer().compose(doc);
+      expect(graph.pages.length, greaterThan(1));
+      final renderer = PageGraphPdfRenderer(title: 'cooperativo');
+      final synchronous = renderer.render(graph);
+      final timings = <String, int>{};
+      final cooperative = await renderer.renderAsync(
+        graph,
+        timings: timings,
+        workBudget: Duration.zero,
+      );
+
+      expect(cooperative, synchronous,
+          reason: 'yield não pode alterar um byte do PDF determinístico');
+      expect(timings['cooperativeYields'], graph.pages.length - 1);
+      expect(timings['maxPageUs'], greaterThan(0));
+      expect(
+          timings['totalUs'], greaterThanOrEqualTo(timings['pageRenderUs']!));
+    });
+
     test('documento de várias páginas gera todas no PDF', () {
       final doc = docOf([
         for (var i = 0; i < 400; i++)
@@ -85,7 +110,10 @@ void main() {
     test('Delta Quill vira PDF e o relatório vem junto', () {
       final ops = [
         {'insert': 'Memorando'},
-        {'insert': '\n', 'attributes': {'header': 1}},
+        {
+          'insert': '\n',
+          'attributes': {'header': 1}
+        },
         {'insert': 'Corpo do despacho.'},
         {'insert': '\n'},
       ];
@@ -99,7 +127,10 @@ void main() {
 
     test('o que não sabemos representar aparece no relatório, não some', () {
       final ops = [
-        {'insert': 'texto', 'attributes': {'formatoInventado': true}},
+        {
+          'insert': 'texto',
+          'attributes': {'formatoInventado': true}
+        },
         {'insert': '\n'},
       ];
       final result = OfficePdfService().fromQuillDelta(ops);

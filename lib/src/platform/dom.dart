@@ -290,6 +290,14 @@ abstract class DomFile {
   int get size;
 }
 
+/// Optional browser capability for assembling a download over multiple event
+/// loop turns. VM/fake adapters continue to use [DomAdapter.downloadBytes].
+abstract interface class DomCooperativeDownloadAdapter {
+  Future<void> downloadBytesCooperatively(
+      String filename, String mimeType, List<int> bytes,
+      {Map<String, int>? timings});
+}
+
 /// Factory responsible for obtaining the concrete DOM adapter.
 abstract class DomAdapter {
   DomDocument get document;
@@ -358,6 +366,25 @@ abstract class DomAdapter {
   void clearNativeSelection();
   String? get userAgent;
   String? get platform;
+}
+
+extension DomAdapterAsyncDownload on DomAdapter {
+  Future<void> downloadBytesAsync(
+      String filename, String mimeType, List<int> bytes,
+      {Map<String, int>? timings}) async {
+    final current = this;
+    if (current is DomCooperativeDownloadAdapter) {
+      await (current as DomCooperativeDownloadAdapter)
+          .downloadBytesCooperatively(
+        filename,
+        mimeType,
+        bytes,
+        timings: timings,
+      );
+    } else {
+      current.downloadBytes(filename, mimeType, bytes);
+    }
+  }
 }
 
 /// Represents a parser for DOM.

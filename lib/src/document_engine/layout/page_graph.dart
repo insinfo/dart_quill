@@ -24,6 +24,8 @@ class PageSetupTwips {
     this.marginLeftTwips = 1134,
     this.headerDistanceTwips = 709, // 1,25 cm da borda
     this.footerDistanceTwips = 709,
+    this.documentGridLinePitchTwips,
+    this.documentGridType,
   });
 
   final int widthTwips;
@@ -37,6 +39,23 @@ class PageSetupTwips {
   /// É como o Word mede (`w:headerReference` + `w:pgMar/@header`).
   final int headerDistanceTwips;
   final int footerDistanceTwips;
+
+  /// Passo da grade vertical de texto (`w:docGrid/@linePitch`). Quando
+  /// presente, linhas do corpo que usam `snapToGrid` ocupam múltiplos deste
+  /// valor. Tabelas não usam a grade sem `adjustLineHeightInTable`.
+  final int? documentGridLinePitchTwips;
+
+  /// `w:docGrid/@type`. Ausente equivale a `default`, isto é, SEM grade.
+  /// Só `lines` e `linesAndChars` ativam o passo vertical; `snapToChars`
+  /// afeta apenas a grade horizontal.
+  final String? documentGridType;
+
+  int? get activeDocumentGridLinePitchTwips {
+    final type = documentGridType?.toLowerCase();
+    return type == 'lines' || type == 'linesandchars'
+        ? documentGridLinePitchTwips
+        : null;
+  }
 
   int get contentWidthTwips => widthTwips - marginLeftTwips - marginRightTwips;
   int get contentHeightTwips =>
@@ -55,6 +74,7 @@ class ResolvedRunStyle {
     this.strike = false,
     this.color = '#000000',
     this.link,
+    this.letterSpacingTwips = 0,
   });
 
   final String family;
@@ -65,6 +85,58 @@ class ResolvedRunStyle {
   final bool strike;
   final String color;
   final String? link;
+
+  /// Espaçamento adicional após cada caractere (`w:rPr/w:spacing`), em
+  /// twips assinados. Zero e valores negativos são semânticos, não ausência.
+  final int letterSpacingTwips;
+}
+
+/// Caixa de texto ancorada a um run, mas fora do fluxo tipográfico.
+///
+/// Todas as medidas já estão em twips. A caixa é metadado visual do segmento:
+/// ocupa largura zero e não participa da altura/quebra da linha âncora.
+class FloatingTextBoxLayout {
+  const FloatingTextBoxLayout({
+    required this.text,
+    required this.widthTwips,
+    required this.heightTwips,
+    this.contentBlocks = const <BlockFragment>[],
+    this.insetLeftTwips = 0,
+    this.insetTopTwips = 0,
+    this.insetRightTwips = 0,
+    this.insetBottomTwips = 0,
+    this.offsetXTwips = 0,
+    this.offsetYTwips = 0,
+    this.positionHAlign,
+    this.positionVRelativeFrom,
+    this.borderWidthTwips = 0,
+    this.borderColor = '#000000',
+    this.backgroundColor,
+    this.wrapTopAndBottom = false,
+  });
+
+  final String text;
+  final int widthTwips;
+  final int heightTwips;
+
+  /// Projeção rica dos blocos de `w:txbxContent`. Vazia em snapshots
+  /// legados, que continuam usando [text] como fallback visual.
+  final List<BlockFragment> contentBlocks;
+  final int insetLeftTwips;
+  final int insetTopTwips;
+  final int insetRightTwips;
+  final int insetBottomTwips;
+  final int offsetXTwips;
+  final int offsetYTwips;
+  final String? positionHAlign;
+  final String? positionVRelativeFrom;
+  final int borderWidthTwips;
+  final String borderColor;
+  final String? backgroundColor;
+
+  /// DrawingML `wp:wrapTopAndBottom`: a caixa continua flutuante na linha
+  /// âncora, mas cria uma exclusão vertical para o corpo da página.
+  final bool wrapTopAndBottom;
 }
 
 /// Um segmento de linha: texto contíguo com um único estilo.
@@ -75,6 +147,12 @@ class LineSegment {
     required this.widthTwips,
     this.imageSrc,
     this.imageHeightTwips,
+    this.hardBreak = false,
+    this.isTab = false,
+    this.tabLeader,
+    this.isOpaqueInline = false,
+    this.isDiscretionaryHyphen = false,
+    this.textBox,
   });
 
   final String text;
@@ -85,6 +163,26 @@ class LineSegment {
   /// [text] for stable character offsets, while the DOM renders the image.
   final String? imageSrc;
   final int? imageHeightTwips;
+
+  /// Quebra manual de linha (`w:br`/nó `hardBreak`). [text] mantém um único
+  /// caractere lógico para que os offsets PM atravessem a quebra, mas os
+  /// renderers projetam `<br>`/nenhum glifo em vez do caractere substituto.
+  final bool hardBreak;
+
+  /// Tabulação lógica. [widthTwips] é o avanço já resolvido até o stop.
+  final bool isTab;
+  final String? tabLeader;
+
+  /// Conteúdo OOXML preservado sem representação visual (bookmarks etc.).
+  final bool isOpaqueInline;
+
+  /// Hífen projetado pelo compositor em uma quebra automática. Ele ocupa
+  /// largura visual, mas zero caracteres no modelo — ao editar/salvar, a
+  /// palavra original continua intacta e pode ser recomposta em outra linha.
+  final bool isDiscretionaryHyphen;
+
+  /// Caixa flutuante ancorada neste ponto; largura do segmento permanece 0.
+  final FloatingTextBoxLayout? textBox;
 }
 
 /// Alinhamento de bloco.
@@ -100,6 +198,9 @@ class LineBox {
     required this.charStart,
     required this.charEnd,
     this.indentTwips = 0,
+    this.wordSpacingTwips = 0,
+    this.manualPageBreakBefore = false,
+    this.renderedPageBreakBefore = false,
   });
 
   /// Deslocamento X DESTA linha dentro do bloco — o recuo de primeira
@@ -111,6 +212,24 @@ class LineBox {
   final int widthTwips;
   final int ascentTwips;
   final int heightTwips;
+
+  /// Ajuste adicional aplicado depois de cada espaço U+0020 desta linha.
+  ///
+  /// O Word pode contrair espaços de uma linha justificada para fazê-la
+  /// caber antes de decidir a quebra. Guardar o ajuste no PageGraph mantém
+  /// DOM e PDF como projeções da mesma decisão tipográfica.
+  final double wordSpacingTwips;
+
+  /// A manual inline `<w:br w:type="page"/>` immediately before this line.
+  /// Unlike [renderedPageBreakBefore], this is editable document content and
+  /// must always be honored by pagination.
+  final bool manualPageBreakBefore;
+
+  /// Posição de um `<w:lastRenderedPageBreak/>` antes desta linha.
+  ///
+  /// É somente um hint do layout que salvou o DOCX: a composição inicial
+  /// pode honrá-lo, mas ele nunca vira uma quebra manual editável/exportada.
+  final bool renderedPageBreakBefore;
 
   /// Offsets de caractere DENTRO do bloco de origem (para o PositionMap).
   final int charStart;
@@ -165,6 +284,11 @@ class BlockFragment extends PageFragment {
     this.rightIndentTwips = 0,
     this.align = LayoutAlign.left,
     this.marker,
+    this.markerPositionTwips = 0,
+    this.markerStyle,
+    this.widowControl = true,
+    this.spaceBeforeTwips = 0,
+    this.spaceAfterTwips = 0,
     super.continuesFromPreviousPage,
     super.continuesOnNextPage,
   });
@@ -175,6 +299,16 @@ class BlockFragment extends PageFragment {
   final List<LineBox> lines;
   final int indentTwips;
   final LayoutAlign align;
+
+  /// Regra Word `w:widowControl`. Quando ausente na hierarquia OOXML, o
+  /// padrão é ativo: a primeira ou a última linha do parágrafo não pode
+  /// ficar isolada em outra página.
+  final bool widowControl;
+
+  /// Espaço de parágrafo efetivamente presente NESTE fragmento. O before só
+  /// aparece no primeiro fragmento; o after, no último.
+  final int spaceBeforeTwips;
+  final int spaceAfterTwips;
 
   @override
   BlockFragment shifted(int docPosDelta) => BlockFragment(
@@ -188,6 +322,11 @@ class BlockFragment extends PageFragment {
         rightIndentTwips: rightIndentTwips,
         align: align,
         marker: marker,
+        markerPositionTwips: markerPositionTwips,
+        markerStyle: markerStyle,
+        widowControl: widowControl,
+        spaceBeforeTwips: spaceBeforeTwips,
+        spaceAfterTwips: spaceAfterTwips,
         continuesFromPreviousPage: continuesFromPreviousPage,
         continuesOnNextPage: continuesOnNextPage,
       );
@@ -198,16 +337,94 @@ class BlockFragment extends PageFragment {
 
   /// Marcador de lista ('1. ', '• ') quando o fragment abre o item.
   final String? marker;
+
+  /// Posição do marcador desde a borda esquerda da caixa disponível.
+  /// [indentTwips] é, separadamente, onde o texto começa.
+  final int markerPositionTwips;
+
+  /// Tipografia do rótulo quando ele não tem run textual próprio (caso
+  /// comum em células numeradas vazias).
+  final ResolvedRunStyle? markerStyle;
+}
+
+/// Alinhamento vertical do conteúdo de uma célula.
+enum TableCellVerticalAlign { top, center, bottom }
+
+/// Uma borda resolvida de tabela/célula.
+///
+/// A espessura continua em twips; [style] usa os nomes CSS canônicos que os
+/// renderers DOM/PDF sabem projetar (`solid`, `double`, `dashed`, `dotted` ou
+/// `none`).
+class TableBorder {
+  const TableBorder({
+    this.style = 'solid',
+    this.widthTwips = 15,
+    this.color = '#000000',
+  });
+
+  final String style;
+  final int widthTwips;
+  final String color;
+
+  bool get isVisible => style != 'none' && widthTwips > 0;
+}
+
+/// Bordas já resolvidas para os quatro lados de uma célula.
+class TableCellBorders {
+  const TableCellBorders({this.top, this.right, this.bottom, this.left});
+
+  final TableBorder? top;
+  final TableBorder? right;
+  final TableBorder? bottom;
+  final TableBorder? left;
 }
 
 /// Célula composta: blocos internos com posição relativa ao topo da célula.
 class TableCellBox {
   const TableCellBox({
+    this.nodeId,
+    this.docPos = 0,
+    this.docPosEnd = 0,
+    this.sourceTableId,
+    this.sourceRowId,
+    this.sourceCellId,
+    this.sourceRowIndex,
+    this.sourceCellIndex,
     required this.xTwips,
     required this.widthTwips,
     required this.blocks,
     required this.contentHeightTwips,
+    this.heightTwips = 0,
+    this.columnIndex = 0,
+    this.columnSpan = 1,
+    this.rowSpan = 1,
+    this.isMergeContinuation = false,
+    this.backgroundColor,
+    this.verticalAlign = TableCellVerticalAlign.top,
+    this.contentOffsetTwips = 0,
+    this.borders = const TableCellBorders(),
+    this.marginTopTwips = 60,
+    this.marginRightTwips = 60,
+    this.marginBottomTwips = 60,
+    this.marginLeftTwips = 60,
   });
+
+  final String? nodeId;
+
+  /// Posição PM do início/fim do CONTEÚDO da célula.
+  final int docPos;
+  final int docPosEnd;
+
+  /// Identidade da árvore PM de origem. Diferentemente da posição, não muda
+  /// quando a tabela é fragmentada ou quando um header é projetado de novo.
+  final String? sourceTableId;
+  final String? sourceRowId;
+  final String? sourceCellId;
+  final int? sourceRowIndex;
+  final int? sourceCellIndex;
+
+  int get docFrom => docPos - 1;
+  int get docTo => docPosEnd + 1;
 
   /// x relativo ao content box da página.
   final int xTwips;
@@ -216,14 +433,160 @@ class TableCellBox {
   /// Blocos internos (yTwips relativo ao TOPO da célula).
   final List<BlockFragment> blocks;
   final int contentHeightTwips;
+
+  /// Altura visual, incluindo todas as linhas cobertas por [rowSpan].
+  final int heightTwips;
+
+  final int columnIndex;
+  final int columnSpan;
+  final int rowSpan;
+
+  /// `w:vMerge continue`: a caixa permanece no grafo para preservar as
+  /// posições PM, mas sua projeção visual pertence à célula `restart`.
+  final bool isMergeContinuation;
+
+  final String? backgroundColor;
+  final TableCellVerticalAlign verticalAlign;
+
+  /// Deslocamento adicional do conteúdo depois de conhecida a altura final
+  /// da linha/mesclagem (0/top, metade/center, total/bottom).
+  final int contentOffsetTwips;
+  final TableCellBorders borders;
+
+  /// Margens internas Word (`tblCellMar`, sobrescritas por `tcMar`).
+  final int marginTopTwips;
+  final int marginRightTwips;
+  final int marginBottomTwips;
+  final int marginLeftTwips;
+
+  TableCellBox shifted(int docPosDelta) => TableCellBox(
+        nodeId: nodeId,
+        docPos: docPos + docPosDelta,
+        docPosEnd: docPosEnd + docPosDelta,
+        sourceTableId: sourceTableId,
+        sourceRowId: sourceRowId,
+        sourceCellId: sourceCellId,
+        sourceRowIndex: sourceRowIndex,
+        sourceCellIndex: sourceCellIndex,
+        xTwips: xTwips,
+        widthTwips: widthTwips,
+        blocks: [for (final block in blocks) block.shifted(docPosDelta)],
+        contentHeightTwips: contentHeightTwips,
+        heightTwips: heightTwips,
+        columnIndex: columnIndex,
+        columnSpan: columnSpan,
+        rowSpan: rowSpan,
+        isMergeContinuation: isMergeContinuation,
+        backgroundColor: backgroundColor,
+        verticalAlign: verticalAlign,
+        contentOffsetTwips: contentOffsetTwips,
+        borders: borders,
+        marginTopTwips: marginTopTwips,
+        marginRightTwips: marginRightTwips,
+        marginBottomTwips: marginBottomTwips,
+        marginLeftTwips: marginLeftTwips,
+      );
 }
 
 /// Linha de tabela composta.
 class TableRowBox {
-  const TableRowBox({required this.heightTwips, required this.cells});
+  const TableRowBox({
+    this.nodeId,
+    this.docPos = 0,
+    this.docPosEnd = 0,
+    this.sourceTableId,
+    this.sourceRowId,
+    this.sourceRowIndex,
+    required this.heightTwips,
+    required this.cells,
+    this.heightRule,
+    this.cantSplit = false,
+    this.repeatHeader = false,
+    this.isRepeatedHeader = false,
+    this.gridBefore = 0,
+    this.gridAfter = 0,
+    this.widthBeforeTwips,
+    this.widthAfterTwips,
+    this.continuesFromPreviousPage = false,
+    this.continuesOnNextPage = false,
+  });
+
+  final String? nodeId;
+
+  /// Posição PM do início/fim do CONTEÚDO da linha.
+  final int docPos;
+  final int docPosEnd;
+
+  final String? sourceTableId;
+  final String? sourceRowId;
+  final int? sourceRowIndex;
+
+  int get docFrom => docPos - 1;
+  int get docTo => docPosEnd + 1;
 
   final int heightTwips;
   final List<TableCellBox> cells;
+
+  /// `exact` ou `atLeast`, quando veio de `w:trHeight`.
+  final String? heightRule;
+  final bool cantSplit;
+  final bool repeatHeader;
+
+  /// Cópia projetada de um header na continuação da tabela. Ela desenha e
+  /// imprime, mas não cria uma segunda posição editável para o mesmo nó.
+  final bool isRepeatedHeader;
+
+  /// Colunas omitidas antes/depois das células (`w:gridBefore/gridAfter`).
+  /// São essenciais em tabelas irregulares: a primeira célula nem sempre
+  /// começa na coluna zero.
+  final int gridBefore;
+  final int gridAfter;
+  final int? widthBeforeTwips;
+  final int? widthAfterTwips;
+  final bool continuesFromPreviousPage;
+  final bool continuesOnNextPage;
+
+  TableRowBox shifted(int docPosDelta) => TableRowBox(
+        nodeId: nodeId,
+        docPos: docPos + docPosDelta,
+        docPosEnd: docPosEnd + docPosDelta,
+        sourceTableId: sourceTableId,
+        sourceRowId: sourceRowId,
+        sourceRowIndex: sourceRowIndex,
+        heightTwips: heightTwips,
+        cells: [for (final cell in cells) cell.shifted(docPosDelta)],
+        heightRule: heightRule,
+        cantSplit: cantSplit,
+        repeatHeader: repeatHeader,
+        isRepeatedHeader: isRepeatedHeader,
+        gridBefore: gridBefore,
+        gridAfter: gridAfter,
+        widthBeforeTwips: widthBeforeTwips,
+        widthAfterTwips: widthAfterTwips,
+        continuesFromPreviousPage: continuesFromPreviousPage,
+        continuesOnNextPage: continuesOnNextPage,
+      );
+
+  TableRowBox asRepeatedHeader() => TableRowBox(
+        nodeId: nodeId,
+        docPos: docPos,
+        docPosEnd: docPosEnd,
+        sourceTableId: sourceTableId,
+        sourceRowId: sourceRowId,
+        sourceRowIndex: sourceRowIndex,
+        heightTwips: heightTwips,
+        cells: cells,
+        heightRule: heightRule,
+        cantSplit: cantSplit,
+        repeatHeader: repeatHeader,
+        isRepeatedHeader: true,
+        gridBefore: gridBefore,
+        gridAfter: gridAfter,
+        widthBeforeTwips: widthBeforeTwips,
+        widthAfterTwips: widthAfterTwips,
+        continuesFromPreviousPage: continuesFromPreviousPage,
+        continuesOnNextPage: continuesOnNextPage,
+      );
 }
 
 /// Fragmento de tabela: as linhas desta página (granularidade de LINHA DE
@@ -232,6 +595,8 @@ class TableFragment extends PageFragment {
   const TableFragment({
     required super.nodeId,
     required super.docPos,
+    required this.docPosEnd,
+    required this.sourceTableId,
     required this.rows,
     required super.yTwips,
     required super.heightTwips,
@@ -240,12 +605,19 @@ class TableFragment extends PageFragment {
   });
 
   final List<TableRowBox> rows;
+  final int docPosEnd;
+  final String? sourceTableId;
+
+  int get docFrom => docPos - 1;
+  int get docTo => docPosEnd + 1;
 
   @override
   TableFragment shifted(int docPosDelta) => TableFragment(
         nodeId: nodeId,
         docPos: docPos + docPosDelta,
-        rows: rows,
+        docPosEnd: docPosEnd + docPosDelta,
+        sourceTableId: sourceTableId,
+        rows: [for (final row in rows) row.shifted(docPosDelta)],
         yTwips: yTwips,
         heightTwips: heightTwips,
         continuesFromPreviousPage: continuesFromPreviousPage,
@@ -267,6 +639,7 @@ class PageSignature {
     required this.firstBlockIndex,
     required this.firstBlockOffset,
     required this.carryListOrdinal,
+    required this.suppressSpaceBeforeAtPageTop,
     required this.startsFreshBlock,
     required this.lastDocPos,
   });
@@ -279,6 +652,13 @@ class PageSignature {
 
   /// Estado da numeração de lista ao entrar na página.
   final int carryListOrdinal;
+
+  /// A fronteira que abriu esta página suprime o `spaceBefore` do primeiro
+  /// bloco visual (overflow automático ou quebra inline explícita).
+  ///
+  /// Faz parte do estado de entrada: sem ele, retomar a composição nesta
+  /// página pode restaurar o espaçamento e mudar toda a paginação seguinte.
+  final bool suppressSpaceBeforeAtPageTop;
 
   /// A página começa um bloco NOVO (não é continuação de parágrafo/tabela)?
   final bool startsFreshBlock;
@@ -339,21 +719,22 @@ class PageLayout {
       return this;
     }
     return PageLayout(
-        index: newIndex,
-        setup: setup,
-        header: header,
-        footer: footer,
-        fragments: docPosDelta == 0
-            ? fragments
-            : [for (final f in fragments) f.shifted(docPosDelta)],
-        signature: PageSignature(
-          firstBlockIndex: signature.firstBlockIndex + blockIndexDelta,
-          firstBlockOffset: signature.firstBlockOffset + docPosDelta,
-          carryListOrdinal: signature.carryListOrdinal,
-          startsFreshBlock: signature.startsFreshBlock,
-          lastDocPos: signature.lastDocPos + docPosDelta,
-        ),
-      );
+      index: newIndex,
+      setup: setup,
+      header: header,
+      footer: footer,
+      fragments: docPosDelta == 0
+          ? fragments
+          : [for (final f in fragments) f.shifted(docPosDelta)],
+      signature: PageSignature(
+        firstBlockIndex: signature.firstBlockIndex + blockIndexDelta,
+        firstBlockOffset: signature.firstBlockOffset + docPosDelta,
+        carryListOrdinal: signature.carryListOrdinal,
+        suppressSpaceBeforeAtPageTop: signature.suppressSpaceBeforeAtPageTop,
+        startsFreshBlock: signature.startsFreshBlock,
+        lastDocPos: signature.lastDocPos + docPosDelta,
+      ),
+    );
   }
 }
 
@@ -393,7 +774,8 @@ class PositionMapEntry {
   final int docPosEnd;
   final int pageIndex;
 
-  PositionMapEntry shifted({required int docPosDelta, required int pageDelta}) =>
+  PositionMapEntry shifted(
+          {required int docPosDelta, required int pageDelta}) =>
       PositionMapEntry(
         docPosStart: docPosStart + docPosDelta,
         docPosEnd: docPosEnd + docPosDelta,
@@ -415,6 +797,7 @@ class PageGraph {
     required this.quality,
     this.docSize = 0,
     this.blockCount = 0,
+    this.honoredRenderedPageBreakHints = false,
   });
 
   final List<PageLayout> pages;
@@ -428,4 +811,11 @@ class PageGraph {
   /// QUANTO deslocar o sufixo reusado.
   final int docSize;
   final int blockCount;
+
+  /// A paginação deste grafo consumiu o cache `lastRenderedPageBreak`.
+  ///
+  /// Na primeira edição, o compositor usa isto para fazer UMA recomposição
+  /// completa sem o cache obsoleto. O grafo seguinte volta a permitir reuso
+  /// incremental mesmo que os nós opacos continuem preservados no modelo.
+  final bool honoredRenderedPageBreakHints;
 }

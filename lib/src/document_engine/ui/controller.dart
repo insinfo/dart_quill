@@ -11,6 +11,7 @@ import 'dart:typed_data';
 import '../../platform/dom.dart';
 import '../layout/page_graph.dart';
 import '../model/index.dart';
+import '../office/snapshot.dart';
 import '../state/index.dart';
 import '../view/editor_view.dart';
 import 'word_options.dart';
@@ -19,6 +20,15 @@ abstract interface class OfficeWordController {
   DomAdapter get adapter;
   Schema get schema;
   OfficeWordEditorOptions get options;
+
+  /// Nome base do documento corrente, sem caminho nem extensão.
+  ///
+  /// Um arquivo aberto substitui o título inicial para que salvar/exportar
+  /// nunca baixe outro documento com um nome herdado da demonstração.
+  String get documentBaseName;
+
+  /// Indica se o modelo/geometria mudou desde a abertura ou último save.
+  bool get isDirty;
 
   /// O laço de edição. Só é válido depois de [viewReady].
   OfficeEditorView get view;
@@ -55,11 +65,48 @@ abstract interface class OfficeWordController {
   /// Com [setup], a geometria de página do arquivo aberto vale (um DOCX
   /// ofício abre em ofício). Headers and footers are separate roots because
   /// the same content is projected on every page.
-  void openDocument(PMNode doc,
-      {PageSetupTwips? setup, PMNode? header, PMNode? footer});
+  void openDocument(
+    PMNode doc, {
+    PageSetupTwips? setup,
+    List<PageSetupTwips>? sections,
+    PMNode? header,
+    PMNode? footer,
+    Map<String, PMNode>? headerVariants,
+    Map<String, PMNode>? footerVariants,
+    bool titlePage = false,
+    bool evenAndOddHeaders = false,
+    OfficeDocumentSnapshot? sourceSnapshot,
+    Uint8List? sourceDocxBytes,
+    Map<String, dynamic>? sourceMap,
+    String? sourceFileName,
+  });
+
+  /// Prepares font and table geometry in cooperative slices before opening a
+  /// large imported document. It does not mutate the current document.
+  Future<int> prewarmLayout(
+    PMNode document, {
+    required PageSetupTwips setup,
+    List<PageSetupTwips> sections = const [],
+    PMNode? header,
+    PMNode? footer,
+    Map<String, PMNode> headerVariants = const {},
+    Map<String, PMNode> footerVariants = const {},
+    bool titlePage = false,
+    bool evenAndOddHeaders = false,
+    bool honorRenderedPageBreaks = true,
+    Map<String, int>? timings,
+  });
 
   Uint8List exportPdf();
+  Future<Uint8List> exportPdfAsync({Map<String, int>? timings});
   Uint8List exportDocx();
+  Future<Uint8List> exportDocxAsync({Map<String, int>? timings});
+
+  /// Salva pelo caminho assíncrono e baixa o DOCX com o nome corrente.
+  Future<void> saveDocx();
+
+  /// Gera e baixa o PDF cooperativamente, sem bloquear documentos longos.
+  Future<void> savePdf();
 }
 
 /// Helpers de construção de DOM compartilhados pelos componentes.
@@ -100,8 +147,8 @@ final class OfficeDomKit {
   /// o consumidor pode trocar (ou omitir) o asset de ícones livremente.
   DomElement button(String text, String title, void Function() action,
       {String? extraClass, String? icon}) {
-    final button =
-        el('button', 'dq-office-btn${extraClass == null ? '' : ' $extraClass'}');
+    final button = el(
+        'button', 'dq-office-btn${extraClass == null ? '' : ' $extraClass'}');
     button.setAttribute('type', 'button');
     button.setAttribute('title', title);
     button.setAttribute('aria-label', title);

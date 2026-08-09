@@ -25,7 +25,7 @@ class OfficeTitleBar {
     bar.append(brand);
 
     final title = _kit.el('div', 'dq-office-doc-title');
-    title.appendText(controller.options.title);
+    title.appendText(controller.documentBaseName);
     bar.append(title);
 
     bar.append(_kit.el('div', 'dq-office-titlebar-actions'));

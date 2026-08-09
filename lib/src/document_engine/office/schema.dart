@@ -45,6 +45,9 @@ Schema officeQuillSchema() {
           'direction': _opt(),
           // Atributos de linha não mapeados (mapa), preservados verbatim.
           'style': _opt(),
+          // Propriedades Word estruturais necessárias para regenerar apenas
+          // um bloco editado sem achatar estilo, numeração ou espaçamento.
+          'word': _opt(),
           'extra': _opt(),
         },
       ),
@@ -57,6 +60,7 @@ Schema officeQuillSchema() {
           'level': AttributeSpec(defaultValue: 1),
           'align': _opt(),
           'style': _opt(),
+          'word': _opt(),
           'extra': _opt(),
         },
       ),
@@ -91,6 +95,7 @@ Schema officeQuillSchema() {
           'indent': _opt(),
           'align': _opt(),
           'style': _opt(),
+          'word': _opt(),
           'extra': _opt(),
         },
       ),
@@ -105,11 +110,16 @@ Schema officeQuillSchema() {
           'anchor': _opt(),
           // Larguras de coluna (lista, dos ops table-col), verbatim.
           'colWidths': _opt(),
+          'word': _opt(),
         },
       ),
       'tableRow': NodeSpec(
         content: 'tableCell+',
-        attrs: {officeIdAttribute: _id(), 'rowId': _opt()},
+        attrs: {
+          officeIdAttribute: _id(),
+          'rowId': _opt(),
+          'word': _opt(),
+        },
       ),
       'tableCell': NodeSpec(
         content: 'block+',
@@ -122,6 +132,7 @@ Schema officeQuillSchema() {
           'cell': _opt(),
           // 'td' | 'th'
           'tag': AttributeSpec(defaultValue: 'td'),
+          'word': _opt(),
         },
       ),
       'image': NodeSpec(
@@ -134,6 +145,36 @@ Schema officeQuillSchema() {
           'height': _opt(),
           'style': _opt(),
           'extra': _opt(),
+        },
+      ),
+      'hardBreak': NodeSpec(
+        inline: true,
+        group: 'inline',
+        atom: true,
+        attrs: {'breakType': _opt()},
+      ),
+      'textBox': NodeSpec(
+        inline: true,
+        group: 'inline',
+        atom: true,
+        attrs: {
+          'text': AttributeSpec(defaultValue: ''),
+          'textBoxDoc': _opt(),
+          'textBoxSourceSignature': _opt(),
+          'width': _opt(),
+          'height': _opt(),
+          'insetLeft': _opt(),
+          'insetTop': _opt(),
+          'insetRight': _opt(),
+          'insetBottom': _opt(),
+          'offsetX': _opt(),
+          'offsetY': _opt(),
+          'positionHAlign': _opt(),
+          'positionVRelativeFrom': _opt(),
+          'borderWidth': _opt(),
+          'borderColor': _opt(),
+          'background': _opt(),
+          'word': _opt(),
         },
       ),
       'video': NodeSpec(
@@ -177,6 +218,9 @@ Schema officeQuillSchema() {
       'background': MarkSpec(attrs: {'value': AttributeSpec()}),
       'font': MarkSpec(attrs: {'value': AttributeSpec()}),
       'size': MarkSpec(attrs: {'value': AttributeSpec()}),
+      // `w:rPr/w:spacing` preservado em twips assinados. CSS/DOM pode
+      // converter na borda, mas o modelo editável não perde precisão OOXML.
+      'letterSpacing': MarkSpec(attrs: {'twips': AttributeSpec()}),
       'link': MarkSpec(
         attrs: {'href': AttributeSpec()},
         inclusive: false,

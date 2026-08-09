@@ -12,6 +12,11 @@ const int _endOfCentralDirectorySignature = 0x06054b50;
 const int _dataDescriptorSignature = 0x08074b50;
 const int _compressionStored = 0;
 const int _compressionDeflate = 8;
+// Levels 1..3 use the fast Deflate path. Level 3 keeps most of the size
+// benefit of level 6 while roughly halving the main-thread work for the
+// multi-megabyte document.xml produced by large edited DOCX files.
+// Original entries are still copied byte-for-byte and never recompressed.
+const int _modifiedEntryCompressionLevel = 3;
 const int _utf8Flag = 0x0800;
 const int _dataDescriptorFlag = 0x0008;
 
@@ -335,7 +340,7 @@ class ZipArchive {
 
 Uint8List _compress(Uint8List bytes) {
   final output = OutputMemoryStream();
-  Deflate(bytes, output: output);
+  Deflate(bytes, level: _modifiedEntryCompressionLevel, output: output);
   return output.getBytes();
 }
 

@@ -21,6 +21,8 @@ class PdfContentBuilder {
   String? _strokeColor;
   double? _lineWidth;
   bool _dashed = false;
+  double _characterSpacingPt = 0;
+  double _wordSpacingPt = 0;
 
   double _x(double x) => x * k;
   double _y(double y) => pageHeightPt - y * k;
@@ -62,6 +64,19 @@ class PdfContentBuilder {
     }
   }
 
+  void _setTextSpacing(double characterSpacingPx, double wordSpacingPx) {
+    final characterSpacingPt = characterSpacingPx * k;
+    final wordSpacingPt = wordSpacingPx * k;
+    if (_characterSpacingPt != characterSpacingPt) {
+      _ops.writeln('${_n(characterSpacingPt)} Tc');
+      _characterSpacingPt = characterSpacingPt;
+    }
+    if (_wordSpacingPt != wordSpacingPt) {
+      _ops.writeln('${_n(wordSpacingPt)} Tw');
+      _wordSpacingPt = wordSpacingPt;
+    }
+  }
+
   /// Texto na baseline ([x],[baselineY]) em px do canvas. [fontResource] é o
   /// nome do recurso (`/F1`), [sizePx] o tamanho em px sem zoom já aplicado ao
   /// k... isto é: o tamanho em px do canvas (com zoom), convertido aqui.
@@ -72,11 +87,14 @@ class PdfContentBuilder {
     required double x,
     required double baselineY,
     String color = '#000000',
+    double characterSpacingPx = 0,
+    double wordSpacingPx = 0,
   }) {
     if (winAnsiText.isEmpty) return;
     _setFill(color);
+    _ops.writeln('BT');
+    _setTextSpacing(characterSpacingPx, wordSpacingPx);
     _ops
-      ..writeln('BT')
       ..writeln('$fontResource ${_n(sizePx * k)} Tf')
       ..writeln('${_n(_x(x))} ${_n(_y(baselineY))} Td')
       ..writeln('(${escapePdfString(winAnsiText)}) Tj')
@@ -99,11 +117,14 @@ class PdfContentBuilder {
   }) {
     if (pieces.isEmpty) return;
     _setFill(color);
-    final resource = fontResource.startsWith('/')
-        ? fontResource
-        : '/${'$fontResource'}';
+    final resource =
+        fontResource.startsWith('/') ? fontResource : '/${'$fontResource'}';
+    _ops.writeln('BT');
+    // O espaçamento de fontes CID é codificado no próprio array TJ (Tw só
+    // reconhece o byte 0x20 em fontes simples). Zera estado que uma fonte
+    // WinAnsi anterior possa ter deixado persistente entre objetos BT/ET.
+    _setTextSpacing(0, 0);
     _ops
-      ..writeln('BT')
       ..writeln('$resource ${_n(sizePx * k)} Tf')
       ..writeln('${_n(_x(x))} ${_n(_y(baselineY))} Td');
     final array = StringBuffer('[');
@@ -127,8 +148,9 @@ class PdfContentBuilder {
   }) {
     if (hexString.length <= 2) return;
     _setFill(color);
+    _ops.writeln('BT');
+    _setTextSpacing(0, 0);
     _ops
-      ..writeln('BT')
       ..writeln('$fontResource ${_n(sizePx * k)} Tf')
       ..writeln('${_n(_x(x))} ${_n(_y(baselineY))} Td')
       ..writeln('$hexString Tj')

@@ -37,10 +37,8 @@ class OfficeStatusBar {
   void update() {
     if (_page == null || !controller.viewReady) return;
     final graph = controller.view.pageGraph;
-    final current =
-        graph.positionMap.pageOf(controller.view.state.selection.from) + 1;
+    final current = controller.view.visiblePageIndex + 1;
     _kit.setText(_page!, 'Página $current de ${graph.pages.length}');
-    _kit.setText(
-        _blocks!, '${controller.view.state.doc.childCount} blocos');
+    _kit.setText(_blocks!, '${controller.view.state.doc.childCount} blocos');
   }
 }

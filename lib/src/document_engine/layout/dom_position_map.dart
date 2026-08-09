@@ -50,18 +50,22 @@ class OfficeDomPositionMap {
     if (block == null) return null;
     final docPos = int.tryParse(block.getAttribute('data-doc-pos') ?? '');
     final charStart = int.tryParse(line.getAttribute('data-char-start') ?? '');
-    if (docPos == null || charStart == null) return null;
+    // Cabeçalhos/rodapés repetidos usam docPos negativo porque não pertencem
+    // ao espaço de posições do corpo. Nunca transforme essa projeção inerte
+    // em seleção/caret editável.
+    if (docPos == null || docPos < 0 || charStart == null) return null;
 
-    // Offset dentro da LINHA: soma o texto dos runs anteriores. O marcador
-    // de lista é projeção do layout e não conta (não é texto do documento).
+    // Offset dentro da LINHA: soma o comprimento LÓGICO dos runs anteriores.
+    // Atoms como imagem/<br>/opaque não têm textContent, mas ocupam uma
+    // posição no modelo e declaram isso em data-model-length.
     var withinLine = 0;
     for (final run in line.childNodes) {
       if (run is DomElement && run.classes.contains(_markerClass)) continue;
       if (_contains(run, node)) {
-        withinLine += _textOffsetWithin(run, node, offset);
+        withinLine += _modelOffsetWithin(run, node, offset);
         return docPos + charStart + withinLine;
       }
-      withinLine += (run.textContent ?? '').length;
+      withinLine += _modelLength(run);
     }
     // O ponto é a própria linha (offset entre filhos): conta os N primeiros.
     var index = 0;
@@ -69,7 +73,7 @@ class OfficeDomPositionMap {
     for (final run in line.childNodes) {
       if (index >= offset) break;
       if (!(run is DomElement && run.classes.contains(_markerClass))) {
-        withinLine += (run.textContent ?? '').length;
+        withinLine += _modelLength(run);
       }
       index++;
     }
@@ -99,9 +103,15 @@ class OfficeDomPositionMap {
       final block = _ancestorWithClass(line, _blockClass);
       if (block == null) continue;
       final docPos = int.tryParse(block.getAttribute('data-doc-pos') ?? '');
-      final charStart = int.tryParse(line.getAttribute('data-char-start') ?? '');
+      final charStart =
+          int.tryParse(line.getAttribute('data-char-start') ?? '');
       final charEnd = int.tryParse(line.getAttribute('data-char-end') ?? '');
-      if (docPos == null || charStart == null || charEnd == null) continue;
+      if (docPos == null ||
+          docPos < 0 ||
+          charStart == null ||
+          charEnd == null) {
+        continue;
+      }
 
       final start = docPos + charStart;
       final end = docPos + charEnd;
@@ -111,15 +121,27 @@ class OfficeDomPositionMap {
       if (modelPosition < start || modelPosition > end) continue;
 
       var remaining = modelPosition - start;
+      var childIndex = 0;
       for (final run in line.childNodes) {
-        if (run is DomElement && run.classes.contains(_markerClass)) continue;
-        final text = run.textContent ?? '';
-        if (remaining <= text.length) {
-          final textNode = _firstTextNode(run);
-          if (textNode != null) return DomTextPosition(textNode, remaining);
-          return DomTextPosition(run, remaining);
+        if (run is DomElement && run.classes.contains(_markerClass)) {
+          childIndex++;
+          continue;
         }
-        remaining -= text.length;
+        final modelLength = _modelLength(run);
+        if (remaining <= modelLength) {
+          final textNode = _firstTextNode(run);
+          // A tab has one real text character and keeps the familiar text
+          // caret. A zero-text atom needs a boundary in its parent: DOM
+          // nodes such as IMG/BR cannot host a Range offset themselves.
+          if (textNode != null) {
+            final textLength = (textNode.textContent ?? '').length;
+            return DomTextPosition(textNode, remaining.clamp(0, textLength));
+          }
+          return DomTextPosition(
+              line, remaining <= 0 ? childIndex : childIndex + 1);
+        }
+        remaining -= modelLength;
+        childIndex++;
       }
       // Linha vazia: o ponto é a própria linha.
       return DomTextPosition(line, 0);
@@ -171,17 +193,40 @@ class OfficeDomPositionMap {
     return false;
   }
 
-  int _textOffsetWithin(DomNode container, DomNode target, int offset) {
-    if (container == target) return offset;
+  /// Logical length of a projected node. Plain runs use their text; atoms
+  /// explicitly override it because an empty IMG/BR/span still has PM size
+  /// one (and a floating text box's visible label is not document text).
+  int _modelLength(DomNode node) {
+    if (node is DomElement) {
+      final declared =
+          int.tryParse(node.getAttribute('data-model-length') ?? '');
+      if (declared != null && declared >= 0) return declared;
+    }
+    return (node.textContent ?? '').length;
+  }
+
+  int _modelOffsetWithin(DomNode container, DomNode target, int offset) {
+    if (container == target) {
+      final length = _modelLength(container);
+      return offset.clamp(0, length);
+    }
+    final declaredLength = container is DomElement
+        ? int.tryParse(container.getAttribute('data-model-length') ?? '')
+        : null;
+    int withinDeclaredLength(int value) =>
+        declaredLength != null && declaredLength >= 0
+            ? value.clamp(0, declaredLength)
+            : value;
     var total = 0;
     for (final child in container.childNodes) {
-      if (child == target) return total + offset;
+      if (child == target) return withinDeclaredLength(total + offset);
       if (_contains(child, target)) {
-        return total + _textOffsetWithin(child, target, offset);
+        return withinDeclaredLength(
+            total + _modelOffsetWithin(child, target, offset));
       }
-      total += (child.textContent ?? '').length;
+      total += _modelLength(child);
     }
-    return total;
+    return withinDeclaredLength(total);
   }
 
   DomNode? _firstTextNode(DomNode node) {

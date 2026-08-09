@@ -1,6 +1,7 @@
 /// Opções públicas do editor Word ([OfficeWordEditor]).
 library;
 
+import '../layout/fonts.dart';
 import '../layout/page_graph.dart';
 import '../view/editor_view.dart';
 
@@ -27,6 +28,7 @@ class OfficeWordEditorOptions {
     this.virtualization = const OfficeVirtualization(radius: 3),
     this.title = 'Documento',
     this.showTitleBar = false,
+    this.fonts = const LayoutFontSet([]),
   });
 
   final OfficeWordMode mode;
@@ -49,4 +51,11 @@ class OfficeWordEditorOptions {
   /// hospedeira normalmente já tem a sua, e duas barras de título é o erro
   /// clássico de componente embarcado.
   final bool showTitleBar;
+
+  /// Faces fornecidas pela aplicação para medição e embedding no PDF.
+  ///
+  /// Aliases OOXML também são respeitados: uma face `Calibri`, por exemplo,
+  /// atende um run `Ecofont_Spranq_eco_Sans` que declare Calibri como fallback.
+  /// Sem faces, o editor usa as métricas compactas e o PDF standard-14.
+  final LayoutFontSet fonts;
 }

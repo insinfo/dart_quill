@@ -22,8 +22,8 @@ void main() {
   PMNode docOf(List<PMNode> blocks) =>
       schema.node('doc', null, Fragment.from(blocks));
 
-  PMNode paragraph(String text) => schema.node(
-      'paragraph', null, Fragment.from([schema.text(text)]));
+  PMNode paragraph(String text) =>
+      schema.node('paragraph', null, Fragment.from([schema.text(text)]));
 
   group('LayoutComposer', () {
     test('documento curto cabe numa página', () {
@@ -35,6 +35,40 @@ void main() {
       final second = graph.pages.first.fragments[1];
       expect(second.yTwips, first.yTwips + first.heightTwips,
           reason: 'fragments empilham sem sobreposição');
+    });
+
+    test('aliases tipográficos usam a mesma métrica da saída correspondente',
+        () {
+      const sample = 'iiii WWWW 0123456789';
+      ({int width, int height, int ascent}) metricsOf(String family) {
+        final marked = schema.text(sample, [
+          schema.marks['font']!.create({'value': family}),
+        ]);
+        final graph = LayoutComposer().compose(docOf([
+          schema.node('paragraph', null, Fragment.from([marked])),
+        ]));
+        final line =
+            (graph.pages.single.fragments.single as BlockFragment).lines.single;
+        return (
+          width: line.widthTwips,
+          height: line.heightTwips,
+          ascent: line.ascentTwips,
+        );
+      }
+
+      final arial = metricsOf('Arial');
+      final calibri = metricsOf('Calibri');
+      final times = metricsOf('Times New Roman');
+      final courier = metricsOf('Courier New');
+      expect(metricsOf('Ecofont_Spranq_eco_Sans'), calibri);
+      expect(metricsOf('__DQ_MISSING_OFFICE_FONT_9F2C__'), arial);
+      expect(metricsOf('serif'), times);
+      expect(metricsOf('Cambria'), times);
+      expect(metricsOf('monospace'), courier);
+      expect(metricsOf('Consolas'), courier);
+      expect(times.width, isNot(arial.width));
+      expect(courier.width, isNot(arial.width));
+      expect(calibri.width, isNot(arial.width));
     });
 
     test('muitos parágrafos fragmentam em várias páginas', () {
@@ -56,8 +90,7 @@ void main() {
 
     test('parágrafo maior que a página atravessa em granularidade de LINHA',
         () {
-      final long = paragraph(List.generate(
-              2000, (i) => 'palavra$i').join(' '));
+      final long = paragraph(List.generate(2000, (i) => 'palavra$i').join(' '));
       final graph = LayoutComposer().compose(docOf([long]));
       expect(graph.pages.length, greaterThan(1));
       final first = graph.pages.first.fragments.single as BlockFragment;
@@ -106,14 +139,13 @@ void main() {
 
     test('heading sai maior e listItem sai com marcador e recuo', () {
       final doc = docOf([
-        schema.node('heading', {'level': 1},
-            Fragment.from([schema.text('Título')])),
+        schema.node(
+            'heading', {'level': 1}, Fragment.from([schema.text('Título')])),
         schema.node('listItem', {'kind': 'ordered'},
             Fragment.from([schema.text('item')])),
       ]);
       final graph = LayoutComposer().compose(doc);
-      final fragments =
-          graph.pages.first.fragments.cast<BlockFragment>();
+      final fragments = graph.pages.first.fragments.cast<BlockFragment>();
       expect(fragments[0].lines.first.heightTwips,
           greaterThan(fragments[1].lines.first.heightTwips),
           reason: 'H1 é maior que texto de lista');
@@ -171,21 +203,33 @@ void main() {
       // fragments em páginas consecutivas.
       final rows = <PMNode>[];
       for (var r = 0; r < 60; r++) {
-        rows.add(schema.node('tableRow', {'rowId': 'r$r'}, Fragment.from([
-          schema.node('tableCell', {'cellId': 'a$r'}, Fragment.from([
-            paragraph('célula A da linha $r'),
-          ])),
-          schema.node('tableCell', {'cellId': 'b$r'}, Fragment.from([
-            paragraph('célula B $r'),
-          ])),
-        ])));
+        rows.add(schema.node(
+            'tableRow',
+            {'rowId': 'r$r'},
+            Fragment.from([
+              schema.node(
+                  'tableCell',
+                  {'cellId': 'a$r'},
+                  Fragment.from([
+                    paragraph('célula A da linha $r'),
+                  ])),
+              schema.node(
+                  'tableCell',
+                  {'cellId': 'b$r'},
+                  Fragment.from([
+                    paragraph('célula B $r'),
+                  ])),
+            ])));
       }
-      final table = schema.node('table', {
-        'colWidths': [
-          {'width': '300'},
-          {'width': '300'},
-        ],
-      }, Fragment.from(rows));
+      final table = schema.node(
+          'table',
+          {
+            'colWidths': [
+              {'width': '300'},
+              {'width': '300'},
+            ],
+          },
+          Fragment.from(rows));
       final graph = LayoutComposer().compose(docOf([table]));
       expect(graph.pages.length, greaterThan(1));
       final first = graph.pages.first.fragments.single as TableFragment;
@@ -210,14 +254,18 @@ void main() {
     });
 
     test('face embutida: CID no PDF e medição pela hmtx real', () {
-      final bytes = File('test/assets/fonts/Inter-Regular.ttf')
-          .readAsBytesSync();
+      final bytes =
+          File('test/assets/fonts/Inter-Regular.ttf').readAsBytesSync();
       final fonts = LayoutFontSet([LayoutFontFace('Inter', bytes)]);
       final doc = docOf([
-        schema.node('paragraph', null, Fragment.from([
-          schema.text('Acentuação perfeita — “aspas” e travessão',
-              [schema.marks['font']!.create({'value': 'Inter'})]),
-        ])),
+        schema.node(
+            'paragraph',
+            null,
+            Fragment.from([
+              schema.text('Acentuação perfeita — “aspas” e travessão', [
+                schema.marks['font']!.create({'value': 'Inter'})
+              ]),
+            ])),
       ]);
       // O MESMO conjunto de faces nas duas pontas.
       final graph = LayoutComposer(fonts: fonts).compose(doc);
@@ -241,18 +289,94 @@ void main() {
           .lines
           .first
           .widthTwips;
-      final lineWithout =
-          (without.pages.first.fragments.first as BlockFragment)
-              .lines
-              .first
-              .widthTwips;
+      final lineWithout = (without.pages.first.fragments.first as BlockFragment)
+          .lines
+          .first
+          .widthTwips;
       expect(lineWith, isNot(lineWithout),
           reason: 'métrica da Inter difere da Arial embarcada');
     });
 
+    test('alias OOXML usa a face Calibri fornecida no composer e no PDF', () {
+      final bytes =
+          File('test/assets/fonts/Inter-Regular.ttf').readAsBytesSync();
+      // O programa de teste é Inter, mas a família exposta é Calibri: isso
+      // permite provar a resolução Ecofont -> Calibri sem distribuir Calibri.
+      final fonts = LayoutFontSet([LayoutFontFace('Calibri', bytes)]);
+      final doc = docOf([
+        schema.node(
+          'paragraph',
+          null,
+          Fragment.from([
+            schema.text('Ecofont com face compatível — ação', [
+              schema.marks['font']!
+                  .create({'value': 'Ecofont_Spranq_eco_Sans'}),
+            ]),
+          ]),
+        ),
+      ]);
+
+      final withFace = LayoutComposer(fonts: fonts).compose(doc);
+      final fallback = LayoutComposer().compose(doc);
+      final withWidth = (withFace.pages.first.fragments.first as BlockFragment)
+          .lines
+          .first
+          .widthTwips;
+      final fallbackWidth =
+          (fallback.pages.first.fragments.first as BlockFragment)
+              .lines
+              .first
+              .widthTwips;
+      expect(withWidth, isNot(fallbackWidth));
+
+      final pdf = PageGraphPdfRenderer(fonts: fonts).render(withFace);
+      expect(String.fromCharCodes(pdf), contains('/Identity-H'));
+      expect(
+        PdfReader(pdf).decodedStreams.join('\n'),
+        matches(RegExp(r'(?:<[0-9a-f]+> Tj|\[<[0-9a-f]+>)')),
+      );
+    });
+
+    test('cache compartilhado distingue fallback de face fornecida', () {
+      final bytes =
+          File('test/assets/fonts/Inter-Regular.ttf').readAsBytesSync();
+      final fonts = LayoutFontSet([LayoutFontFace('Inter', bytes)]);
+      final measurements = LayoutMeasurementCache();
+      final doc = docOf([
+        schema.node(
+          'paragraph',
+          null,
+          Fragment.from([
+            schema.text('AVALIAÇÃO tipográfica', [
+              schema.marks['font']!.create({'value': 'Inter'}),
+            ]),
+          ]),
+        ),
+      ]);
+
+      int lineWidth(PageGraph graph) =>
+          (graph.pages.first.fragments.first as BlockFragment)
+              .lines
+              .first
+              .widthTwips;
+
+      final fallbackWidth = lineWidth(
+        LayoutComposer(measurementCache: measurements).compose(doc),
+      );
+      final sharedFaceWidth = lineWidth(
+        LayoutComposer(fonts: fonts, measurementCache: measurements)
+            .compose(doc),
+      );
+      final freshFaceWidth =
+          lineWidth(LayoutComposer(fonts: fonts).compose(doc));
+
+      expect(sharedFaceWidth, freshFaceWidth);
+      expect(sharedFaceWidth, isNot(fallbackWidth));
+    });
+
     test('kerning GPOS: medição ajustada e array TJ no PDF', () {
-      final bytes = File('test/assets/fonts/Inter-Regular.ttf')
-          .readAsBytesSync();
+      final bytes =
+          File('test/assets/fonts/Inter-Regular.ttf').readAsBytesSync();
       final face = LayoutFontFace('Inter', bytes);
       // Um par sabidamente kernado em latino: a soma dos avanços difere da
       // medição com kerning aplicado.
@@ -261,7 +385,7 @@ void main() {
       for (final rune in sample.runes) {
         sumOfAdvances += face.font.advanceWidthOfChar(rune);
       }
-      final measured = face.measureWidthPt(sample, 1000) ;
+      final measured = face.measureWidthPt(sample, 1000);
       expect(measured, isNot(closeTo(sumOfAdvances, 0.5)),
           reason: 'o kerning GPOS tem de ajustar a medição '
               '(soma=$sumOfAdvances medido=$measured)');
@@ -271,10 +395,14 @@ void main() {
       // E o PDF desenha com o array TJ carregando os ajustes.
       final fonts = LayoutFontSet([face]);
       final doc = docOf([
-        schema.node('paragraph', null, Fragment.from([
-          schema.text(sample,
-              [schema.marks['font']!.create({'value': 'Inter'})]),
-        ])),
+        schema.node(
+            'paragraph',
+            null,
+            Fragment.from([
+              schema.text(sample, [
+                schema.marks['font']!.create({'value': 'Inter'})
+              ]),
+            ])),
       ]);
       final graph = LayoutComposer(fonts: fonts).compose(doc);
       final pdf = PageGraphPdfRenderer(fonts: fonts).render(graph);

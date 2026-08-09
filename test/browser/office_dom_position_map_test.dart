@@ -38,8 +38,13 @@ void main() {
   PMNode paragraph(String text) =>
       schema.node('paragraph', null, Fragment.from([schema.text(text)]));
 
-  PageGraph project(PMNode doc, {PageWindow? window}) {
-    final graph = LayoutComposer().compose(doc);
+  PageGraph project(
+    PMNode doc, {
+    PageWindow? window,
+    PMNode? header,
+    PMNode? footer,
+  }) {
+    final graph = LayoutComposer(header: header, footer: footer).compose(doc);
     PageGraphDomRenderer(document: adapter.document, editable: true)
         .render(graph, host, window: window);
     return graph;
@@ -67,9 +72,45 @@ void main() {
     adapter.setSelectionByNodes(textNode, 11, textNode, 11); // em "gama"
 
     final native = adapter.getNativeSelectionRange()!;
-    expect(map.modelPositionAt(native.startContainer, native.startOffset),
-        1 + 11,
+    expect(
+        map.modelPositionAt(native.startContainer, native.startOffset), 1 + 11,
         reason: 'ler a seleção nativa tem de dar a posição do modelo');
+  });
+
+  test('header/footer inertes nunca recebem o caret destinado ao corpo', () {
+    project(
+      docOf([paragraph('abc')]),
+      header: docOf([paragraph('CABEÇALHO MUITO LONGO')]),
+      footer: docOf([paragraph('RODAPÉ MUITO LONGO')]),
+    );
+
+    final bodyCaret = map.domPositionFor(host, 1)!;
+    adapter.setSelectionByNodes(
+      bodyCaret.node,
+      bodyCaret.offset,
+      bodyCaret.node,
+      bodyCaret.offset,
+    );
+    final native = adapter.getNativeSelectionRange()!;
+    final pageContent = host.querySelector('.dq-office-page-content')!;
+    DomNode? current = native.startContainer;
+    var insideBody = false;
+    while (current != null) {
+      if (current == pageContent) insideBody = true;
+      current = current.parentNode;
+    }
+    expect(insideBody, isTrue);
+
+    final headerText = host
+        .querySelector('.dq-office-header')!
+        .querySelector('.dq-office-run')!
+        .firstChild!;
+    final footerText = host
+        .querySelector('.dq-office-footer')!
+        .querySelector('.dq-office-run')!
+        .firstChild!;
+    expect(map.modelPositionAt(headerText, 0), isNull);
+    expect(map.modelPositionAt(footerText, 0), isNull);
   });
 
   test('round-trip com a seleção nativa no meio do caminho', () {
@@ -95,6 +136,51 @@ void main() {
     expect(checked, greaterThan(3));
   });
 
+  test('seleção nativa atravessa atoms inline sem perder posições', () {
+    final block = schema.node(
+      'paragraph',
+      null,
+      Fragment.from([
+        schema.text('A'),
+        schema.node('image', {
+          'src': 'data:image/png;base64,AA==',
+          'width': 20,
+          'height': 20,
+        }),
+        schema.node('opaqueInline', {
+          'insert': {'qname': 'w:bookmarkStart', 'officeXml': '<w:x/>'}
+        }),
+        schema.node('textBox', {
+          'text': 'flutuante',
+          'width': 400,
+          'height': 200,
+          'offsetX': 0,
+          'offsetY': 0,
+        }),
+        schema.text('B'),
+      ]),
+    );
+    project(docOf([block]));
+
+    for (var modelPosition = 1; modelPosition <= 6; modelPosition++) {
+      final dom = map.domPositionFor(host, modelPosition)!;
+      adapter.setSelectionByNodes(dom.node, dom.offset, dom.node, dom.offset);
+      final native = adapter.getNativeSelectionRange()!;
+      expect(
+        map.modelPositionAt(native.startContainer, native.startOffset),
+        modelPosition,
+        reason: 'caret nativo derivou na posição $modelPosition',
+      );
+    }
+
+    final from = map.domPositionFor(host, 2)!;
+    final to = map.domPositionFor(host, 5)!;
+    adapter.setSelectionByNodes(from.node, from.offset, to.node, to.offset);
+    final native = adapter.getNativeSelectionRange()!;
+    expect(map.modelPositionAt(native.startContainer, native.startOffset), 2);
+    expect(map.modelPositionAt(native.endContainer, native.endOffset), 5);
+  });
+
   test('o caret sabe em que página está, e a geometria concorda', () {
     final blocks = [
       for (var i = 0; i < 200; i++) paragraph('Parágrafo $i do documento.')
@@ -115,8 +201,7 @@ void main() {
     expect(top1, greaterThan(top0));
   });
 
-  test('hit-testing: o ponto onde o usuário clica vira posição do modelo',
-      () {
+  test('hit-testing: o ponto onde o usuário clica vira posição do modelo', () {
     project(docOf([paragraph('alvo do clique no meio da linha')]));
 
     final run = host.querySelector('.dq-office-run')!;

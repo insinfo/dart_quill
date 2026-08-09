@@ -75,8 +75,8 @@ void main() {
     final graph = LayoutComposer().compose(docOf([paragraph('editável')]));
     renderer(editable: true).render(graph, HtmlDomElement(hostElement));
 
-    final content =
-        hostElement.querySelector('.dq-office-page-content')! as web.HTMLElement;
+    final content = hostElement.querySelector('.dq-office-page-content')!
+        as web.HTMLElement;
     expect(content.isContentEditable, isTrue,
         reason: 'o browser tem de reconhecer a superfície como editável');
     content.focus();
@@ -126,5 +126,38 @@ void main() {
       expect(className, isNot(contains('ql-')),
           reason: 'toda classe da projeção Office usa o prefixo próprio');
     }
+  });
+
+  test('fonte Office ausente não cai no serif padrão do browser', () {
+    PMNode withFont(String text, String family) => schema.node(
+          'paragraph',
+          null,
+          Fragment.from([
+            schema.text(text, [
+              schema.marks['font']!.create({'value': family}),
+            ]),
+          ]),
+        );
+    const sample = 'iiii WWWW 0123456789';
+    final graph = LayoutComposer().compose(docOf([
+      withFont('sem serifa', 'Ecofont_Spranq_eco_Sans'),
+      withFont(sample, '__DQ_MISSING_OFFICE_FONT_9F2C__'),
+      withFont(sample, 'Arial'),
+    ]));
+    renderer().render(graph, HtmlDomElement(hostElement));
+
+    final runs = hostElement.querySelectorAll('.dq-office-run');
+    expect(runs.length, 3);
+    final run = runs.item(0)! as web.HTMLElement;
+    expect(
+      run.style.fontFamily.replaceAll(' ', ''),
+      'Ecofont_Spranq_eco_Sans,calibri,carlito,arial,sans-serif',
+    );
+    final missingWidth =
+        (runs.item(1)! as web.HTMLElement).getBoundingClientRect().width;
+    final arialWidth =
+        (runs.item(2)! as web.HTMLElement).getBoundingClientRect().width;
+    expect(missingWidth, closeTo(arialWidth, 0.25),
+        reason: 'fallback ausente precisa pintar com a mesma Arial medida');
   });
 }

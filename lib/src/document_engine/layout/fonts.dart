@@ -10,6 +10,7 @@ library;
 
 import 'dart:typed_data';
 
+import '../../office/document/fonts/font_registry.dart';
 import '../../office/document/fonts/truetype.dart';
 
 /// Codificador de texto→hex CID (o `encodeText` da fonte embutida).
@@ -66,8 +67,7 @@ class LayoutFontFace {
     for (var i = 0; i < runes.length; i++) {
       buffer.write(String.fromCharCode(runes[i]));
       final next = i + 1 < runes.length ? runes[i + 1] : null;
-      final kern =
-          next == null ? 0 : font.kerningBetweenChars(runes[i], next);
+      final kern = next == null ? 0 : font.kerningBetweenChars(runes[i], next);
       if (kern != 0) {
         pieces.add(ShapedPiece(encode(buffer.toString()), -kern));
         buffer.clear();
@@ -79,25 +79,43 @@ class LayoutFontFace {
     return pieces;
   }
 
-  double ascentPt(double sizePt) =>
-      font.ascender * sizePt / font.unitsPerEm;
+  double ascentPt(double sizePt) => font.ascender * sizePt / font.unitsPerEm;
 
-  double descentPt(double sizePt) =>
-      -font.descender * sizePt / font.unitsPerEm;
+  double descentPt(double sizePt) => -font.descender * sizePt / font.unitsPerEm;
+
+  double lineGapPt(double sizePt) => font.lineGap * sizePt / font.unitsPerEm;
 }
 
 /// Resolve a face para (família, bold, itálico) — a mesma política do
 /// exportador linear: casamento exato, senão a regular da família (o PDF
 /// sintetiza menos que o browser, então a regular é o fallback honesto).
 class LayoutFontSet {
-  LayoutFontSet(this.faces);
+  const LayoutFontSet(this.faces);
 
   final List<LayoutFontFace> faces;
 
   bool get isEmpty => faces.isEmpty;
 
-  LayoutFontFace? faceFor(String family, {bool bold = false, bool italic = false}) {
-    final key = family.trim().toLowerCase();
+  LayoutFontFace? faceFor(String family,
+      {bool bold = false, bool italic = false}) {
+    final candidates = <String>[
+      family,
+      ...FontRegistry.instance.fallbackFamilyStack(family),
+    ];
+    final visited = <String>{};
+    for (final candidate in candidates) {
+      final key = candidate.trim().toLowerCase();
+      if (!visited.add(key)) continue;
+      final face = _faceForExactFamily(key, bold: bold, italic: italic);
+      if (face != null) return face;
+    }
+    return null;
+  }
+
+  /// Exact-family lookup kept separate so an OOXML alias is tried only after
+  /// every requested weight/style fallback for the original family.
+  LayoutFontFace? _faceForExactFamily(String key,
+      {required bool bold, required bool italic}) {
     LayoutFontFace? regular;
     for (final face in faces) {
       if (face.family.trim().toLowerCase() != key) continue;

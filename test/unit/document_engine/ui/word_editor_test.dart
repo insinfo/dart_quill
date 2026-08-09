@@ -17,6 +17,7 @@ import 'dart:typed_data';
 import 'package:test/test.dart';
 
 import 'package:dart_quill/dart_quill_office.dart';
+import 'package:dart_quill/src/office/document/zip/zip_archive.dart';
 import 'package:dart_quill/src/platform/dom.dart';
 
 import '../../../support/fake_dom.dart';
@@ -71,6 +72,25 @@ void main() {
 
   int count(String selector) => host.querySelectorAll(selector).length;
 
+  Future<void> settleAsyncFileOpen(bool Function() completed) async {
+    // Documentos grandes criam uma quantidade variável de fatias
+    // cooperativas. Esperar a mudança observável evita acoplar o teste ao
+    // número de yields interno do importador.
+    for (var i = 0; i < 500; i++) {
+      await Future<void>.delayed(Duration.zero);
+      if (completed()) return;
+    }
+    throw StateError('abertura DOCX assíncrona não terminou');
+  }
+
+  Future<void> settleAsyncDocxExport(FakeDomAdapter fake) async {
+    for (var i = 0; i < 500; i++) {
+      await Future<void>.delayed(Duration.zero);
+      if (fake.downloads.isNotEmpty) return;
+    }
+    throw StateError('exportação DOCX assíncrona não terminou');
+  }
+
   group('modo word', () {
     test('a biblioteca monta o chrome INTEIRO: ribbon, régua, status', () {
       mount();
@@ -107,6 +127,28 @@ void main() {
       expect(
           status.textContent, contains('de ${editor.pageGraph.pages.length}'));
       expect(status.textContent, contains('Página 1'));
+    });
+
+    test('a barra de status acompanha a página visível no scroll', () {
+      final editor = mount(blocks: 200);
+      expect(editor.pageGraph.pages.length, greaterThan(4));
+      final canvas = host.querySelector('.dq-office-canvas') as FakeDomElement;
+      final projectedPageHeightPx =
+          editor.pageGraph.pages.first.setup.heightTwips / 20 * 96 / 72;
+      final renderedPageHeightPx = (projectedPageHeightPx * 100).round() / 100;
+      const targetPageIndex = 3;
+      final targetOffset = 26 + targetPageIndex * (renderedPageHeightPx + 26);
+      canvas.scrollTop = (targetOffset - 2).floor();
+      canvas.dispatchEvent('scroll', FakeDomEvent('scroll', canvas));
+      var status = host.querySelector('.dq-office-statusbar')!;
+      expect(status.textContent, contains('Página 3 de'),
+          reason: 'antes da borda ainda vale a página anterior');
+
+      canvas.scrollTop = targetOffset.floor();
+      canvas.dispatchEvent('scroll', FakeDomEvent('scroll', canvas));
+
+      status = host.querySelector('.dq-office-statusbar')!;
+      expect(status.textContent, contains('Página 4 de'));
     });
 
     test('o botão da ribbon roda o MESMO comando do atalho', () {
@@ -405,6 +447,19 @@ void main() {
     // Numerada: troca o tipo direto.
     click(byTitle('Lista numerada'));
     expect(editor.state.doc.child(0).attrs['kind'], 'ordered');
+
+    // A lista da ribbon precisa continuar sendo lista no arquivo Word, não
+    // apenas um marcador desenhado pelo compositor.
+    final reopened = PMNode.fromJSON(
+      schema,
+      OfficeDocxCodec(schema: schema).import(editor.exportDocx()).snapshot.body,
+    );
+    expect(reopened.child(0).type.name, 'listItem');
+    expect(reopened.child(0).attrs['kind'], 'ordered');
+    expect(
+      ((reopened.child(0).attrs['word'] as Map)['numPr'] as Map)['numId'],
+      isNot(0),
+    );
   });
 
   group('aba Inserir', () {
@@ -518,13 +573,98 @@ void main() {
     void click(DomElement el) => (el as FakeDomElement)
         .dispatchEvent('click', FakeDomMouseEvent(type: 'click', target: el));
 
-    test('Exportar PDF baixa as MESMAS páginas da tela', () {
+    String documentXmlOf(List<int> bytes) {
+      final archive = ZipArchive.decodeBytes(Uint8List.fromList(bytes));
+      final entry = archive.entries
+          .firstWhere((entry) => entry.name == 'word/document.xml');
+      return utf8.decode(entry.content);
+    }
+
+    const renderedHintSetup = PageSetupTwips(
+      widthTwips: 5000,
+      heightTwips: 1000,
+      marginTopTwips: 0,
+      marginRightTwips: 0,
+      marginBottomTwips: 0,
+      marginLeftTwips: 0,
+    );
+
+    Uint8List renderedHintDocx() {
+      final marker = schema.node('opaqueInline', {
+        'insert': {
+          'qname': 'w:lastRenderedPageBreak',
+          'officeXml': '<w:lastRenderedPageBreak/>',
+          'runContent': true,
+        }
+      });
+      final sourceDoc = schema.node(
+        'doc',
+        null,
+        Fragment.from([
+          schema.node(
+            'paragraph',
+            {
+              'style': const {'lineTwips': 200, 'lineRule': 'exact'},
+            },
+            Fragment.from([
+              schema.text('antes'),
+              marker,
+              schema.text('depois'),
+            ]),
+          ),
+        ]),
+      );
+      final bytes = OfficeDocxCodec(schema: schema)
+          .exportDocument(sourceDoc, pageSetup: renderedHintSetup);
+      final archive = ZipArchive.decodeBytes(bytes);
+      archive.setFile(
+        'docProps/app.xml',
+        utf8.encode(
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+          '<Properties xmlns="http://schemas.openxmlformats.org/'
+          'officeDocument/2006/extended-properties">'
+          '<Application>dart_quill test</Application><Pages>2</Pages>'
+          '</Properties>',
+        ),
+      );
+      return archive.encode();
+    }
+
+    void openRenderedHintDocx(OfficeWordEditor current, Uint8List sourceBytes) {
+      final imported = OfficeDocxCodec(schema: schema).import(sourceBytes);
+      current.openDocument(
+        PMNode.fromJSON(schema, imported.snapshot.body),
+        setup: OfficeDocxCodec.pageSetupOf(imported.snapshot),
+        sections: OfficeDocxCodec.pageSetupsOf(imported.snapshot),
+        sourceDocxBytes: sourceBytes,
+        sourceMap: imported.snapshot.sourceMap,
+        sourceFileName: 'hinted.docx',
+      );
+    }
+
+    ({OfficeWordEditor current, Uint8List sourceBytes})
+        mountRenderedHintDocx() {
+      final current = OfficeWordEditor.mount(
+        host: host,
+        adapter: adapter,
+        document: docOf(1),
+        schema: schema,
+        options: const OfficeWordEditorOptions(),
+      );
+      editor = current;
+      final sourceBytes = renderedHintDocx();
+      openRenderedHintDocx(current, sourceBytes);
+      return (current: current, sourceBytes: sourceBytes);
+    }
+
+    test('Exportar PDF baixa as MESMAS páginas da tela', () async {
       final editor = mount(blocks: 120);
       final fake = adapter as FakeDomAdapter;
       fake.downloads.clear();
 
       click(tab('Arquivo'));
       click(button('PDF'));
+      await settleAsyncDocxExport(fake);
 
       expect(fake.downloads, hasLength(1));
       final download = fake.downloads.single;
@@ -534,13 +674,14 @@ void main() {
           editor.pageGraph.pages.length);
     });
 
-    test('Exportar DOCX gera um pacote que REABRE com o mesmo texto', () {
+    test('Exportar DOCX gera um pacote que REABRE com o mesmo texto', () async {
       final editor = mount(blocks: 5);
       final fake = adapter as FakeDomAdapter;
       fake.downloads.clear();
 
       click(tab('Arquivo'));
       click(buttonByTitle('Exportar DOCX'));
+      await settleAsyncDocxExport(fake);
 
       final download = fake.downloads.single;
       expect(download.filename, endsWith('.docx'));
@@ -554,6 +695,149 @@ void main() {
       expect(doc.textBetween(0, doc.content.size, blockSeparator: ' '),
           contains('Parágrafo 0'));
       expect(doc.childCount, editor.state.doc.childCount);
+    });
+
+    test('documento novo exporta e reabre com o setup corrente', () {
+      final editor = mount(blocks: 5);
+      const setup = PageSetupTwips(
+        widthTwips: 15840,
+        heightTwips: 12240,
+        marginTopTwips: 700,
+        marginRightTwips: 800,
+        marginBottomTwips: 900,
+        marginLeftTwips: 1000,
+      );
+
+      editor.setPageSetup(setup);
+      final snapshot =
+          OfficeDocxCodec(schema: schema).import(editor.exportDocx()).snapshot;
+      final reopened = OfficeDocxCodec.pageSetupOf(snapshot);
+
+      expect(reopened.widthTwips, setup.widthTwips);
+      expect(reopened.heightTwips, setup.heightTwips);
+      expect(reopened.marginTopTwips, setup.marginTopTwips);
+      expect(reopened.marginRightTwips, setup.marginRightTwips);
+      expect(reopened.marginBottomTwips, setup.marginBottomTwips);
+      expect(reopened.marginLeftTwips, setup.marginLeftTwips);
+    });
+
+    test('DOCX aberto só regenera sectPr depois de alterar Layout', () {
+      final editor = mount(blocks: 5);
+      final codec = OfficeDocxCodec(schema: schema);
+      const sourceSetup = PageSetupTwips(
+        widthTwips: 12240,
+        heightTwips: 15840,
+        marginTopTwips: 600,
+        marginRightTwips: 700,
+        marginBottomTwips: 800,
+        marginLeftTwips: 900,
+      );
+      final sourceBytes = codec.exportDocument(
+        schema.node(
+            'doc', null, Fragment.from([paragraph('Documento importado')])),
+        pageSetup: sourceSetup,
+      );
+      final imported = codec.import(sourceBytes);
+      final importedDoc = PMNode.fromJSON(schema, imported.snapshot.body);
+
+      editor.openDocument(
+        importedDoc,
+        setup: OfficeDocxCodec.pageSetupOf(imported.snapshot),
+        sections: OfficeDocxCodec.pageSetupsOf(imported.snapshot),
+        sourceDocxBytes: sourceBytes,
+        sourceMap: imported.snapshot.sourceMap,
+      );
+      expect(documentXmlOf(editor.exportDocx()), documentXmlOf(sourceBytes),
+          reason: 'abrir e salvar sem usar Layout preserva o sectPr original');
+
+      const changed = PageSetupTwips(
+        widthTwips: 16838,
+        heightTwips: 11906,
+        marginTopTwips: 1000,
+        marginRightTwips: 1100,
+        marginBottomTwips: 1200,
+        marginLeftTwips: 1300,
+      );
+      editor.setPageSetup(changed);
+      final saved = editor.exportDocx();
+      final reopened =
+          OfficeDocxCodec.pageSetupOf(codec.import(saved).snapshot);
+
+      expect(documentXmlOf(saved), isNot(documentXmlOf(sourceBytes)));
+      expect(reopened.widthTwips, changed.widthTwips);
+      expect(reopened.heightTwips, changed.heightTwips);
+      expect(reopened.marginTopTwips, changed.marginTopTwips);
+      expect(reopened.marginRightTwips, changed.marginRightTwips);
+      expect(reopened.marginBottomTwips, changed.marginBottomTwips);
+      expect(reopened.marginLeftTwips, changed.marginLeftTwips);
+    });
+
+    test('save e zoom não reativam hints depois de editar só formatação',
+        () async {
+      final session = mountRenderedHintDocx();
+      final current = session.current;
+      final fake = adapter as FakeDomAdapter;
+      fake.downloads.clear();
+
+      expect(current.pageGraph.pages, hasLength(2));
+      expect(current.pageGraph.honoredRenderedPageBreakHints, isTrue);
+      expect(current.view.renderedPageBreakHintsValid, isTrue);
+
+      final bold = schema.marks['bold']!.create();
+      current.dispatch(current.state.tr..addMark(1, 6, bold));
+      expect(current.pageGraph.pages, hasLength(1));
+      expect(current.pageGraph.honoredRenderedPageBreakHints, isFalse);
+      expect(current.view.renderedPageBreakHintsValid, isFalse);
+      expect(current.isDirty, isTrue);
+
+      await current.saveDocx();
+      expect(current.isDirty, isFalse);
+      expect(fake.downloads, hasLength(1));
+      expect(
+        RegExp(r'<w:lastRenderedPageBreak\b')
+            .allMatches(documentXmlOf(fake.downloads.single.bytes))
+            .length,
+        0,
+      );
+
+      current.setZoom(1.5);
+      expect(current.pageGraph.pages, hasLength(1));
+      expect(current.pageGraph.honoredRenderedPageBreakHints, isFalse,
+          reason: 'remount do zoom não pode ressuscitar o cache salvo antigo');
+      expect(current.view.renderedPageBreakHintsValid, isFalse);
+
+      openRenderedHintDocx(current, session.sourceBytes);
+      expect(current.pageGraph.pages, hasLength(2));
+      expect(current.pageGraph.honoredRenderedPageBreakHints, isTrue,
+          reason: 'somente abrir outro DOCX inicia um novo ciclo de hints');
+      expect(current.view.renderedPageBreakHintsValid, isTrue);
+    });
+
+    test('alterar papel invalida hints na tela e no DOCX salvo', () {
+      final session = mountRenderedHintDocx();
+      final current = session.current;
+
+      expect(current.pageGraph.pages, hasLength(2));
+      expect(current.pageGraph.honoredRenderedPageBreakHints, isTrue);
+
+      current.setPageSetup(const PageSetupTwips(
+        widthTwips: 5000,
+        heightTwips: 2000,
+        marginTopTwips: 0,
+        marginRightTwips: 0,
+        marginBottomTwips: 0,
+        marginLeftTwips: 0,
+      ));
+
+      expect(current.pageGraph.pages, hasLength(1));
+      expect(current.pageGraph.honoredRenderedPageBreakHints, isFalse);
+      expect(current.view.renderedPageBreakHintsValid, isFalse);
+      expect(
+        RegExp(r'<w:lastRenderedPageBreak\b')
+            .allMatches(documentXmlOf(current.exportDocx()))
+            .length,
+        0,
+      );
     });
 
     test('Exportar Delta gera JSON Quill que reimporta', () {
@@ -591,7 +875,7 @@ void main() {
       expect(editor.state.doc.textContent, contains('Documento aberto'));
     });
 
-    test('Abrir DOCX substitui conteúdo e geometria', () {
+    test('Abrir DOCX substitui conteúdo e geometria', () async {
       final editor = mount(blocks: 5);
       final fake = adapter as FakeDomAdapter;
       fake.filePicks.clear();
@@ -603,10 +887,157 @@ void main() {
       click(buttonByTitle('Abrir arquivo DOCX'));
       final request = fake.filePicks.single;
       expect(request.accept, '.docx');
+      final beforeOpen = editor.state.doc;
       request.onFile('novo.docx', bytes);
+      await settleAsyncFileOpen(() => !identical(editor.state.doc, beforeOpen));
 
       expect(editor.state.doc.textContent, contains('Conteúdo vindo do DOCX'));
       expect(editor.pageGraph.pages, isNotEmpty);
+    });
+
+    test('TR aberto mantém o nome original em DOCX, PDF e Delta', () async {
+      final current = OfficeWordEditor.mount(
+        host: host,
+        adapter: adapter,
+        document: docOf(5),
+        schema: schema,
+        options: const OfficeWordEditorOptions(
+          title: 'Estudo Técnico Preliminar',
+          showTitleBar: true,
+        ),
+      );
+      editor = current;
+      final fake = adapter as FakeDomAdapter;
+      fake.filePicks.clear();
+      fake.downloads.clear();
+      final bytes = OfficeDocxCodec(schema: schema).exportDocument(
+        schema.node('doc', null, Fragment.from([paragraph('Conteúdo do TR')])),
+      );
+      const originalName =
+          'PGCTIC1_-_TR_-_SISTEMA_GESTAO_PUBLICA__Recuperação_Automática_.docx';
+      const stem =
+          'PGCTIC1_-_TR_-_SISTEMA_GESTAO_PUBLICA__Recuperação_Automática_';
+
+      click(tab('Arquivo'));
+      click(buttonByTitle('Abrir arquivo DOCX'));
+      final beforeOpen = current.state.doc;
+      fake.filePicks.single.onFile(originalName, bytes);
+      await settleAsyncFileOpen(
+          () => !identical(current.state.doc, beforeOpen));
+
+      expect(current.documentBaseName, stem);
+      expect(host.querySelector('.dq-office-doc-title')!.textContent, stem,
+          reason: 'o título inicial do ETP não pode vazar para o TR aberto');
+
+      click(button('PDF'));
+      await settleAsyncDocxExport(fake);
+      expect(fake.downloads.single.filename, '$stem.pdf');
+
+      fake.downloads.clear();
+      click(buttonByTitle('Exportar Delta Quill (.json)'));
+      expect(fake.downloads.single.filename, '$stem.json');
+
+      fake.downloads.clear();
+      click(buttonByTitle('Exportar DOCX'));
+      await settleAsyncDocxExport(fake);
+      expect(fake.downloads.single.filename, originalName,
+          reason: 'salvar TR não pode usar o nome do ETP da demonstração');
+    });
+
+    test('Ctrl+S impede o save do navegador e baixa DOCX assíncrono', () async {
+      final current = OfficeWordEditor.mount(
+        host: host,
+        adapter: adapter,
+        document: docOf(5),
+        schema: schema,
+        options: const OfficeWordEditorOptions(title: 'Contrato novo.docx'),
+      );
+      editor = current;
+      final fake = adapter as FakeDomAdapter;
+      fake.downloads.clear();
+
+      current.dispatch(current.state.tr..insertText('SALVO POR CTRL S ', 1));
+      expect(current.isDirty, isTrue);
+      expect(host.getAttribute('data-dq-office-dirty'), 'true');
+
+      final shortcut = FakeDomKeyboardEvent(
+        type: 'keydown',
+        target: host,
+        key: 's',
+        ctrlKey: true,
+      );
+      (host as FakeDomElement).dispatchEvent('keydown', shortcut);
+      expect(shortcut.defaultPrevented, isTrue,
+          reason: 'Ctrl+S não pode abrir o diálogo de salvar página');
+      await settleAsyncDocxExport(fake);
+
+      final download = fake.downloads.single;
+      expect(download.filename, 'Contrato novo.docx',
+          reason: 'options.title continua sendo o fallback de documento novo');
+      expect(current.isDirty, isFalse);
+      expect(host.getAttribute('data-dq-office-dirty'), 'false');
+      final reopened = OfficeDocxCodec(schema: schema)
+          .import(Uint8List.fromList(download.bytes));
+      final saved = PMNode.fromJSON(schema, reopened.snapshot.body);
+      expect(saved.textContent, contains('SALVO POR CTRL S'));
+    });
+
+    test('DOCX importado é baixado pela rota preservadora', () async {
+      final editor = mount(blocks: 5);
+      final fake = adapter as FakeDomAdapter;
+      fake.filePicks.clear();
+      fake.downloads.clear();
+      final original =
+          File('test/assets/docx/etp_corpus.docx').readAsBytesSync();
+
+      click(tab('Arquivo'));
+      click(buttonByTitle('Abrir arquivo DOCX'));
+      final beforeOpen = editor.state.doc;
+      fake.filePicks.single.onFile('etp.docx', original);
+      await settleAsyncFileOpen(() => !identical(editor.state.doc, beforeOpen));
+
+      // Uma edição real na árvore força o patch do parágrafo, enquanto as
+      // tabelas e as demais partes de origem precisam continuar no pacote.
+      editor.dispatch(editor.state.tr..insertText('MARCADOR SALVO ', 1));
+      click(buttonByTitle('Exportar DOCX'));
+      await settleAsyncDocxExport(fake);
+
+      final before = documentXmlOf(original);
+      final after = documentXmlOf(fake.downloads.single.bytes);
+      expect(after, contains('MARCADOR SALVO'));
+      expect(
+          '<w:tbl'.allMatches(after).length, '<w:tbl'.allMatches(before).length,
+          reason: 'a exportação da UI não pode descartar tabelas importadas');
+    });
+
+    test('todas as seções abertas chegam ao paginador', () {
+      final editor = mount(blocks: 5);
+      const portrait = PageSetupTwips(widthTwips: 10000, heightTwips: 16000);
+      const landscape = PageSetupTwips(widthTwips: 16000, heightTwips: 10000);
+      final endOfFirstSection = schema.node(
+        'paragraph',
+        {
+          'style': {'sectionBreak': true}
+        },
+        Fragment.from([schema.text('Fim da primeira seção')]),
+      );
+      final doc = schema.node(
+        'doc',
+        null,
+        Fragment.from([
+          endOfFirstSection,
+          paragraph('Conteúdo da segunda seção'),
+        ]),
+      );
+
+      editor.openDocument(
+        doc,
+        setup: portrait,
+        sections: const [portrait, landscape],
+      );
+
+      expect(editor.pageGraph.pages.first.setup, portrait);
+      expect(editor.pageGraph.pages.last.setup, landscape);
     });
   });
 

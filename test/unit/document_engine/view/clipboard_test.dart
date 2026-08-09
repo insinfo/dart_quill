@@ -19,8 +19,8 @@ void main() {
   final schema = officeQuillSchema();
   const clipboard = OfficeClipboard();
 
-  PMNode paragraph(String text, [List<Mark>? marks]) => schema.node(
-      'paragraph', null, Fragment.from([schema.text(text, marks)]));
+  PMNode paragraph(String text, [List<Mark>? marks]) =>
+      schema.node('paragraph', null, Fragment.from([schema.text(text, marks)]));
 
   PMNode docOf(List<PMNode> blocks) =>
       schema.node('doc', null, Fragment.from(blocks));
@@ -35,21 +35,31 @@ void main() {
 
     test('marcas viram tags reconhecíveis por outros programas', () {
       final bold = schema.marks['bold']!.create();
-      final slice =
-          Slice(Fragment.from([paragraph('forte', [bold])]), 0, 0);
+      final slice = Slice(
+          Fragment.from([
+            paragraph('forte', [bold])
+          ]),
+          0,
+          0);
       expect(clipboard.serialize(slice).html, contains('<strong>forte'));
     });
 
     test('link leva o href', () {
       final link = schema.marks['link']!.create({'href': 'https://x.dev'});
-      final slice = Slice(Fragment.from([paragraph('ir', [link])]), 0, 0);
+      final slice = Slice(
+          Fragment.from([
+            paragraph('ir', [link])
+          ]),
+          0,
+          0);
       expect(clipboard.serialize(slice).html, contains('href="https://x.dev"'));
     });
 
     test('heading vira h1..h6', () {
       final slice = Slice(
           Fragment.from([
-            schema.node('heading', {'level': 2}, Fragment.from([schema.text('t')]))
+            schema.node(
+                'heading', {'level': 2}, Fragment.from([schema.text('t')]))
           ]),
           0,
           0);
@@ -64,8 +74,8 @@ void main() {
     });
 
     test('vários blocos viram várias linhas no texto puro', () {
-      final slice = Slice(
-          Fragment.from([paragraph('um'), paragraph('dois')]), 0, 0);
+      final slice =
+          Slice(Fragment.from([paragraph('um'), paragraph('dois')]), 0, 0);
       expect(clipboard.serialize(slice).text, 'um\ndois');
     });
   });
@@ -78,8 +88,8 @@ void main() {
     }
 
     test('bloco inteiro volta idêntico', () {
-      final slice = Slice(
-          Fragment.from([paragraph('alpha'), paragraph('beta')]), 0, 0);
+      final slice =
+          Slice(Fragment.from([paragraph('alpha'), paragraph('beta')]), 0, 0);
       expect(roundTrip(slice).toJSON(), slice.toJSON());
     });
 
@@ -119,8 +129,8 @@ void main() {
     test('atributos de bloco sobrevivem', () {
       final slice = Slice(
           Fragment.from([
-            schema.node('heading', {'level': 3},
-                Fragment.from([schema.text('titulo')]))
+            schema.node(
+                'heading', {'level': 3}, Fragment.from([schema.text('titulo')]))
           ]),
           0,
           0);
@@ -225,8 +235,8 @@ void main() {
       host.remove();
     });
 
-    OfficeEditorView mount(List<PMNode> blocks) => view =
-        OfficeEditorView.withExtensions(
+    OfficeEditorView mount(List<PMNode> blocks) =>
+        view = OfficeEditorView.withExtensions(
             host: host,
             doc: docOf(blocks),
             adapter: adapter,
@@ -242,13 +252,44 @@ void main() {
 
     FakeDomClipboardEvent fire(String type, {FakeDomDataTransfer? data}) {
       final event = FakeDomClipboardEvent(
-          type: type, target: host, clipboardData: data ?? FakeDomDataTransfer());
+          type: type,
+          target: host,
+          clipboardData: data ?? FakeDomDataTransfer());
       (host as FakeDomElement).dispatchEvent(type, event);
       return event;
     }
 
     String textOf(OfficeEditorView view) => view.state.doc
         .textBetween(0, view.state.doc.content.size, blockSeparator: ' ');
+
+    PMNode twoCellTable() {
+      PMNode cell(String text) => schema.node(
+            'tableCell',
+            null,
+            Fragment.from([paragraph(text)]),
+          );
+      return schema.node(
+        'table',
+        null,
+        Fragment.from([
+          schema.node(
+            'tableRow',
+            null,
+            Fragment.from([cell('alpha'), cell('beta')]),
+          ),
+        ]),
+      );
+    }
+
+    List<int> cellTextStarts(PMNode doc) {
+      final starts = <int>[];
+      doc.descendants((node, position, parent, index) {
+        if (node.type.name != 'tableCell') return true;
+        starts.add(position + 2);
+        return false;
+      });
+      return starts;
+    }
 
     test('copiar escreve texto e HTML na área de transferência', () {
       mount([paragraph('copie isto')]);
@@ -275,6 +316,21 @@ void main() {
 
       expect(data.getData('text/plain'), 'um ');
       expect(textOf(view), 'dois');
+    });
+
+    test('recortar seleção entre células é cancelado sem apagar estrutura', () {
+      final view = mount([twoCellTable()]);
+      final starts = cellTextStarts(view.state.doc);
+      select(starts.first + 1, starts.last + 1);
+      final before = view.state.doc;
+      final data = FakeDomDataTransfer();
+
+      final event = fire('cut', data: data);
+
+      expect(event.defaultPrevented, isTrue);
+      expect(view.state.doc.eq(before), isTrue);
+      expect(data.getData('text/plain') ?? '', isEmpty);
+      expect(view.state.doc.child(0).child(0).childCount, 2);
     });
 
     test('copiar sem seleção não cancela o evento', () {
@@ -328,6 +384,21 @@ void main() {
       final data = FakeDomDataTransfer()..setData('text/plain', 'X');
       fire('paste', data: data);
       expect(textOf(view), 'um X tres');
+    });
+
+    test('colar sobre seleção entre células é cancelado sem substituir tabela',
+        () {
+      final view = mount([twoCellTable()]);
+      final starts = cellTextStarts(view.state.doc);
+      select(starts.first + 1, starts.last + 1);
+      final before = view.state.doc;
+      final data = FakeDomDataTransfer()..setData('text/plain', 'X');
+
+      final event = fire('paste', data: data);
+
+      expect(event.defaultPrevented, isTrue);
+      expect(view.state.doc.eq(before), isTrue);
+      expect(view.state.doc.child(0).child(0).childCount, 2);
     });
 
     test('colar entra no histórico e o undo desfaz', () {

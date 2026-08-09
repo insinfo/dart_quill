@@ -69,14 +69,47 @@ class OfficeDomReconciler {
     final block = _blockOf(node);
     if (block == null || !_contains(host, block)) return null;
     final docPos = int.tryParse(block.getAttribute('data-doc-pos') ?? '');
-    if (docPos == null) return null;
+    if (docPos == null || docPos < 1) return null;
 
-    final domText = textOfBlock(block);
-    final modelText = _modelTextAt(state.doc, docPos);
+    // Um mesmo parágrafo pode ter vários fragmentos DOM, inclusive em
+    // páginas diferentes. O IME escreve dentro de UMA linha projetada; usar
+    // textContent do bloco e compará-lo com o parágrafo PM inteiro apagaria
+    // tudo que ficou nas páginas anteriores/seguintes.
+    final line = _lineOf(node, block);
+    if (line == null) return null;
+    final charStart = int.tryParse(line.getAttribute('data-char-start') ?? '');
+    final charEnd = int.tryParse(line.getAttribute('data-char-end') ?? '');
+    if (charStart == null ||
+        charEnd == null ||
+        charStart < 0 ||
+        charEnd < charStart) {
+      return null;
+    }
+
+    final domText = textOfProjectedLine(line);
+    final modelText = _modelTextAt(
+      state.doc,
+      docPos,
+      charStart: charStart,
+      charEnd: charEnd,
+    );
     if (modelText == null || domText == modelText) return null;
 
-    final diff = diffText(modelText, domText, docPos);
+    final rangeStart = docPos + charStart;
+    final diff = diffText(modelText, domText, rangeStart);
     if (diff.isEmpty) return null;
+    final localFrom = diff.from - rangeStart;
+    final localTo = diff.to - rangeStart;
+    if (localFrom < 0 || localTo < localFrom || localTo > modelText.length) {
+      return null;
+    }
+    // Atoms inline não editáveis são sentinelas de alinhamento, não texto
+    // que o IME possa materializar ou apagar. Se o diff os tocar, a opção
+    // segura é reprojetar o modelo canônico.
+    if (diff.text.contains(_modelAtom) ||
+        modelText.substring(localFrom, localTo).contains(_modelAtom)) {
+      return null;
+    }
     return state.tr..insertText(diff.text, diff.from, diff.to);
   }
 
@@ -86,22 +119,57 @@ class OfficeDomReconciler {
   /// faria o diff "descobrir" um texto que o documento nunca teve.
   String textOfBlock(DomElement block) {
     final buffer = StringBuffer();
-    _collectText(block, buffer);
+    for (final line in _linesIn(block)) {
+      _collectModelText(line, buffer);
+    }
     return buffer.toString();
   }
 
-  void _collectText(DomNode node, StringBuffer buffer) {
+  /// Texto lógico de uma linha: somente caracteres que têm posição no PM.
+  /// Hífens discricionários e caixas flutuantes são projeções visuais;
+  /// atoms reais usam uma sentinela de um code unit para preservar offsets.
+  String textOfProjectedLine(DomElement line) {
+    final buffer = StringBuffer();
+    _collectModelText(line, buffer);
+    return buffer.toString();
+  }
+
+  static const String _modelAtom = '\u{fffc}';
+
+  void _collectModelText(DomNode node, StringBuffer buffer) {
     if (node is DomText) {
       buffer.write(node.data);
       return;
     }
-    if (node is DomElement &&
-        node.classes.contains('$officeCssPrefix-marker')) {
-      return;
+    if (node is DomElement) {
+      final declaredLength =
+          int.tryParse(node.getAttribute('data-model-length') ?? '');
+      if (declaredLength == 0 ||
+          node.classes.contains('$officeCssPrefix-marker') ||
+          node.classes.contains('$officeCssPrefix-discretionary-hyphen') ||
+          node.classes.contains('$officeCssPrefix-text-box')) {
+        return;
+      }
+      if (node.getAttribute('contenteditable') == 'false') {
+        if (declaredLength != null && declaredLength > 0) {
+          for (var i = 0; i < declaredLength; i++) {
+            buffer.write(_modelAtom);
+          }
+        }
+        return;
+      }
+      if (declaredLength != null &&
+          declaredLength > 0 &&
+          node.firstChild == null) {
+        for (var i = 0; i < declaredLength; i++) {
+          buffer.write(_modelAtom);
+        }
+        return;
+      }
     }
     var child = node.firstChild;
     while (child != null) {
-      _collectText(child, buffer);
+      _collectModelText(child, buffer);
       child = child.nextSibling;
     }
   }
@@ -131,13 +199,47 @@ class OfficeDomReconciler {
     return null;
   }
 
-  /// O texto do nó do modelo que começa em [docPos].
-  String? _modelTextAt(PMNode doc, int docPos) {
+  DomElement? _lineOf(DomNode node, DomElement block) {
+    DomNode? current = node;
+    while (current != null) {
+      if (current is DomElement &&
+          current.classes.contains('$officeCssPrefix-line')) {
+        return current;
+      }
+      if (current == block) return null;
+      current = current.parentNode;
+    }
+    return null;
+  }
+
+  Iterable<DomElement> _linesIn(DomNode root) sync* {
+    for (final child in root.childNodes) {
+      if (child is! DomElement) continue;
+      if (child.classes.contains('$officeCssPrefix-line')) {
+        yield child;
+      } else {
+        yield* _linesIn(child);
+      }
+    }
+  }
+
+  /// O texto lógico da faixa projetada do textblock que começa em [docPos].
+  String? _modelTextAt(
+    PMNode doc,
+    int docPos, {
+    required int charStart,
+    required int charEnd,
+  }) {
     if (docPos < 1 || docPos > doc.content.size) return null;
     final resolved = doc.resolve(docPos);
     final block = resolved.parent;
     if (!block.isTextblock) return null;
-    return block.textContent;
+    if (charEnd > block.content.size) return null;
+    return block.textBetween(
+      charStart,
+      charEnd,
+      leafText: (_) => _modelAtom,
+    );
   }
 
   /// Prefixo/sufixo comum, em posições do modelo.
@@ -147,8 +249,10 @@ class OfficeDomReconciler {
   /// meio caractere inválido, e o bug só aparece no conteúdo do usuário.
   OfficeTextDiff diffText(String before, String after, int docPos) {
     var start = 0;
-    final maxStart = before.length < after.length ? before.length : after.length;
-    while (start < maxStart && before.codeUnitAt(start) == after.codeUnitAt(start)) {
+    final maxStart =
+        before.length < after.length ? before.length : after.length;
+    while (start < maxStart &&
+        before.codeUnitAt(start) == after.codeUnitAt(start)) {
       start++;
     }
     if (_splitsSurrogate(before, start) || _splitsSurrogate(after, start)) {

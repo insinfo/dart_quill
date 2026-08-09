@@ -300,6 +300,21 @@ class XmlDocument {
     return builder.document;
   }
 
+  /// Mesmo DOM de [parse], construído pela variante cooperativa da mesma
+  /// máquina SAX. Não muda entidades, namespaces nem serialização.
+  static Future<XmlDocument> parseAsync(
+    String source, {
+    Duration sliceBudget = const Duration(milliseconds: 16),
+  }) async {
+    final builder = _DomBuilder();
+    await XmlSaxParser.parseStringAsync(
+      source,
+      builder,
+      sliceBudget: sliceBudget,
+    );
+    return builder.document;
+  }
+
   static XmlDocument parseBytes(Uint8List bytes) {
     final builder = _DomBuilder();
     XmlSaxParser.parseBytes(bytes, builder);

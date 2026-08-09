@@ -9,6 +9,10 @@ class WpNumberingLevel {
   final String numFmt; // decimal | lowerLetter | lowerRoman | bullet | ...
   final String lvlText; // ex.: "%1.%2." ou "" (bullet char)
   final String? lvlJc;
+
+  /// Separador entre o rótulo automático e o texto: tab (default OOXML),
+  /// space ou nothing (`w:suff`).
+  final String suffix;
   final WpIndent? indent;
   final WpRunProperties? runProperties;
 
@@ -21,10 +25,28 @@ class WpNumberingLevel {
     this.numFmt = 'decimal',
     this.lvlText = '',
     this.lvlJc,
+    this.suffix = 'tab',
     this.indent,
     this.runProperties,
     this.restart,
   });
+
+  WpNumberingLevel copyWith({
+    int? ilvl,
+    int? start,
+  }) {
+    return WpNumberingLevel(
+      ilvl: ilvl ?? this.ilvl,
+      start: start ?? this.start,
+      numFmt: numFmt,
+      lvlText: lvlText,
+      lvlJc: lvlJc,
+      suffix: suffix,
+      indent: indent,
+      runProperties: runProperties,
+      restart: restart,
+    );
+  }
 
   static WpNumberingLevel fromXml(XmlElement el) {
     return WpNumberingLevel(
@@ -35,6 +57,7 @@ class WpNumberingLevel {
       numFmt: el.firstChild('w:numFmt')?.getAttribute('w:val') ?? 'decimal',
       lvlText: el.firstChild('w:lvlText')?.getAttribute('w:val') ?? '',
       lvlJc: el.firstChild('w:lvlJc')?.getAttribute('w:val'),
+      suffix: el.firstChild('w:suff')?.getAttribute('w:val') ?? 'tab',
       indent: WpIndent.fromXml(el.firstChild('w:pPr')?.firstChild('w:ind')),
       runProperties: WpRunProperties.fromXml(el.firstChild('w:rPr')),
       restart: int.tryParse(
@@ -57,10 +80,20 @@ class WpNum {
   final int abstractNumId;
   final Map<int, WpNumberingLevel> overrides;
 
-  const WpNum(
-      {required this.numId,
-      required this.abstractNumId,
-      this.overrides = const {}});
+  /// `w:startOverride` values keyed by `w:lvlOverride/@w:ilvl`.
+  ///
+  /// A start-only override is common in Word-authored documents: it changes
+  /// the initial/restart value without duplicating the complete `<w:lvl>`.
+  /// Keeping it separate also lets the counter distinguish an explicit list
+  /// restart from an ordinary second numbering instance.
+  final Map<int, int> startOverrides;
+
+  const WpNum({
+    required this.numId,
+    required this.abstractNumId,
+    this.overrides = const {},
+    this.startOverrides = const {},
+  });
 }
 
 /// Catálogo de numeração (`numbering.xml`): abstractNum + num
@@ -99,15 +132,33 @@ class WpNumbering {
           el.firstChild('w:abstractNumId')?.getAttribute('w:val') ?? '');
       if (numId == null || abstractNumId == null) continue;
       final overrides = <int, WpNumberingLevel>{};
+      final startOverrides = <int, int>{};
       for (final overrideEl in el.childrenNamed('w:lvlOverride')) {
+        final overrideIlvl =
+            int.tryParse(overrideEl.getAttribute('w:ilvl') ?? '');
+        if (overrideIlvl == null) continue;
+        final startOverride = int.tryParse(
+          overrideEl.firstChild('w:startOverride')?.getAttribute('w:val') ?? '',
+        );
+        if (startOverride != null) {
+          startOverrides[overrideIlvl] = startOverride;
+        }
         final lvlEl = overrideEl.firstChild('w:lvl');
         if (lvlEl != null) {
-          final level = WpNumberingLevel.fromXml(lvlEl);
-          overrides[level.ilvl] = level;
+          // The key of the override is carried by w:lvlOverride. Some Word
+          // producers omit (or disagree on) w:lvl/@w:ilvl, so do not silently
+          // attach the override to level zero.
+          final level =
+              WpNumberingLevel.fromXml(lvlEl).copyWith(ilvl: overrideIlvl);
+          overrides[overrideIlvl] = level;
         }
       }
       nums[numId] = WpNum(
-          numId: numId, abstractNumId: abstractNumId, overrides: overrides);
+        numId: numId,
+        abstractNumId: abstractNumId,
+        overrides: overrides,
+        startOverrides: startOverrides,
+      );
     }
 
     return WpNumbering(abstractNums: abstractNums, nums: nums);
@@ -117,9 +168,11 @@ class WpNumbering {
   WpNumberingLevel? levelOf(int numId, int ilvl) {
     final num = nums[numId];
     if (num == null) return null;
-    final override = num.overrides[ilvl];
-    if (override != null) return override;
-    return abstractNums[num.abstractNumId]?.levels[ilvl];
+    final level =
+        num.overrides[ilvl] ?? abstractNums[num.abstractNumId]?.levels[ilvl];
+    if (level == null) return null;
+    final startOverride = num.startOverrides[ilvl];
+    return startOverride == null ? level : level.copyWith(start: startOverride);
   }
 }
 

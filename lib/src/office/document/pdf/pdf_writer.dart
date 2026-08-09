@@ -5,6 +5,13 @@ import '../zip/codecs/zlib/deflate.dart';
 import '../zip/codecs/zlib/inflate.dart';
 import 'pdf_image.dart';
 
+// PDF content streams are generated on the browser main isolate. Level 1
+// keeps the files compact while avoiding the disproportionate CPU cost of
+// the default level 6 on long, table-heavy documents (the TR corpus has 140
+// pages). This changes compression only; the decoded PDF operators are
+// byte-for-byte identical.
+const int _pdfStreamCompressionLevel = DeflateLevel.bestSpeed;
+
 /// Escritor PDF de baixo nível, Dart puro, orientado a objetos indiretos.
 ///
 /// Produz PDF 1.4 com content streams comprimidos (FlateDecode/zlib),
@@ -20,6 +27,7 @@ class PdfWriter {
   final List<Uint8List?> _objects = <Uint8List?>[null]; // índice 0 não usado
   final List<int> _pageIds = <int>[];
   final Map<String, int> _fontIds = <String, int>{};
+  final Map<String, String> _fontResourceNames = <String, String>{};
 
   /// Fontes registradas por nome de recurso (`TT1`, `TT2`, …), usadas pelas
   /// fontes embutidas. Ficam separadas das standard-14, cujo nome (`/F1`) é
@@ -76,16 +84,20 @@ class PdfWriter {
   }
 
   /// Objeto de fonte standard-14 com WinAnsiEncoding (criado uma única vez).
-  int fontId(String baseFont) => _fontIds.putIfAbsent(
-        baseFont,
-        () => addDict('<< /Type /Font /Subtype /Type1 /BaseFont /$baseFont '
-            '/Encoding /WinAnsiEncoding >>'),
-      );
+  int fontId(String baseFont) => _fontIds.putIfAbsent(baseFont, () {
+        // Preserve the historical `/F1`, `/F2`, ... assignment from the
+        // insertion order of `_fontIds`, but cache it once. Text-heavy PDFs
+        // ask for the resource name for every run; rebuilding the key list and
+        // searching it there made that hot path O(font count) per run.
+        _fontResourceNames[baseFont] = '/F${_fontIds.length + 1}';
+        return addDict('<< /Type /Font /Subtype /Type1 /BaseFont /$baseFont '
+            '/Encoding /WinAnsiEncoding >>');
+      });
 
   /// Nome de recurso da fonte na página (ex.: `/F3`), estável por BaseFont.
   String fontResourceName(String baseFont) {
     fontId(baseFont);
-    return '/F${_fontIds.keys.toList().indexOf(baseFont) + 1}';
+    return _fontResourceNames[baseFont]!;
   }
 
   /// Associa um nome de recurso (`TT1`) ao objeto de uma fonte já montada.
@@ -93,9 +105,8 @@ class PdfWriter {
   /// É por aqui que uma fonte embutida entra nos `/Resources` da página; o
   /// [fontId] cuida apenas das 14 padrão.
   void registerFontResource(String resourceName, int objectId) {
-    final name = resourceName.startsWith('/')
-        ? resourceName.substring(1)
-        : resourceName;
+    final name =
+        resourceName.startsWith('/') ? resourceName.substring(1) : resourceName;
     _namedFontIds[name] = objectId;
   }
 
@@ -269,7 +280,8 @@ Uint8List zlibDecode(List<int> data) {
 
 /// Envolve [raw] em zlib (RFC 1950): header + deflate + Adler-32.
 Uint8List zlibEncode(List<int> raw) {
-  final Uint8List deflated = Deflate(raw).getBytes();
+  final Uint8List deflated =
+      Deflate(raw, level: _pdfStreamCompressionLevel).getBytes();
   final BytesBuilder builder = BytesBuilder(copy: false)
     ..add(const <int>[0x78, 0x9c])
     ..add(deflated);

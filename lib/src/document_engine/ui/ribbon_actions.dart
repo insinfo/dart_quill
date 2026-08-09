@@ -245,8 +245,18 @@ void toggleList(OfficeWordController c, String kind) {
   final block = c.view.state.selection.fromRes.parent;
   final isSame = block.type.name == 'listItem' && block.attrs['kind'] == kind;
   final command = isSame
-      ? cmd.setBlockType(c.schema.nodes['paragraph']!)
-      : cmd.setBlockType(c.schema.nodes['listItem']!, {'kind': kind});
+      ? cmd.setBlockType(c.schema.nodes['paragraph']!, (PMNode node) {
+          return {
+            'word': _wordAttrs(node, clearNumbering: true),
+            'style': _styleWithoutListMarker(node),
+          };
+        })
+      : cmd.setBlockType(c.schema.nodes['listItem']!, (PMNode node) {
+          return {
+            'kind': kind,
+            'style': _styleWithoutListMarker(node),
+          };
+        });
   command(c.view.state, c.dispatch);
 }
 
@@ -258,10 +268,49 @@ void applyNamedStyle(OfficeWordController c, String name) {
     'Título 3' => 3,
     _ => null,
   };
-  final command = level == null
-      ? cmd.setBlockType(c.schema.nodes['paragraph']!)
-      : cmd.setBlockType(c.schema.nodes['heading']!, {'level': level});
+  final styleId = level == null ? 'Normal' : 'Heading$level';
+  final target =
+      level == null ? c.schema.nodes['paragraph']! : c.schema.nodes['heading']!;
+  final command = cmd.setBlockType(target, (PMNode node) {
+    return {
+      if (level != null) 'level': level,
+      'word': _wordAttrs(
+        node,
+        styleId: styleId,
+        clearNumbering: node.type.name == 'listItem',
+      ),
+      if (node.type.name == 'listItem') 'style': _styleWithoutListMarker(node),
+    };
+  });
   command(c.view.state, c.dispatch);
+}
+
+/// Keeps imported paragraph properties while changing only what the ribbon
+/// action explicitly means to change. `numId=0` is OOXML's explicit
+/// "numbering off" value, including when numbering came from a paragraph
+/// style rather than direct formatting.
+Map<String, dynamic> _wordAttrs(
+  PMNode node, {
+  String? styleId,
+  bool clearNumbering = false,
+}) {
+  final raw = node.attrs['word'];
+  final word = raw is Map
+      ? Map<String, dynamic>.from(raw.cast<String, dynamic>())
+      : <String, dynamic>{};
+  if (styleId != null) word['styleId'] = styleId;
+  if (clearNumbering) {
+    word['numPr'] = <String, dynamic>{'numId': 0, 'ilvl': 0};
+  }
+  return word;
+}
+
+dynamic _styleWithoutListMarker(PMNode node) {
+  final raw = node.attrs['style'];
+  if (raw is! Map) return raw;
+  final style = Map<String, dynamic>.from(raw.cast<String, dynamic>());
+  style.remove('marker');
+  return style.isEmpty ? null : style;
 }
 
 /// Ctrl+Enter do Word: divide o parágrafo no cursor e o bloco novo abre a
