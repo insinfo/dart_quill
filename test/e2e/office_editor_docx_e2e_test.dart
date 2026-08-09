@@ -167,6 +167,7 @@ void main() {
         await app.reload();
         final workflowIssueStart = app.issueCount;
         final source = File(document.path);
+      if (skipWithoutCorpus(source, 'corpus ${document.name}')) return;
         final bodyToken = 'E2E_${document.name.toUpperCase()}_BODY_TOKEN';
         final tableToken = 'E2E_${document.name.toUpperCase()}_TABLE_TOKEN';
         final listToken = 'E2E_${document.name.toUpperCase()}_LIST_TOKEN';

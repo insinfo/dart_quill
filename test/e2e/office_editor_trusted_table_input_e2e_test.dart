@@ -21,6 +21,7 @@ void main() {
       const bodyMarker = ' E2E_TR_REPAGINATE_BODY';
       const tableMarker = ' E2E_TR_FRAGMENTED_TABLE';
       final source = officeTrCorpus();
+      if (skipWithoutCorpus(source, 'corpus TR')) return;
 
       await app.importDocx(
         source,

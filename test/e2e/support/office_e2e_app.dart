@@ -14,6 +14,7 @@ import 'dart:typed_data';
 import 'package:puppeteer/puppeteer.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_static/shelf_static.dart';
+import 'package:test/test.dart';
 
 import '../../support/pdf_reader.dart';
 
@@ -104,6 +105,21 @@ File officeCorpusFile(String prefix) {
 /// Os dois corpora de produção usados pelos e2e do editor Office.
 File officeEtpCorpus() => officeCorpusFile('PGCTIC1_-_ETP_-');
 File officeTrCorpus() => officeCorpusFile('PGCTIC1_-_TR_-');
+
+/// Pula o teste quando o corpus de produção não está presente.
+///
+/// `resources/` é ignorado pelo git: os DOCX reais de compras públicas não
+/// são versionados, então na CI eles simplesmente não existem. Falhar ali
+/// dizia "o editor quebrou" quando o fato é "o insumo não veio" — e uma
+/// suíte vermelha por ausência de fixture deixa de ser sinal. Pular é
+/// visível no relatório; passar em silêncio, não.
+bool skipWithoutCorpus(File corpus, String what) {
+  if (corpus.existsSync()) return false;
+  markTestSkipped(
+      '$what indisponível (${corpus.path}): os corpora de produção não são '
+      'versionados; rode localmente com resources/ populado');
+  return true;
+}
 
 /// A built office example under control of a real Chromium instance.
 final class OfficeE2eApp {

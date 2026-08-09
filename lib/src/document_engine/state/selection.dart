@@ -237,6 +237,120 @@ class NodeSelection extends Selection {
   }
 }
 
+/// Seleção RETANGULAR de células de tabela.
+///
+/// Não é um intervalo contínuo do documento: as células de uma coluna não
+/// são vizinhas na árvore, e um `from..to` cru arrastaria junto as células
+/// intermediárias das outras colunas. Por isso a seleção carrega uma faixa
+/// POR CÉLULA (`ranges`) — o mesmo mecanismo que `Selection` já expõe — e o
+/// conteúdo/exclusão agem célula a célula.
+///
+/// [anchorCellPos] e [headCellPos] são as posições dos NÓS das duas células
+/// que definem o retângulo; quem calcula quais células ele cobre é o mapa de
+/// grade (`ui/table_map.dart`), porque isso depende de colspan/vMerge.
+class CellSelection extends Selection {
+  CellSelection._(
+    this.anchorCellPos,
+    this.headCellPos,
+    this.cellPositions,
+    ResolvedPos anchorRes,
+    ResolvedPos headRes,
+    List<SelectionRange> ranges,
+  ) : super(anchorRes, headRes, ranges);
+
+  /// Cria a seleção a partir das posições das células do retângulo.
+  ///
+  /// [cellPositions] tem de estar em ordem de documento e conter as células
+  /// REAIS (as continuações de mesclagem inclusive) — é o que o mapa de
+  /// grade devolve.
+  factory CellSelection.create(
+    PMNode doc,
+    int anchorCellPos,
+    int headCellPos,
+    List<int> cellPositions,
+  ) {
+    final ranges = <SelectionRange>[];
+    for (final pos in cellPositions) {
+      final cell = doc.nodeAt(pos);
+      if (cell == null) continue;
+      // A faixa cobre o CONTEÚDO da célula, não o nó: limpar uma seleção de
+      // células esvazia o texto e mantém a grade de pé.
+      ranges.add(SelectionRange(
+        doc.resolve(pos + 1),
+        doc.resolve(pos + cell.nodeSize - 1),
+      ));
+    }
+    if (ranges.isEmpty) {
+      final fallback = doc.resolve(anchorCellPos.clamp(0, doc.content.size));
+      return CellSelection._(
+        anchorCellPos,
+        headCellPos,
+        const [],
+        fallback,
+        fallback,
+        [SelectionRange(fallback, fallback)],
+      );
+    }
+    return CellSelection._(
+      anchorCellPos,
+      headCellPos,
+      List.unmodifiable(cellPositions),
+      doc.resolve(anchorCellPos + 1),
+      doc.resolve(headCellPos + 1),
+      ranges,
+    );
+  }
+
+  final int anchorCellPos;
+  final int headCellPos;
+
+  /// Posições dos nós das células selecionadas, em ordem de documento.
+  final List<int> cellPositions;
+
+  /// Uma seleção de células NUNCA é vazia para efeito de UI: mesmo com todas
+  /// as células em branco ela representa uma escolha do usuário (o
+  /// destinatário de "excluir linha", "mesclar", "sombrear").
+  @override
+  bool get empty => false;
+
+  @override
+  bool eq(Selection other) =>
+      other is CellSelection &&
+      other.anchorCellPos == anchorCellPos &&
+      other.headCellPos == headCellPos;
+
+  @override
+  Selection map(PMNode doc, Mapping mapping) {
+    final anchor = mapping.mapResult(anchorCellPos, 1);
+    final head = mapping.mapResult(headCellPos, 1);
+    if (anchor.deleted || head.deleted) {
+      // A tabela (ou as células) sumiram: cai para uma seleção de texto
+      // próxima em vez de apontar para o vazio.
+      return Selection.near(doc.resolve(
+          anchor.pos.clamp(0, doc.content.size)));
+    }
+    final mapped = <int>[];
+    for (final pos in cellPositions) {
+      final result = mapping.mapResult(pos, 1);
+      if (result.deleted) continue;
+      final node = doc.nodeAt(result.pos);
+      if (node != null && node.type.name == 'tableCell') mapped.add(result.pos);
+    }
+    if (mapped.isEmpty) {
+      return Selection.near(doc.resolve(anchor.pos.clamp(0, doc.content.size)));
+    }
+    return CellSelection.create(doc, anchor.pos, head.pos, mapped);
+  }
+
+  @override
+  Map<String, dynamic> toJSON() => {
+        'type': 'cell',
+        'anchor': anchorCellPos,
+        'head': headCellPos,
+        'cells': cellPositions,
+      };
+}
+
 class AllSelection extends Selection {
   AllSelection(PMNode doc) : super(doc.resolve(0), doc.resolve(doc.content.size));
 
@@ -262,6 +376,14 @@ void _ensureSelectionJsonRegistered() {
   if (_selectionJsonRegistered) return;
   Selection.jsonID("text", (doc, json) => TextSelection.create(doc, json["anchor"] as int, json["head"] as int?));
   Selection.jsonID("node", (doc, json) => NodeSelection.create(doc, json["anchor"] as int));
+  Selection.jsonID(
+      "cell",
+      (doc, json) => CellSelection.create(
+            doc,
+            json["anchor"] as int,
+            json["head"] as int,
+            [for (final pos in (json["cells"] as List)) pos as int],
+          ));
   Selection.jsonID("all", (doc, json) => AllSelection(doc));
   _selectionJsonRegistered = true;
 }

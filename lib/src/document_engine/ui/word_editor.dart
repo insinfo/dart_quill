@@ -63,6 +63,7 @@ import 'ribbon.dart';
 import 'ribbon_actions.dart' as ribbon_actions;
 import 'rulers.dart';
 import 'status_bar.dart';
+import 'table_adorner.dart';
 import 'title_bar.dart';
 import 'word_options.dart';
 
@@ -134,6 +135,7 @@ class OfficeWordEditor implements OfficeWordController {
 
   late final OfficeOverlay _overlay = OfficeOverlay(this);
   late final OfficeObjectAdorner _objectAdorner = OfficeObjectAdorner(this);
+  late final OfficeTableAdorner _tableAdorner = OfficeTableAdorner(this);
   OfficeSelectionQuickbar? _quickbar;
   OfficeContextMenu? _contextMenu;
   DomEventListener? _contextMenuListener;
@@ -649,15 +651,24 @@ class OfficeWordEditor implements OfficeWordController {
     _canvas.addEventListener('scroll', (_) {
       _overlay.closeAll();
       _objectAdorner.refresh();
+      _tableAdorner.refresh();
     });
 
     if (options.mode != OfficeWordMode.view) {
       // O arrasto de alça pertence ao canvas inteiro: soltar o ponteiro fora
       // do objeto ainda tem de encerrar (e aplicar) o redimensionamento.
+      // A divisa de coluna tem prioridade sobre a seleção de texto: o
+      // ponteiro sobre a borda inicia o redimensionamento, como no Word.
       _canvas.addEventListener(
-          'pointermove', (event) => _objectAdorner.handlePointerMove(event));
-      _canvas.addEventListener(
-          'pointerup', (event) => _objectAdorner.handlePointerUp(event));
+          'pointerdown', (event) => _tableAdorner.handlePointerDown(event));
+      _canvas.addEventListener('pointermove', (event) {
+        _objectAdorner.handlePointerMove(event);
+        _tableAdorner.handlePointerMove(event);
+      });
+      _canvas.addEventListener('pointerup', (event) {
+        _objectAdorner.handlePointerUp(event);
+        _tableAdorner.handlePointerUp(event);
+      });
     }
 
     if (options.mode != OfficeWordMode.view) {
@@ -898,6 +909,7 @@ class OfficeWordEditor implements OfficeWordController {
     _ribbon?.refreshContextual();
     _quickbar?.refreshState();
     _objectAdorner.refresh();
+    _tableAdorner.refresh();
     _hRuler?.positionMarkers();
     _positionVerticalRuler();
   }
@@ -933,6 +945,7 @@ class OfficeWordEditor implements OfficeWordController {
       _canvas.removeEventListener('contextmenu', contextMenu);
     }
     _objectAdorner.clear();
+    _tableAdorner.clear();
     _overlay.dispose();
     _view.dispose();
     _kit.clear(host);

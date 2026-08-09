@@ -61,6 +61,7 @@ void main() {
   test(
       'ETP captures the complete first and last papers outside canvas clipping',
       () async {
+    if (skipWithoutCorpus(officeEtpCorpus(), 'corpus ETP')) return;
     await app.reload();
     await app.importDocx(
       officeEtpCorpus(),
@@ -173,6 +174,7 @@ void main() {
   test('TR captures Word boundary pages, edits and saves through trusted UI',
       () async {
     final source = officeTrCorpus();
+    if (skipWithoutCorpus(source, 'corpus TR')) return;
     await app.reload();
     final imported = await app.importDocx(
       source,

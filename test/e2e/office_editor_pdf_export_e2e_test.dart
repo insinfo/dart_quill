@@ -30,9 +30,10 @@ void main() {
 
   for (final document in documents) {
     test('${document.name.toUpperCase()}: botão Exportar PDF', () async {
+      final source = File(document.path);
+      if (skipWithoutCorpus(source, 'corpus ${document.name}')) return;
       await app.reload();
       final issueStart = app.issueCount;
-      final source = File(document.path);
       final imported = await app.importDocx(
         source,
         artifactName: '${document.name}-final-pdf-focused',
