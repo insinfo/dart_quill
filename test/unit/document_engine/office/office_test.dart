@@ -68,8 +68,8 @@ void main() {
       final tr = state.tr
         ..insert(
             0,
-            schema.node('paragraph', null,
-                Fragment.from([schema.text('primeiro')])));
+            schema.node(
+                'paragraph', null, Fragment.from([schema.text('primeiro')])));
       final next = state.apply(tr);
       final ids = <String>[];
       next.doc.descendants((node, pos, parent, index) {
@@ -84,8 +84,8 @@ void main() {
     test('id duplicado (colar) é re-cunhado na segunda ocorrência', () {
       var counter = 0;
       final state = stateWith(() => 'id-${counter++}');
-      final paragraph = schema.node('paragraph', {'id': 'DUP'},
-          Fragment.from([schema.text('x')]));
+      final paragraph = schema.node(
+          'paragraph', {'id': 'DUP'}, Fragment.from([schema.text('x')]));
       final tr = state.tr
         ..insert(0, paragraph)
         ..insert(0, paragraph);
@@ -119,8 +119,7 @@ void main() {
         documentId: 'doc-1',
         revision: 7,
       );
-      final decoded =
-          OfficeDocumentSnapshot.fromJson(snapshot.toJson());
+      final decoded = OfficeDocumentSnapshot.fromJson(snapshot.toJson());
       expect(decoded.documentId, 'doc-1');
       expect(decoded.revision, 7);
       final body = decoded.decodeBody(testSchema);
@@ -129,8 +128,7 @@ void main() {
 
     test('hash canônico independe da ordem de inserção das chaves', () {
       final document = doc(p('conteúdo'));
-      final a =
-          OfficeDocumentSnapshot.fromDocument(document, documentId: 'x');
+      final a = OfficeDocumentSnapshot.fromDocument(document, documentId: 'x');
       // reserializa por um caminho que embaralha a ordem das chaves
       final shuffled = json.decode(json.encode(a.toJson()));
       final b = OfficeDocumentSnapshot.fromJson(
@@ -140,10 +138,10 @@ void main() {
     });
 
     test('conteúdo diferente => hash diferente', () {
-      final a = OfficeDocumentSnapshot.fromDocument(doc(p('um')),
-          documentId: 'x');
-      final b = OfficeDocumentSnapshot.fromDocument(doc(p('dois')),
-          documentId: 'x');
+      final a =
+          OfficeDocumentSnapshot.fromDocument(doc(p('um')), documentId: 'x');
+      final b =
+          OfficeDocumentSnapshot.fromDocument(doc(p('dois')), documentId: 'x');
       expect(a.contentHash(), isNot(b.contentHash()));
     });
 
@@ -156,8 +154,8 @@ void main() {
               {...good, 'format': 'outra-coisa'}),
           throwsA(isA<OfficeSnapshotFormatException>()));
       expect(
-          () => OfficeDocumentSnapshot.fromJson(
-              {...good, 'formatVersion': 999}),
+          () =>
+              OfficeDocumentSnapshot.fromJson({...good, 'formatVersion': 999}),
           throwsA(isA<OfficeSnapshotFormatException>()));
     });
 

@@ -86,7 +86,13 @@ class PageGraphDomRenderer {
   /// Marca o content box das páginas como `contenteditable`. A entrada em si
   /// (beforeinput/IME/seleção) é a Fase 2 completa; aqui a superfície já
   /// nasce com o atributo certo para o hardening começar.
-  final bool editable;
+  ///
+  /// NÃO é final: o modo cabeçalho/rodapé (F6) suspende a edição do CORPO
+  /// enquanto a região é editada. Desligar o atributo é o que impede o caret
+  /// de voltar ao texto por teclado — só esmaecer com CSS deixaria a
+  /// digitação cair no lugar errado. Quem troca o valor precisa reprojetar
+  /// ([OfficeEditorView.reproject]); o grafo não muda.
+  bool editable;
 
   /// Geometria externa da projeção, usada pela virtualização para mapear
   /// `scrollTop` em página sem medir o DOM a cada evento.

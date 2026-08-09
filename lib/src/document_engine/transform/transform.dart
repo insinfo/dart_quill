@@ -131,7 +131,8 @@ class Transform {
     return this;
   }
 
-  Transform setNodeMarkup(int pos, [NodeType? type, Map<String, dynamic>? attrs, List<Mark>? marks]) {
+  Transform setNodeMarkup(int pos,
+      [NodeType? type, Map<String, dynamic>? attrs, List<Mark>? marks]) {
     structure_lib.setNodeMarkup(this, pos, type, attrs, marks);
     return this;
   }
@@ -154,7 +155,7 @@ class Transform {
   Transform removeNodeMark(int pos, dynamic mark) {
     PMNode? node = doc.nodeAt(pos);
     if (node == null) throw RangeError("No node at position \$pos");
-    
+
     if (mark is Mark) {
       if (mark.isInSet(node.marks)) step(RemoveNodeMarkStep(pos, mark));
     } else if (mark is MarkType) {
@@ -172,7 +173,8 @@ class Transform {
     return this;
   }
 
-  Transform split(int pos, [int depth = 1, List<structure_lib.Wrapping?>? typesAfter]) {
+  Transform split(int pos,
+      [int depth = 1, List<structure_lib.Wrapping?>? typesAfter]) {
     structure_lib.split(this, pos, depth, typesAfter);
     return this;
   }
@@ -187,7 +189,8 @@ class Transform {
     return this;
   }
 
-  Transform clearIncompatible(int pos, NodeType parentType, [ContentMatch? match]) {
+  Transform clearIncompatible(int pos, NodeType parentType,
+      [ContentMatch? match]) {
     mark_lib.clearIncompatible(this, pos, parentType, match);
     return this;
   }

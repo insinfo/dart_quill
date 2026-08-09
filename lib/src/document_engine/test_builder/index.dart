@@ -20,7 +20,8 @@ class _FlatResult {
   _FlatResult(this.nodes, this.tags);
 }
 
-_FlatResult _flattenAndMergeMarks(List<dynamic> items, [List<Mark> marks = const []]) {
+_FlatResult _flattenAndMergeMarks(List<dynamic> items,
+    [List<Mark> marks = const []]) {
   List<PMNode> result = [];
   Map<String, int> tags = {};
   int currentOffset = 0;
@@ -30,7 +31,7 @@ _FlatResult _flattenAndMergeMarks(List<dynamic> items, [List<Mark> marks = const
       RegExp tagRegex = RegExp(r'<([a-zA-Z0-9_]+)>');
       int lastIndex = 0;
       String textContent = "";
-      
+
       for (var match in tagRegex.allMatches(item)) {
         String before = item.substring(lastIndex, match.start);
         if (before.isNotEmpty) {
@@ -41,7 +42,7 @@ _FlatResult _flattenAndMergeMarks(List<dynamic> items, [List<Mark> marks = const
         tags[match.group(1)!] = currentOffset;
         lastIndex = match.end;
       }
-      
+
       String remaining = item.substring(lastIndex);
       if (remaining.isNotEmpty) {
         result.add(testSchema.text(remaining, marks));
@@ -58,13 +59,13 @@ _FlatResult _flattenAndMergeMarks(List<dynamic> items, [List<Mark> marks = const
       if (!identical(newNode, item)) {
         newNode.tag = item.tag;
       }
-      
+
       // Merge child tags
       Map<String, int> childTags = newNode.tag;
       childTags.forEach((key, value) {
         tags[key] = currentOffset + 1 + value; // +1 for the node opening
       });
-      
+
       result.add(newNode);
       currentOffset += newNode.nodeSize;
     } else if (item is List) {
@@ -75,7 +76,8 @@ _FlatResult _flattenAndMergeMarks(List<dynamic> items, [List<Mark> marks = const
       });
       for (var n in childRes.nodes) currentOffset += n.nodeSize;
     } else if (item is _MarkedContent) {
-      _FlatResult childRes = _flattenAndMergeMarks(item.content, [...marks, item.mark]);
+      _FlatResult childRes =
+          _flattenAndMergeMarks(item.content, [...marks, item.mark]);
       result.addAll(childRes.nodes);
       childRes.tags.forEach((key, value) {
         tags[key] = currentOffset + value;
@@ -89,7 +91,7 @@ _FlatResult _flattenAndMergeMarks(List<dynamic> items, [List<Mark> marks = const
 PMNode _node(String type, [dynamic attrsOrContent, dynamic content]) {
   Map<String, dynamic>? attrs;
   List<dynamic> children = [];
-  
+
   if (attrsOrContent is Map<String, dynamic>) {
     attrs = attrsOrContent;
     if (content != null) {
@@ -98,7 +100,7 @@ PMNode _node(String type, [dynamic attrsOrContent, dynamic content]) {
   } else if (attrsOrContent != null) {
     children = attrsOrContent is List ? attrsOrContent : [attrsOrContent];
   }
-  
+
   NodeType nodeType = testSchema.nodes[type]!;
   _FlatResult res = _flattenAndMergeMarks(children);
   PMNode node = nodeType.create(attrs, res.nodes);
@@ -109,7 +111,7 @@ PMNode _node(String type, [dynamic attrsOrContent, dynamic content]) {
 _MarkedContent _mark(String type, [dynamic attrsOrContent, dynamic content]) {
   Map<String, dynamic>? attrs;
   List<dynamic> children = [];
-  
+
   if (attrsOrContent is Map<String, dynamic>) {
     attrs = attrsOrContent;
     if (content != null) {
@@ -118,30 +120,186 @@ _MarkedContent _mark(String type, [dynamic attrsOrContent, dynamic content]) {
   } else if (attrsOrContent != null) {
     children = attrsOrContent is List ? attrsOrContent : [attrsOrContent];
   }
-  
+
   MarkType markType = testSchema.marks[type]!;
   return _MarkedContent(markType.create(attrs), children);
 }
 
 // Nodes
-PMNode doc([dynamic a, dynamic b, dynamic c, dynamic d, dynamic e, dynamic f, dynamic g, dynamic h, dynamic i, dynamic j]) => _node('doc', [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
-PMNode p([dynamic a, dynamic b, dynamic c, dynamic d, dynamic e, dynamic f, dynamic g, dynamic h, dynamic i, dynamic j]) => _node('paragraph', [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
-PMNode blockquote([dynamic a, dynamic b, dynamic c, dynamic d, dynamic e, dynamic f, dynamic g, dynamic h, dynamic i, dynamic j]) => _node('blockquote', [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
-PMNode h1([dynamic a, dynamic b, dynamic c, dynamic d, dynamic e, dynamic f, dynamic g, dynamic h, dynamic i, dynamic j]) => _node('heading', {'level': 1}, [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
-PMNode h2([dynamic a, dynamic b, dynamic c, dynamic d, dynamic e, dynamic f, dynamic g, dynamic h, dynamic i, dynamic j]) => _node('heading', {'level': 2}, [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
+PMNode doc(
+        [dynamic a,
+        dynamic b,
+        dynamic c,
+        dynamic d,
+        dynamic e,
+        dynamic f,
+        dynamic g,
+        dynamic h,
+        dynamic i,
+        dynamic j]) =>
+    _node(
+        'doc', [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
+PMNode p(
+        [dynamic a,
+        dynamic b,
+        dynamic c,
+        dynamic d,
+        dynamic e,
+        dynamic f,
+        dynamic g,
+        dynamic h,
+        dynamic i,
+        dynamic j]) =>
+    _node('paragraph',
+        [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
+PMNode blockquote(
+        [dynamic a,
+        dynamic b,
+        dynamic c,
+        dynamic d,
+        dynamic e,
+        dynamic f,
+        dynamic g,
+        dynamic h,
+        dynamic i,
+        dynamic j]) =>
+    _node('blockquote',
+        [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
+PMNode h1(
+        [dynamic a,
+        dynamic b,
+        dynamic c,
+        dynamic d,
+        dynamic e,
+        dynamic f,
+        dynamic g,
+        dynamic h,
+        dynamic i,
+        dynamic j]) =>
+    _node('heading', {'level': 1},
+        [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
+PMNode h2(
+        [dynamic a,
+        dynamic b,
+        dynamic c,
+        dynamic d,
+        dynamic e,
+        dynamic f,
+        dynamic g,
+        dynamic h,
+        dynamic i,
+        dynamic j]) =>
+    _node('heading', {'level': 2},
+        [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
 PMNode hr() => _node('horizontal_rule');
 PMNode br() => _node('hard_break');
 PMNode img(Map<String, dynamic> attrs) => _node('image', attrs);
-PMNode ul([dynamic a, dynamic b, dynamic c, dynamic d, dynamic e, dynamic f, dynamic g, dynamic h, dynamic i, dynamic j]) => _node('bullet_list', [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
-PMNode ol([dynamic a, dynamic b, dynamic c, dynamic d, dynamic e, dynamic f, dynamic g, dynamic h, dynamic i, dynamic j]) => _node('ordered_list', [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
-PMNode li([dynamic a, dynamic b, dynamic c, dynamic d, dynamic e, dynamic f, dynamic g, dynamic h, dynamic i, dynamic j]) => _node('list_item', [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
-PMNode pre([dynamic a, dynamic b, dynamic c, dynamic d, dynamic e, dynamic f, dynamic g, dynamic h, dynamic i, dynamic j]) => _node('code_block', [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
+PMNode ul(
+        [dynamic a,
+        dynamic b,
+        dynamic c,
+        dynamic d,
+        dynamic e,
+        dynamic f,
+        dynamic g,
+        dynamic h,
+        dynamic i,
+        dynamic j]) =>
+    _node('bullet_list',
+        [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
+PMNode ol(
+        [dynamic a,
+        dynamic b,
+        dynamic c,
+        dynamic d,
+        dynamic e,
+        dynamic f,
+        dynamic g,
+        dynamic h,
+        dynamic i,
+        dynamic j]) =>
+    _node('ordered_list',
+        [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
+PMNode li(
+        [dynamic a,
+        dynamic b,
+        dynamic c,
+        dynamic d,
+        dynamic e,
+        dynamic f,
+        dynamic g,
+        dynamic h,
+        dynamic i,
+        dynamic j]) =>
+    _node('list_item',
+        [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
+PMNode pre(
+        [dynamic a,
+        dynamic b,
+        dynamic c,
+        dynamic d,
+        dynamic e,
+        dynamic f,
+        dynamic g,
+        dynamic h,
+        dynamic i,
+        dynamic j]) =>
+    _node('code_block',
+        [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
 
 // Marks
-dynamic em([dynamic a, dynamic b, dynamic c, dynamic d, dynamic e, dynamic f, dynamic g, dynamic h, dynamic i, dynamic j]) => _mark('em', [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
-dynamic strong([dynamic a, dynamic b, dynamic c, dynamic d, dynamic e, dynamic f, dynamic g, dynamic h, dynamic i, dynamic j]) => _mark('strong', [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
-dynamic a(Map<String, dynamic> attrs, [dynamic a, dynamic b, dynamic c, dynamic d, dynamic e, dynamic f, dynamic g, dynamic h, dynamic i, dynamic j]) => _mark('link', attrs, [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
-dynamic code([dynamic a, dynamic b, dynamic c, dynamic d, dynamic e, dynamic f, dynamic g, dynamic h, dynamic i, dynamic j]) => _mark('code', [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
+dynamic em(
+        [dynamic a,
+        dynamic b,
+        dynamic c,
+        dynamic d,
+        dynamic e,
+        dynamic f,
+        dynamic g,
+        dynamic h,
+        dynamic i,
+        dynamic j]) =>
+    _mark(
+        'em', [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
+dynamic strong(
+        [dynamic a,
+        dynamic b,
+        dynamic c,
+        dynamic d,
+        dynamic e,
+        dynamic f,
+        dynamic g,
+        dynamic h,
+        dynamic i,
+        dynamic j]) =>
+    _mark('strong',
+        [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
+dynamic a(Map<String, dynamic> attrs,
+        [dynamic a,
+        dynamic b,
+        dynamic c,
+        dynamic d,
+        dynamic e,
+        dynamic f,
+        dynamic g,
+        dynamic h,
+        dynamic i,
+        dynamic j]) =>
+    _mark('link', attrs,
+        [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
+dynamic code(
+        [dynamic a,
+        dynamic b,
+        dynamic c,
+        dynamic d,
+        dynamic e,
+        dynamic f,
+        dynamic g,
+        dynamic h,
+        dynamic i,
+        dynamic j]) =>
+    _mark('code',
+        [a, b, c, d, e, f, g, h, i, j].where((e) => e != null).toList());
 
 // General
 Schema get schema => testSchema;

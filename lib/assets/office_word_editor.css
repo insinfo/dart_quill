@@ -1283,6 +1283,99 @@
   }
 }
 
+/* ---- modo cabeçalho/rodapé (F6) ---- */
+
+/* O corpo continua VISÍVEL (o usuário precisa dele como referência), mas
+   esmaecido e inerte. O `contenteditable` já foi removido pelo renderer; o
+   pointer-events aqui é o que faz o duplo clique chegar ao canvas e fechar o
+   modo. As regiões seguem clicáveis para trocar de página/região sem sair. */
+.dq-office-app-hf .dq-office-page-content {
+  opacity: .42;
+}
+
+.dq-office-app-hf .dq-office-pages {
+  pointer-events: none;
+}
+
+.dq-office-app-hf .dq-office-header,
+.dq-office-app-hf .dq-office-footer {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* A superfície editável da região: um editor completo montado sobre outra
+   raiz, posicionado no overlay sobre a faixa da página ativa. O fundo branco
+   cobre a projeção ANTIGA da região (que só é recomposta ao fechar) e o
+   overflow recorta a folha virtual em que a região é composta. */
+.dq-office-hf-surface {
+  position: absolute;
+  z-index: 33;
+  pointer-events: auto;
+  overflow: hidden;
+  background: #fff;
+}
+
+.dq-office-hf-surface .dq-office-page {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* A página editada saiu da janela virtualizada: sem geometria não há onde
+   desenhar, e o canto do editor não é "onde a região está". */
+.dq-office-hf-offscreen {
+  display: none;
+}
+
+.dq-office-hf-surface .dq-office-page-content:focus {
+  outline: none;
+}
+
+/* Tracejado + etiqueta, como o separador do Writer
+   (sw/source/uibase/docvw/HeaderFooterWin.cxx). Não intercepta o ponteiro:
+   quem recebe o clique é a superfície logo abaixo. */
+.dq-office-hf-frame {
+  position: absolute;
+  z-index: 34;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 1px dashed #9a9a9a;
+}
+
+.dq-office-hf-frame-header {
+  border-bottom-color: #4a4a4a;
+}
+
+.dq-office-hf-frame-footer {
+  border-top-color: #4a4a4a;
+}
+
+.dq-office-hf-label {
+  position: absolute;
+  left: 0;
+  padding: 0 5px;
+  background: #fff;
+  border: 1px solid #c8c8c8;
+  border-radius: 2px;
+  font-size: 10.5px;
+  line-height: 15px;
+  color: #4a4a4a;
+  white-space: nowrap;
+}
+
+.dq-office-hf-frame-header .dq-office-hf-label {
+  bottom: -8px;
+}
+
+.dq-office-hf-frame-footer .dq-office-hf-label {
+  top: -8px;
+}
+
+/* O Fechar do Word encerra a sessão: destacado, e o único vermelho da aba. */
+.dq-office-hf-close {
+  font-weight: 600;
+  color: #a4262c;
+}
+
 /* flow: superficie continua, sem chrome de pagina */
 .dq-office-app-flow .dq-office-pages {
   gap: 0;

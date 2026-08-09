@@ -35,8 +35,8 @@ void main() {
     host.remove();
   });
 
-  PMNode paragraph(String text) => schema.node(
-      'paragraph', null, Fragment.from([schema.text(text)]));
+  PMNode paragraph(String text) =>
+      schema.node('paragraph', null, Fragment.from([schema.text(text)]));
 
   PMNode longDoc(int blocks) => schema.node(
       'doc',
@@ -70,7 +70,8 @@ void main() {
     final view = mount(longDoc(400),
         virtualization: const OfficeVirtualization(radius: 1));
     final total = view.pageGraph.pages.length;
-    expect(total, greaterThan(4), reason: 'precisa de páginas para virtualizar');
+    expect(total, greaterThan(4),
+        reason: 'precisa de páginas para virtualizar');
 
     expect(mountedPages(), lessThan(total));
     expect(mountedPages() + placeholders(), total,
@@ -92,8 +93,8 @@ void main() {
         .lastWhere((entry) => entry.pageIndex == total - 1);
 
     view.dispatch(view.state.tr
-      ..setSelection(TextSelection.create(
-          view.state.doc, lastPageEntry.docPosStart)));
+      ..setSelection(
+          TextSelection.create(view.state.doc, lastPageEntry.docPosStart)));
 
     expect(view.mountedWindow!.contains(total - 1), isTrue,
         reason: 'desmontar a página do caret faria o cursor sumir');
@@ -113,7 +114,8 @@ void main() {
     final pageHeightPx =
         view.pageGraph.pages.first.setup.heightTwips / 20.0 * (96 / 72);
     host.scrollTop = (pageHeightPx * 3).round();
-    (host as FakeDomElement).dispatchEvent('scroll', FakeDomEvent('scroll', host));
+    (host as FakeDomElement)
+        .dispatchEvent('scroll', FakeDomEvent('scroll', host));
 
     final after = view.mountedWindow!;
     expect(after, isNot(before));
@@ -126,7 +128,8 @@ void main() {
         virtualization: const OfficeVirtualization(radius: 2));
     final before = view.mountedWindow;
     host.scrollTop = 5;
-    (host as FakeDomElement).dispatchEvent('scroll', FakeDomEvent('scroll', host));
+    (host as FakeDomElement)
+        .dispatchEvent('scroll', FakeDomEvent('scroll', host));
     expect(view.mountedWindow, before,
         reason: 'reprojetar a cada pixel de scroll seria pior que não '
             'virtualizar');
@@ -135,22 +138,22 @@ void main() {
   test('scroll durante composição IME NÃO remonta', () {
     final view = mount(longDoc(600),
         virtualization: const OfficeVirtualization(radius: 1));
-    (host as FakeDomElement)
-        .dispatchEvent('compositionstart', FakeDomEvent('compositionstart', host));
+    (host as FakeDomElement).dispatchEvent(
+        'compositionstart', FakeDomEvent('compositionstart', host));
     final before = view.mountedWindow;
 
     final pageHeightPx =
         view.pageGraph.pages.first.setup.heightTwips / 20.0 * (96 / 72);
     host.scrollTop = (pageHeightPx * 4).round();
-    (host as FakeDomElement).dispatchEvent('scroll', FakeDomEvent('scroll', host));
+    (host as FakeDomElement)
+        .dispatchEvent('scroll', FakeDomEvent('scroll', host));
 
     expect(view.mountedWindow, before,
         reason: 'remontar no meio da composição destruiria o estado do IME');
   });
 
   test('placeholders têm a altura EXATA da página', () {
-    mount(longDoc(400),
-        virtualization: const OfficeVirtualization(radius: 1));
+    mount(longDoc(400), virtualization: const OfficeVirtualization(radius: 1));
     final placeholder =
         host.querySelectorAll('.dq-office-page-placeholder').first;
     final page = host.querySelectorAll('.dq-office-page').first;
@@ -182,7 +185,8 @@ void main() {
     view.dispose();
     final before = view.mountedWindow;
     host.scrollTop = 100000;
-    (host as FakeDomElement).dispatchEvent('scroll', FakeDomEvent('scroll', host));
+    (host as FakeDomElement)
+        .dispatchEvent('scroll', FakeDomEvent('scroll', host));
     expect(view.mountedWindow, before);
   });
 }

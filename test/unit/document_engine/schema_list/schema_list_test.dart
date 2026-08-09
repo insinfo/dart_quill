@@ -74,8 +74,8 @@ void main() {
     });
 
     test('item aninhado sobe um nível', () {
-      final result = runCommand(liftListItem(listItem),
-          doc(ul(li(p('one'), ul(li(p('t<a>wo')))))));
+      final result = runCommand(
+          liftListItem(listItem), doc(ul(li(p('one'), ul(li(p('t<a>wo')))))));
       expect(result.eq(doc(ul(li(p('one')), li(p('two'))))), isTrue,
           reason: result.toString());
     });

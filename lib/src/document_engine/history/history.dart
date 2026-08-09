@@ -89,7 +89,8 @@ class Branch {
           final res = transform.maybeStep(mappedStep);
           if (res.doc != null) {
             map = transform.mapping.maps[transform.mapping.maps.length - 1];
-            addAfter.add(Item(map, null, null, addAfter.length + addBefore.length));
+            addAfter
+                .add(Item(map, null, null, addAfter.length + addBefore.length));
           }
         }
         mapFrom = mFrom - 1;
@@ -98,9 +99,10 @@ class Branch {
         transform.maybeStep(step);
       }
 
-
       if (item.selection != null) {
-        selection = remap != null ? item.selection!.map(remap.slice(mapFrom!)) : item.selection;
+        selection = remap != null
+            ? item.selection!.map(remap.slice(mapFrom!))
+            : item.selection;
         final slicedItems = items.sublist(0, end);
         final reversedAddBefore = addBefore.reversed.toList();
         final finalItems = [...slicedItems, ...reversedAddBefore, ...addAfter];
@@ -109,7 +111,8 @@ class Branch {
       }
     }
 
-    return PopEventResult(remaining: remaining!, transform: transform, selection: selection!);
+    return PopEventResult(
+        remaining: remaining!, transform: transform, selection: selection!);
   }
 
   Branch addTransform(
@@ -121,7 +124,8 @@ class Branch {
     final List<Item> newItems = [];
     int eventCountVal = eventCount;
     List<Item> oldItems = items;
-    Item? lastItem = (!preserveItems && oldItems.isNotEmpty) ? oldItems.last : null;
+    Item? lastItem =
+        (!preserveItems && oldItems.isNotEmpty) ? oldItems.last : null;
 
     for (int i = 0; i < transform.steps.length; i++) {
       final step = transform.steps[i].invert(transform.docs[i]);
@@ -142,7 +146,7 @@ class Branch {
       }
       if (!preserveItems) lastItem = item;
     }
-    
+
     int overflow = eventCountVal - histOptions.depth;
     if (overflow > DEPTH_OVERFLOW) {
       oldItems = cutOffEvents(oldItems, overflow);
@@ -155,9 +159,10 @@ class Branch {
     final maps = Mapping();
     for (int i = from; i < to; i++) {
       final item = items[i];
-      final mirrorPos = (item.mirrorOffset != null && i - item.mirrorOffset! >= from)
-          ? maps.maps.length - item.mirrorOffset!
-          : null;
+      final mirrorPos =
+          (item.mirrorOffset != null && i - item.mirrorOffset! >= from)
+              ? maps.maps.length - item.mirrorOffset!
+              : null;
       maps.appendMap(item.map, mirrorPos);
     }
     return maps;
@@ -192,7 +197,8 @@ class Branch {
       newUntil = min(newUntil, pos);
       final map = mapping.maps[pos];
       if (item.step != null) {
-        final step = rebasedTransform.steps[pos].invert(rebasedTransform.docs[pos]);
+        final step =
+            rebasedTransform.steps[pos].invert(rebasedTransform.docs[pos]);
         final selection = item.selection?.map(mapping.slice(iRebased + 1, pos));
         if (selection != null) eventCountVal++;
         rebasedItems.add(Item(map, step, selection));
@@ -205,7 +211,7 @@ class Branch {
     for (int i = rebasedCount; i < newUntil; i++) {
       newMaps.add(Item(mapping.maps[i]));
     }
-    
+
     final slicedItems = items.sublist(0, start);
     final finalItems = [...slicedItems, ...newMaps, ...rebasedItems];
     var branch = Branch(finalItems, eventCountVal);
@@ -247,7 +253,8 @@ class Branch {
           final newItem = Item(map!.invert(), step, selection);
           Item? merged;
           final int last = compressedItems.length - 1;
-          if (compressedItems.isNotEmpty && (merged = compressedItems[last].merge(newItem)) != null) {
+          if (compressedItems.isNotEmpty &&
+              (merged = compressedItems[last].merge(newItem)) != null) {
             compressedItems[last] = merged!;
           } else {
             compressedItems.add(newItem);
@@ -364,7 +371,8 @@ List<int>? mapRanges(List<int>? ranges, Mapping mapping) {
   return result;
 }
 
-HistoryState applyTransaction(HistoryState history, EditorState state, Transaction tr, HistoryOptions options) {
+HistoryState applyTransaction(HistoryState history, EditorState state,
+    Transaction tr, HistoryOptions options) {
   final historyTr = tr.getMeta(historyKey) as HistoryMeta?;
   if (historyTr != null) return historyTr.historyState;
 
@@ -389,20 +397,30 @@ HistoryState applyTransaction(HistoryState history, EditorState state, Transacti
     } else {
       return HistoryState(
         history.done,
-        history.undone.addTransform(tr, null, options, mustPreserveItems(state)),
+        history.undone
+            .addTransform(tr, null, options, mustPreserveItems(state)),
         null,
         history.prevTime,
         history.prevComposition,
       );
     }
-  } else if (tr.getMeta("addToHistory") != false && !(appended != null && appended.getMeta("addToHistory") == false)) {
+  } else if (tr.getMeta("addToHistory") != false &&
+      !(appended != null && appended.getMeta("addToHistory") == false)) {
     final composition = tr.getMeta("composition") as int?;
     final newGroup = history.prevTime == 0 ||
-      (appended == null && history.prevComposition != composition &&
-       (history.prevTime < (tr.time) - options.newGroupDelay || !isAdjacentTo(tr, history.prevRanges)));
-    final prevRanges = appended != null ? mapRanges(history.prevRanges, tr.mapping) : rangesFor(tr.mapping.maps);
+        (appended == null &&
+            history.prevComposition != composition &&
+            (history.prevTime < (tr.time) - options.newGroupDelay ||
+                !isAdjacentTo(tr, history.prevRanges)));
+    final prevRanges = appended != null
+        ? mapRanges(history.prevRanges, tr.mapping)
+        : rangesFor(tr.mapping.maps);
     return HistoryState(
-      history.done.addTransform(tr, newGroup ? state.selection.getBookmark() : null, options, mustPreserveItems(state)),
+      history.done.addTransform(
+          tr,
+          newGroup ? state.selection.getBookmark() : null,
+          options,
+          mustPreserveItems(state)),
       Branch.empty,
       prevRanges,
       tr.time,
@@ -430,11 +448,15 @@ HistoryState applyTransaction(HistoryState history, EditorState state, Transacti
   }
 }
 
-Transaction? histTransaction(HistoryState history, EditorState state, bool redo) {
+Transaction? histTransaction(
+    HistoryState history, EditorState state, bool redo) {
   final bool preserveItems = mustPreserveItems(state);
   final histPlugin = historyKey.get(state);
-  final histOptions = (histPlugin?.spec.extraProps["config"] as HistoryOptions?) ?? const HistoryOptions();
-  final pop = (redo ? history.undone : history.done).popEvent(state, preserveItems);
+  final histOptions =
+      (histPlugin?.spec.extraProps["config"] as HistoryOptions?) ??
+          const HistoryOptions();
+  final pop =
+      (redo ? history.undone : history.done).popEvent(state, preserveItems);
   if (pop == null) return null;
 
   final selection = pop.selection.resolve(pop.transform.doc);
@@ -452,7 +474,7 @@ Transaction? histTransaction(HistoryState history, EditorState state, bool redo)
     0,
     -1,
   );
-  
+
   final tr = pop.transform;
   tr.setSelection(selection);
   tr.setMeta(historyKey, HistoryMeta(redo: redo, historyState: newHist));
@@ -465,39 +487,44 @@ Transaction closeHistory(Transaction tr) {
 
 Plugin history([HistoryOptions config = const HistoryOptions()]) {
   return Plugin(PluginSpec(
-    key: historyKey,
-    state: StateField(
-      init: (configObj, instance) {
-        return HistoryState(Branch.empty, Branch.empty, null, 0, -1);
+      key: historyKey,
+      state: StateField(
+        init: (configObj, instance) {
+          return HistoryState(Branch.empty, Branch.empty, null, 0, -1);
+        },
+        apply: (tr, hist, oldState, newState) {
+          return applyTransaction(hist as HistoryState, oldState, tr, config);
+        },
+      ),
+      extraProps: {
+        "config": config,
       },
-      apply: (tr, hist, oldState, newState) {
-        return applyTransaction(hist as HistoryState, oldState, tr, config);
-      },
-    ),
-    extraProps: {
-      "config": config,
-    },
-    props: {
-      "handleDOMEvents": {
-        "beforeinput": (dynamic view, dynamic e) {
-          try {
-            final inputType = e.inputType as String;
-            final Command? command = inputType == "historyUndo" ? undo : inputType == "historyRedo" ? redo : null;
-            if (command == null || view.editable == false) return false;
-            e.preventDefault();
-            return command(view.state as EditorState, view.dispatch as void Function(Transaction));
-          } catch (_) {}
-          return false;
+      props: {
+        "handleDOMEvents": {
+          "beforeinput": (dynamic view, dynamic e) {
+            try {
+              final inputType = e.inputType as String;
+              final Command? command = inputType == "historyUndo"
+                  ? undo
+                  : inputType == "historyRedo"
+                      ? redo
+                      : null;
+              if (command == null || view.editable == false) return false;
+              e.preventDefault();
+              return command(view.state as EditorState,
+                  view.dispatch as void Function(Transaction));
+            } catch (_) {}
+            return false;
+          }
         }
-      }
-    }
-  ));
+      }));
 }
 
 Command buildCommand(bool redoVal, bool scroll) {
   return (state, [dispatch, view]) {
     final hist = historyKey.getState(state) as HistoryState?;
-    if (hist == null || (redoVal ? hist.undone : hist.done).eventCount == 0) return false;
+    if (hist == null || (redoVal ? hist.undone : hist.done).eventCount == 0)
+      return false;
     if (dispatch != null) {
       final tr = histTransaction(hist, state, redoVal);
       if (tr != null) {

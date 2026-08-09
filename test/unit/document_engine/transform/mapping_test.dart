@@ -8,7 +8,7 @@ void testMapping(Mapping mapping, List<List<dynamic>> cases) {
     int to = cases[i][1];
     int bias = cases[i].length > 2 ? cases[i][2] : 1;
     bool lossy = cases[i].length > 3 ? cases[i][3] : false;
-    
+
     expect(mapping.map(from, bias), equals(to));
     if (!lossy) expect(inverted.map(to, bias), equals(from));
   }
@@ -41,69 +41,239 @@ Mapping mk(List<dynamic> args) {
 void main() {
   group('Mapping', () {
     test('can map through a single insertion', () {
-      testMapping(mk([[2, 0, 4]]), [
-        [0, 0], [2, 6], [2, 2, -1], [3, 7]
-      ]);
+      testMapping(
+          mk([
+            [2, 0, 4]
+          ]),
+          [
+            [0, 0],
+            [2, 6],
+            [2, 2, -1],
+            [3, 7]
+          ]);
     });
 
     test('can map through a single deletion', () {
-      testMapping(mk([[2, 4, 0]]), [
-        [0, 0], [2, 2, -1], [3, 2, 1, true], [6, 2, 1], [6, 2, -1, true], [7, 3]
-      ]);
+      testMapping(
+          mk([
+            [2, 4, 0]
+          ]),
+          [
+            [0, 0],
+            [2, 2, -1],
+            [3, 2, 1, true],
+            [6, 2, 1],
+            [6, 2, -1, true],
+            [7, 3]
+          ]);
     });
 
     test('can map through a single replace', () {
-      testMapping(mk([[2, 4, 4]]), [
-        [0, 0], [2, 2, 1], [4, 6, 1, true], [4, 2, -1, true], [6, 6, -1], [8, 8]
-      ]);
+      testMapping(
+          mk([
+            [2, 4, 4]
+          ]),
+          [
+            [0, 0],
+            [2, 2, 1],
+            [4, 6, 1, true],
+            [4, 2, -1, true],
+            [6, 6, -1],
+            [8, 8]
+          ]);
     });
 
     test('can map through a mirrorred delete-insert', () {
-      testMapping(mk([[2, 4, 0], [2, 0, 4], {0: 1}]), [
-        [0, 0], [2, 2], [4, 4], [6, 6], [7, 7]
-      ]);
+      testMapping(
+          mk([
+            [2, 4, 0],
+            [2, 0, 4],
+            {0: 1}
+          ]),
+          [
+            [0, 0],
+            [2, 2],
+            [4, 4],
+            [6, 6],
+            [7, 7]
+          ]);
     });
 
     test('cap map through a mirrorred insert-delete', () {
-      testMapping(mk([[2, 0, 4], [2, 4, 0], {0: 1}]), [
-        [0, 0], [2, 2], [3, 3]
-      ]);
+      testMapping(
+          mk([
+            [2, 0, 4],
+            [2, 4, 0],
+            {0: 1}
+          ]),
+          [
+            [0, 0],
+            [2, 2],
+            [3, 3]
+          ]);
     });
 
     test('can map through an delete-insert with an insert in between', () {
-      testMapping(mk([[2, 4, 0], [1, 0, 1], [3, 0, 4], {0: 2}]), [
-        [0, 0], [1, 2], [4, 5], [6, 7], [7, 8]
-      ]);
+      testMapping(
+          mk([
+            [2, 4, 0],
+            [1, 0, 1],
+            [3, 0, 4],
+            {0: 2}
+          ]),
+          [
+            [0, 0],
+            [1, 2],
+            [4, 5],
+            [6, 7],
+            [7, 8]
+          ]);
     });
 
     test('assigns the correct deleted flags when deletions happen before', () {
-      testDel(mk([[0, 2, 0]]), 2, -1, "db");
-      testDel(mk([[0, 2, 0]]), 2, 1, "b");
-      testDel(mk([[0, 2, 2]]), 2, -1, "db");
-      testDel(mk([[0, 1, 0], [0, 1, 0]]), 2, -1, "db");
-      testDel(mk([[0, 1, 0]]), 2, -1, "");
+      testDel(
+          mk([
+            [0, 2, 0]
+          ]),
+          2,
+          -1,
+          "db");
+      testDel(
+          mk([
+            [0, 2, 0]
+          ]),
+          2,
+          1,
+          "b");
+      testDel(
+          mk([
+            [0, 2, 2]
+          ]),
+          2,
+          -1,
+          "db");
+      testDel(
+          mk([
+            [0, 1, 0],
+            [0, 1, 0]
+          ]),
+          2,
+          -1,
+          "db");
+      testDel(
+          mk([
+            [0, 1, 0]
+          ]),
+          2,
+          -1,
+          "");
     });
 
     test('assigns the correct deleted flags when deletions happen after', () {
-      testDel(mk([[2, 2, 0]]), 2, -1, "a");
-      testDel(mk([[2, 2, 0]]), 2, 1, "da");
-      testDel(mk([[2, 2, 2]]), 2, 1, "da");
-      testDel(mk([[2, 1, 0], [2, 1, 0]]), 2, 1, "da");
-      testDel(mk([[3, 2, 0]]), 2, -1, "");
+      testDel(
+          mk([
+            [2, 2, 0]
+          ]),
+          2,
+          -1,
+          "a");
+      testDel(
+          mk([
+            [2, 2, 0]
+          ]),
+          2,
+          1,
+          "da");
+      testDel(
+          mk([
+            [2, 2, 2]
+          ]),
+          2,
+          1,
+          "da");
+      testDel(
+          mk([
+            [2, 1, 0],
+            [2, 1, 0]
+          ]),
+          2,
+          1,
+          "da");
+      testDel(
+          mk([
+            [3, 2, 0]
+          ]),
+          2,
+          -1,
+          "");
     });
 
     test('assigns the correct deleted flags when deletions happen across', () {
-      testDel(mk([[0, 4, 0]]), 2, -1, "dbax");
-      testDel(mk([[0, 4, 0]]), 2, 1, "dbax");
-      testDel(mk([[0, 4, 0]]), 2, 1, "dbax");
-      testDel(mk([[0, 1, 0], [4, 1, 0], [0, 3, 0]]), 2, 1, "dbax");
+      testDel(
+          mk([
+            [0, 4, 0]
+          ]),
+          2,
+          -1,
+          "dbax");
+      testDel(
+          mk([
+            [0, 4, 0]
+          ]),
+          2,
+          1,
+          "dbax");
+      testDel(
+          mk([
+            [0, 4, 0]
+          ]),
+          2,
+          1,
+          "dbax");
+      testDel(
+          mk([
+            [0, 1, 0],
+            [4, 1, 0],
+            [0, 3, 0]
+          ]),
+          2,
+          1,
+          "dbax");
     });
 
     test('assigns the correct deleted flags when deletions happen around', () {
-      testDel(mk([[4, 1, 0], [0, 1, 0]]), 2, -1, "");
-      testDel(mk([[2, 1, 0], [0, 2, 0]]), 2, -1, "dba");
-      testDel(mk([[2, 1, 0], [0, 1, 0]]), 2, -1, "a");
-      testDel(mk([[3, 1, 0], [0, 2, 0]]), 2, -1, "db");
+      testDel(
+          mk([
+            [4, 1, 0],
+            [0, 1, 0]
+          ]),
+          2,
+          -1,
+          "");
+      testDel(
+          mk([
+            [2, 1, 0],
+            [0, 2, 0]
+          ]),
+          2,
+          -1,
+          "dba");
+      testDel(
+          mk([
+            [2, 1, 0],
+            [0, 1, 0]
+          ]),
+          2,
+          -1,
+          "a");
+      testDel(
+          mk([
+            [3, 1, 0],
+            [0, 2, 0]
+          ]),
+          2,
+          -1,
+          "db");
     });
   });
 }

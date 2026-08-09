@@ -63,9 +63,10 @@ class ContentMatch {
     return false;
   }
 
-  Fragment? fillBefore(Fragment after, [bool toEnd = false, int startIndex = 0]) {
+  Fragment? fillBefore(Fragment after,
+      [bool toEnd = false, int startIndex = 0]) {
     List<ContentMatch> seen = [this];
-    
+
     Fragment? search(ContentMatch match, List<NodeType> types) {
       ContentMatch? finished = match.matchFragment(after, startIndex);
       if (finished != null && (!toEnd || finished.validEnd)) {
@@ -75,7 +76,8 @@ class ContentMatch {
       for (int i = 0; i < match.next.length; i++) {
         NodeType type = match.next[i].type;
         ContentMatch nextMatch = match.next[i].next;
-        if (!(type.isText || type.hasRequiredAttrs()) && !seen.contains(nextMatch)) {
+        if (!(type.isText || type.hasRequiredAttrs()) &&
+            !seen.contains(nextMatch)) {
           seen.add(nextMatch);
           Fragment? found = search(nextMatch, [...types, type]);
           if (found != null) return found;
@@ -105,7 +107,9 @@ class ContentMatch {
       ContentMatch match = current.match;
       if (match.matchType(target) != null) {
         List<NodeType> result = [];
-        for (_Active? obj = current; obj != null && obj.type != null; obj = obj.via) {
+        for (_Active? obj = current;
+            obj != null && obj.type != null;
+            obj = obj.via) {
           result.add(obj.type!);
         }
         return result.reversed.toList();
@@ -143,13 +147,15 @@ class ContentMatch {
         if (!seen.contains(m.next[i].next)) scan(m.next[i].next);
       }
     }
+
     scan(this);
     return seen.asMap().entries.map((entry) {
       int i = entry.key;
       ContentMatch m = entry.value;
       String out = "$i${m.validEnd ? '*' : ' '} ";
       for (int j = 0; j < m.next.length; j++) {
-        out += (j > 0 ? ", " : "") + "${m.next[j].type.name}->${seen.indexOf(m.next[j].next)}";
+        out += (j > 0 ? ", " : "") +
+            "${m.next[j].type.name}->${seen.indexOf(m.next[j].next)}";
       }
       return out;
     }).join("\n");
@@ -348,24 +354,24 @@ class _Edge {
 
 List<List<_Edge>> nfa(Expr expr) {
   List<List<_Edge>> nfaObj = [[]];
-  
+
   int node() {
     nfaObj.add([]);
     return nfaObj.length - 1;
   }
-  
+
   _Edge edge(int from, [int? to, NodeType? term]) {
     _Edge e = _Edge(term, to);
     nfaObj[from].add(e);
     return e;
   }
-  
+
   void connect(List<_Edge> edges, int to) {
     for (var e in edges) {
       e.to = to;
     }
   }
-  
+
   List<_Edge> compile(Expr expr, int from) {
     if (expr is ChoiceExpr) {
       return expr.exprs.expand((e) => compile(e, from)).toList();
@@ -421,7 +427,7 @@ int _cmp(int a, int b) => b - a;
 
 List<int> nullFrom(List<List<_Edge>> nfaObj, int startNode) {
   List<int> result = [];
-  
+
   void scan(int node) {
     List<_Edge> edges = nfaObj[node];
     if (edges.length == 1 && edges[0].term == null) return scan(edges[0].to!);
@@ -432,7 +438,7 @@ List<int> nullFrom(List<List<_Edge>> nfaObj, int startNode) {
       if (term == null && !result.contains(to)) scan(to);
     }
   }
-  
+
   scan(startNode);
   result.sort(_cmp);
   return result;
@@ -440,7 +446,7 @@ List<int> nullFrom(List<List<_Edge>> nfaObj, int startNode) {
 
 ContentMatch dfa(List<List<_Edge>> nfaObj) {
   Map<String, ContentMatch> labeled = {};
-  
+
   ContentMatch explore(List<int> states) {
     List<List<dynamic>> out = [];
     for (int node in states) {
@@ -459,11 +465,11 @@ ContentMatch dfa(List<List<_Edge>> nfaObj) {
         }
       }
     }
-    
+
     String stateKey = states.join(",");
     ContentMatch state = ContentMatch(states.contains(nfaObj.length - 1));
     labeled[stateKey] = state;
-    
+
     for (var pair in out) {
       NodeType term = pair[0] as NodeType;
       List<int> nextStates = pair[1] as List<int>;
@@ -491,7 +497,8 @@ void checkForDeadEnds(ContentMatch match, TokenStream stream) {
       if (!work.contains(next)) work.add(next);
     }
     if (dead) {
-      stream.err("Only non-generatable nodes (${nodes.join(", ")}) in a required position");
+      stream.err(
+          "Only non-generatable nodes (${nodes.join(", ")}) in a required position");
     }
   }
 }

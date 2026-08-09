@@ -351,6 +351,21 @@ class OfficeEditorView {
   /// A janela de páginas montada agora. Null quando tudo está montado.
   PageWindow? get mountedWindow => _window;
 
+  /// Reprojeta o grafo CORRENTE sem recompor.
+  ///
+  /// Existe para uma mudança que é só de PROJEÇÃO: entrar no modo
+  /// cabeçalho/rodapé desliga o `contenteditable` do corpo, e isso é um
+  /// atributo escrito pelo renderer, não uma mudança de documento. Recompor
+  /// para trocar um atributo custaria a paginação inteira (centenas de ms num
+  /// DOCX longo) sem produzir um grafo diferente. Durante composição IME a
+  /// projeção pertence ao browser e a chamada é ignorada — a mesma regra do
+  /// `dispatch`.
+  void reproject() {
+    if (_disposed || _composing) return;
+    _project();
+    _writeSelection();
+  }
+
   /// True enquanto uma composição IME está em curso. Enquanto for true, a
   /// projeção NÃO é reconstruída.
   bool get isComposing => _composing;

@@ -12,18 +12,34 @@ class FieldDesc {
 }
 
 final List<FieldDesc> _baseFields = [
-  FieldDesc("doc",
-      (EditorStateConfig config, EditorState instance) => config.doc ?? config.schema!.topNodeType.createAndFill()!,
-      (Transaction tr, PMNode value, EditorState oldState, EditorState newState) => tr.doc),
-  FieldDesc("selection",
-      (EditorStateConfig config, EditorState instance) => config.selection ?? Selection.atStart(instance.doc),
-      (Transaction tr, Selection value, EditorState oldState, EditorState newState) => tr.selection),
-  FieldDesc("storedMarks",
+  FieldDesc(
+      "doc",
+      (EditorStateConfig config, EditorState instance) =>
+          config.doc ?? config.schema!.topNodeType.createAndFill()!,
+      (Transaction tr, PMNode value, EditorState oldState,
+              EditorState newState) =>
+          tr.doc),
+  FieldDesc(
+      "selection",
+      (EditorStateConfig config, EditorState instance) =>
+          config.selection ?? Selection.atStart(instance.doc),
+      (Transaction tr, Selection value, EditorState oldState,
+              EditorState newState) =>
+          tr.selection),
+  FieldDesc(
+      "storedMarks",
       (EditorStateConfig config, EditorState instance) => config.storedMarks,
-      (Transaction tr, List<Mark>? marks, EditorState oldState, EditorState newState) => (newState.selection is TextSelection && (newState.selection as TextSelection).empty) ? tr.storedMarks : null),
-  FieldDesc("scrollToSelection",
+      (Transaction tr, List<Mark>? marks, EditorState oldState,
+              EditorState newState) =>
+          (newState.selection is TextSelection &&
+                  (newState.selection as TextSelection).empty)
+              ? tr.storedMarks
+              : null),
+  FieldDesc(
+      "scrollToSelection",
       (EditorStateConfig config, EditorState instance) => 0,
-      (Transaction tr, int prev, EditorState oldState, EditorState newState) => tr.scrolledIntoView ? prev + 1 : prev),
+      (Transaction tr, int prev, EditorState oldState, EditorState newState) =>
+          tr.scrolledIntoView ? prev + 1 : prev),
 ];
 
 class Configuration {
@@ -42,15 +58,19 @@ class Configuration {
     if (plugins != null) {
       for (Plugin plugin in plugins) {
         if (pluginsByKey.containsKey(plugin.key)) {
-          throw RangeError("Adding different instances of a keyed plugin (${plugin.key})");
+          throw RangeError(
+              "Adding different instances of a keyed plugin (${plugin.key})");
         }
         currentPlugins.add(plugin);
         pluginsByKey[plugin.key] = plugin;
         if (plugin.spec.state != null) {
           fields.add(FieldDesc(
             plugin.key,
-            (EditorStateConfig config, EditorState instance) => plugin.spec.state!.init(config, instance),
-            (Transaction tr, dynamic value, EditorState oldState, EditorState newState) => plugin.spec.state!.apply(tr, value, oldState, newState),
+            (EditorStateConfig config, EditorState instance) =>
+                plugin.spec.state!.init(config, instance),
+            (Transaction tr, dynamic value, EditorState oldState,
+                    EditorState newState) =>
+                plugin.spec.state!.apply(tr, value, oldState, newState),
           ));
         }
       }
@@ -102,7 +122,8 @@ class EditorState {
     for (int i = 0; i < config.plugins.length; i++) {
       if (i != ignore) {
         Plugin plugin = config.plugins[i];
-        if (plugin.spec.filterTransaction != null && !plugin.spec.filterTransaction!(tr, this)) {
+        if (plugin.spec.filterTransaction != null &&
+            !plugin.spec.filterTransaction!(tr, this)) {
           return false;
         }
       }
@@ -124,13 +145,18 @@ class EditorState {
         if (plugin.spec.appendTransaction != null) {
           int n = seen != null ? seen[i].n : 0;
           EditorState oldState = seen != null ? seen[i].state : this;
-          Transaction? tr = n < trs.length ? plugin.spec.appendTransaction!(n > 0 ? trs.sublist(n) : trs, oldState, newState) : null;
+          Transaction? tr = n < trs.length
+              ? plugin.spec.appendTransaction!(
+                  n > 0 ? trs.sublist(n) : trs, oldState, newState)
+              : null;
           if (tr != null && newState.filterTransaction(tr, i)) {
             tr.setMeta("appendedTransaction", rootTr);
             if (seen == null) {
               seen = [];
               for (int j = 0; j < config.plugins.length; j++) {
-                seen.add(j < i ? _SeenPlugin(newState, trs.length) : _SeenPlugin(this, 0));
+                seen.add(j < i
+                    ? _SeenPlugin(newState, trs.length)
+                    : _SeenPlugin(this, 0));
               }
             }
             trs.add(tr);
@@ -145,22 +171,31 @@ class EditorState {
   }
 
   EditorState applyInner(Transaction tr) {
-    if (!tr.before.eq(doc)) throw RangeError("Applying a mismatched transaction");
+    if (!tr.before.eq(doc))
+      throw RangeError("Applying a mismatched transaction");
     EditorState newInstance = EditorState._(config);
     for (int i = 0; i < config.fields.length; i++) {
       FieldDesc field = config.fields[i];
       dynamic oldValue;
-      if (field.name == 'doc') oldValue = _doc;
-      else if (field.name == 'selection') oldValue = _selection;
-      else if (field.name == 'storedMarks') oldValue = _storedMarks;
-      else oldValue = pluginState[field.name];
+      if (field.name == 'doc')
+        oldValue = _doc;
+      else if (field.name == 'selection')
+        oldValue = _selection;
+      else if (field.name == 'storedMarks')
+        oldValue = _storedMarks;
+      else
+        oldValue = pluginState[field.name];
 
       dynamic newValue = field.apply(tr, oldValue, this, newInstance);
 
-      if (field.name == 'doc') newInstance._doc = newValue;
-      else if (field.name == 'selection') newInstance._selection = newValue;
-      else if (field.name == 'storedMarks') newInstance._storedMarks = newValue;
-      else newInstance.pluginState[field.name] = newValue;
+      if (field.name == 'doc')
+        newInstance._doc = newValue;
+      else if (field.name == 'selection')
+        newInstance._selection = newValue;
+      else if (field.name == 'storedMarks')
+        newInstance._storedMarks = newValue;
+      else
+        newInstance.pluginState[field.name] = newValue;
     }
     return newInstance;
   }
@@ -168,15 +203,21 @@ class EditorState {
   Transaction get tr => Transaction(this);
 
   static EditorState create(EditorStateConfig config) {
-    Configuration configObj = Configuration(config.doc != null ? config.doc!.type.schema : config.schema!, config.plugins);
+    Configuration configObj = Configuration(
+        config.doc != null ? config.doc!.type.schema : config.schema!,
+        config.plugins);
     EditorState instance = EditorState._(configObj);
     for (int i = 0; i < configObj.fields.length; i++) {
       FieldDesc field = configObj.fields[i];
       dynamic value = field.init(config, instance);
-      if (field.name == 'doc') instance._doc = value;
-      else if (field.name == 'selection') instance._selection = value;
-      else if (field.name == 'storedMarks') instance._storedMarks = value;
-      else instance.pluginState[field.name] = value;
+      if (field.name == 'doc')
+        instance._doc = value;
+      else if (field.name == 'selection')
+        instance._selection = value;
+      else if (field.name == 'storedMarks')
+        instance._storedMarks = value;
+      else
+        instance.pluginState[field.name] = value;
     }
     return instance;
   }
@@ -188,19 +229,27 @@ class EditorState {
     for (int i = 0; i < fields.length; i++) {
       String name = fields[i].name;
       dynamic value;
-      if (name == 'doc') value = _doc;
-      else if (name == 'selection') value = _selection;
-      else if (name == 'storedMarks') value = _storedMarks;
-      else if (pluginState.containsKey(name)) value = pluginState[name];
+      if (name == 'doc')
+        value = _doc;
+      else if (name == 'selection')
+        value = _selection;
+      else if (name == 'storedMarks')
+        value = _storedMarks;
+      else if (pluginState.containsKey(name))
+        value = pluginState[name];
       else {
         // init new field
         value = fields[i].init(EditorStateConfig(plugins: plugins), instance);
       }
-      
-      if (name == 'doc') instance._doc = value;
-      else if (name == 'selection') instance._selection = value;
-      else if (name == 'storedMarks') instance._storedMarks = value;
-      else instance.pluginState[name] = value;
+
+      if (name == 'doc')
+        instance._doc = value;
+      else if (name == 'selection')
+        instance._selection = value;
+      else if (name == 'storedMarks')
+        instance._storedMarks = value;
+      else
+        instance.pluginState[name] = value;
     }
     return instance;
   }
@@ -216,7 +265,8 @@ class EditorState {
     if (pluginFields != null) {
       for (String prop in pluginFields.keys) {
         if (prop == "doc" || prop == "selection") {
-          throw RangeError("The JSON fields `doc` and `selection` are reserved");
+          throw RangeError(
+              "The JSON fields `doc` and `selection` are reserved");
         }
         Plugin plugin = pluginFields[prop]!;
         StateField<dynamic>? state = plugin.spec.state;
@@ -228,9 +278,12 @@ class EditorState {
     return result;
   }
 
-  static EditorState fromJSON(EditorStateConfig config, dynamic json, [Map<String, Plugin>? pluginFields]) {
-    if (json == null) throw RangeError("Invalid input for EditorState.fromJSON");
-    if (config.schema == null) throw RangeError("Required config field 'schema' missing");
+  static EditorState fromJSON(EditorStateConfig config, dynamic json,
+      [Map<String, Plugin>? pluginFields]) {
+    if (json == null)
+      throw RangeError("Invalid input for EditorState.fromJSON");
+    if (config.schema == null)
+      throw RangeError("Required config field 'schema' missing");
     Configuration configObj = Configuration(config.schema!, config.plugins);
     EditorState instance = EditorState._(configObj);
 
@@ -238,10 +291,13 @@ class EditorState {
       if (field.name == "doc") {
         instance._doc = PMNode.fromJSON(config.schema!, json['doc']);
       } else if (field.name == "selection") {
-        instance._selection = Selection.fromJSON(instance._doc, json['selection']);
+        instance._selection =
+            Selection.fromJSON(instance._doc, json['selection']);
       } else if (field.name == "storedMarks") {
         if (json['storedMarks'] != null) {
-          instance._storedMarks = (json['storedMarks'] as List).map((m) => config.schema!.markFromJSON(m)).toList();
+          instance._storedMarks = (json['storedMarks'] as List)
+              .map((m) => config.schema!.markFromJSON(m))
+              .toList();
         }
       } else {
         bool handled = false;
@@ -249,8 +305,12 @@ class EditorState {
           for (String prop in pluginFields.keys) {
             Plugin plugin = pluginFields[prop]!;
             StateField<dynamic>? state = plugin.spec.state;
-            if (plugin.key == field.name && state != null && state.fromJSON != null && json.containsKey(prop)) {
-              instance.pluginState[field.name] = state.fromJSON!(config, json[prop], instance);
+            if (plugin.key == field.name &&
+                state != null &&
+                state.fromJSON != null &&
+                json.containsKey(prop)) {
+              instance.pluginState[field.name] =
+                  state.fromJSON!(config, json[prop], instance);
               handled = true;
               break;
             }

@@ -13,17 +13,22 @@ import '../state/index.dart';
 import 'controller.dart';
 
 /// Aplica uma marca com atributos sobre a seleção nativa (fonte/tamanho).
+///
+/// Todas as ações deste arquivo leem `c.activeView`, não `c.view`: com o
+/// modo cabeçalho/rodapé aberto, formatar tem de agir na REGIÃO que o
+/// usuário está editando, e não no corpo que ficou parado atrás dela.
 void addMarkOverSelection(
     OfficeWordController c, String markName, Map<String, dynamic> attrs) {
   final type = c.schema.marks[markName];
   if (type == null) return;
   c.syncSelection();
-  final selection = c.view.state.selection;
+  final selection = c.activeView.state.selection;
   final mark = type.create(attrs);
   if (selection.empty) {
-    c.dispatch(c.view.state.tr..addStoredMark(mark));
+    c.dispatch(c.activeView.state.tr..addStoredMark(mark));
   } else {
-    c.dispatch(c.view.state.tr..addMark(selection.from, selection.to, mark));
+    c.dispatch(
+        c.activeView.state.tr..addMark(selection.from, selection.to, mark));
   }
 }
 
@@ -32,7 +37,7 @@ void addMarkOverSelection(
 String? currentMarkValue(OfficeWordController c, String markName) {
   final type = c.schema.marks[markName];
   if (type == null) return null;
-  final state = c.view.state;
+  final state = c.activeView.state;
   final selection = state.selection;
   final marks = selection.empty
       ? (state.storedMarks ?? selection.fromRes.marks())
@@ -58,7 +63,7 @@ String? currentMarkValue(OfficeWordController c, String markName) {
 String? effectiveInlineValue(OfficeWordController c, String markName) {
   final type = c.schema.marks[markName];
   if (type == null) return null;
-  final state = c.view.state;
+  final state = c.activeView.state;
   final selection = state.selection;
 
   String? fromMarks(Iterable<Mark> marks) {
@@ -170,8 +175,8 @@ void toggleScript(OfficeWordController c, String value) {
   final type = c.schema.marks['script'];
   if (type == null) return;
   c.syncSelection();
-  final selection = c.view.state.selection;
-  final tr = c.view.state.tr;
+  final selection = c.activeView.state.selection;
+  final tr = c.activeView.state.tr;
   if (currentMarkValue(c, 'script') == value) {
     if (selection.empty) {
       tr.removeStoredMark(type);
@@ -192,8 +197,8 @@ void toggleScript(OfficeWordController c, String value) {
 /// A borracha do Word: remove TODAS as marcas da seleção.
 void clearFormatting(OfficeWordController c) {
   c.syncSelection();
-  final selection = c.view.state.selection;
-  final tr = c.view.state.tr;
+  final selection = c.activeView.state.selection;
+  final tr = c.activeView.state.tr;
   if (selection.empty) {
     tr.setStoredMarks([]);
   } else {
@@ -207,8 +212,8 @@ void applyMarkColor(OfficeWordController c, String markName, String? color) {
   final type = c.schema.marks[markName];
   if (type == null) return;
   c.syncSelection();
-  final selection = c.view.state.selection;
-  final tr = c.view.state.tr;
+  final selection = c.activeView.state.selection;
+  final tr = c.activeView.state.tr;
   if (color == null) {
     if (selection.empty) {
       tr.removeStoredMark(type);
@@ -230,7 +235,7 @@ void applyMarkColor(OfficeWordController c, String markName, String? color) {
 /// minúsculas.
 void toggleCase(OfficeWordController c) {
   c.syncSelection();
-  final state = c.view.state;
+  final state = c.activeView.state;
   final selection = state.selection;
   if (selection.empty) return;
   final text = state.doc.textBetween(selection.from, selection.to);
@@ -263,17 +268,17 @@ List<Mark>? _painterMarks;
 
 void copySelection(OfficeWordController c) {
   c.syncSelection();
-  final selection = c.view.state.selection;
+  final selection = c.activeView.state.selection;
   if (selection.empty) return;
   _internalClipboard = selection.content();
 }
 
 void cutSelection(OfficeWordController c) {
   c.syncSelection();
-  final selection = c.view.state.selection;
+  final selection = c.activeView.state.selection;
   if (selection.empty) return;
   _internalClipboard = selection.content();
-  c.dispatch(c.view.state.tr..deleteSelection());
+  c.dispatch(c.activeView.state.tr..deleteSelection());
 }
 
 /// Há algo copiado NO editor para colar? (O menu de contexto desabilita o
@@ -284,14 +289,14 @@ void pasteInternal(OfficeWordController c) {
   final slice = _internalClipboard;
   if (slice == null) return;
   c.syncSelection();
-  c.dispatch(c.view.state.tr..replaceSelection(slice));
+  c.dispatch(c.activeView.state.tr..replaceSelection(slice));
 }
 
 /// Pincel de Formatação: copia as marcas vigentes; a próxima seleção as
 /// recebe (one-shot, como um clique no pincel do Word).
 void armFormatPainter(OfficeWordController c) {
   c.syncSelection();
-  final state = c.view.state;
+  final state = c.activeView.state;
   final selection = state.selection;
   _painterMarks = List.of(selection.empty
       ? (state.storedMarks ?? selection.fromRes.marks())
@@ -306,9 +311,9 @@ void maybeApplyFormatPainter(OfficeWordController c) {
   if (marks == null) return;
   _painterMarks = null;
   c.syncSelection();
-  final selection = c.view.state.selection;
+  final selection = c.activeView.state.selection;
   if (selection.empty) return;
-  final tr = c.view.state.tr;
+  final tr = c.activeView.state.tr;
   tr.removeMark(selection.from, selection.to);
   for (final mark in marks) {
     tr.addMark(selection.from, selection.to, mark);
@@ -319,7 +324,7 @@ void maybeApplyFormatPainter(OfficeWordController c) {
 /// Alinha os BLOCOS cobertos pela seleção.
 void setAlign(OfficeWordController c, String align) {
   c.syncSelection();
-  final state = c.view.state;
+  final state = c.activeView.state;
   final tr = state.tr;
   state.doc.nodesBetween(state.selection.from, state.selection.to,
       (node, pos, parent, index) {
@@ -337,7 +342,7 @@ void setAlign(OfficeWordController c, String align) {
 /// parágrafo que a contém — que é exatamente como o Word se comporta nos
 /// dois casos.
 void setObjectAlign(OfficeWordController c, String align) {
-  final state = c.view.state;
+  final state = c.activeView.state;
   final selection = state.selection;
   if (selection is! NodeSelection) return;
   final node = selection.node;
@@ -365,7 +370,7 @@ void setObjectAlign(OfficeWordController c, String align) {
 
 /// Apaga o objeto selecionado, deixando o caret onde ele estava.
 void deleteSelectedObject(OfficeWordController c) {
-  final state = c.view.state;
+  final state = c.activeView.state;
   final selection = state.selection;
   if (selection is! NodeSelection) return;
   final tr = state.tr..delete(selection.from, selection.to);
@@ -379,7 +384,7 @@ void deleteSelectedObject(OfficeWordController c) {
 /// comportamento do Word.
 void toggleList(OfficeWordController c, String kind) {
   c.syncSelection();
-  final block = c.view.state.selection.fromRes.parent;
+  final block = c.activeView.state.selection.fromRes.parent;
   final isSame = block.type.name == 'listItem' && block.attrs['kind'] == kind;
   final command = isSame
       ? cmd.setBlockType(c.schema.nodes['paragraph']!, (PMNode node) {
@@ -394,7 +399,7 @@ void toggleList(OfficeWordController c, String kind) {
             'style': _styleWithoutListMarker(node),
           };
         });
-  command(c.view.state, c.dispatch);
+  command(c.activeView.state, c.dispatch);
 }
 
 void applyNamedStyle(OfficeWordController c, String name) {
@@ -419,7 +424,7 @@ void applyNamedStyle(OfficeWordController c, String name) {
       if (node.type.name == 'listItem') 'style': _styleWithoutListMarker(node),
     };
   });
-  command(c.view.state, c.dispatch);
+  command(c.activeView.state, c.dispatch);
 }
 
 /// Keeps imported paragraph properties while changing only what the ribbon
@@ -455,7 +460,7 @@ dynamic _styleWithoutListMarker(PMNode node) {
 /// fecha a página ao encontrá-lo, e o PDF sai igual.
 void insertPageBreak(OfficeWordController c) {
   c.syncSelection();
-  final state = c.view.state;
+  final state = c.activeView.state;
   final tr = state.tr;
   final from = state.selection.from;
   tr.split(from);
@@ -491,7 +496,7 @@ void insertHardBreak(OfficeWordController c, String breakType) {
   final type = c.schema.nodes['hardBreak'];
   if (type == null) return;
   c.syncSelection();
-  c.dispatch(c.view.state.tr
+  c.dispatch(c.activeView.state.tr
     ..replaceSelectionWith(type.create({'breakType': breakType})));
 }
 
@@ -500,7 +505,7 @@ void insertHardBreak(OfficeWordController c, String breakType) {
 /// nova página em branco.
 void insertBlankPage(OfficeWordController c) {
   c.syncSelection();
-  final state = c.view.state;
+  final state = c.activeView.state;
   final tr = state.tr;
   final from = state.selection.from;
   tr.split(from);
@@ -542,8 +547,8 @@ void insertTable(OfficeWordController c, int rows, int cols) {
   final table = c.schema.node(
       'table', null, Fragment.from([for (var r = 0; r < rows; r++) row()]));
 
-  final from = c.view.state.selection.from;
-  final tr = c.view.state.tr..replaceSelectionWith(table);
+  final from = c.activeView.state.selection.from;
+  final tr = c.activeView.state.tr..replaceSelectionWith(table);
   final around = tr.mapping.map(from);
   int? cellText;
   tr.doc.nodesBetween(around - table.nodeSize < 0 ? 0 : around - table.nodeSize,

@@ -17,7 +17,8 @@ class StateField<T> {
   final dynamic init;
   final dynamic apply;
   final dynamic Function(dynamic value)? toJSON;
-  final dynamic Function(EditorStateConfig config, dynamic value, EditorState state)? fromJSON;
+  final dynamic Function(
+      EditorStateConfig config, dynamic value, EditorState state)? fromJSON;
 
   StateField({
     required this.init,
@@ -33,7 +34,8 @@ class PluginSpec<T> {
   final PluginKey? key;
   final PluginView Function(dynamic view)? view; // view is EditorView
   final bool Function(Transaction tr, EditorState state)? filterTransaction;
-  final Transaction? Function(List<Transaction> transactions, EditorState oldState, EditorState newState)? appendTransaction;
+  final Transaction? Function(List<Transaction> transactions,
+      EditorState oldState, EditorState newState)? appendTransaction;
   final Map<String, dynamic> extraProps;
 
   PluginSpec({

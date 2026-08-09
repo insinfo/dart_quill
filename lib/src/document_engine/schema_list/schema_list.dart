@@ -61,14 +61,8 @@ Transform _doWrapInList(Transform tr, NodeRange range, List<Wrapping> wrappers,
         Fragment.from(wrappers[i].type.create(wrappers[i].attrs, content));
   }
 
-  tr.step(ReplaceAroundStep(
-      range.start - (joinBefore ? 2 : 0),
-      range.end,
-      range.start,
-      range.end,
-      Slice(content, 0, 0),
-      wrappers.length,
-      true));
+  tr.step(ReplaceAroundStep(range.start - (joinBefore ? 2 : 0), range.end,
+      range.start, range.end, Slice(content, 0, 0), wrappers.length, true));
 
   var found = 0;
   for (var i = 0; i < wrappers.length; i++) {
@@ -150,8 +144,9 @@ Command splitListItem(NodeType itemType, [Map<String, dynamic>? itemAttrs]) {
       }
       return true;
     }
-    final nextType =
-        $to.pos == $from.end() ? grandParent.contentMatchAt(0).defaultType : null;
+    final nextType = $to.pos == $from.end()
+        ? grandParent.contentMatchAt(0).defaultType
+        : null;
     final tr = state.tr;
     tr.delete($from.pos, $to.pos);
     final types = nextType != null
@@ -175,8 +170,8 @@ Command liftListItem(NodeType itemType) {
   return (state, [dispatch, view]) {
     final $from = state.selection.$from;
     final $to = state.selection.$to;
-    final range = $from.blockRange(
-        $to, (node) => node.childCount > 0 && node.firstChild!.type == itemType);
+    final range = $from.blockRange($to,
+        (node) => node.childCount > 0 && node.firstChild!.type == itemType);
     if (range == null) return false;
     if (dispatch == null) return true;
     if ($from.node(range.depth - 1).type == itemType) {
@@ -205,8 +200,8 @@ bool _liftToOuterList(EditorState state, void Function(Transaction) dispatch,
         Slice(Fragment.from(itemType.create(null, range.parent.copy())), 1, 0),
         1,
         true));
-    range = NodeRange(
-        tr.doc.resolve(range.$from.pos), tr.doc.resolve(endOfList), range.depth);
+    range = NodeRange(tr.doc.resolve(range.$from.pos),
+        tr.doc.resolve(endOfList), range.depth);
   }
   final target = liftTarget(range);
   if (target == null) return false;
@@ -220,8 +215,8 @@ bool _liftToOuterList(EditorState state, void Function(Transaction) dispatch,
   return true;
 }
 
-bool _liftOutOfList(EditorState state, void Function(Transaction) dispatch,
-    NodeRange range) {
+bool _liftOutOfList(
+    EditorState state, void Function(Transaction) dispatch, NodeRange range) {
   final tr = state.tr;
   final list = range.parent;
   // Merge the list items into a single big item
@@ -241,11 +236,8 @@ bool _liftOutOfList(EditorState state, void Function(Transaction) dispatch,
   final atEnd = range.endIndex == list.childCount;
   final parent = $start.node(-1);
   final indexBefore = $start.index(-1);
-  if (!parent.canReplace(
-      indexBefore + (atStart ? 0 : 1),
-      indexBefore + 1,
-      item.content
-          .append(atEnd ? Fragment.empty : Fragment.from(list)))) {
+  if (!parent.canReplace(indexBefore + (atStart ? 0 : 1), indexBefore + 1,
+      item.content.append(atEnd ? Fragment.empty : Fragment.from(list)))) {
     return false;
   }
   final start = $start.pos;
@@ -259,9 +251,7 @@ bool _liftOutOfList(EditorState state, void Function(Transaction) dispatch,
       start + 1,
       end - 1,
       Slice(
-          (atStart
-                  ? Fragment.empty
-                  : Fragment.from(list.copy(Fragment.empty)))
+          (atStart ? Fragment.empty : Fragment.from(list.copy(Fragment.empty)))
               .append(atEnd
                   ? Fragment.empty
                   : Fragment.from(list.copy(Fragment.empty))),
@@ -278,8 +268,8 @@ Command sinkListItem(NodeType itemType) {
   return (state, [dispatch, view]) {
     final $from = state.selection.$from;
     final $to = state.selection.$to;
-    final range = $from.blockRange(
-        $to, (node) => node.childCount > 0 && node.firstChild!.type == itemType);
+    final range = $from.blockRange($to,
+        (node) => node.childCount > 0 && node.firstChild!.type == itemType);
     if (range == null) return false;
     final startIndex = range.startIndex;
     if (startIndex == 0) return false;
@@ -290,9 +280,8 @@ Command sinkListItem(NodeType itemType) {
     if (dispatch != null) {
       final nestedBefore = nodeBefore.lastChild != null &&
           nodeBefore.lastChild!.type == parent.type;
-      final inner = nestedBefore
-          ? Fragment.from(itemType.create())
-          : Fragment.empty;
+      final inner =
+          nestedBefore ? Fragment.from(itemType.create()) : Fragment.empty;
       final slice = Slice(
           Fragment.from(itemType.create(
               null, Fragment.from(parent.type.create(null, inner)))),
@@ -301,8 +290,8 @@ Command sinkListItem(NodeType itemType) {
       final before = range.start;
       final after = range.end;
       final tr = state.tr;
-      tr.step(ReplaceAroundStep(
-          before - (nestedBefore ? 3 : 1), after, before, after, slice, 1, true));
+      tr.step(ReplaceAroundStep(before - (nestedBefore ? 3 : 1), after, before,
+          after, slice, 1, true));
       dispatch(tr.scrollIntoView());
     }
     return true;

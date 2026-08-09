@@ -192,8 +192,13 @@ void main() {
         {'insert': '\n'},
       ];
       final result = importQuillDelta(ops, schema);
-      expect(result.report.issues.map((i) => i.code),
-          containsAll(['unknown-inline-attribute', 'unknown-line-attribute', 'unknown-embed']));
+      expect(
+          result.report.issues.map((i) => i.code),
+          containsAll([
+            'unknown-inline-attribute',
+            'unknown-line-attribute',
+            'unknown-embed'
+          ]));
       expect(result.report.isLossless, isTrue,
           reason: 'rota de escape preserva; só descarte quebra o lossless');
       expectRoundTrip(ops, schema, label: 'delta com desconhecidos');

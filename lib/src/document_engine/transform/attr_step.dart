@@ -12,11 +12,13 @@ class AttrStep extends Step {
   @override
   StepResult apply(PMNode doc) {
     PMNode? node = doc.nodeAt(pos);
-    if (node == null) return StepResult.fail("No node at attribute step's position");
+    if (node == null)
+      return StepResult.fail("No node at attribute step's position");
     Map<String, dynamic> attrs = Map.from(node.attrs);
     attrs[attr] = value;
     PMNode updated = node.type.create(attrs, null, node.marks);
-    return StepResult.fromReplace(doc, pos, pos + 1, Slice(Fragment.from(updated), 0, node.isLeaf ? 0 : 1));
+    return StepResult.fromReplace(doc, pos, pos + 1,
+        Slice(Fragment.from(updated), 0, node.isLeaf ? 0 : 1));
   }
 
   @override

@@ -11,6 +11,7 @@ import 'controller.dart';
 import 'ribbon_actions.dart' as actions;
 import 'table_ops.dart' as table_ops;
 import 'tabs/file_tab.dart';
+import 'tabs/header_footer_tab.dart';
 import 'tabs/home_tab.dart';
 import 'tabs/insert_tab.dart';
 import 'tabs/layout_tab.dart';
@@ -89,6 +90,13 @@ class OfficeRibbon {
   /// Tabela") são grupos grandes demais para caber numa aba só.
   static const List<String> tableTabKeys = ['tableDesign', 'tableLayout'];
 
+  /// Todas as abas que nascem escondidas e aparecem por CONTEXTO: as duas de
+  /// tabela e a de cabeçalho/rodapé.
+  static const List<String> contextualTabKeys = [
+    ...tableTabKeys,
+    'headerfooter',
+  ];
+
   final Map<String, DomElement> _tabs = {};
   final Map<String, DomElement> _markButtons = {};
   final Map<String, ({DomElement element, String fallback})> _markValueSelects =
@@ -99,6 +107,10 @@ class OfficeRibbon {
   final Map<String, DomElement> _styleCards = {};
   DomElement? _styleSelect;
   DomElement? _body;
+
+  /// Estado anterior da sessão de cabeçalho/rodapé — a aba contextual só é
+  /// forçada na TRANSIÇÃO para ativa.
+  bool _headerFooterWasActive = false;
 
   /// A ribbon completa (modo word), com abas.
   DomElement build() {
@@ -112,13 +124,15 @@ class OfficeRibbon {
       ('layout', 'Layout'),
       ('tableDesign', 'Design da Tabela'),
       ('tableLayout', 'Tabela Layout'),
+      ('headerfooter', 'Cabeçalho e Rodapé'),
     ]) {
       final tab = kit.el('button', 'dq-office-ribbon-tab');
       tab.setAttribute('type', 'button');
       tab.appendText(label);
       _tabs[key] = tab;
-      if (tableTabKeys.contains(key)) {
-        // Contextual: só existe enquanto a seleção está numa tabela.
+      if (contextualTabKeys.contains(key)) {
+        // Contextual: só existe enquanto a seleção está numa tabela, ou
+        // enquanto o modo cabeçalho/rodapé está aberto.
         tab.classes.add('dq-office-ribbon-tab-contextual');
         tab.classes.add('dq-office-ribbon-tab-hidden');
       }
@@ -182,6 +196,7 @@ class OfficeRibbon {
       'file' => buildFileTab(context),
       'tableDesign' => buildTableDesignTab(context),
       'tableLayout' => buildTableLayoutTab(context),
+      'headerfooter' => buildHeaderFooterTab(context),
       _ => buildHomeTab(context),
     };
     for (final group in groups) {
@@ -190,31 +205,47 @@ class OfficeRibbon {
     refreshState();
   }
 
-  /// A shell é CONTEXTUAL: as abas de tabela existem enquanto a seleção
-  /// está numa tabela e somem fora — voltando para Página Inicial se uma
-  /// delas estava ativa.
+  /// A shell é CONTEXTUAL: as duas abas de tabela existem enquanto a
+  /// seleção está numa tabela, e a de "Cabeçalho e Rodapé" segue a sessão de
+  /// edição da região. Todas somem fora do contexto — voltando para Página
+  /// Inicial se a que sumiu estava ativa.
   void refreshContextual() {
     if (!controller.viewReady) return;
     final inTable = table_ops.tableDepthOf(controller.view.state) != null;
     for (final key in tableTabKeys) {
       final tab = _tabs[key];
-      if (tab == null) continue;
-      if (inTable) {
-        tab.classes.remove('dq-office-ribbon-tab-hidden');
-      } else {
-        tab.classes.add('dq-office-ribbon-tab-hidden');
-        if (tab.classes.contains('dq-office-ribbon-tab-active')) {
-          showTab('home');
-        }
-      }
+      if (tab != null) _setContextualVisible(tab, inTable);
     }
+
+    final region = _tabs['headerfooter'];
+    if (region == null) return;
+    final active = controller.headerFooter.isActive;
+    _setContextualVisible(region, active);
+    // Entrar no modo TROCA a aba, como no Word — o usuário não deveria ter de
+    // procurar os comandos de cabeçalho depois do duplo clique. Só na
+    // TRANSIÇÃO: forçar a aba a cada refresh impediria olhar outra aba com o
+    // modo aberto.
+    if (active && !_headerFooterWasActive) showTab('headerfooter');
+    _headerFooterWasActive = active;
+  }
+
+  void _setContextualVisible(DomElement tab, bool visible) {
+    if (visible) {
+      tab.classes.remove('dq-office-ribbon-tab-hidden');
+      return;
+    }
+    tab.classes.add('dq-office-ribbon-tab-hidden');
+    if (tab.classes.contains('dq-office-ribbon-tab-active')) showTab('home');
   }
 
   /// Acende os botões conforme a seleção. Leitura pura do estado: a UI
   /// reflete o modelo, nunca o contrário.
   void refreshState() {
     if (!controller.viewReady) return;
-    final state = controller.view.state;
+    // A view ATIVA: com o modo cabeçalho/rodapé aberto, o N aceso tem de
+    // descrever a seleção que está dentro da região, não a que ficou parada
+    // no corpo.
+    final state = controller.activeView.state;
     final selection = state.selection;
 
     bool activeFor(String name) {

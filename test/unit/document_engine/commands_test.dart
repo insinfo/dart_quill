@@ -3,7 +3,6 @@ import 'package:dart_quill/src/document_engine/state/index.dart';
 import 'package:dart_quill/src/document_engine/commands/index.dart';
 import 'package:dart_quill/src/document_engine/test_builder/index.dart';
 
-
 void main() {
   group('Commands', () {
     test('splitBlock should split a paragraph', () {
@@ -27,7 +26,7 @@ void main() {
 
       expect(success, isTrue);
       expect(dispatched, isTrue);
-      
+
       // The expected document structure should have two paragraphs: p("a"), p("b")
       final expected = doc(p("a"), p("b"));
       expect(state.doc.eq(expected), isTrue);

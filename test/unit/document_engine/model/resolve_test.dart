@@ -7,7 +7,11 @@ void main() {
   final _doc = {'node': testDoc, 'start': 0, 'end': 12};
   final _p1 = {'node': testDoc.child(0), 'start': 1, 'end': 3};
   final _blk = {'node': testDoc.child(1), 'start': 5, 'end': 11};
-  final _p2 = {'node': (_blk['node'] as PMNode).child(0), 'start': 6, 'end': 10};
+  final _p2 = {
+    'node': (_blk['node'] as PMNode).child(0),
+    'start': 6,
+    'end': 10
+  };
 
   group('Node', () {
     group('resolve', () {
@@ -45,11 +49,12 @@ void main() {
             }
           }
           expect(posRes.parentOffset, equals(exp[exp.length - 3]));
-          
+
           PMNode? before = posRes.nodeBefore;
           dynamic eBefore = exp[exp.length - 2];
-          expect(eBefore is String ? before?.textContent : before, equals(eBefore));
-          
+          expect(eBefore is String ? before?.textContent : before,
+              equals(eBefore));
+
           PMNode? after = posRes.nodeAfter;
           dynamic eAfter = exp[exp.length - 1];
           expect(eAfter is String ? after?.textContent : after, equals(eAfter));
@@ -57,7 +62,8 @@ void main() {
       });
 
       test('has a working posAtIndex method', () {
-        PMNode d = doc(blockquote(p("one"), blockquote(p("two ", em("three")), p("four"))));
+        PMNode d = doc(blockquote(
+            p("one"), blockquote(p("two ", em("three")), p("four"))));
         ResolvedPos pThree = d.resolve(12); // Start of em("three")
         expect(pThree.posAtIndex(0), equals(8));
         expect(pThree.posAtIndex(1), equals(12));

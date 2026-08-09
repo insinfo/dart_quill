@@ -216,8 +216,8 @@ class OfficeDocumentSnapshot {
       throw OfficeSnapshotFormatException('envelope sem "roots.body"');
     }
     Map<String, Map<String, dynamic>> rootsOf(String key) =>
-        ((roots[key] as Map?) ?? const {}).map((k, v) =>
-            MapEntry('$k', (v as Map).cast<String, dynamic>()));
+        ((roots[key] as Map?) ?? const {})
+            .map((k, v) => MapEntry('$k', (v as Map).cast<String, dynamic>()));
     return OfficeDocumentSnapshot(
       documentId: '${json['documentId']}',
       schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
@@ -250,8 +250,8 @@ class OfficeDocumentSnapshot {
   static String _canonicalEncode(dynamic value) {
     if (value is Map) {
       final keys = value.keys.map((k) => '$k').toList()..sort();
-      final parts = keys.map((k) =>
-          '${json.encode(k)}:${_canonicalEncode(value[k])}');
+      final parts =
+          keys.map((k) => '${json.encode(k)}:${_canonicalEncode(value[k])}');
       return '{${parts.join(',')}}';
     }
     if (value is List) {

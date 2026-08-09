@@ -4,7 +4,8 @@ import '../model/index.dart';
 import 'step.dart';
 import 'map.dart';
 
-Fragment _mapFragment(Fragment fragment, PMNode Function(PMNode, PMNode, int) f, PMNode parent) {
+Fragment _mapFragment(
+    Fragment fragment, PMNode Function(PMNode, PMNode, int) f, PMNode parent) {
   List<PMNode> mapped = [];
   for (int i = 0; i < fragment.childCount; i++) {
     PMNode child = fragment.child(i);
@@ -31,12 +32,16 @@ class AddMarkStep extends Step {
     Slice oldSlice = doc.slice(from, to);
     ResolvedPos fromPos = doc.resolve(from);
     PMNode parent = fromPos.node(fromPos.sharedDepth(to));
-    
-    Slice slice = Slice(_mapFragment(oldSlice.content, (node, parentNode, i) {
-      if (!node.isAtom || !parentNode.type.allowsMarkType(mark.type)) return node;
-      return node.mark(mark.addToSet(node.marks));
-    }, parent), oldSlice.openStart, oldSlice.openEnd);
-    
+
+    Slice slice = Slice(
+        _mapFragment(oldSlice.content, (node, parentNode, i) {
+          if (!node.isAtom || !parentNode.type.allowsMarkType(mark.type))
+            return node;
+          return node.mark(mark.addToSet(node.marks));
+        }, parent),
+        oldSlice.openStart,
+        oldSlice.openEnd);
+
     return StepResult.fromReplace(doc, from, to, slice);
   }
 
@@ -49,13 +54,17 @@ class AddMarkStep extends Step {
   Step? map(Mappable mapping) {
     MapResult fromRes = mapping.mapResult(from, 1);
     MapResult toRes = mapping.mapResult(to, -1);
-    if ((fromRes.deleted && toRes.deleted) || fromRes.pos >= toRes.pos) return null;
+    if ((fromRes.deleted && toRes.deleted) || fromRes.pos >= toRes.pos)
+      return null;
     return AddMarkStep(fromRes.pos, toRes.pos, mark);
   }
 
   @override
   Step? merge(Step other) {
-    if (other is AddMarkStep && other.mark.eq(mark) && from <= other.to && to >= other.from) {
+    if (other is AddMarkStep &&
+        other.mark.eq(mark) &&
+        from <= other.to &&
+        to >= other.from) {
       return AddMarkStep(min(from, other.from), max(to, other.to), mark);
     }
     return null;
@@ -63,14 +72,20 @@ class AddMarkStep extends Step {
 
   @override
   dynamic toJSON() {
-    return {"stepType": "addMark", "mark": mark.toJSON(), "from": from, "to": to};
+    return {
+      "stepType": "addMark",
+      "mark": mark.toJSON(),
+      "from": from,
+      "to": to
+    };
   }
 
   static Step fromJSON(Schema schema, dynamic json) {
     if (json['from'] is! int || json['to'] is! int) {
       throw RangeError("Invalid input for AddMarkStep.fromJSON");
     }
-    return AddMarkStep(json['from'], json['to'], schema.markFromJSON(json['mark']));
+    return AddMarkStep(
+        json['from'], json['to'], schema.markFromJSON(json['mark']));
   }
 }
 
@@ -84,9 +99,12 @@ class RemoveMarkStep extends Step {
   @override
   StepResult apply(PMNode doc) {
     Slice oldSlice = doc.slice(from, to);
-    Slice slice = Slice(_mapFragment(oldSlice.content, (node, parentNode, i) {
-      return node.mark(mark.removeFromSet(node.marks));
-    }, doc), oldSlice.openStart, oldSlice.openEnd);
+    Slice slice = Slice(
+        _mapFragment(oldSlice.content, (node, parentNode, i) {
+          return node.mark(mark.removeFromSet(node.marks));
+        }, doc),
+        oldSlice.openStart,
+        oldSlice.openEnd);
     return StepResult.fromReplace(doc, from, to, slice);
   }
 
@@ -99,13 +117,17 @@ class RemoveMarkStep extends Step {
   Step? map(Mappable mapping) {
     MapResult fromRes = mapping.mapResult(from, 1);
     MapResult toRes = mapping.mapResult(to, -1);
-    if ((fromRes.deleted && toRes.deleted) || fromRes.pos >= toRes.pos) return null;
+    if ((fromRes.deleted && toRes.deleted) || fromRes.pos >= toRes.pos)
+      return null;
     return RemoveMarkStep(fromRes.pos, toRes.pos, mark);
   }
 
   @override
   Step? merge(Step other) {
-    if (other is RemoveMarkStep && other.mark.eq(mark) && from <= other.to && to >= other.from) {
+    if (other is RemoveMarkStep &&
+        other.mark.eq(mark) &&
+        from <= other.to &&
+        to >= other.from) {
       return RemoveMarkStep(min(from, other.from), max(to, other.to), mark);
     }
     return null;
@@ -113,14 +135,20 @@ class RemoveMarkStep extends Step {
 
   @override
   dynamic toJSON() {
-    return {"stepType": "removeMark", "mark": mark.toJSON(), "from": from, "to": to};
+    return {
+      "stepType": "removeMark",
+      "mark": mark.toJSON(),
+      "from": from,
+      "to": to
+    };
   }
 
   static Step fromJSON(Schema schema, dynamic json) {
     if (json['from'] is! int || json['to'] is! int) {
       throw RangeError("Invalid input for RemoveMarkStep.fromJSON");
     }
-    return RemoveMarkStep(json['from'], json['to'], schema.markFromJSON(json['mark']));
+    return RemoveMarkStep(
+        json['from'], json['to'], schema.markFromJSON(json['mark']));
   }
 }
 
@@ -134,8 +162,10 @@ class AddNodeMarkStep extends Step {
   StepResult apply(PMNode doc) {
     PMNode? node = doc.nodeAt(pos);
     if (node == null) return StepResult.fail("No node at mark step's position");
-    PMNode updated = node.type.create(node.attrs, null, mark.addToSet(node.marks));
-    return StepResult.fromReplace(doc, pos, pos + 1, Slice(Fragment.from(updated), 0, node.isLeaf ? 0 : 1));
+    PMNode updated =
+        node.type.create(node.attrs, null, mark.addToSet(node.marks));
+    return StepResult.fromReplace(doc, pos, pos + 1,
+        Slice(Fragment.from(updated), 0, node.isLeaf ? 0 : 1));
   }
 
   @override
@@ -184,8 +214,10 @@ class RemoveNodeMarkStep extends Step {
   StepResult apply(PMNode doc) {
     PMNode? node = doc.nodeAt(pos);
     if (node == null) return StepResult.fail("No node at mark step's position");
-    PMNode updated = node.type.create(node.attrs, null, mark.removeFromSet(node.marks));
-    return StepResult.fromReplace(doc, pos, pos + 1, Slice(Fragment.from(updated), 0, node.isLeaf ? 0 : 1));
+    PMNode updated =
+        node.type.create(node.attrs, null, mark.removeFromSet(node.marks));
+    return StepResult.fromReplace(doc, pos, pos + 1,
+        Slice(Fragment.from(updated), 0, node.isLeaf ? 0 : 1));
   }
 
   @override

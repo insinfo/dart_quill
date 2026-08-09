@@ -39,8 +39,8 @@ class OfficeClipboard {
   // -- modelo → área de transferência ---------------------------------------
 
   OfficeClipboardPayload serialize(Slice slice) {
-    final text = slice.content.textBetween(
-        0, slice.content.size, blockSeparator: '\n');
+    final text =
+        slice.content.textBetween(0, slice.content.size, blockSeparator: '\n');
     final buffer = StringBuffer()
       ..write('<div $officeSliceAttribute="')
       ..write(_escapeAttribute(jsonEncode(slice.toJSON())))
@@ -159,8 +159,8 @@ class OfficeClipboard {
       if (pending.isEmpty) return;
       // CÓPIA: Fragment.from guarda a lista recebida, e limpar `pending`
       // esvaziaria o fragmento já construído (com o tamanho antigo).
-      blocks.add(
-          schema.node('paragraph', null, Fragment.from(List.of(pending))));
+      blocks
+          .add(schema.node('paragraph', null, Fragment.from(List.of(pending))));
       pending.clear();
     }
 

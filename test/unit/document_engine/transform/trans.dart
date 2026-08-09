@@ -16,7 +16,9 @@ void testMapping(Mapping mapping, int pos, int newPos) {
   expect(mapped, equals(newPos));
 
   Mapping remap = Mapping(mapping.maps.map((m) => m.invert()).toList());
-  for (int i = mapping.maps.length - 1, mapFrom = mapping.maps.length; i >= 0; i--) {
+  for (int i = mapping.maps.length - 1, mapFrom = mapping.maps.length;
+      i >= 0;
+      i--) {
     remap.appendMap(mapping.maps[i], --mapFrom);
   }
   expect(remap.map(pos, 1), equals(pos));
@@ -27,13 +29,16 @@ void testStepJSON(Transform tr) {
   for (var step in tr.steps) {
     newTR.step(Step.fromJSON(tr.doc.type.schema, step.toJSON()));
   }
-  expect(tr.doc.toJSON(), equals(newTR.doc.toJSON())); // Compare JSON representations for deep equality
+  expect(
+      tr.doc.toJSON(),
+      equals(newTR.doc
+          .toJSON())); // Compare JSON representations for deep equality
 }
 
 void testTransform(Transform tr, PMNode expectNode) {
   expect(tr.doc.toJSON(), equals(expectNode.toJSON()));
   expect(tr.doc.eq(expectNode), isTrue);
-  
+
   expect(invert(tr).doc.toJSON(), equals(tr.before.toJSON()));
   expect(invert(tr).doc.eq(tr.before), isTrue);
 

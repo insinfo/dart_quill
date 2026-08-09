@@ -20,8 +20,7 @@ void main() {
   PMNode paragraph(String text, {bool endsSection = false}) => schema.node(
       'paragraph',
       {
-        if (endsSection)
-          'style': {'sizePt': 12.0, 'sectionBreak': true}
+        if (endsSection) 'style': {'sizePt': 12.0, 'sectionBreak': true}
       },
       Fragment.from([schema.text(text)]));
 
@@ -37,8 +36,8 @@ void main() {
 
   group('troca de geometria', () {
     test('sem seções declaradas, tudo usa o setup único', () {
-      final graph = LayoutComposer().compose(
-          docOf([for (var i = 0; i < 80; i++) paragraph(filler(i))]));
+      final graph = LayoutComposer()
+          .compose(docOf([for (var i = 0; i < 80; i++) paragraph(filler(i))]));
       for (final page in graph.pages) {
         expect(page.setup.widthTwips, portrait.widthTwips);
       }
@@ -84,11 +83,9 @@ void main() {
       final firstPage = graph.pages.first;
       expect(firstPage.setup.widthTwips, portrait.widthTwips);
       expect(
-          firstPage.fragments
-              .whereType<BlockFragment>()
-              .any((f) => f.lines
-                  .expand((l) => l.segments)
-                  .any((s) => s.text.contains('último da seção 1'))),
+          firstPage.fragments.whereType<BlockFragment>().any((f) => f.lines
+              .expand((l) => l.segments)
+              .any((s) => s.text.contains('último da seção 1'))),
           isTrue,
           reason: 'ele tem de ficar na página retrato, não na paisagem');
     });
@@ -100,9 +97,8 @@ void main() {
         paragraph('s2', endsSection: true),
         paragraph('s3'),
       ];
-      final graph =
-          LayoutComposer(sections: const [portrait, landscape, wide])
-              .compose(docOf(blocks));
+      final graph = LayoutComposer(sections: const [portrait, landscape, wide])
+          .compose(docOf(blocks));
 
       expect(graph.pages.length, 3);
       expect(graph.pages[0].setup.widthTwips, portrait.widthTwips);
@@ -130,10 +126,16 @@ void main() {
       final tall = LayoutComposer(setup: portrait).compose(docOf([text]));
       final wide = LayoutComposer(setup: landscape).compose(docOf([text]));
 
-      final tallLines =
-          tall.pages.first.fragments.whereType<BlockFragment>().first.lines.length;
-      final wideLines =
-          wide.pages.first.fragments.whereType<BlockFragment>().first.lines.length;
+      final tallLines = tall.pages.first.fragments
+          .whereType<BlockFragment>()
+          .first
+          .lines
+          .length;
+      final wideLines = wide.pages.first.fragments
+          .whereType<BlockFragment>()
+          .first
+          .lines
+          .length;
       expect(wideLines, lessThan(tallLines));
     });
   });

@@ -67,9 +67,7 @@ class Diff {
         String tB = childB.text!;
         int iA_str = tA.length;
         int iB_str = tB.length;
-        while (iA_str > 0 &&
-            iB_str > 0 &&
-            tA[iA_str - 1] == tB[iB_str - 1]) {
+        while (iA_str > 0 && iB_str > 0 && tA[iA_str - 1] == tB[iB_str - 1]) {
           iA_str--;
           iB_str--;
           posA--;

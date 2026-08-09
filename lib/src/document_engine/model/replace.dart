@@ -23,17 +23,21 @@ class Slice {
 
   /// @internal
   Slice? insertAt(int pos, Fragment fragment) {
-    Fragment? newContent = _insertInto(content, pos + openStart, fragment, openStart + 1, openEnd + 1);
+    Fragment? newContent = _insertInto(
+        content, pos + openStart, fragment, openStart + 1, openEnd + 1);
     return newContent != null ? Slice(newContent, openStart, openEnd) : null;
   }
 
   /// @internal
   Slice removeBetween(int from, int to) {
-    return Slice(_removeRange(content, from + openStart, to + openStart), openStart, openEnd);
+    return Slice(_removeRange(content, from + openStart, to + openStart),
+        openStart, openEnd);
   }
 
   bool eq(Slice other) {
-    return content.eq(other.content) && openStart == other.openStart && openEnd == other.openEnd;
+    return content.eq(other.content) &&
+        openStart == other.openStart &&
+        openEnd == other.openEnd;
   }
 
   @override
@@ -54,15 +58,24 @@ class Slice {
     if (openStart is! int || openEnd is! int) {
       throw RangeError("Invalid input for Slice.fromJSON");
     }
-    return Slice(Fragment.fromJSON(schema, json['content']), openStart, openEnd);
+    return Slice(
+        Fragment.fromJSON(schema, json['content']), openStart, openEnd);
   }
 
   static Slice maxOpen(Fragment fragment, [bool openIsolating = true]) {
     int openStart = 0, openEnd = 0;
-    for (PMNode? n = fragment.firstChild; n != null && !n.isLeaf && (openIsolating || n.type.spec.isolating != true); n = n.firstChild) {
+    for (PMNode? n = fragment.firstChild;
+        n != null &&
+            !n.isLeaf &&
+            (openIsolating || n.type.spec.isolating != true);
+        n = n.firstChild) {
       openStart++;
     }
-    for (PMNode? n = fragment.lastChild; n != null && !n.isLeaf && (openIsolating || n.type.spec.isolating != true); n = n.lastChild) {
+    for (PMNode? n = fragment.lastChild;
+        n != null &&
+            !n.isLeaf &&
+            (openIsolating || n.type.spec.isolating != true);
+        n = n.lastChild) {
       openEnd++;
     }
     return Slice(fragment, openStart, openEnd);
@@ -91,19 +104,30 @@ Fragment _removeRange(Fragment content, int from, int to) {
           child.content, from - fromIo.offset - 1, to - fromIo.offset - 1)));
 }
 
-Fragment? _insertInto(Fragment content, int dist, Fragment insert, int openStart, int openEnd, [PMNode? parent]) {
+Fragment? _insertInto(
+    Fragment content, int dist, Fragment insert, int openStart, int openEnd,
+    [PMNode? parent]) {
   IndexOffset io = content.findIndex(dist);
   PMNode? child = content.maybeChild(io.index);
   if (io.offset == dist || child!.isText) {
-    if (parent != null && openStart <= 0 && openEnd <= 0 && !parent.canReplace(io.index, io.index, insert)) {
+    if (parent != null &&
+        openStart <= 0 &&
+        openEnd <= 0 &&
+        !parent.canReplace(io.index, io.index, insert)) {
       return null;
     }
     return content.cut(0, dist).append(insert).append(content.cut(dist));
   }
-  Fragment? inner = _insertInto(child.content, dist - io.offset - 1, insert,
+  Fragment? inner = _insertInto(
+      child.content,
+      dist - io.offset - 1,
+      insert,
       io.index == 0 ? openStart - 1 : 0,
-      io.index == content.childCount - 1 ? openEnd - 1 : 0, child);
-  return inner != null ? content.replaceChild(io.index, child.copy(inner)) : null;
+      io.index == content.childCount - 1 ? openEnd - 1 : 0,
+      child);
+  return inner != null
+      ? content.replaceChild(io.index, child.copy(inner))
+      : null;
 }
 
 PMNode replace(ResolvedPos $from, ResolvedPos $to, Slice slice) {
@@ -116,7 +140,8 @@ PMNode replace(ResolvedPos $from, ResolvedPos $to, Slice slice) {
   return _replaceOuter($from, $to, slice, 0);
 }
 
-PMNode _replaceOuter(ResolvedPos $from, ResolvedPos $to, Slice slice, int depth) {
+PMNode _replaceOuter(
+    ResolvedPos $from, ResolvedPos $to, Slice slice, int depth) {
   int index = $from.index(depth);
   PMNode node = $from.node(depth);
 
@@ -125,10 +150,18 @@ PMNode _replaceOuter(ResolvedPos $from, ResolvedPos $to, Slice slice, int depth)
     return node.copy(node.content.replaceChild(index, inner));
   } else if (slice.content.size == 0) {
     return _close(node, _replaceTwoWay($from, $to, depth));
-  } else if (slice.openStart == 0 && slice.openEnd == 0 && $from.depth == depth && $to.depth == depth) {
+  } else if (slice.openStart == 0 &&
+      slice.openEnd == 0 &&
+      $from.depth == depth &&
+      $to.depth == depth) {
     PMNode parent = $from.parent;
     Fragment content = parent.content;
-    return _close(parent, content.cut(0, $from.parentOffset).append(slice.content).append(content.cut($to.parentOffset)));
+    return _close(
+        parent,
+        content
+            .cut(0, $from.parentOffset)
+            .append(slice.content)
+            .append(content.cut($to.parentOffset)));
   } else {
     _PreparedSlice p = _prepareSliceForReplace(slice, $from);
     return _close(node, _replaceThreeWay($from, p.start, p.end, $to, depth));
@@ -150,13 +183,15 @@ PMNode _joinable(ResolvedPos $before, ResolvedPos $after, int depth) {
 void _addNode(PMNode child, List<PMNode> target) {
   int last = target.length - 1;
   if (last >= 0 && child.isText && child.sameMarkup(target[last])) {
-    target[last] = (target[last] as TextNode).withText((target[last] as TextNode).text + (child as TextNode).text);
+    target[last] = (target[last] as TextNode)
+        .withText((target[last] as TextNode).text + (child as TextNode).text);
   } else {
     target.add(child);
   }
 }
 
-void _addRange(ResolvedPos? $start, ResolvedPos? $end, int depth, List<PMNode> target) {
+void _addRange(
+    ResolvedPos? $start, ResolvedPos? $end, int depth, List<PMNode> target) {
   PMNode node = ($end ?? $start)!.node(depth);
   int startIndex = 0;
   int endIndex = $end != null ? $end.index(depth) : node.childCount;
@@ -184,19 +219,27 @@ PMNode _close(PMNode node, Fragment content) {
   return node.copy(content);
 }
 
-Fragment _replaceThreeWay(ResolvedPos $from, ResolvedPos $start, ResolvedPos $end, ResolvedPos $to, int depth) {
-  PMNode? openStart = $from.depth > depth ? _joinable($from, $start, depth + 1) : null;
+Fragment _replaceThreeWay(ResolvedPos $from, ResolvedPos $start,
+    ResolvedPos $end, ResolvedPos $to, int depth) {
+  PMNode? openStart =
+      $from.depth > depth ? _joinable($from, $start, depth + 1) : null;
   PMNode? openEnd = $to.depth > depth ? _joinable($end, $to, depth + 1) : null;
 
   List<PMNode> content = [];
   _addRange(null, $from, depth, content);
 
-  if (openStart != null && openEnd != null && $start.index(depth) == $end.index(depth)) {
+  if (openStart != null &&
+      openEnd != null &&
+      $start.index(depth) == $end.index(depth)) {
     _checkJoin(openStart, openEnd);
-    _addNode(_close(openStart, _replaceThreeWay($from, $start, $end, $to, depth + 1)), content);
+    _addNode(
+        _close(
+            openStart, _replaceThreeWay($from, $start, $end, $to, depth + 1)),
+        content);
   } else {
     if (openStart != null) {
-      _addNode(_close(openStart, _replaceTwoWay($from, $start, depth + 1)), content);
+      _addNode(
+          _close(openStart, _replaceTwoWay($from, $start, depth + 1)), content);
     }
     _addRange($start, $end, depth, content);
     if (openEnd != null) {
@@ -225,8 +268,7 @@ _PreparedSlice _prepareSliceForReplace(Slice slice, ResolvedPos $along) {
   for (int i = extra - 1; i >= 0; i--) {
     node = $along.node(i).copy(Fragment.from(node));
   }
-  return _PreparedSlice(
-      node.resolveNoCache(slice.openStart + extra),
+  return _PreparedSlice(node.resolveNoCache(slice.openStart + extra),
       node.resolveNoCache(node.content.size - slice.openEnd - extra));
 }
 

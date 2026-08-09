@@ -31,8 +31,7 @@ class OfficeCompatibilityReport {
 
   /// Falso apenas quando algo foi DESCARTADO (op retain/delete num documento
   /// que deveria ser insert-only); rotas de escape preservam tudo.
-  bool get isLossless =>
-      issues.every((issue) => issue.code != 'non-insert-op');
+  bool get isLossless => issues.every((issue) => issue.code != 'non-insert-op');
 
   void add(String code, String detail) =>
       issues.add(OfficeCompatibilityIssue(code, detail));
@@ -122,10 +121,13 @@ OfficeImportResult importQuillDelta(List<dynamic> ops, Schema schema) {
                     Fragment.from(cell.blocks)))
                 .toList())))
         .toList();
-    blocks.add(schema.node('table', {
-      'anchor': acc.anchor,
-      'colWidths': acc.colWidths.isEmpty ? null : acc.colWidths,
-    }, Fragment.from(rows)));
+    blocks.add(schema.node(
+        'table',
+        {
+          'anchor': acc.anchor,
+          'colWidths': acc.colWidths.isEmpty ? null : acc.colWidths,
+        },
+        Fragment.from(rows)));
   }
 
   List<Mark> marksOf(Map<String, dynamic> attrs) {
@@ -193,8 +195,8 @@ OfficeImportResult importQuillDelta(List<dynamic> ops, Schema schema) {
         table!.colWidths.add(attrs['table-col']);
         return;
       }
-      final isTh = attrs.containsKey('table-th-block') ||
-          attrs.containsKey('table-th');
+      final isTh =
+          attrs.containsKey('table-th-block') || attrs.containsKey('table-th');
       final cellMap = ((attrs['table-cell'] ?? attrs['table-th']) as Map?)
               ?.cast<String, dynamic>() ??
           const <String, dynamic>{};
@@ -240,42 +242,53 @@ OfficeImportResult importQuillDelta(List<dynamic> ops, Schema schema) {
     final header = attrs['header'];
     final list = attrs['list'];
     if (header is int) {
-      blocks.add(schema.node('heading', {
-        'level': header,
-        'align': attrs['align'],
-        'extra': extraOrNull,
-      }, content));
+      blocks.add(schema.node(
+          'heading',
+          {
+            'level': header,
+            'align': attrs['align'],
+            'extra': extraOrNull,
+          },
+          content));
     } else if (list is String) {
-      blocks.add(schema.node('listItem', {
-        'kind': list,
-        'indent': attrs['indent'],
-        'align': attrs['align'],
-        'extra': extraOrNull,
-      }, content));
+      blocks.add(schema.node(
+          'listItem',
+          {
+            'kind': list,
+            'indent': attrs['indent'],
+            'align': attrs['align'],
+            'extra': extraOrNull,
+          },
+          content));
     } else if (attrs['blockquote'] == true) {
-      blocks.add(
-          schema.node('blockquote', {'extra': extraOrNull}, content));
+      blocks.add(schema.node('blockquote', {'extra': extraOrNull}, content));
     } else if (attrs.containsKey('code-block')) {
       final language = attrs['code-block'];
-      blocks.add(schema.node('codeBlock', {
-        'language': language is String ? language : null,
-        'extra': extraOrNull,
-      }, content));
+      blocks.add(schema.node(
+          'codeBlock',
+          {
+            'language': language is String ? language : null,
+            'extra': extraOrNull,
+          },
+          content));
     } else {
-      blocks.add(schema.node('paragraph', {
-        'align': attrs['align'],
-        'indent': attrs['indent'],
-        'direction': attrs['direction'],
-        'extra': extraOrNull,
-      }, content));
+      blocks.add(schema.node(
+          'paragraph',
+          {
+            'align': attrs['align'],
+            'indent': attrs['indent'],
+            'direction': attrs['direction'],
+            'extra': extraOrNull,
+          },
+          content));
     }
   }
 
   for (final dynamic rawOp in ops) {
     if (rawOp is! Map) continue;
     final dynamic insert = rawOp['insert'];
-    final attrs = ((rawOp['attributes'] as Map?) ?? const {})
-        .cast<String, dynamic>();
+    final attrs =
+        ((rawOp['attributes'] as Map?) ?? const {}).cast<String, dynamic>();
     if (insert == null) {
       report.add('non-insert-op', '$rawOp');
       continue;
@@ -392,8 +405,7 @@ List<Map<String, dynamic>> exportQuillDelta(PMNode doc) {
         case 'link':
           attrs['link'] = mark.attrs['href'];
         case 'opaqueAttrs':
-          attrs.addAll(
-              (mark.attrs['attrs'] as Map).cast<String, dynamic>());
+          attrs.addAll((mark.attrs['attrs'] as Map).cast<String, dynamic>());
         default:
           attrs[mark.type.name] = true;
       }
@@ -415,11 +427,13 @@ List<Map<String, dynamic>> exportQuillDelta(PMNode doc) {
 
       switch (child.type.name) {
         case 'image':
-          push({'image': child.attrs['src']}, withExtra({
-            if (child.attrs['width'] != null) 'width': child.attrs['width'],
-            if (child.attrs['height'] != null)
-              'height': child.attrs['height'],
-          }));
+          push(
+              {'image': child.attrs['src']},
+              withExtra({
+                if (child.attrs['width'] != null) 'width': child.attrs['width'],
+                if (child.attrs['height'] != null)
+                  'height': child.attrs['height'],
+              }));
         case 'video':
           push({'video': child.attrs['src']}, withExtra({}));
         case 'formula':
@@ -489,8 +503,7 @@ List<Map<String, dynamic>> exportQuillDelta(PMNode doc) {
                     cell.attrs['cellId'],
                 if (cell.attrs['cell'] != null)
                   isTh ? 'table-th' : 'table-cell': cell.attrs['cell'],
-                if (inner.attrs['align'] != null)
-                  'align': inner.attrs['align'],
+                if (inner.attrs['align'] != null) 'align': inner.attrs['align'],
               };
               final extra = inner.attrs['extra'];
               if (extra is Map) attrs.addAll(extra.cast<String, dynamic>());

@@ -61,15 +61,19 @@ class ResolvedPos {
   /// The (absolute) position directly before the wrapping node at the given level.
   int before([int? d]) {
     int rDepth = resolveDepth(d);
-    if (rDepth == 0) throw RangeError("There is no position before the top-level node");
+    if (rDepth == 0)
+      throw RangeError("There is no position before the top-level node");
     return rDepth == depth + 1 ? pos : path[rDepth * 3 - 1] as int;
   }
 
   /// The (absolute) position directly after the wrapping node at the given level.
   int after([int? d]) {
     int rDepth = resolveDepth(d);
-    if (rDepth == 0) throw RangeError("There is no position after the top-level node");
-    return rDepth == depth + 1 ? pos : (path[rDepth * 3 - 1] as int) + node(rDepth).nodeSize;
+    if (rDepth == 0)
+      throw RangeError("There is no position after the top-level node");
+    return rDepth == depth + 1
+        ? pos
+        : (path[rDepth * 3 - 1] as int) + node(rDepth).nodeSize;
   }
 
   /// When this position points into a text node, this returns the distance between the position and the start of the text node.
@@ -154,10 +158,13 @@ class ResolvedPos {
   }
 
   /// Returns a range based on the place where this position and the given position diverge.
-  NodeRange? blockRange([ResolvedPos? other, bool Function(PMNode node)? pred]) {
+  NodeRange? blockRange(
+      [ResolvedPos? other, bool Function(PMNode node)? pred]) {
     other ??= this;
     if (other.pos < pos) return other.blockRange(this);
-    for (int d = depth - (parent.inlineContent || pos == other.pos ? 1 : 0); d >= 0; d--) {
+    for (int d = depth - (parent.inlineContent || pos == other.pos ? 1 : 0);
+        d >= 0;
+        d--) {
       if (other.pos <= end(d) && (pred == null || pred(node(d)))) {
         return NodeRange(this, other, d);
       }
@@ -184,7 +191,8 @@ class ResolvedPos {
   String toString() {
     String str = "";
     for (int i = 1; i <= depth; i++) {
-      str += (str.isNotEmpty ? "/" : "") + "${node(i).type.name}_${index(i - 1)}";
+      str +=
+          (str.isNotEmpty ? "/" : "") + "${node(i).type.name}_${index(i - 1)}";
     }
     return "$str:$parentOffset";
   }

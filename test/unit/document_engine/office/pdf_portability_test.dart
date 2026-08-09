@@ -57,7 +57,8 @@ String _resolve(String target, String from) {
 
 /// Todos os arquivos alcançáveis a partir de [entry], e as dependências
 /// externas que eles trazem.
-({Set<String> files, Map<String, Set<String>> external}) _closure(String entry) {
+({Set<String> files, Map<String, Set<String>> external}) _closure(
+    String entry) {
   final files = <String>{};
   final external = <String, Set<String>>{};
   final pending = <String>[entry];
@@ -108,7 +109,8 @@ void main() {
       final dartLibs = closure.external.keys
           .where((dependency) => dependency.startsWith('dart:'))
           .toSet();
-      expect(dartLibs,
+      expect(
+          dartLibs,
           everyElement(isIn({
             'dart:async',
             'dart:collection',

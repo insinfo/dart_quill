@@ -3,7 +3,8 @@ import '../transform/index.dart';
 import 'selection.dart';
 import 'state.dart';
 
-typedef Command = bool Function(EditorState state, [void Function(Transaction tr)? dispatch, dynamic view]);
+typedef Command = bool Function(EditorState state,
+    [void Function(Transaction tr)? dispatch, dynamic view]);
 
 const int UPDATED_SEL = 1;
 const int UPDATED_MARKS = 2;
@@ -33,7 +34,8 @@ class Transaction extends Transform {
 
   Transaction setSelection(Selection selection) {
     if (selection.fromRes.doc != doc) {
-      throw RangeError("Selection passed to setSelection must point at the current document");
+      throw RangeError(
+          "Selection passed to setSelection must point at the current document");
     }
     _curSelection = selection;
     _curSelectionFor = steps.length;
@@ -62,7 +64,8 @@ class Transaction extends Transform {
   }
 
   Transaction removeStoredMark(dynamic mark) {
-    return ensureMarks(mark.removeFromSet(storedMarks ?? selection.headRes.marks()));
+    return ensureMarks(
+        mark.removeFromSet(storedMarks ?? selection.headRes.marks()));
   }
 
   bool get storedMarksSet => (_updated & UPDATED_MARKS) > 0;
@@ -87,7 +90,10 @@ class Transaction extends Transform {
   Transaction replaceSelectionWith(PMNode node, [bool inheritMarks = true]) {
     Selection sel = selection;
     if (inheritMarks) {
-      node = node.mark(storedMarks ?? (sel.empty ? sel.fromRes.marks() : (sel.fromRes.marksAcross(sel.toRes) ?? [])));
+      node = node.mark(storedMarks ??
+          (sel.empty
+              ? sel.fromRes.marks()
+              : (sel.fromRes.marksAcross(sel.toRes) ?? [])));
     }
     sel.replaceWith(this, node);
     return this;
@@ -109,7 +115,8 @@ class Transaction extends Transform {
       List<Mark>? marks = storedMarks;
       if (marks == null) {
         ResolvedPos fromRes = doc.resolve(from);
-        marks = to == from ? fromRes.marks() : fromRes.marksAcross(doc.resolve(to));
+        marks =
+            to == from ? fromRes.marks() : fromRes.marksAcross(doc.resolve(to));
       }
       replaceRangeWith(from, to, schema.text(text, marks));
       if (!selection.empty && selection.to == from + text.length) {

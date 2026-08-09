@@ -75,16 +75,21 @@ class StepMap implements Mappable {
       int oldSize = ranges[i + oldIndex];
       int newSize = ranges[i + newIndex];
       int end = start + oldSize;
-      
+
       if (pos <= end) {
-        int side = oldSize == 0 ? assoc : (pos == start ? -1 : (pos == end ? 1 : assoc));
+        int side = oldSize == 0
+            ? assoc
+            : (pos == start ? -1 : (pos == end ? 1 : assoc));
         int result = start + diff + (side < 0 ? 0 : newSize);
         if (simple) return result;
-        
-        int? recover = pos == (assoc < 0 ? start : end) ? null : _makeRecover(i ~/ 3, pos - start);
-        int del = pos == start ? DEL_AFTER : (pos == end ? DEL_BEFORE : DEL_ACROSS);
+
+        int? recover = pos == (assoc < 0 ? start : end)
+            ? null
+            : _makeRecover(i ~/ 3, pos - start);
+        int del =
+            pos == start ? DEL_AFTER : (pos == end ? DEL_BEFORE : DEL_ACROSS);
         if (assoc < 0 ? pos != start : pos != end) del |= DEL_SIDE;
-        
+
         return MapResult(result, del, recover);
       }
       diff += newSize - oldSize;
@@ -106,7 +111,8 @@ class StepMap implements Mappable {
     return false;
   }
 
-  void forEach(void Function(int oldStart, int oldEnd, int newStart, int newEnd) f) {
+  void forEach(
+      void Function(int oldStart, int oldEnd, int newStart, int newEnd) f) {
     int oldIndex = inverted ? 2 : 1, newIndex = inverted ? 1 : 2;
     for (int i = 0, diff = 0; i < ranges.length; i += 3) {
       int start = ranges[i];
@@ -169,7 +175,8 @@ class Mapping implements Mappable {
     int startSize = _maps.length;
     for (int i = 0; i < mapping._maps.length; i++) {
       int? mirr = mapping.getMirror(i);
-      appendMap(mapping._maps[i], (mirr != null && mirr < i) ? startSize + mirr : null);
+      appendMap(mapping._maps[i],
+          (mirr != null && mirr < i) ? startSize + mirr : null);
     }
   }
 
@@ -192,7 +199,8 @@ class Mapping implements Mappable {
     int totalSize = _maps.length + mapping._maps.length;
     for (int i = mapping.maps.length - 1; i >= 0; i--) {
       int? mirr = mapping.getMirror(i);
-      appendMap(mapping._maps[i].invert(), (mirr != null && mirr > i) ? totalSize - mirr - 1 : null);
+      appendMap(mapping._maps[i].invert(),
+          (mirr != null && mirr > i) ? totalSize - mirr - 1 : null);
     }
   }
 

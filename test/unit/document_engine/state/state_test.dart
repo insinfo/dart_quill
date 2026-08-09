@@ -50,15 +50,18 @@ void main() {
     });
 
     test("supports plugin fields", () {
-      var state = EditorState.create(EditorStateConfig(plugins: [messageCountPlugin], schema: schema));
+      var state = EditorState.create(
+          EditorStateConfig(plugins: [messageCountPlugin], schema: schema));
       var newState = state.apply(state.tr).apply(state.tr);
       expect(messageCountPlugin.getState(state), equals(0));
       expect(messageCountPlugin.getState(newState), equals(2));
     });
 
     test("can be serialized to JSON", () {
-      var state = EditorState.create(EditorStateConfig(plugins: [messageCountPlugin], doc: doc(p("ok"))));
-      state = state.apply(state.tr.setSelection(TextSelection.create(state.doc, 3)));
+      var state = EditorState.create(
+          EditorStateConfig(plugins: [messageCountPlugin], doc: doc(p("ok"))));
+      state = state
+          .apply(state.tr.setSelection(TextSelection.create(state.doc, 3)));
       var pluginProps = {"count": messageCountPlugin};
       var expected = {
         "doc": {
@@ -77,7 +80,10 @@ void main() {
       };
       var json = state.toJSON(pluginProps);
       expect(jsonEncode(json), equals(jsonEncode(expected)));
-      var copy = EditorState.fromJSON(EditorStateConfig(plugins: [messageCountPlugin], schema: schema), json, pluginProps);
+      var copy = EditorState.fromJSON(
+          EditorStateConfig(plugins: [messageCountPlugin], schema: schema),
+          json,
+          pluginProps);
       expect(copy.doc.eq(state.doc), isTrue);
       expect(copy.selection.from, equals(3));
       expect(messageCountPlugin.getState(copy), equals(1));
@@ -85,19 +91,24 @@ void main() {
       var limitedJSON = state.toJSON();
       expect(limitedJSON["doc"], isNotNull);
       expect(limitedJSON["messageCount\$"], isNull);
-      var deserialized = EditorState.fromJSON(EditorStateConfig(plugins: [messageCountPlugin], schema: schema), limitedJSON);
+      var deserialized = EditorState.fromJSON(
+          EditorStateConfig(plugins: [messageCountPlugin], schema: schema),
+          limitedJSON);
       expect(messageCountPlugin.getState(deserialized), equals(0));
     });
 
     test("supports specifying and persisting storedMarks", () {
-      var state = EditorState.create(EditorStateConfig(doc: doc(p("ok")), storedMarks: [schema.mark("em")]));
+      var state = EditorState.create(EditorStateConfig(
+          doc: doc(p("ok")), storedMarks: [schema.mark("em")]));
       expect(state.storedMarks!.length, equals(1));
-      var copy = EditorState.fromJSON(EditorStateConfig(schema: schema), state.toJSON());
+      var copy = EditorState.fromJSON(
+          EditorStateConfig(schema: schema), state.toJSON());
       expect(copy.storedMarks!.length, equals(1));
     });
 
     test("supports reconfiguration", () {
-      var state = EditorState.create(EditorStateConfig(plugins: [messageCountPlugin], schema: schema));
+      var state = EditorState.create(
+          EditorStateConfig(plugins: [messageCountPlugin], schema: schema));
       expect(messageCountPlugin.getState(state), equals(0));
       var without = state.reconfigure(plugins: []);
       expect(messageCountPlugin.getState(without), isNull);
@@ -109,42 +120,54 @@ void main() {
     });
 
     test("allows plugins to filter transactions", () {
-      var state = EditorState.create(EditorStateConfig(plugins: [transactionPlugin], schema: schema));
+      var state = EditorState.create(
+          EditorStateConfig(plugins: [transactionPlugin], schema: schema));
       var applied = state.applyTransaction(state.tr.insertText("X"));
       expect(applied.state.doc.eq(doc(p("X"))), isTrue);
       expect(applied.transactions.length, equals(1));
-      applied = state.applyTransaction(state.tr.insertText("Y").setMeta("filtered", true));
+      applied = state
+          .applyTransaction(state.tr.insertText("Y").setMeta("filtered", true));
       expect(applied.state, equals(state));
       expect(applied.transactions.length, equals(0));
     });
 
     test("allows plugins to append transactions", () {
-      var state = EditorState.create(EditorStateConfig(plugins: [transactionPlugin], schema: schema));
-      var applied = state.applyTransaction(state.tr.insertText("X").setMeta("append", true));
+      var state = EditorState.create(
+          EditorStateConfig(plugins: [transactionPlugin], schema: schema));
+      var applied = state
+          .applyTransaction(state.tr.insertText("X").setMeta("append", true));
       expect(applied.state.doc.eq(doc(p("XA"))), isTrue);
       expect(applied.transactions.length, equals(2));
     });
 
-    test("stores a reference to a root transaction for appended transactions", () {
-      var state = EditorState.create(EditorStateConfig(schema: schema, plugins: [
+    test("stores a reference to a root transaction for appended transactions",
+        () {
+      var state =
+          EditorState.create(EditorStateConfig(schema: schema, plugins: [
         Plugin<dynamic>(PluginSpec<dynamic>(
-          appendTransaction: (trs, oldState, newState) => newState.tr.insertText("Y"),
+          appendTransaction: (trs, oldState, newState) =>
+              newState.tr.insertText("Y"),
         ))
       ]));
       var applied = state.applyTransaction(state.tr.insertText("X"));
       var transactions = applied.transactions;
       expect(transactions.length, equals(2));
-      expect(transactions[1].getMeta("appendedTransaction"), equals(transactions[0]));
+      expect(transactions[1].getMeta("appendedTransaction"),
+          equals(transactions[0]));
     });
   });
 
   group("Plugin", () {
     test("calls prop functions bound to the plugin", () {
-      expect((messageCountPlugin.props["testProp"] as Function)(messageCountPlugin), equals(messageCountPlugin));
+      expect(
+          (messageCountPlugin.props["testProp"]
+              as Function)(messageCountPlugin),
+          equals(messageCountPlugin));
     });
 
     test("can be found by key", () {
-      var state = EditorState.create(EditorStateConfig(plugins: [messageCountPlugin], schema: schema));
+      var state = EditorState.create(
+          EditorStateConfig(plugins: [messageCountPlugin], schema: schema));
       expect(messageCountKey.get(state), equals(messageCountPlugin));
       expect(messageCountKey.getState(state), equals(0));
     });

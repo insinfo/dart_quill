@@ -14,6 +14,7 @@ import '../model/index.dart';
 import '../office/snapshot.dart';
 import '../state/index.dart';
 import '../view/editor_view.dart';
+import 'header_footer.dart';
 import 'overlay.dart';
 import 'word_options.dart';
 
@@ -36,8 +37,54 @@ abstract interface class OfficeWordController {
   /// Indica se o modelo/geometria mudou desde a abertura ou último save.
   bool get isDirty;
 
-  /// O laço de edição. Só é válido depois de [viewReady].
+  /// O laço de edição do CORPO. Só é válido depois de [viewReady].
+  ///
+  /// É o que réguas, barra de status e adornos usam: eles falam da página, da
+  /// paginação e da geometria do documento, que continuam sendo do corpo
+  /// mesmo com o modo cabeçalho/rodapé aberto.
   OfficeEditorView get view;
+
+  /// A view em que a EDIÇÃO acontece agora — a do corpo, ou a da região
+  /// quando a sessão de cabeçalho/rodapé está aberta.
+  ///
+  /// A separação é o que faz negrito, undo e a quickbar agirem no cabeçalho
+  /// enquanto ele está sendo editado, sem que a régua vertical passe a
+  /// acompanhar um documento de uma linha.
+  OfficeEditorView get activeView;
+
+  /// A sessão de edição de cabeçalho/rodapé (F6). Sempre existe; pergunte
+  /// [OfficeHeaderFooterSession.isActive] antes de reagir a ela.
+  OfficeHeaderFooterSession get headerFooter;
+
+  /// `w:titlePg` — a primeira página usa as variantes `first`.
+  bool get titlePage;
+
+  /// `w:evenAndOddHeaders` — páginas pares usam as variantes `even`.
+  bool get evenAndOddHeaders;
+
+  /// Liga/desliga as variantes de cabeçalho/rodapé. O documento REPAGINA (a
+  /// altura das regiões muda o inset do corpo) e fica sujo.
+  void setHeaderFooterFlags({bool? titlePage, bool? evenAndOddHeaders});
+
+  /// Qual região o compositor usa na página [pageIndex], e de onde ela veio.
+  OfficeRegionRef regionForPage(int pageIndex, {required bool isHeader});
+
+  /// Substitui a região descrita por [ref] pelo documento [doc].
+  ///
+  /// Com [recompose] falso a troca é só de MODELO (marca sujo e nada mais):
+  /// é o caminho de cada tecla digitada na região, e recompor o documento
+  /// inteiro a cada caractere travaria a digitação num DOCX longo. O
+  /// fechamento do modo passa `recompose: true` e paga a repaginação uma vez.
+  void setRegionDocument(OfficeRegionRef ref, PMNode doc,
+      {bool recompose = false});
+
+  /// Suspende (ou devolve) a edição do CORPO.
+  ///
+  /// Suspenso, as páginas perdem o `contenteditable` e o host ganha a classe
+  /// de esmaecimento. Tirar só a opacidade não bastaria: o caret continuaria
+  /// podendo voltar ao texto pelo teclado enquanto o usuário pensa estar
+  /// digitando no cabeçalho.
+  void setBodyEditingSuspended(bool suspended);
 
   /// A ribbon nasce ANTES da view (a ordem visual do chrome manda); os
   /// refreshes de estado só valem quando isto for true.

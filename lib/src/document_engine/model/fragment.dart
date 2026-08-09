@@ -24,12 +24,9 @@ class Fragment {
   /// Invoke a callback for all descendant nodes between the given two
   /// positions (relative to start of this fragment). Doesn't descend
   /// into a node when the callback returns `false`.
-  void nodesBetween(
-      int from,
-      int to,
+  void nodesBetween(int from, int to,
       bool? Function(PMNode node, int start, PMNode? parent, int index) f,
-      [int nodeStart = 0,
-      PMNode? parent]) {
+      [int nodeStart = 0, PMNode? parent]) {
     for (int i = 0, pos = 0; pos < to; i++) {
       PMNode child = content[i];
       int end = pos + child.nodeSize;
@@ -37,11 +34,8 @@ class Fragment {
           f(child, nodeStart + pos, parent, i) != false &&
           child.content.size > 0) {
         int start = pos + 1;
-        child.nodesBetween(
-            max(0, from - start),
-            min(child.content.size, to - start),
-            f,
-            nodeStart + start);
+        child.nodesBetween(max(0, from - start),
+            min(child.content.size, to - start), f, nodeStart + start);
       }
       pos = end;
     }
@@ -50,7 +44,8 @@ class Fragment {
   /// Call the given callback for every descendant node. `pos` will be
   /// relative to the start of the fragment. The callback may return
   /// `false` to prevent traversal of a given node's children.
-  void descendants(bool? Function(PMNode node, int pos, PMNode? parent, int index) f) {
+  void descendants(
+      bool? Function(PMNode node, int pos, PMNode? parent, int index) f) {
     nodesBetween(0, size, f);
   }
 
@@ -61,7 +56,8 @@ class Fragment {
     bool first = true;
     nodesBetween(from, to, (node, pos, parent, index) {
       String nodeText = node.isText
-          ? node.text!.substring(max(from, pos) - pos, min(to, pos + node.text!.length) - pos)
+          ? node.text!.substring(
+              max(from, pos) - pos, min(to, pos + node.text!.length) - pos)
           : !node.isLeaf
               ? ""
               : leafText != null
@@ -255,7 +251,8 @@ class Fragment {
   static Fragment fromJSON(Schema schema, dynamic value) {
     if (value == null) return Fragment.empty;
     if (value is! List) throw RangeError("Invalid input for Fragment.fromJSON");
-    return Fragment.fromArray(value.map((e) => schema.nodeFromJSON(e)).toList());
+    return Fragment.fromArray(
+        value.map((e) => schema.nodeFromJSON(e)).toList());
   }
 
   /// Build a fragment from an array of nodes. Ensures that adjacent
@@ -269,8 +266,8 @@ class Fragment {
       size += node.nodeSize;
       if (i > 0 && node.isText && array[i - 1].sameMarkup(node)) {
         joined ??= array.sublist(0, i);
-        joined[joined.length - 1] = (joined.last as TextNode).withText(
-            (joined.last as TextNode).text + (node as TextNode).text);
+        joined[joined.length - 1] = (joined.last as TextNode)
+            .withText((joined.last as TextNode).text + (node as TextNode).text);
       } else if (joined != null) {
         joined.add(node);
       }

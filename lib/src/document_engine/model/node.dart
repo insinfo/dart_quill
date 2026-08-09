@@ -53,9 +53,7 @@ class PMNode {
   }
 
   /// Invoke a callback for all descendant nodes recursively.
-  void nodesBetween(
-      int from,
-      int to,
+  void nodesBetween(int from, int to,
       bool? Function(PMNode node, int pos, PMNode? parent, int index) f,
       [int startPos = 0]) {
     content.nodesBetween(from, to, f, startPos, this);
@@ -136,7 +134,8 @@ class PMNode {
     int depth = includeParents ? 0 : $from.sharedDepth(to);
     int start = $from.start(depth);
     PMNode node = $from.node(depth);
-    Fragment sliceContent = node.content.cut($from.pos - start, $to.pos - start);
+    Fragment sliceContent =
+        node.content.cut($from.pos - start, $to.pos - start);
     return Slice(sliceContent, $from.depth - depth, $to.depth - depth);
   }
 
@@ -171,8 +170,7 @@ class PMNode {
       return NodeIndexOffset(content.child(io.index), io.index, io.offset);
     }
     PMNode node = content.child(io.index - 1);
-    return NodeIndexOffset(
-        node, io.index - 1, io.offset - node.nodeSize);
+    return NodeIndexOffset(node, io.index - 1, io.offset - node.nodeSize);
   }
 
   /// Resolve the given position in the document.
@@ -316,7 +314,8 @@ class PMNode {
       if (json['marks'] is! List) {
         throw RangeError("Invalid mark data for Node.fromJSON");
       }
-      marks = (json['marks'] as List).map((m) => schema.markFromJSON(m)).toList();
+      marks =
+          (json['marks'] as List).map((m) => schema.markFromJSON(m)).toList();
     }
     if (json['type'] == "text") {
       if (json['text'] is! String) {

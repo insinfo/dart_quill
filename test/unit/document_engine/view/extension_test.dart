@@ -44,8 +44,7 @@ void main() {
         schema.node('paragraph', null, Fragment.from([schema.text(text)]))
       ]));
 
-  OfficeEditorView mount(String text,
-      {List<OfficeExtension>? extensions}) {
+  OfficeEditorView mount(String text, {List<OfficeExtension>? extensions}) {
     return view = OfficeEditorView.withExtensions(
       host: host,
       doc: docOf(text),

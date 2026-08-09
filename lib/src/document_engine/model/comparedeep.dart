@@ -1,6 +1,6 @@
 bool compareDeep(dynamic a, dynamic b) {
   if (identical(a, b)) return true;
-  
+
   if (a == null || b == null) return false;
 
   if (a is List && b is List) {

@@ -21,7 +21,9 @@ void addMark(Transform tr, int from, int to, Mark mark) {
 
       for (int i = 0; i < marks.length; i++) {
         if (!marks[i].isInSet(newSet)) {
-          if (removing != null && removing!.to == start && removing!.mark.eq(marks[i])) {
+          if (removing != null &&
+              removing!.to == start &&
+              removing!.mark.eq(marks[i])) {
             removing = RemoveMarkStep(removing!.from, end, removing!.mark);
             removed[removed.length - 1] = removing!;
           } else {
@@ -61,12 +63,12 @@ class _MatchedMark {
 void removeMark(Transform tr, int from, int to, [dynamic mark]) {
   List<_MatchedMark> matched = [];
   int step = 0;
-  
+
   tr.doc.nodesBetween(from, to, (node, pos, parent, index) {
     if (!node.isInline) return true;
     step++;
     List<Mark>? toRemove;
-    
+
     if (mark is MarkType) {
       List<Mark> set = node.marks;
       Mark? found;
@@ -82,7 +84,7 @@ void removeMark(Transform tr, int from, int to, [dynamic mark]) {
     } else if (mark == null) {
       toRemove = List.from(node.marks);
     }
-    
+
     if (toRemove != null && toRemove.isNotEmpty) {
       int end = min(pos + node.nodeSize, to);
       for (int i = 0; i < toRemove.length; i++) {
@@ -105,23 +107,24 @@ void removeMark(Transform tr, int from, int to, [dynamic mark]) {
     }
     return true;
   });
-  
+
   for (var m in matched) {
     tr.step(RemoveMarkStep(m.from, m.to, m.style));
   }
 }
 
-void clearIncompatible(Transform tr, int pos, NodeType parentType, [ContentMatch? match, bool clearNewlines = true]) {
+void clearIncompatible(Transform tr, int pos, NodeType parentType,
+    [ContentMatch? match, bool clearNewlines = true]) {
   match ??= parentType.contentMatch;
   PMNode node = tr.doc.nodeAt(pos)!;
   List<Step> replSteps = [];
   int cur = pos + 1;
-  
+
   for (int i = 0; i < node.childCount; i++) {
     PMNode child = node.child(i);
     int end = cur + child.nodeSize;
     ContentMatch? allowed = match!.matchType(child.type);
-    
+
     if (allowed == null) {
       replSteps.add(ReplaceStep(cur, end, Slice.empty));
     } else {
@@ -138,20 +141,25 @@ void clearIncompatible(Transform tr, int pos, NodeType parentType, [ContentMatch
         Slice? slice;
         for (Match m in matches) {
           if (slice == null) {
-            slice = Slice(Fragment.from(parentType.schema.text(" ", parentType.allowedMarks(child.marks))), 0, 0);
+            slice = Slice(
+                Fragment.from(parentType.schema
+                    .text(" ", parentType.allowedMarks(child.marks))),
+                0,
+                0);
           }
-          replSteps.add(ReplaceStep(cur + m.start, cur + m.start + m.group(0)!.length, slice));
+          replSteps.add(ReplaceStep(
+              cur + m.start, cur + m.start + m.group(0)!.length, slice));
         }
       }
     }
     cur = end;
   }
-  
+
   if (!match!.validEnd) {
     Fragment? fill = match.fillBefore(Fragment.empty, true);
     tr.replace(cur, cur, Slice(fill!, 0, 0));
   }
-  
+
   for (int i = replSteps.length - 1; i >= 0; i--) {
     tr.step(replSteps[i]);
   }

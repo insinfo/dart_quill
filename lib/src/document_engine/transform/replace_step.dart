@@ -33,24 +33,33 @@ class ReplaceStep extends Step {
   @override
   Step? map(Mappable mapping) {
     MapResult toRes = mapping.mapResult(to, -1);
-    MapResult fromRes = (from == to && MAP_BIAS < 0) ? toRes : mapping.mapResult(from, 1);
+    MapResult fromRes =
+        (from == to && MAP_BIAS < 0) ? toRes : mapping.mapResult(from, 1);
     if (fromRes.deletedAcross && toRes.deletedAcross) return null;
-    return ReplaceStep(fromRes.pos, max(fromRes.pos, toRes.pos), slice, structure);
+    return ReplaceStep(
+        fromRes.pos, max(fromRes.pos, toRes.pos), slice, structure);
   }
 
   @override
   Step? merge(Step other) {
     if (other is! ReplaceStep || other.structure || structure) return null;
 
-    if (from + slice.size == other.from && slice.openEnd == 0 && other.slice.openStart == 0) {
+    if (from + slice.size == other.from &&
+        slice.openEnd == 0 &&
+        other.slice.openStart == 0) {
       Slice mergedSlice = (slice.size + other.slice.size == 0)
           ? Slice.empty
-          : Slice(slice.content.append(other.slice.content), slice.openStart, other.slice.openEnd);
-      return ReplaceStep(from, to + (other.to - other.from), mergedSlice, structure);
-    } else if (other.to == from && slice.openStart == 0 && other.slice.openEnd == 0) {
+          : Slice(slice.content.append(other.slice.content), slice.openStart,
+              other.slice.openEnd);
+      return ReplaceStep(
+          from, to + (other.to - other.from), mergedSlice, structure);
+    } else if (other.to == from &&
+        slice.openStart == 0 &&
+        other.slice.openEnd == 0) {
       Slice mergedSlice = (slice.size + other.slice.size == 0)
           ? Slice.empty
-          : Slice(other.slice.content.append(slice.content), other.slice.openStart, slice.openEnd);
+          : Slice(other.slice.content.append(slice.content),
+              other.slice.openStart, slice.openEnd);
       return ReplaceStep(other.from, to, mergedSlice, structure);
     } else {
       return null;
@@ -69,8 +78,8 @@ class ReplaceStep extends Step {
     if (json['from'] is! int || json['to'] is! int) {
       throw RangeError("Invalid input for ReplaceStep.fromJSON");
     }
-    return ReplaceStep(
-        json['from'], json['to'], Slice.fromJSON(schema, json['slice']), json['structure'] == true);
+    return ReplaceStep(json['from'], json['to'],
+        Slice.fromJSON(schema, json['slice']), json['structure'] == true);
   }
 
   static int MAP_BIAS = 1;
@@ -85,13 +94,15 @@ class ReplaceAroundStep extends Step {
   final int insert;
   final bool structure;
 
-  ReplaceAroundStep(this.from, this.to, this.gapFrom, this.gapTo, this.slice, this.insert,
+  ReplaceAroundStep(
+      this.from, this.to, this.gapFrom, this.gapTo, this.slice, this.insert,
       [this.structure = false]);
 
   @override
   StepResult apply(PMNode doc) {
     if (structure &&
-        (_contentBetween(doc, from, gapFrom) || _contentBetween(doc, gapTo, to))) {
+        (_contentBetween(doc, from, gapFrom) ||
+            _contentBetween(doc, gapTo, to))) {
       return StepResult.fail("Structure gap-replace would overwrite content");
     }
 
@@ -106,10 +117,8 @@ class ReplaceAroundStep extends Step {
 
   @override
   StepMap getMap() {
-    return StepMap([
-      from, gapFrom - from, insert,
-      gapTo, to - gapTo, slice.size - insert
-    ]);
+    return StepMap(
+        [from, gapFrom - from, insert, gapTo, to - gapTo, slice.size - insert]);
   }
 
   @override
@@ -131,11 +140,14 @@ class ReplaceAroundStep extends Step {
     MapResult toRes = mapping.mapResult(to, -1);
     int gapFromMap = from == gapFrom ? fromRes.pos : mapping.map(gapFrom, -1);
     int gapToMap = to == gapTo ? toRes.pos : mapping.map(gapTo, 1);
-    
-    if ((fromRes.deletedAcross && toRes.deletedAcross) || gapFromMap < fromRes.pos || gapToMap > toRes.pos) {
+
+    if ((fromRes.deletedAcross && toRes.deletedAcross) ||
+        gapFromMap < fromRes.pos ||
+        gapToMap > toRes.pos) {
       return null;
     }
-    return ReplaceAroundStep(fromRes.pos, toRes.pos, gapFromMap, gapToMap, slice, insert, structure);
+    return ReplaceAroundStep(
+        fromRes.pos, toRes.pos, gapFromMap, gapToMap, slice, insert, structure);
   }
 
   @override
@@ -161,8 +173,14 @@ class ReplaceAroundStep extends Step {
         json['insert'] is! int) {
       throw RangeError("Invalid input for ReplaceAroundStep.fromJSON");
     }
-    return ReplaceAroundStep(json['from'], json['to'], json['gapFrom'], json['gapTo'],
-        Slice.fromJSON(schema, json['slice']), json['insert'], json['structure'] == true);
+    return ReplaceAroundStep(
+        json['from'],
+        json['to'],
+        json['gapFrom'],
+        json['gapTo'],
+        Slice.fromJSON(schema, json['slice']),
+        json['insert'],
+        json['structure'] == true);
   }
 }
 
@@ -170,12 +188,14 @@ bool _contentBetween(PMNode doc, int from, int to) {
   ResolvedPos fromPos = doc.resolve(from);
   int dist = to - from;
   int depth = fromPos.depth;
-  
-  while (dist > 0 && depth > 0 && fromPos.indexAfter(depth) == fromPos.node(depth).childCount) {
+
+  while (dist > 0 &&
+      depth > 0 &&
+      fromPos.indexAfter(depth) == fromPos.node(depth).childCount) {
     depth--;
     dist--;
   }
-  
+
   if (dist > 0) {
     PMNode? next = fromPos.node(depth).maybeChild(fromPos.indexAfter(depth));
     while (dist > 0) {

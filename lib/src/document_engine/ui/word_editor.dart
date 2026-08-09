@@ -56,6 +56,7 @@ import '../view/editor_view.dart';
 import '../view/extension.dart';
 import 'context_menu.dart';
 import 'controller.dart';
+import 'header_footer.dart';
 import 'object_adorner.dart';
 import 'overlay.dart';
 import 'quickbar.dart';
@@ -70,6 +71,7 @@ import 'word_options.dart';
 export 'controller.dart'
     show OfficeWordController, OfficeDomKit, OfficeComboBox;
 export 'context_menu.dart' show OfficeContextMenu;
+export 'header_footer.dart' show OfficeHeaderFooterSession, OfficeRegionRef;
 export 'image_insert.dart'
     show
         insertImage,
@@ -133,12 +135,15 @@ class OfficeWordEditor implements OfficeWordController {
   final OfficeDomKit _kit;
 
   late OfficeEditorView _view;
+  late PageGraphDomRenderer _renderer;
   late DomElement _pagesHost;
   late DomElement _canvas;
 
   late final OfficeOverlay _overlay = OfficeOverlay(this);
   late final OfficeObjectAdorner _objectAdorner = OfficeObjectAdorner(this);
   late final OfficeTableAdorner _tableAdorner = OfficeTableAdorner(this);
+  late final OfficeHeaderFooterSession _headerFooter =
+      OfficeHeaderFooterSession(this, onChanged: _refresh);
   OfficeSelectionQuickbar? _quickbar;
   OfficeContextMenu? _contextMenu;
   DomEventListener? _contextMenuListener;
@@ -156,6 +161,10 @@ class OfficeWordEditor implements OfficeWordController {
   DomElement? _busyLabel;
   bool _disposed = false;
   bool _viewReady = false;
+
+  /// Falso enquanto o modo cabeçalho/rodapé está aberto: as páginas do corpo
+  /// nascem SEM `contenteditable`.
+  bool _bodyEditable = true;
   bool _dirty = false;
   bool _saveInFlight = false;
   bool _pdfExportInFlight = false;
@@ -198,6 +207,18 @@ class OfficeWordEditor implements OfficeWordController {
   OfficeOverlay get overlay => _overlay;
   @override
   OfficeEditorView get view => _view;
+
+  /// A edição corrente pode estar na região: comandos, undo e a quickbar
+  /// seguem para lá enquanto o modo cabeçalho/rodapé está aberto. Réguas,
+  /// status bar e adornos continuam usando [view] — eles falam da PÁGINA.
+  @override
+  OfficeEditorView get activeView => _headerFooter.regionView ?? _view;
+  @override
+  OfficeHeaderFooterSession get headerFooter => _headerFooter;
+  @override
+  bool get titlePage => _titlePage;
+  @override
+  bool get evenAndOddHeaders => _evenAndOddHeaders;
   @override
   bool get viewReady => _viewReady;
   @override
@@ -215,23 +236,24 @@ class OfficeWordEditor implements OfficeWordController {
   EditorState get state => _view.state;
 
   @override
-  void dispatch(Transaction tr) => _view.dispatch(tr);
+  void dispatch(Transaction tr) => activeView.dispatch(tr);
 
   @override
-  bool runCommand(String name) => _view.runCommand(name);
+  bool runCommand(String name) => activeView.runCommand(name);
 
   @override
-  void syncSelection() => _view.syncSelectionFromDom();
+  void syncSelection() => activeView.syncSelectionFromDom();
 
   @override
   Map? currentBlockStyle() {
-    final style = _view.state.selection.fromRes.parent.attrs['style'];
+    final style = activeView.state.selection.fromRes.parent.attrs['style'];
     return style is Map ? style : null;
   }
 
   @override
   void applyBlockStyle(Map<String, dynamic> patch) {
-    final state = _view.state;
+    final target = activeView;
+    final state = target.state;
     final tr = state.tr;
     state.doc.nodesBetween(state.selection.from, state.selection.to,
         (node, pos, parent, index) {
@@ -243,7 +265,7 @@ class OfficeWordEditor implements OfficeWordController {
       });
       return false;
     });
-    if (tr.docChanged) _view.dispatch(tr);
+    if (tr.docChanged) target.dispatch(tr);
   }
 
   /// O PDF da MESMA paginação que está na tela — não há segunda composição.
@@ -473,6 +495,96 @@ class OfficeWordEditor implements OfficeWordController {
     _remountPreservingState();
   }
 
+  // -- cabeçalho/rodapé (F6) --------------------------------------------------
+
+  @override
+  OfficeRegionRef regionForPage(int pageIndex, {required bool isHeader}) {
+    final variants = isHeader ? _headerVariants : _footerVariants;
+    // A ordem tem de ser a MESMA de `LayoutComposer._regionForPage`: se a UI
+    // resolvesse a variante por outra regra, o usuário editaria um cabeçalho
+    // que não é o que está desenhado naquela página.
+    if (variants.isNotEmpty) {
+      for (final key in [
+        if (_titlePage && pageIndex == 0) 'first',
+        if (_evenAndOddHeaders && (pageIndex + 1).isEven) 'even',
+        'default',
+      ]) {
+        final doc = variants[key];
+        if (doc != null) {
+          return OfficeRegionRef(isHeader: isHeader, variant: key, doc: doc);
+        }
+      }
+    }
+    return OfficeRegionRef(
+      isHeader: isHeader,
+      variant: null,
+      doc: isHeader ? _header : _footer,
+    );
+  }
+
+  @override
+  void setRegionDocument(OfficeRegionRef ref, PMNode doc,
+      {bool recompose = false}) {
+    if (_disposed) return;
+    final variant = ref.variant;
+    if (variant == null) {
+      if (ref.isHeader) {
+        _header = doc;
+      } else {
+        _footer = doc;
+      }
+    } else {
+      final variants = ref.isHeader ? _headerVariants : _footerVariants;
+      final previous = variants[variant];
+      final updated =
+          Map<String, PMNode>.unmodifiable({...variants, variant: doc});
+      if (ref.isHeader) {
+        _headerVariants = updated;
+        // O importador aponta `header`/`footer` para a variante `default`;
+        // deixar o campo simples preso ao nó ANTIGO faria o prewarm e o
+        // fallback medirem um cabeçalho que ninguém mais projeta.
+        if (identical(_header, previous)) _header = doc;
+      } else {
+        _footerVariants = updated;
+        if (identical(_footer, previous)) _footer = doc;
+      }
+    }
+    // A região muda a altura do inset do corpo: os hints de quebra do Word
+    // deixam de descrever este documento.
+    _renderedPageBreakHintsValid = false;
+    _markDirty();
+    if (recompose) _remountPreservingState();
+  }
+
+  @override
+  void setHeaderFooterFlags({bool? titlePage, bool? evenAndOddHeaders}) {
+    if (_disposed) return;
+    if (titlePage == null && evenAndOddHeaders == null) return;
+    if (titlePage != null) _titlePage = titlePage;
+    if (evenAndOddHeaders != null) _evenAndOddHeaders = evenAndOddHeaders;
+    _renderedPageBreakHintsValid = false;
+    _markDirty();
+    _remountPreservingState();
+  }
+
+  @override
+  void setBodyEditingSuspended(bool suspended) {
+    if (_disposed) return;
+    _bodyEditable = !suspended;
+    if (suspended) {
+      host.classes.add('dq-office-app-hf');
+    } else {
+      host.classes.remove('dq-office-app-hf');
+    }
+    if (!_viewReady) return;
+    _renderer.editable = _rendererEditable;
+    // Só a projeção muda; o grafo é o mesmo, então nada é recomposto.
+    _view.reproject();
+  }
+
+  bool get _rendererEditable =>
+      options.mode != OfficeWordMode.view && _bodyEditable;
+
   /// Abre um documento NOVO (aba Arquivo): estado e histórico recomeçam.
   @override
   void openDocument(
@@ -492,6 +604,11 @@ class OfficeWordEditor implements OfficeWordController {
   }) {
     if (_disposed) return;
     _changeRevision++;
+    // O modo cabeçalho/rodapé descreve o documento que está saindo: manter a
+    // sessão viva editaria uma região que não existe mais.
+    _headerFooter.dispose();
+    _bodyEditable = true;
+    host.classes.remove('dq-office-app-hf');
     // Só um novo DOCX inicia outro ciclo de validade. Abrir Delta ou outro
     // documento sem pacote de origem não pode ressuscitar hints herdados da
     // sessão anterior.
@@ -662,7 +779,15 @@ class OfficeWordEditor implements OfficeWordController {
       _overlay.closeAll();
       _objectAdorner.refresh();
       _tableAdorner.refresh();
+      _headerFooter.reposition();
     });
+
+    if (options.mode != OfficeWordMode.view) {
+      // Duplo clique é o gesto do Word para entrar e sair do cabeçalho: na
+      // região entra (ou troca de página/região), no corpo sai. Um único
+      // handler no canvas mantém os dois lados simétricos.
+      _canvas.addEventListener('dblclick', _handleDoubleClick);
+    }
 
     if (options.mode != OfficeWordMode.view) {
       // O arrasto de alça pertence ao canvas inteiro: soltar o ponteiro fora
@@ -707,6 +832,13 @@ class OfficeWordEditor implements OfficeWordController {
 
   void _mountView(EditorState state) {
     _observedDoc = state.doc;
+    _renderer = PageGraphDomRenderer(
+      document: adapter.document,
+      editable: _rendererEditable,
+      pxPerPt: 96 / 72 * _zoom,
+      pageGapPx: options.mode == OfficeWordMode.flow ? 0 : 26,
+      scrollTopInsetPx: 26,
+    );
     _view = OfficeEditorView(
       host: _pagesHost,
       state: state,
@@ -726,13 +858,7 @@ class OfficeWordEditor implements OfficeWordController {
         tableCache: _layoutTableCache,
         tableLineCache: _layoutTableLineCache,
       ),
-      renderer: PageGraphDomRenderer(
-        document: adapter.document,
-        editable: options.mode != OfficeWordMode.view,
-        pxPerPt: 96 / 72 * _zoom,
-        pageGapPx: options.mode == OfficeWordMode.flow ? 0 : 26,
-        scrollTopInsetPx: 26,
-      ),
+      renderer: _renderer,
       virtualization: options.virtualization,
       progressive: options.progressivePagination,
       scrollContainer: _canvas,
@@ -784,13 +910,20 @@ class OfficeWordEditor implements OfficeWordController {
     unawaited(saveDocx());
   }
 
+  void _handleDoubleClick(DomEvent event) {
+    if (_disposed) return;
+    if (_headerFooter.handleDoubleClick(event)) event.preventDefault();
+  }
+
   /// `mouseup` no documento: se sobrou seleção, a quickbar aparece sobre
   /// ela; senão, some. É também onde o pincel de formatação é aplicado, e a
   /// ordem importa — o pincel age primeiro para a barra já refletir o
   /// resultado.
   void _handleSelectionFinished(DomEvent event) {
     if (_disposed) return;
-    syncSelection();
+    // Explicitamente a view do CORPO: este handler vive no canvas e fala das
+    // páginas, mesmo que a edição corrente esteja numa região.
+    _view.syncSelectionFromDom();
     if (_view.state.selection.empty) {
       _quickbar?.hide();
       return;
@@ -825,7 +958,7 @@ class OfficeWordEditor implements OfficeWordController {
     final selecting = event.shiftKey ||
         ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() == 'a');
     if (!selecting) return;
-    syncSelection();
+    _view.syncSelectionFromDom();
     if (_view.state.selection.empty) {
       _quickbar?.hide();
       return;
@@ -929,6 +1062,9 @@ class OfficeWordEditor implements OfficeWordController {
     _quickbar?.refreshState();
     _objectAdorner.refresh();
     _tableAdorner.refresh();
+    // A superfície da região vive no overlay, que não rola com as páginas —
+    // ela reacompanha a página exatamente como os adornos.
+    _headerFooter.reposition();
     _hRuler?.positionMarkers();
     _positionVerticalRuler();
   }
@@ -965,6 +1101,7 @@ class OfficeWordEditor implements OfficeWordController {
     }
     _objectAdorner.clear();
     _tableAdorner.clear();
+    _headerFooter.dispose();
     _overlay.dispose();
     _view.dispose();
     _kit.clear(host);
