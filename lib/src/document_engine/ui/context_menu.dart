@@ -14,6 +14,8 @@ library;
 
 import '../../platform/dom.dart';
 import 'controller.dart';
+import 'dialogs/font_dialog.dart';
+import 'dialogs/paragraph_dialog.dart';
 import 'menu.dart';
 import 'ribbon_actions.dart' as actions;
 import 'table_ops.dart' as table_ops;
@@ -88,6 +90,15 @@ class OfficeContextMenu {
         label: 'Limpar Formatação',
         icon: 'clearstyle',
         onSelect: () => actions.clearFormatting(controller),
+      ),
+      const OfficeMenuEntry.separator(),
+      OfficeMenuEntry(
+        label: 'Fonte…',
+        onSelect: () => openFontDialog(controller),
+      ),
+      OfficeMenuEntry(
+        label: 'Parágrafo…',
+        onSelect: () => openParagraphDialog(controller),
       ),
       const OfficeMenuEntry.separator(),
       OfficeMenuEntry(

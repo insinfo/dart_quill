@@ -774,6 +774,121 @@
   background: #cfe4fa;
 }
 
+/* ---- diálogos modais (Fonte…, Parágrafo…) ---- */
+
+/* O popup do diálogo não tem moldura própria: quem desenha é o véu. */
+.dq-office-dialog-popup {
+  left: 0 !important;
+  top: 0 !important;
+  right: 0;
+  bottom: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.dq-office-dialog-veil {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.dq-office-dialog {
+  min-width: 340px;
+  max-width: 460px;
+  max-height: 84%;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #b9b9b9;
+  border-radius: 3px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.3);
+}
+
+.dq-office-dialog-title {
+  padding: 10px 14px;
+  border-bottom: 1px solid #e1dfdd;
+  font-size: 14px;
+  font-weight: 600;
+  color: #242424;
+}
+
+.dq-office-dialog-body {
+  padding: 10px 14px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dq-office-dialog-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 12.5px;
+  color: #333;
+}
+
+.dq-office-dialog-label {
+  grid-column: 1;
+}
+
+.dq-office-dialog-input {
+  grid-column: 2;
+  width: 150px;
+  height: 24px;
+  border: 1px solid #c7c7c7;
+  border-radius: 2px;
+  padding: 0 4px;
+  font: inherit;
+  font-size: 12.5px;
+  color: #242424;
+}
+
+.dq-office-dialog-input:focus {
+  outline: none;
+  border-color: #185abd;
+}
+
+.dq-office-dialog-check {
+  grid-column: 2;
+  justify-self: end;
+}
+
+.dq-office-dialog-hint {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: #767676;
+}
+
+.dq-office-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #e1dfdd;
+}
+
+.dq-office-dialog-button {
+  height: 26px;
+  min-width: 78px;
+  padding: 0 12px;
+  border: 1px solid #c7c7c7;
+  border-radius: 2px;
+  background: #fff;
+}
+
+.dq-office-dialog-primary {
+  background: #185abd;
+  border-color: #185abd;
+  color: #fff;
+}
+
 /* ---- adornos de tabela: seleção de células, âncora e guia de coluna ---- */
 
 .dq-office-cellmark {
