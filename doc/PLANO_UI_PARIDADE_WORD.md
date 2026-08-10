@@ -44,9 +44,9 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Contagem de palavras na status bar | ✅ | `status_bar.dart` — cacheada por identidade do doc (2026-08-09) |
 | Spinner/overlay de loading ao abrir e salvar | ✅ | `runBusy` no controller + `.dq-office-busy` (2026-08-09) |
 | Paginação progressiva estilo Word (primeiras páginas já, resto em background, contagem cresce) | ✅ | `compose(maxPages:)` + `composeContinue` + `OfficeProgressivePagination` (2026-08-09); ver §2.1 para limites |
-| Localizar/Substituir (Ctrl+F/Ctrl+H) | ❌ | nenhuma ocorrência em `ui/` |
-| Marcas de formatação ¶ (mostrar/ocultar) | ❌ | — |
-| Hyperlink (inserir/editar/abrir) | 🟡 | marca `link` existe no schema (`office/schema.dart:224`), zero UI |
+| Localizar/Substituir (Ctrl+F/Ctrl+H) | ✅ | `ui/find_replace.dart` (2026-08-09): painel no overlay, contador "N de M", Anterior/Próximo, opções de caixa e palavra inteira; Substituir Tudo em UMA transação. Sem realce visual das OUTRAS ocorrências (ver §2.8) |
+| Marcas de formatação ¶ (mostrar/ocultar) | 🟡 | `ui/formatting_marks.dart` + CSS `.dq-office-marks` (2026-08-09): pilcrow e seta de tabulação por pseudo-elemento. Ponto médio no espaço NÃO é viável por CSS (ver §2.8) |
+| Hyperlink (inserir/editar/abrir) | 🟡 | `ui/dialogs/link_dialog.dart` (2026-08-09): Ctrl+K insere/edita/remove a marca `link` com a aparência do estilo Hiperlink. Falta ABRIR o link (Ctrl+clique) |
 | Verificação ortográfica | ❌ | `spellcheck` nem é setado na projeção |
 | Fonte de ícones com cobertura para as fases seguintes | ✅ | 116 ícones (era 35) gerados de `resources/onlyoffice_ribbon_icons` por `tool/build_icon_font.dart` (2026-08-09): bordas, disposição de texto, cabeçalho/rodapé, colunas, hifenização, numeração de linhas, marca-d'água, alinhamento de tabela e busca |
 
@@ -86,10 +86,10 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Renderização de imagem/objeto ancorado (flutuante) e textBox | ✅ | `dom_renderer.dart:472-486, 590-601` (contenteditable=false) |
 | Clique seleciona o objeto (moldura de seleção) | ✅ | `ui/object_adorner.dart` (2026-08-09) |
 | Âncoras de redimensionamento (8 handles) em imagem | ✅ | arrasto sem reprojetar, UMA transação no pointerup, Shift mantém proporção (2026-08-09) |
-| Âncoras de redimensionamento em caixa de texto | ✅ | mesmo adorno (`officeResizableNodeTypes`) — a edição in-place fica para F9 |
+| Âncoras de redimensionamento em caixa de texto | ✅ | mesmo adorno (`officeResizableNodeTypes`) |
 | Arrastar para reposicionar objeto flutuante; ícone de âncora ⚓ | ❌ | schema já guarda `offsetX/offsetY/positionHAlign` (`office/schema.dart:156-178`) |
 | Opções de disposição do texto (inline, quadrado, atrás, na frente…) | ❌ | o compositor só honra `wrapTopAndBottom`; a UI espera o wrap real (senão o botão não mudaria nada) |
-| Edição in-place da caixa de texto | ❌ | `textBox` é atom com `contenteditable=false`; conteúdo em `textBoxDoc` |
+| Edição in-place da caixa de texto | ✅ | `ui/text_box_session.dart` (2026-08-09): duplo clique abre uma view sobre a caixa; o `w:txbxContent` é regerado na exportação quando a assinatura mudou (§2.10) |
 | Inserir imagem (aba Inserir → arquivo) | ✅ | `ui/image_insert.dart` (2026-08-09): tamanho natural lido do cabeçalho, limitado à área útil |
 | Inserir caixa de texto | ❌ | — |
 | Girar objeto (handle de rotação) | ❌ | — |
@@ -156,12 +156,12 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 
 | Funcionalidade | Status | Evidência |
 |---|---|---|
-| Aplicar Normal/Título 1–3 | ✅ | `ribbon_actions.dart:263-286` (grava `styleId` no attr `word`) |
-| Galeria dinâmica com os estilos DO DOCUMENTO (nome + preview real) | ❌ | cartões fixos (`tabs/home_tab.dart:183-191`); estilos importados do DOCX não aparecem |
-| Criar estilo a partir da seleção (diálogo "Criar Novo Estilo…") | ❌ | — |
-| Modificar estilo (diálogo com fonte/parágrafo/baseado em) | ❌ | — |
-| Menu de contexto do cartão (Atualizar para corresponder, Renomear, Remover) | ❌ | — |
-| Exportar styles.xml alterado | 🟡 | partes originais preservadas byte a byte; não há caminho para GRAVAR estilo novo/alterado |
+| Aplicar Normal/Título 1–3 | ✅ | `ribbon_actions.applyNamedStyle` (grava `styleId` no attr `word`) |
+| Galeria dinâmica com os estilos DO DOCUMENTO (nome + preview real) | ✅ | `office/style_catalog.dart` + `tabs/home_tab.buildStyleGallery` (2026-08-09); cartões `w:qFormat` ordenados por `uiPriority`, preview com fonte/corpo/cor/negrito reais |
+| Criar estilo a partir da seleção (diálogo "Criar Novo Estilo…") | ✅ | `dialogs/style_dialog.openCreateStyleDialog` (2026-08-09) |
+| Modificar estilo (diálogo com fonte/parágrafo/baseado em) | 🟡 | `dialogs/style_dialog.openModifyStyleDialog` (2026-08-09): família, corpo, negrito, alinhamento, recuos, espaçamento e entrelinha. Cor/itálico/sublinhado FICAM DE FORA — `LayoutComposer._BlockStyle` (4617-4671) não tem esses campos e `_styleOfText` (2539-2570) só os obtém de marcas de run |
+| Menu de contexto do cartão (Atualizar para corresponder, Renomear, Remover) | ✅ | `tabs/home_tab._openStyleCardMenu` (2026-08-09), pelo `ui/menu.dart` |
+| Exportar styles.xml alterado | ✅ | `OfficeStyleCatalog.patchStylesXml` + `docx_codec._applyStyleCatalog` (2026-08-09): patch TEXTUAL elemento a elemento; sem edição de estilo a parte sai byte a byte |
 
 ### 1.10 Aba Inserir (paridade Word)
 
@@ -171,11 +171,11 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Tabela (grid picker) | ✅ (10×8, hover) |
 | Imagens (do arquivo) | ✅ |
 | Formas / Ícones / SmartArt / Gráfico | ❌ (fora do escopo mínimo, exceto formas básicas) |
-| Link (Ctrl+K) / Indicador / Referência cruzada | ❌ |
+| Link (Ctrl+K) / Indicador / Referência cruzada | 🟡 (Link feito em 2026-08-09; indicador e referência cruzada não) |
 | Comentário | ❌ |
 | Cabeçalho / Rodapé / Número de Página (dropdowns) | ❌ |
 | Caixa de Texto / Partes Rápidas / WordArt / Letra Capitular | ❌ (mínimo: Caixa de Texto) |
-| Equação / Símbolo | ❌ (mínimo: Símbolo) |
+| Equação / Símbolo | 🟡 (Símbolo feito em 2026-08-09: galeria de 42 sinais; Equação não) |
 | Folha de Rosto / Página em Branco | 🟡 (Página em Branco feita; Folha de Rosto não) |
 
 ---
@@ -246,6 +246,42 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
     DOCUMENTO por padrão e rejeita explicitamente um `schema:` incompatível.
     O próprio `example/office_editor` tinha esse defeito.
 
+### 2.9 F10 parcial em 2026-08-09 (Localizar/Substituir, Link, Símbolo, ¶)
+
+Entregues: `ui/find_replace.dart`, `ui/dialogs/link_dialog.dart`,
+`ui/symbol_picker.dart`, `ui/formatting_marks.dart`, com Ctrl+F/Ctrl+H/Ctrl+K
+registrados em `ui/word_editor.dart` (ao lado do Ctrl+S, porque abrir painel
+e diálogo é chrome, não transação sobre o `EditorState`).
+
+O ponto que exigiu desenho: **índice de texto ≠ posição do modelo**. A
+varredura achata o documento uma vez guardando `posição[i]` para cada
+caractere e escrevendo uma CERCA (NUL) em todo nó que não é texto —
+isso resolve de uma vez a posição depois de uma imagem (átomo ocupa posição
+e não tem texto), impede ocorrência atravessando parágrafo/célula/objeto e
+mantém o casamento entre runs de formatação diferente.
+
+Pendências honestas desta fatia:
+
+1. **Sem realce das demais ocorrências.** Só a ocorrência corrente é
+   SELECIONADA. Pintar as outras exige decorações na projeção (o renderer
+   desenha a partir do `PageGraph`, não há camada de decoração inline) ou
+   marcas temporárias no documento — e marca temporária suja undo e DOCX.
+   Depende de uma camada de decoração no `PageGraphDomRenderer`.
+2. **Ponto médio no espaço (·) não sai por CSS.** Não existe seletor de
+   CARACTERE; revelar espaço a espaço exigiria o renderer emitir um elemento
+   por espaço, e `layout/dom_position_map.dart:199` soma o comprimento
+   lógico dos filhos — a fragmentação mudaria a projeção que o mapa de
+   posições e o reconciliador leem. ¶ e a seta de tabulação saem por
+   `::after`/`::before` (pseudo-elemento não está no DOM, não tem
+   `textContent`, não desloca nada) e estão entregues.
+3. **Ctrl+clique não ABRE o hiperlink.** O renderer projeta `data-link`
+   (`layout/dom_renderer.dart:583`), mas nada escuta o clique; falta decidir
+   a política de navegação (mesma aba/nova aba) com a aplicação hospedeira.
+4. **Localizar/Substituir e ¶ estão na aba Inserir**, não na Página Inicial
+   (grupos Edição/Parágrafo, como no Word): `tabs/home_tab.dart` estava sob
+   edição concorrente. São funções livres — mudar de aba é mover a linha que
+   as monta.
+
 ### 2.5 F5 concluída em 2026-08-09 (sem a galeria de estilos)
 
 **Duas abas contextuais**, como no Word: `tabs/table_design_tab.dart`
@@ -286,6 +322,79 @@ Propriedades da Tabela; direção do texto e margens de célula (o compositor l�
 cabeçalho (o renderer já repete, falta ligar `word.tblHeader` pela UI); e o
 realce de estado dos botões novos — a ribbon só reflete marcas e estilo de
 bloco, então o alinhamento vertical corrente ainda não acende o botão.
+
+### 2.10 F9 parcial em 2026-08-09 (edição in-place da caixa de texto)
+
+Duplo clique na caixa entra, duplo clique fora sai — outra
+`OfficeEditorView` sobre outra raiz no overlay, a mesma estrutura do F6 pela
+mesma razão do §6.
+
+Duas peças que a caixa exigiu e o cabeçalho não:
+
+- o visual flutuante é filho do FRAGMENTO, não da linha, então não herdava
+  offset de caractere nenhum. `FloatingTextBoxLayout.charStartInBlock` +
+  `data-doc-pos` no elemento resolvem qual caixa o duplo clique abriu;
+- a gravação é UMA transação ao sair, não por tecla: `textBoxDoc` vive
+  DENTRO do documento do corpo, e gravar por tecla repaginaria o documento
+  inteiro a cada caractere. O preço é a sessão ser um único passo de undo.
+
+Exportação: o writer carimbava o `rawXml` importado, então a edição não
+chegava ao arquivo. `_textBoxRawXml` compara a assinatura atual com
+`textBoxSourceSignature` e, só quando diferem, regenera o miolo de TODAS as
+ocorrências de `w:txbxContent` (o Word escreve a caixa duas vezes dentro de
+`mc:AlternateContent`; atualizar uma só faria o texto mudar conforme o
+leitor). O resto do XML da forma segue carimbado.
+
+**Pendente do F9:** inserir caixa de texto nova (é criação de estrutura
+DrawingML, não edição), e as opções de disposição do texto, que dependem do
+compositor honrar wrap além de `wrapTopAndBottom`.
+
+### 2.8 F8 (estilos dinâmicos) concluída em 2026-08-09
+
+**`OfficeStyleCatalog`** (`office/style_catalog.dart`) resolve a cascata do
+Word por ESTILO (docDefaults → cadeia `basedOn` da raiz para a folha) e
+devolve um mapa cujas chaves são LITERALMENTE as de `attrs['style']`. Foi a
+decisão que evitou uma segunda linguagem de apresentação: aplicar um estilo
+é escrever esse mapa no bloco, e o compositor já sabe lê-lo.
+
+O catálogo viaja em `OfficeDocxImport.styleCatalog`, não no snapshot: a UI
+importa com `includePackageResources: false`, então o `styles.xml` não
+sobrevive ao envelope, e reabrir o pacote só para listar a galeria custaria
+outro unzip do documento. `OfficeStyleCatalog.fromSnapshot` existe para o
+envelope persistido, que tem as partes opacas.
+
+**A galeria** é o recorte que o Word faz: estilos de PARÁGRAFO com
+`w:qFormat`, ordenados por `uiPriority`, com o `w:default` pregado em
+primeiro (ele quase sempre tira o `qFormat` do `w:latentStyles`, que não
+parseamos, e uma galeria sem "Normal" não teria caminho de volta ao corpo do
+texto). Sem catálogo, os quatro cartões fixos continuam de pé.
+
+**Três decisões de contrato:**
+
+- **Aplicar/modificar um estilo REESCREVE as marcas dos runs.** A importação
+  achata a cascata em marcas (`docx_codec._marksOf`), e no compositor a marca
+  ganha do bloco (`layout_composer._styleOfText:2539-2570`). Sem tocar nelas,
+  mudar a fonte de um estilo não mudaria uma letra de um DOCX importado. A
+  reescrita só atinge o run cujo valor AINDA É o do estilo antigo — é o único
+  sinal disponível para separar "veio do estilo" de "o usuário pôs à mão", e a
+  mesma regra vale chave a chave em `attrs['style']`.
+- **Exportar é patch TEXTUAL do `styles.xml`.** Reserializar a parte a partir
+  do nosso modelo perderia `w:latentStyles`, `w:semiHidden`, `w:next`, rsids e
+  os estilos que nem representamos — 78 KB de conteúdo alheio num DOCX real.
+  O patch troca só os elementos governados dentro do `<w:style>` tocado, e
+  nunca APAGA um filho que não geramos. Sem edição de estilo a parte sai byte
+  a byte.
+- **"Remover da Galeria" tira o `w:qFormat`, não o estilo.** Apagar a
+  definição invalidaria todo `w:pStyle` que ainda aponta para ela.
+
+**O que NÃO entrou, e por quê:** cor da fonte, itálico e sublinhado no
+diálogo. `LayoutComposer._BlockStyle` (`layout_composer.dart:4617-4671`) não
+tem esses três campos — o compositor só os obtém de marcas de run. Um
+controle de "cor do estilo" gravaria uma definição que a tela ignoraria em
+todo parágrafo novo, que é o botão-que-não-faz-nada que este plano proíbe.
+Falta também a re-resolução de cabeçalhos/rodapés (raízes próprias, sem
+caminho de transação por região) e a galeria de estilos de TABELA, que
+continua dependendo do compositor resolver `w:tblStyle`.
 
 ### 2.7 F6 (cabeçalho/rodapé) concluída em 2026-08-09
 
@@ -674,7 +783,7 @@ overlay/NodeSelection destravam tudo que envolve objeto.
 - **Critério:** documento com 2 seções (retrato+paisagem) criado no editor
   abre idêntico no Word.
 
-### F8 — Estilos dinâmicos e gestão
+### F8 — Estilos dinâmicos e gestão — **CONCLUÍDA 2026-08-09** (ver §2.8; cor/itálico/sublinhado do estilo pendentes de `_BlockStyle`)
 - `OfficeStyleCatalog` (§3.7); galeria dinâmica com estilos do documento;
   menu de contexto do cartão (Atualizar para Corresponder à Seleção,
   Modificar…, Renomear, Remover da Galeria); diálogo Criar Estilo; exportação
@@ -683,7 +792,7 @@ overlay/NodeSelection destravam tudo que envolve objeto.
   modificar um estilo muda todos os parágrafos que o usam; DOCX exportado
   reflete no Word.
 
-### F9 — Caixa de texto completa
+### F9 — Caixa de texto completa — **PARCIAL 2026-08-09** (edição in-place e exportação feitas; inserir caixa nova e disposição do texto pendentes — ver §2.10)
 - Inserir → Caixa de Texto; `NodeSelection` + handles (F3 reusa);
   edição in-place (view secundária sobre `textBoxDoc`, mesma técnica do
   header F6); opções de alinhamento/disposição; bordas/preenchimento.
