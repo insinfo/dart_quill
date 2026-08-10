@@ -26,6 +26,8 @@ class PageSetupTwips {
     this.footerDistanceTwips = 709,
     this.documentGridLinePitchTwips,
     this.documentGridType,
+    this.columnCount,
+    this.columnSpacingTwips = 720,
   });
 
   final int widthTwips;
@@ -57,7 +59,53 @@ class PageSetupTwips {
         : null;
   }
 
+  /// Colunas da seção (`w:cols/@num`), ou null quando NÃO foi declarado.
+  ///
+  /// A distinção entre null e 1 é o que impede a exportação de achatar um
+  /// `w:cols w:num="2"` importado quando o chamador montou a geometria só
+  /// para trocar margens: null significa "não mexi", e o `w:cols` de origem
+  /// segue intacto. Para compor, use [columns].
+  ///
+  ///
+  /// Só colunas de largura IGUAL são modeladas. `w:cols` permite declarar
+  /// cada coluna com sua largura (`w:col/@w`), e o Word usa isso em layouts
+  /// de revista; aqui a contagem e o espaçamento cobrem o que a ribbon
+  /// oferece, e uma seção importada com larguras desiguais é composta com a
+  /// contagem dela e larguras iguais — o texto fica na coluna certa, com a
+  /// divisão errada, que é melhor que ignorar as colunas e empilhar tudo
+  /// numa só.
+  final int? columnCount;
+
+  /// A contagem EFETIVA para compor: sem declaração, uma coluna.
+  int get columns => columnCount ?? 1;
+
+  /// Espaço ENTRE colunas (`w:cols/@space`). O padrão do Word é 0,5".
+  final int columnSpacingTwips;
+
   int get contentWidthTwips => widthTwips - marginLeftTwips - marginRightTwips;
+
+  /// Largura de UMA coluna. O espaçamento entra `columnCount - 1` vezes.
+  int get columnWidthTwips {
+    if (columns <= 1) return contentWidthTwips;
+    final usable = contentWidthTwips - columnSpacingTwips * (columns - 1);
+    final each = usable ~/ columns;
+    // Colunas demais para a largura do papel: uma coluna de largura zero (ou
+    // negativa) faria toda palavra estourar a linha e o compositor entraria
+    // em laço. Um piso mínimo mantém a composição terminando, e a página sai
+    // visivelmente errada — que é o sintoma certo para uma configuração
+    // impossível.
+    return each > _minimumColumnTwips ? each : _minimumColumnTwips;
+  }
+
+  /// Deslocamento horizontal da coluna [index] dentro do content box.
+  int columnLeftTwips(int index) {
+    if (columns <= 1 || index <= 0) return 0;
+    final clamped = index < columns ? index : columns - 1;
+    return clamped * (columnWidthTwips + columnSpacingTwips);
+  }
+
+  /// Meia polegada: abaixo disso não cabe nem uma palavra média.
+  static const int _minimumColumnTwips = 720;
   int get contentHeightTwips =>
       heightTwips - marginTopTwips - marginBottomTwips;
 }
@@ -281,8 +329,17 @@ class LineBox {
     this.wrapRightInsetTwips = 0,
     this.wordSpacingTwips = 0,
     this.manualPageBreakBefore = false,
+    this.columnBreakOnly = false,
     this.renderedPageBreakBefore = false,
   });
+
+  /// A quebra manual desta linha é `<w:br w:type="column"/>`, não `page`.
+  ///
+  /// Num grafo monocoluna os dois davam no mesmo — a próxima coluna livre
+  /// era a primeira da página seguinte. Com colunas de verdade eles deixam
+  /// de ser sinônimos: a quebra de COLUNA continua na mesma página, e só a
+  /// de PÁGINA fecha a folha com a coluna ao lado ainda vazia.
+  final bool columnBreakOnly;
 
   /// Deslocamento X DESTA linha dentro do bloco — o recuo de primeira
   /// linha do Word. Negativo é o recuo pendente (hanging): a primeira
@@ -338,7 +395,21 @@ sealed class PageFragment {
     required this.heightTwips,
     this.continuesFromPreviousPage = false,
     this.continuesOnNextPage = false,
+    this.columnIndex = 0,
   });
+
+  /// Em qual COLUNA da seção este fragmento saiu.
+  ///
+  /// Guardar o índice, e não o x já calculado, mantém uma única fonte de
+  /// verdade para a geometria: os renderers resolvem o deslocamento pela
+  /// mesma `PageSetupTwips.columnLeftTwips` que o compositor usou. Um x
+  /// carimbado por fragmento divergiria no primeiro caso de margem ou
+  /// espaçamento que eu esquecesse de propagar.
+  ///
+  /// `yTwips` continua relativo ao topo do content box, então dois
+  /// fragmentos de colunas diferentes podem ter o MESMO y — é justamente
+  /// isso que os coloca lado a lado.
+  final int columnIndex;
 
   /// Id estável do nó de origem (officeIdsPlugin) — a chave do cache
   /// tipográfico e da invalidação incremental.
@@ -385,6 +456,7 @@ class BlockFragment extends PageFragment {
     this.borders,
     super.continuesFromPreviousPage,
     super.continuesOnNextPage,
+    super.columnIndex,
   });
 
   /// Nome do tipo do nó ('paragraph', 'heading', 'listItem', ...).
@@ -436,6 +508,7 @@ class BlockFragment extends PageFragment {
         borders: borders,
         continuesFromPreviousPage: continuesFromPreviousPage,
         continuesOnNextPage: continuesOnNextPage,
+        columnIndex: columnIndex,
       );
 
   /// Recuo DIREITO do parágrafo, em twips: as linhas quebram antes e o
@@ -726,6 +799,7 @@ class TableFragment extends PageFragment {
     required super.heightTwips,
     super.continuesFromPreviousPage,
     super.continuesOnNextPage,
+    super.columnIndex,
   });
 
   final List<TableRowBox> rows;
@@ -746,6 +820,7 @@ class TableFragment extends PageFragment {
         heightTwips: heightTwips,
         continuesFromPreviousPage: continuesFromPreviousPage,
         continuesOnNextPage: continuesOnNextPage,
+        columnIndex: columnIndex,
       );
 }
 

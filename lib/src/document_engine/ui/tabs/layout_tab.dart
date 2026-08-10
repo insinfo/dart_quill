@@ -55,7 +55,7 @@ List<DomElement> buildLayoutTab(RibbonContext ctx) {
             () => _paperEntries(c),
             icon: 'pagesize', extraClass: 'dq-office-menuwrap-big'),
         menuButton(
-            c, 'Colunas', 'Colunas', 'layout:columns', () => _columnEntries(),
+            c, 'Colunas', 'Colunas', 'layout:columns', () => _columnEntries(c),
             icon: 'columns', extraClass: 'dq-office-menuwrap-big'),
       ]),
       kit.row([
@@ -210,28 +210,42 @@ List<OfficeMenuEntry> _breakEntries(OfficeWordController c) {
   ];
 }
 
-/// O menu Colunas — inteiro desabilitado, de propósito.
+/// O menu Colunas.
 ///
-/// Não existe layout de colunas no motor: o `PageGraph` é monocoluna (o
-/// próprio compositor documenta isso ao tratar `w:br w:type="column"` como
-/// salto de página) e nenhuma propriedade de `w:cols` é lida em
-/// `layout/`. Um item "Duas" que gravasse a contagem de colunas deixaria o
-/// texto exatamente onde está — então ele fica visível, marcado como
-/// indisponível, em vez de mentir. "Uma" aparece com ✓ porque é o que o
-/// documento REALMENTE é hoje.
-List<OfficeMenuEntry> _columnEntries() {
-  const pending = 'O compositor ainda não faz layout de colunas';
-  return const [
-    OfficeMenuEntry(
-      label: 'Uma',
-      description: 'O layout atual do editor',
-      checked: true,
-      enabled: false,
-    ),
-    OfficeMenuEntry(label: 'Duas', description: pending, enabled: false),
-    OfficeMenuEntry(label: 'Três', description: pending, enabled: false),
-    OfficeMenuEntry(label: 'À Esquerda', description: pending, enabled: false),
-    OfficeMenuEntry(label: 'À Direita', description: pending, enabled: false),
+/// O compositor passou a fazer fluxo de jornal — a coluna 1 enche até o
+/// rodapé e o texto continua no topo da coluna 2, na MESMA página — então
+/// estes itens mudam o desenho de verdade. A contagem vale para a SEÇÃO do
+/// cursor, como no Word, e é gravada em `w:cols/@num`.
+///
+/// "À Esquerda" e "À Direita" são as duas colunas DESIGUAIS do Word (uma
+/// estreita e uma larga). Ficam desabilitadas porque o modelo de geometria
+/// só descreve colunas de largura igual — `PageSetupTwips.columnWidthTwips`
+/// divide a área útil pela contagem. Habilitá-las produziria duas colunas
+/// iguais com o nome errado, que é pior que um item honesto.
+List<OfficeMenuEntry> _columnEntries(OfficeWordController c) {
+  final current = c.pageSetup.columns;
+  const unequal = 'Exige colunas de larguras DIFERENTES; a geometria só '
+      'modela colunas iguais';
+  return [
+    for (final option in const [
+      (count: 1, label: 'Uma'),
+      (count: 2, label: 'Duas'),
+      (count: 3, label: 'Três'),
+    ])
+      OfficeMenuEntry(
+        label: option.label,
+        description: option.count == 1
+            ? 'O texto ocupa a largura inteira da área útil'
+            : 'O texto enche uma coluna e continua no topo da seguinte, na '
+                'mesma página',
+        checked: current == option.count,
+        onSelect: () => actions.setColumnCount(c, option.count),
+      ),
+    const OfficeMenuEntry.separator(),
+    const OfficeMenuEntry(
+        label: 'À Esquerda', description: unequal, enabled: false),
+    const OfficeMenuEntry(
+        label: 'À Direita', description: unequal, enabled: false),
   ];
 }
 

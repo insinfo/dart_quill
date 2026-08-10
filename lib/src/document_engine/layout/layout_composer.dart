@@ -553,7 +553,7 @@ class LayoutComposer {
         final key = _tableLayoutKey(
           block,
           tableDocPos: docPos,
-          availableTwips: activeSetup.contentWidthTwips,
+          availableTwips: activeSetup.columnWidthTwips,
           honorRenderedPageBreaks: honorRenderedPageBreaks,
         );
         if (_tableCache._lookup(key) != null) {
@@ -564,7 +564,7 @@ class LayoutComposer {
             table: block,
             diagnostics: localDiagnostics,
             tableDocPos: docPos,
-            availableTwips: activeSetup.contentWidthTwips,
+            availableTwips: activeSetup.columnWidthTwips,
             honorRenderedPageBreaks: honorRenderedPageBreaks,
           );
           for (final _ in _composeTableRowsSteps(build)) {
@@ -582,7 +582,7 @@ class LayoutComposer {
           final currentKey = _tableLayoutKey(
             block,
             tableDocPos: docPos,
-            availableTwips: activeSetup.contentWidthTwips,
+            availableTwips: activeSetup.columnWidthTwips,
             honorRenderedPageBreaks: honorRenderedPageBreaks,
           );
           // A font registry and the supplied face list can change while this
@@ -756,7 +756,63 @@ class LayoutComposer {
     var pageStartSuppressSpaceBeforeAtPageTop =
         startSuppressSpaceBeforeAtPageTop;
     var suppressSpaceBeforeAtPageTop = startSuppressSpaceBeforeAtPageTop;
-    void closePage({bool suppressSpaceBefore = false}) {
+
+    // Coluna corrente da seção. Uma seção de coluna única mantém isto em 0 e
+    // todo o caminho abaixo se comporta exatamente como antes.
+    var activeColumnIndex = 0;
+
+    /// Reabre o cursor no topo da faixa de conteúdo.
+    ///
+    /// É o mesmo cálculo para começar uma coluna e para começar uma página:
+    /// a coluna ocupa a altura inteira do corpo, e o que muda entre elas é o
+    /// x, que o fragmento carrega no `columnIndex`.
+    void resetVerticalFlow() {
+      capacity = activeSetup.contentHeightTwips -
+          _footerBodyInsetTwips(
+            activeSetup,
+            _footerForPage(pages.length),
+            pages.length,
+          );
+      if (capacity < 0) capacity = 0;
+      bodyTopInsetTwips = _headerBodyInsetTwips(
+        activeSetup,
+        _headerForPage(pages.length),
+        pages.length,
+      );
+      cursorTwips = bodyTopInsetTwips;
+    }
+
+    /// Fecha a COLUNA corrente.
+    ///
+    /// Enquanto houver coluna à direita, o conteúdo continua na MESMA página:
+    /// é o fluxo de jornal do Word — a coluna 1 enche até o rodapé e o texto
+    /// segue no topo da coluna 2. Só quando a última coluna enche é que a
+    /// página fecha de verdade. Devolve true quando a página foi fechada.
+    ///
+    /// As exclusões de wrap NÃO são zeradas ao trocar de coluna: elas são
+    /// delimitadas por PÁGINA (um objeto ancorado na página 3 não encurta
+    /// linha da 4), e a coluna 2 é a mesma página.
+    bool closeColumn({bool suppressSpaceBefore = false}) {
+      if (activeColumnIndex + 1 >= activeSetup.columns) return true;
+      activeColumnIndex++;
+      resetVerticalFlow();
+      suppressSpaceBeforeAtPageTop = suppressSpaceBefore;
+      return false;
+    }
+
+    /// Fecha a página.
+    ///
+    /// [force] separa as duas coisas que antes eram a mesma: "acabou o
+    /// espaço" (que numa seção de várias colunas continua na coluna ao lado)
+    /// e "acabou a PÁGINA" — quebra manual de página, quebra de seção e o
+    /// flush final, que têm de emitir a página mesmo com coluna livre à
+    /// direita. Sem esse segundo caso, um documento que termina antes de
+    /// encher todas as colunas não emitiria página NENHUMA.
+    void closePage({bool suppressSpaceBefore = false, bool force = false}) {
+      if (!force && !closeColumn(suppressSpaceBefore: suppressSpaceBefore)) {
+        return;
+      }
+      activeColumnIndex = 0;
       final first = currentFragments.isEmpty ? null : currentFragments.first;
       pages.add(PageLayout(
         index: pages.length,
@@ -944,13 +1000,13 @@ class LayoutComposer {
         // An inline `<w:br type="page"/>` consumes the top spacing of the
         // paragraph that follows it. `w:pageBreakBefore` is a paragraph
         // property and keeps that paragraph's own spacing.
-        closePage(suppressSpaceBefore: inlinePageBreakOnly);
+        closePage(suppressSpaceBefore: inlinePageBreakOnly, force: true);
       }
       if (renderedPageBreakBefore && _hasVisualPageContent(currentFragments)) {
         // `lastRenderedPageBreak` records where Word already laid the page
         // out; it must not be treated as a newly calculated overflow. Word's
         // saved top spacing is part of that confirmed geometry.
-        closePage();
+        closePage(force: true);
       }
       // ANTES da atualização de numeração: retomar neste bloco tem de
       // reproduzir o mesmo incremento, não contá-lo duas vezes.
@@ -972,6 +1028,7 @@ class LayoutComposer {
           lines: const [],
           yTwips: cursorTwips,
           heightTwips: 0,
+          columnIndex: activeColumnIndex,
         );
         if (currentFragments.isEmpty) {
           pendingMetadataFragments.add(fragment);
@@ -994,7 +1051,7 @@ class LayoutComposer {
           block,
           diagnostics,
           tableDocPos: docPos,
-          availableTwips: activeSetup.contentWidthTwips,
+          availableTwips: activeSetup.columnWidthTwips,
           honorRenderedPageBreaks: honorHints,
         );
         var headerCount = 0;
@@ -1156,6 +1213,7 @@ class LayoutComposer {
           final height = repeatedHeight + bodyHeight;
           beginPage(index, blockOffset, ordinalBefore);
           currentFragments.add(TableFragment(
+            columnIndex: activeColumnIndex,
             nodeId: officeNodeId(block),
             docPos: docPos,
             docPosEnd: docPos + block.content.size,
@@ -1216,7 +1274,7 @@ class LayoutComposer {
           ? <LineBox>[]
           : _breakLines(
               block,
-              activeSetup.contentWidthTwips -
+              activeSetup.columnWidthTwips -
                   blockFlow.textIndentTwips -
                   blockStyle.rightIndentTwips,
               blockStyle,
@@ -1258,7 +1316,7 @@ class LayoutComposer {
           final nextFlow = _paragraphFlow(nextStyle);
           final nextLines = _breakLines(
             next,
-            activeSetup.contentWidthTwips -
+            activeSetup.columnWidthTwips -
                 nextFlow.textIndentTwips -
                 nextStyle.rightIndentTwips,
             nextStyle,
@@ -1345,6 +1403,9 @@ class LayoutComposer {
                 (honorHints && lines[i].renderedPageBreakBefore)) &&
             _hasVisualPageContent(currentFragments)) {
           closePage(
+            // Quebra de COLUNA continua na mesma página; só a de página
+            // fecha a folha com a coluna ao lado ainda vazia.
+            force: !lines[i].columnBreakOnly,
             suppressSpaceBefore: lines[i].manualPageBreakBefore,
           );
         }
@@ -1466,6 +1527,7 @@ class LayoutComposer {
         final slice = lines.sublist(i, i + take);
         beginPage(index, blockOffset, ordinalBefore);
         currentFragments.add(BlockFragment(
+          columnIndex: activeColumnIndex,
           nodeId: officeNodeId(block),
           docPos: docPos,
           kind: kind,
@@ -1501,7 +1563,7 @@ class LayoutComposer {
           slice,
           blockTopTwips: sliceTopTwips,
           blockLeftTwips: blockFlow.textIndentTwips,
-          blockWidthTwips: activeSetup.contentWidthTwips -
+          blockWidthTwips: activeSetup.columnWidthTwips -
               blockFlow.textIndentTwips -
               blockStyle.rightIndentTwips,
         ));
@@ -1524,7 +1586,10 @@ class LayoutComposer {
       // a seção que termina NELE, então ele ainda pertence à geometria
       // antiga.
       if (_endsSection(block) && sectionIndex + 1 < sections.length) {
-        if (currentFragments.isNotEmpty) closePage();
+        // A fronteira de seção fecha a PÁGINA: a seção nova pode ter outra
+        // contagem de colunas, e continuar na coluna ao lado misturaria as
+        // duas geometrias na mesma faixa.
+        if (currentFragments.isNotEmpty) closePage(force: true);
         sectionIndex++;
         activeSetup = sections[sectionIndex];
         capacity = activeSetup.contentHeightTwips -
@@ -1579,6 +1644,7 @@ class LayoutComposer {
         }
         beginPage(index, blockOffset, ordinalBefore);
         currentFragments.add(BlockFragment(
+          columnIndex: activeColumnIndex,
           nodeId: officeNodeId(block),
           docPos: docPos,
           kind: kind,
@@ -1621,7 +1687,7 @@ class LayoutComposer {
     }
     if (!converged &&
         (currentFragments.isNotEmpty || pages.length == reusedPages.length)) {
-      closePage();
+      closePage(force: true);
     }
 
     return PageGraph(
@@ -3023,10 +3089,12 @@ class LayoutComposer {
           widthTwips: 0,
           charStart: charOffset,
           hardBreak: true,
-          // O PageGraph atual é monocoluna. Nesse fluxo, a próxima coluna
-          // disponível depois de `<w:br w:type="column"/>` é a primeira
-          // coluna da página seguinte, exatamente como o Word.
+          // Os dois interrompem o fluxo vertical; o que muda é ONDE ele
+          // recomeça. Numa seção de coluna única a distinção não aparece —
+          // a próxima coluna livre É a da página seguinte, e foi por isso
+          // que os dois puderam ser o mesmo sinal por tanto tempo.
           pageBreak: breakType == 'page' || breakType == 'column',
+          columnBreak: breakType == 'column',
           modelLength: child.nodeSize,
         ));
         charOffset += child.nodeSize;
@@ -3142,6 +3210,7 @@ class LayoutComposer {
       var currentCompressibleSpaceWidth = 0;
       var currentHangingPunctuationWidth = 0;
       var manualPageBreakBeforeNextLine = false;
+      var columnBreakOnlyNextLine = false;
       var renderedBreakBeforeNextLine = false;
 
       // Topo da linha em construção, relativo à PRIMEIRA linha do bloco.
@@ -3355,6 +3424,7 @@ class LayoutComposer {
           wrapRightInsetTwips: wrapRightTwips,
           wordSpacingTwips: wordSpacingTwips,
           manualPageBreakBefore: manualPageBreakBeforeNextLine,
+          columnBreakOnly: columnBreakOnlyNextLine,
           renderedPageBreakBefore: renderedBreakBeforeNextLine,
         ));
         pendingLineTopTwips += height;
@@ -3363,6 +3433,7 @@ class LayoutComposer {
         currentCompressibleSpaceWidth = 0;
         currentHangingPunctuationWidth = 0;
         manualPageBreakBeforeNextLine = false;
+        columnBreakOnlyNextLine = false;
         renderedBreakBeforeNextLine = false;
       }
 
@@ -3375,7 +3446,10 @@ class LayoutComposer {
         if (token.hardBreak) {
           current.add(token);
           flush();
-          if (token.pageBreak) manualPageBreakBeforeNextLine = true;
+          if (token.pageBreak) {
+            manualPageBreakBeforeNextLine = true;
+            columnBreakOnlyNextLine = token.columnBreak;
+          }
           endedWithHardBreak = true;
           continue;
         }
@@ -3549,6 +3623,7 @@ class LayoutComposer {
           wrapLeftInsetTwips: wrapLeftTwips,
           wrapRightInsetTwips: wrapRightTwips,
           manualPageBreakBefore: manualPageBreakBeforeNextLine,
+          columnBreakOnly: columnBreakOnlyNextLine,
         ));
       }
       return lines;
@@ -5118,6 +5193,7 @@ class _Token {
     this.imageHeightTwips,
     this.hardBreak = false,
     this.pageBreak = false,
+    this.columnBreak = false,
     this.isTab = false,
     this.tabLeader,
     this.isOpaqueInline = false,
@@ -5136,6 +5212,9 @@ class _Token {
   final int? imageHeightTwips;
   final bool hardBreak;
   final bool pageBreak;
+
+  /// A quebra é de COLUNA (`w:br w:type="column"`), não de página.
+  final bool columnBreak;
   final bool isTab;
   final String? tabLeader;
   final bool isOpaqueInline;

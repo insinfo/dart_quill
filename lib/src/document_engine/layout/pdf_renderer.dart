@@ -312,15 +312,21 @@ class PageGraphPdfRenderer {
     }
 
     for (final fragment in page.fragments) {
+      // Mesma resolução de coluna do DOM, pela mesma geometria da seção — é
+      // o que garante que a exportação em PDF saia igual à tela num
+      // documento de duas colunas.
+      final columnX =
+          _twipsToPt(page.setup.columnLeftTwips(fragment.columnIndex));
+      final columnWidth = _twipsToPt(page.setup.columnWidthTwips);
       switch (fragment) {
         case BlockFragment():
           _renderBlock(
             writer,
             builder,
             fragment,
-            x: contentX + _twipsToPt(fragment.indentTwips),
+            x: contentX + columnX + _twipsToPt(fragment.indentTwips),
             top: contentTop + _twipsToPt(fragment.yTwips),
-            available: contentWidth - _twipsToPt(fragment.indentTwips),
+            available: columnWidth - _twipsToPt(fragment.indentTwips),
             withMarker: true,
             images: images,
             xObjects: xObjects,
@@ -329,7 +335,7 @@ class PageGraphPdfRenderer {
         case TableFragment():
           _renderTable(
               writer, images, xObjects, floatingTextBoxes, builder, fragment,
-              contentX: contentX,
+              contentX: contentX + columnX,
               top: contentTop + _twipsToPt(fragment.yTwips));
       }
     }

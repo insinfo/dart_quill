@@ -203,12 +203,18 @@ class PageGraphDomRenderer {
     pageElement.append(content);
 
     for (final fragment in page.fragments) {
+      // O x vem do ÍNDICE da coluna resolvido pela mesma geometria que o
+      // compositor usou. Dois fragmentos de colunas diferentes têm o mesmo
+      // `yTwips` — é o deslocamento horizontal que os põe lado a lado.
+      final columnLeft = setup.columnLeftTwips(fragment.columnIndex);
       switch (fragment) {
         case BlockFragment():
           content.append(_renderBlock(fragment,
-              availableTwips: setup.contentWidthTwips, withMarker: true));
+              availableTwips: setup.columnWidthTwips,
+              withMarker: true,
+              leftOffsetTwips: columnLeft));
         case TableFragment():
-          content.append(_renderTable(fragment));
+          content.append(_renderTable(fragment, leftOffsetTwips: columnLeft));
       }
     }
     return pageElement;
@@ -245,7 +251,7 @@ class PageGraphDomRenderer {
     return element;
   }
 
-  DomElement _renderTable(TableFragment fragment) {
+  DomElement _renderTable(TableFragment fragment, {int leftOffsetTwips = 0}) {
     final element = document.createElement('div');
     element.classes.add('$officeCssPrefix-table');
     element.setAttribute('role', 'table');
@@ -262,7 +268,8 @@ class PageGraphDomRenderer {
     }
     element.setAttribute(
         'style',
-        'position:absolute;left:0;'
+        'position:absolute;'
+            'left:${_n(_px(leftOffsetTwips))}px;'
             'top:${_n(_px(fragment.yTwips))}px;'
             'width:${_n(_px(tableWidth))}px;'
             'height:${_n(_px(fragment.heightTwips))}px;');
@@ -390,6 +397,7 @@ class PageGraphDomRenderer {
     required int availableTwips,
     required bool withMarker,
     int topOffsetTwips = 0,
+    int leftOffsetTwips = 0,
     bool projectedCopy = false,
   }) {
     final element = document.createElement('div');
@@ -405,7 +413,7 @@ class PageGraphDomRenderer {
     element.setAttribute(
         'style',
         'position:absolute;'
-            'left:${_n(_px(fragment.indentTwips))}px;'
+            'left:${_n(_px(leftOffsetTwips + fragment.indentTwips))}px;'
             'top:${_n(_px(fragment.yTwips + topOffsetTwips))}px;'
             'width:${_n(_px(availableTwips - fragment.indentTwips))}px;'
             'height:${_n(_px(fragment.heightTwips))}px;');

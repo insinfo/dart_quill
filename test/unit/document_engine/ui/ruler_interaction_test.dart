@@ -316,7 +316,9 @@ void main() {
       expect(editor.pageGraph.pages.length, before + 1);
     });
 
-    test('Quebra de coluna salta para a próxima página (grafo monocoluna)', () {
+    test(
+        'Quebra de coluna, numa seção de UMA coluna, vai para a página seguinte',
+        () {
       final editor = mount(blocks: 3);
       final before = editor.pageGraph.pages.length;
       caretAt(1);
@@ -326,19 +328,35 @@ void main() {
       expect(editor.pageGraph.pages.length, before + 1);
     });
 
-    test('Colunas aparece DESABILITADO: o compositor é monocoluna', () {
+    test('Colunas habilita as contagens e recusa as DESIGUAIS', () {
       mount();
       final menu = openMenuOf('Colunas');
-      for (final label in const [
-        'Uma',
-        'Duas',
-        'Três',
-        'À Esquerda',
-        'À Direita'
-      ]) {
+      // O compositor faz fluxo de jornal, então estas mudam o desenho.
+      for (final label in const ['Uma', 'Duas', 'Três']) {
+        expect(enabled(itemOf(menu, label)), isTrue, reason: label);
+      }
+      // Estas duas são as colunas de larguras DIFERENTES do Word; a
+      // geometria só modela colunas iguais, então habilitá-las produziria
+      // duas colunas iguais com o nome errado.
+      for (final label in const ['À Esquerda', 'À Direita']) {
         expect(enabled(itemOf(menu, label)), isFalse, reason: label);
       }
-      expect(menu.textContent, contains('não faz layout de colunas'));
+      expect(menu.textContent, contains('larguras DIFERENTES'));
+    });
+
+    test('escolher Duas recompõe o documento em duas colunas', () {
+      final editor = mount(blocks: 40);
+      expect(editor.pageSetup.columns, 1);
+
+      click(itemOf(openMenuOf('Colunas'), 'Duas'));
+
+      expect(editor.pageSetup.columnCount, 2);
+      final colunas = <int>{
+        for (final page in editor.pageGraph.pages)
+          for (final fragment in page.fragments) fragment.columnIndex,
+      };
+      expect(colunas, contains(1),
+          reason: 'sem fragmento na coluna 1 a metade direita fica em branco');
     });
   });
 }

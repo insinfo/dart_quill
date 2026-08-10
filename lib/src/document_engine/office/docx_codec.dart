@@ -1634,6 +1634,8 @@ class OfficeDocxCodec {
         'footerDistanceTwips': section.footerDistanceTwips,
         'documentGridType': section.documentGridType,
         'documentGridLinePitchTwips': section.documentGridLinePitchTwips,
+        'columnCount': section.columnCount,
+        'columnSpacingTwips': section.columnSpacingTwips,
         'titlePage': section.titlePage,
       };
 
@@ -1672,6 +1674,22 @@ class OfficeDocxCodec {
       documentGridLinePitchTwips: preserveExistingAncillary
           ? base.documentGridLinePitchTwips
           : setup.documentGridLinePitchTwips,
+      // Colunas só chegam ao arquivo quando MUDARAM.
+      //
+      // Gravar sempre o valor do editor parece mais simples e é errado: um
+      // chamador que monta a geometria para trocar margens (e não declara
+      // colunas) achataria um `w:cols w:num="2"` importado para uma coluna
+      // só. É a mesma corrupção silenciosa do B3, e null aqui significa
+      // "não mexi", o que faz o writer deixar o `w:cols` de origem intacto —
+      // inclusive `w:equalWidth` e os `w:col` que o editor não modela.
+      columnCount: setup.columnCount == null ||
+              setup.columnCount == (base.columnCount ?? 1)
+          ? null
+          : setup.columnCount,
+      columnSpacingTwips: setup.columnCount == null ||
+              setup.columnCount == (base.columnCount ?? 1)
+          ? null
+          : setup.columnSpacingTwips,
       titlePage: base.titlePage,
       headerReferences: base.headerReferences,
       footerReferences: base.footerReferences,
@@ -1720,6 +1738,13 @@ class OfficeDocxCodec {
               ? (section['documentGridLinePitchTwips'] as num).toInt()
               : null,
       documentGridType: section['documentGridType'] as String?,
+      // `w:cols` ausente fica NULL, não 1: é o que permite reexportar sem
+      // carimbar um `w:num` que o arquivo não tinha.
+      columnCount:
+          section['columnCount'] is num && (section['columnCount'] as num) > 0
+              ? (section['columnCount'] as num).toInt()
+              : null,
+      columnSpacingTwips: value('columnSpacingTwips', 720),
     );
   }
 
@@ -1749,6 +1774,13 @@ class OfficeDocxCodec {
               ? (section['documentGridLinePitchTwips'] as num).toInt()
               : null,
       documentGridType: section['documentGridType'] as String?,
+      // `w:cols` ausente fica NULL, não 1: é o que permite reexportar sem
+      // carimbar um `w:num` que o arquivo não tinha.
+      columnCount:
+          section['columnCount'] is num && (section['columnCount'] as num) > 0
+              ? (section['columnCount'] as num).toInt()
+              : null,
+      columnSpacingTwips: value('columnSpacingTwips', 720),
     );
   }
 

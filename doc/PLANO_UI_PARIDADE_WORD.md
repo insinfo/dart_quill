@@ -135,7 +135,7 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Margens | 🟡 | dropdown com 4 predefinições do Word e as 4 medidas em cm, ✓ na vigente; `headerDistance`/`footerDistance` agora PRESERVADOS (2026-08-09). Falta "Margens Personalizadas…" |
 | Múltiplas seções com geometrias diferentes (importadas) | ✅ | `word_editor.dart:126`, composer usa `sections` |
 | Editar UMA seção (aba Layout por seção) | 🟡 | `word_editor.setPageSetup`/`pageSetup` (2026-08-09, B3): leitura e escrita seguem a seção do cursor, e "Quebras › Próxima Página" cria seção. Na EXPORTAÇÃO só a última seção chega ao arquivo — `_editedFile` aplica o override ao `sectPr` do corpo (§2, B3) |
-| Colunas (1/2/3, esquerda, direita) | ❌ | dropdown existe em `tabs/layout_tab.dart`, todos os itens DESABILITADOS: nenhuma leitura de `w:cols` em `layout/`, e o compositor documenta o fluxo monocoluna (`layout_composer.dart:2914-2916`) |
+| Colunas (1/2/3, esquerda, direita) | 🟡 | fluxo de jornal no compositor (2026-08-09): a coluna enche e o texto continua na seguinte, na MESMA página; `w:cols/@num` lido e gravado; 1/2/3 habilitados. "À Esquerda"/"À Direita" seguem desabilitadas — são colunas de larguras DIFERENTES, e a geometria só modela colunas iguais |
 | Quebras: página/coluna/seção (próxima página, contínua, par, ímpar) | 🟡 | dropdown em `tabs/layout_tab.dart` (2026-08-09): Página, Coluna, Disposição do Texto e **Próxima Página** habilitadas e honradas (`layout_composer.dart:930, 1480, 2913`); Contínua sairia como quebra de página (o compositor sempre fecha a página na fronteira) e Par/Ímpar exigem página em branco de paridade — as três seguem desabilitadas com o motivo escrito |
 | Números de linha | ❌ | — |
 | Hifenização | ❌ | — |
@@ -247,6 +247,43 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
     silêncio (transação sem passos). Agora `mount` usa o schema DO
     DOCUMENTO por padrão e rejeita explicitamente um `schema:` incompatível.
     O próprio `example/office_editor` tinha esse defeito.
+
+### 2.13 Colunas: fluxo de jornal (2026-08-09)
+
+O que define colunas não é a largura das linhas — é o FLUXO. A coluna 1
+enche até o rodapé e o texto continua no TOPO da coluna 2, na mesma página;
+só quando a última enche é que a página fecha. Um layout que só estreitasse
+as linhas e continuasse quebrando a página no fim da primeira coluna
+pareceria certo numa captura de tela e estaria errado no segundo parágrafo.
+
+A implementação é pequena porque reaproveita a máquina que já existia:
+`closePage` passou a tentar `closeColumn` antes de emitir a página. O
+fragmento carrega o `columnIndex` (não o x já calculado), e os dois
+renderers resolvem o deslocamento pela MESMA `columnLeftTwips` que o
+compositor usou — um x carimbado por fragmento divergiria do desenho no
+primeiro caso de margem que eu esquecesse de propagar. `yTwips` continua
+relativo ao topo do corpo, então dois fragmentos de colunas diferentes têm o
+mesmo y: é o x que os põe lado a lado.
+
+Duas coisas que essa mudança separou, e que antes eram legitimamente a mesma:
+
+- **`force` em `closePage`.** "Acabou o espaço" (continua na coluna ao lado)
+  deixou de ser "acabou a PÁGINA" (quebra manual, quebra de seção, flush
+  final). Sem isso, um documento que termina antes de encher todas as
+  colunas não emitia página nenhuma — foi o primeiro teste a pegar.
+- **`w:br w:type="column"` vs `"page"`.** Num grafo monocoluna a próxima
+  coluna livre ERA a da página seguinte, e por isso os dois puderam
+  compartilhar um sinal por tanto tempo.
+
+**`columnCount` é anulável de propósito.** null significa "não declarado",
+e é isso que impede a exportação de achatar um `w:cols w:num="2"` importado
+quando o chamador montou a geometria só para trocar margens — a mesma
+corrupção silenciosa do B3, que dois testes de preservação de `sectPr`
+pegaram na primeira tentativa. O arquivo só recebe `w:cols` quando a
+contagem MUDOU; `w:equalWidth` e os `w:col` do produtor ficam onde estavam.
+
+**Pendente:** colunas de larguras desiguais, linha separadora (`w:sep`) e
+quebra de coluna balanceada no fim da seção.
 
 ### 2.11 Disposição do texto (wrap) no compositor e a UI que depende dela
 

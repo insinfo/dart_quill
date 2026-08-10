@@ -757,6 +757,28 @@ class DocxWriter {
     setIfPresent(pgMar, 'w:footer', section.footerDistanceTwips);
     setIfPresent(pgMar, 'w:gutter', section.gutterTwips);
 
+    if (section.columnCount != null) {
+      // As larguras individuais (`w:col`) ficam onde estavam: mudar a
+      // CONTAGEM já invalida a divisão declarada, e o Word recalcula colunas
+      // iguais quando `w:cols` não traz `w:col` coerente com `@num`. Apagar
+      // os filhos aqui jogaria fora `w:equalWidth`/`w:sep` que o produtor
+      // declarou e o editor não modela.
+      final cols = ensureChild('w:cols', const {
+        'w:formProt',
+        'w:vAlign',
+        'w:noEndnote',
+        'w:titlePg',
+        'w:textDirection',
+        'w:bidi',
+        'w:rtlGutter',
+        'w:docGrid',
+        'w:printerSettings',
+        'w:sectPrChange',
+      });
+      cols.setAttribute('w:num', '${section.columnCount}');
+      setIfPresent(cols, 'w:space', section.columnSpacingTwips);
+    }
+
     if (section.documentGridType != null ||
         section.documentGridLinePitchTwips != null) {
       final docGrid = ensureChild('w:docGrid', const {

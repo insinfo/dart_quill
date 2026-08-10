@@ -946,6 +946,12 @@ class WpSectionProperties {
   final int? gutterTwips;
   final String? documentGridType;
   final int? documentGridLinePitchTwips;
+
+  /// `w:cols/@num` e `@space`. Só a CONTAGEM e o espaçamento são modelados;
+  /// larguras individuais (`w:col/@w`) continuam no [sourceXml] e são
+  /// re-emitidas byte a byte enquanto o usuário não mexer nas colunas.
+  final int? columnCount;
+  final int? columnSpacingTwips;
   final bool titlePage; // w:titlePg — header/footer "first" ativo
   final List<WpHeaderFooterReference> headerReferences;
   final List<WpHeaderFooterReference> footerReferences;
@@ -974,6 +980,8 @@ class WpSectionProperties {
     this.gutterTwips,
     this.documentGridType,
     this.documentGridLinePitchTwips,
+    this.columnCount,
+    this.columnSpacingTwips,
     this.titlePage = false,
     this.headerReferences = const [],
     this.footerReferences = const [],
@@ -1006,6 +1014,8 @@ class WpSectionProperties {
       documentGridType: el.firstChild('w:docGrid')?.getAttribute('w:type'),
       documentGridLinePitchTwips:
           _intVal(el.firstChild('w:docGrid'), 'w:linePitch'),
+      columnCount: _intVal(el.firstChild('w:cols'), 'w:num'),
+      columnSpacingTwips: _intVal(el.firstChild('w:cols'), 'w:space'),
       titlePage: _onOff(el.firstChild('w:titlePg')) ?? false,
       headerReferences: refs('w:headerReference'),
       footerReferences: refs('w:footerReference'),

@@ -1089,8 +1089,19 @@ void setMarginsTwips(
   ));
 }
 
-PageSetupTwips _copySetup(PageSetupTwips setup,
-        {required int width, required int height}) =>
+/// Copia a geometria trocando só o que foi pedido.
+///
+/// Tudo que a UI NÃO oferece tem de sobreviver: a grade de texto do
+/// documento (`w:docGrid`) governa a altura das linhas e vem do arquivo —
+/// perdê-la ao trocar o tamanho do papel mudaria a métrica de um documento
+/// inteiro sem ninguém pedir.
+PageSetupTwips _copySetup(
+  PageSetupTwips setup, {
+  required int width,
+  required int height,
+  int? columnCount,
+  int? columnSpacingTwips,
+}) =>
     PageSetupTwips(
       widthTwips: width,
       heightTwips: height,
@@ -1100,7 +1111,28 @@ PageSetupTwips _copySetup(PageSetupTwips setup,
       marginLeftTwips: setup.marginLeftTwips,
       headerDistanceTwips: setup.headerDistanceTwips,
       footerDistanceTwips: setup.footerDistanceTwips,
+      documentGridLinePitchTwips: setup.documentGridLinePitchTwips,
+      documentGridType: setup.documentGridType,
+      columnCount: columnCount ?? setup.columnCount,
+      columnSpacingTwips: columnSpacingTwips ?? setup.columnSpacingTwips,
     );
+
+/// Menu Colunas: quantas colunas a SEÇÃO do cursor tem.
+///
+/// Vale para a seção, não para o documento — é `setPageSetup` que resolve
+/// isso desde o B3. Um documento de coluna única com um anexo em duas
+/// colunas é o caso normal disto.
+void setColumnCount(OfficeWordController c, int count, {int? spacingTwips}) {
+  if (count < 1) return;
+  final setup = c.pageSetup;
+  c.setPageSetup(_copySetup(
+    setup,
+    width: setup.widthTwips,
+    height: setup.heightTwips,
+    columnCount: count,
+    columnSpacingTwips: spacingTwips,
+  ));
+}
 
 // -- estilos do documento (F8) ------------------------------------------------
 
