@@ -474,9 +474,16 @@ class PageGraphPdfRenderer {
       // caixa em que center/right se apoiam — igual ao DOM.
       var cursorX = x + _twipsToPt(line.indentTwips);
       final lineOriginX = cursorX;
-      final lineAvailable = available -
+      final blockAvailable = available -
           _twipsToPt(line.indentTwips) -
           _twipsToPt(fragment.rightIndentTwips);
+      // A exclusão do objeto flutuante encolhe a caixa em que o TEXTO se
+      // apoia, mas não a do próprio objeto — senão a caixa se afastaria de
+      // si mesma a cada recomposição.
+      cursorX += _twipsToPt(line.wrapLeftInsetTwips);
+      final lineAvailable = blockAvailable -
+          _twipsToPt(line.wrapLeftInsetTwips) -
+          _twipsToPt(line.wrapRightInsetTwips);
       final lineWidth = _twipsToPt(line.widthTwips);
       if (fragment.align == LayoutAlign.center) {
         cursorX += (lineAvailable - lineWidth) / 2;
@@ -502,7 +509,7 @@ class PageGraphPdfRenderer {
           floatingTextBoxes.add(_PdfFloatingTextBoxPaint(
             segment: segment,
             lineOriginX: lineOriginX,
-            lineAvailable: lineAvailable,
+            lineAvailable: blockAvailable,
             lineTop: y,
           ));
           continue;

@@ -174,6 +174,16 @@ Schema officeQuillSchema() {
           'borderWidth': _opt(),
           'borderColor': _opt(),
           'background': _opt(),
+          // Disposição do texto (DrawingML `wp:wrap*` + `@behindDoc`).
+          // Fica FORA de `word` porque o usuário a edita: `word` é XML bruto
+          // preservado, e uma troca de modo precisa de um lugar que o
+          // compositor leia e a exportação saiba reescrever.
+          'wrapMode': _opt(),
+          'wrapSide': _opt(),
+          'wrapDistLeft': _opt(),
+          'wrapDistTop': _opt(),
+          'wrapDistRight': _opt(),
+          'wrapDistBottom': _opt(),
           'word': _opt(),
         },
       ),

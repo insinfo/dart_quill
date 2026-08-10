@@ -713,6 +713,10 @@ class LayoutComposer {
 
     var currentFragments = <PageFragment>[];
     var pendingMetadataFragments = <BlockFragment>[];
+    // Exclusões dos objetos flutuantes JÁ desenhados nesta página. Vivem por
+    // página porque é assim que o Word as delimita: um objeto ancorado na
+    // página 3 não encurta linha nenhuma da página 4.
+    var activeWrapExclusions = <_WrapExclusion>[];
     // Retomando no meio do documento (incremental ou progressivo), a seção
     // ativa é a que os blocos anteriores já atravessaram — reiniciar na
     // primeira aplicaria a geometria errada ao restante.
@@ -767,6 +771,7 @@ class LayoutComposer {
         ),
       ));
       currentFragments = [];
+      activeWrapExclusions = <_WrapExclusion>[];
       capacity = activeSetup.contentHeightTwips -
           _footerBodyInsetTwips(
             activeSetup,
@@ -1203,7 +1208,7 @@ class LayoutComposer {
       }
       final blockFlow = _paragraphFlow(blockStyle);
       final importedPageBreakOnly = _isImportedPageBreakOnlyParagraph(block);
-      final lines = importedPageBreakOnly
+      List<LineBox> breakBlockLines() => importedPageBreakOnly
           ? <LineBox>[]
           : _breakLines(
               block,
@@ -1214,7 +1219,18 @@ class LayoutComposer {
               diagnostics,
               honorRenderedPageBreaks: honorHints,
               gridLinePitchTwips: activeSetup.activeDocumentGridLinePitchTwips,
+              wrapField: _WrapField(activeWrapExclusions),
+              blockTopTwips: cursorTwips + effectiveSpaceBefore,
+              blockLeftTwips: blockFlow.textIndentTwips,
             );
+      // A quebra depende de ONDE o bloco cai (a exclusão é posicional), mas
+      // decidir a página depende das linhas. Quando o bloco muda de página
+      // ANTES de emitir a primeira linha, as exclusões da página anterior
+      // deixam de valer e a quebra precisa ser refeita — só nesse caso, e só
+      // quando havia exclusão, para não pagar duas composições no documento
+      // comum, que não tem objeto flutuante nenhum.
+      var brokenWithWrap = activeWrapExclusions.isNotEmpty;
+      var lines = breakBlockLines();
 
       // `keepLines`: se o parágrafo inteiro cabe numa página, não o corta.
       // `keepNext`: mantém este bloco e ao menos a primeira linha do próximo
@@ -1296,6 +1312,10 @@ class LayoutComposer {
           cursorTwips + keepRequiredHeight > capacity &&
           _hasVisualPageContent(currentFragments)) {
         closePage(suppressSpaceBefore: true);
+        if (brokenWithWrap) {
+          lines = breakBlockLines();
+          brokenWithWrap = false;
+        }
       }
 
       var firstLineOfBlock = true;
@@ -1425,6 +1445,10 @@ class LayoutComposer {
             // daqui em diante.
             honorHints = false;
             closePage(suppressSpaceBefore: true);
+            if (i == 0 && brokenWithWrap) {
+              lines = breakBlockLines();
+              brokenWithWrap = false;
+            }
             // A fronteira de página nasce AQUI quando o bloco inteiro não
             // cabe no que sobrou: é o ponto em que a página nova começa
             // num bloco fresco, e portanto o ponto de convergência.
@@ -1464,7 +1488,24 @@ class LayoutComposer {
             pageIndex: pages.length,
           ));
         }
+        // Só AGORA a fatia tem posição definitiva na página: é daqui que sai
+        // a exclusão que os parágrafos seguintes vão respeitar.
+        final sliceTopTwips = cursorTwips + spaceBefore;
+        activeWrapExclusions.addAll(_wrapExclusionsOf(
+          slice,
+          blockTopTwips: sliceTopTwips,
+          blockLeftTwips: blockFlow.textIndentTwips,
+          blockWidthTwips: activeSetup.contentWidthTwips -
+              blockFlow.textIndentTwips -
+              blockStyle.rightIndentTwips,
+        ));
         cursorTwips += height;
+        // `wp:wrapTopAndBottom` reserva a faixa vertical inteira: o corpo
+        // recomeça abaixo do objeto. Diferente da exclusão lateral, isso é
+        // um deslocamento do CURSOR — nenhuma linha convive com a faixa.
+        final topAndBottom =
+            _topAndBottomBottomTwips(slice, blockTopTwips: sliceTopTwips);
+        if (topAndBottom > cursorTwips) cursorTwips = topAndBottom;
         firstLineOfBlock = false;
         i += take;
       }
@@ -2869,6 +2910,14 @@ class LayoutComposer {
   }
 
   /// Quebra o conteúdo inline de [block] em linhas de até [widthTwips].
+  ///
+  /// [wrapField] traz as exclusões dos objetos flutuantes que já estão na
+  /// página (parágrafos anteriores). Os objetos ANCORADOS NESTE bloco são
+  /// resolvidos aqui mesmo, numa segunda passada: a posição vertical do
+  /// objeto depende da linha em que a âncora cai, e a linha depende da
+  /// exclusão — o Word também itera para fechar esse laço. Uma passada extra
+  /// basta para o caso real (a âncora quase nunca muda de linha por causa da
+  /// própria exclusão) e não introduz laço sem fim.
   List<LineBox> _breakLines(
     PMNode block,
     int widthTwips,
@@ -2876,6 +2925,9 @@ class LayoutComposer {
     LayoutDiagnostics diagnostics, {
     bool honorRenderedPageBreaks = true,
     int? gridLinePitchTwips,
+    _WrapField wrapField = _WrapField.empty,
+    int blockTopTwips = 0,
+    int blockLeftTwips = 0,
   }) {
     final flow = _paragraphFlow(blockStyle);
     // Tokens (palavra/espaço) com estilo, mantendo o offset de caractere.
@@ -2973,8 +3025,12 @@ class LayoutComposer {
             borderWidthTwips: integer('borderWidth', 0),
             borderColor: child.attrs['borderColor']?.toString() ?? '#000000',
             backgroundColor: child.attrs['background']?.toString(),
-            wrapTopAndBottom: (child.attrs['word']?.toString() ?? '')
-                .contains('wrapTopAndBottom'),
+            wrapMode: _wrapModeOf(child),
+            wrapSide: _wrapSideOf(child.attrs['wrapSide']),
+            wrapDistLeftTwips: integer('wrapDistLeft', 0),
+            wrapDistTopTwips: integer('wrapDistTop', 0),
+            wrapDistRightTwips: integer('wrapDistRight', 0),
+            wrapDistBottomTwips: integer('wrapDistBottom', 0),
             charStartInBlock: charOffset,
           ),
           modelLength: child.nodeSize,
@@ -3006,373 +3062,555 @@ class LayoutComposer {
       }
     });
 
-    final lines = <LineBox>[];
-    var current = <_Token>[];
-    var currentWidth = 0;
-    var currentCompressibleSpaceWidth = 0;
-    var currentHangingPunctuationWidth = 0;
-    var manualPageBreakBeforeNextLine = false;
-    var renderedBreakBeforeNextLine = false;
+    // Altura de sonda para descobrir a exclusão da linha ANTES de conhecer a
+    // altura real dela (que só existe depois de escolhidos os tokens). A
+    // altura natural do estilo do bloco é a melhor estimativa disponível e
+    // erra, no máximo, na linha que mistura corpos de fonte muito diferentes.
+    final probeLineHeightTwips = _resolvedLineHeightTwips(
+      _lineHeightTwips(
+          blockStyle.family ?? baseFontFamily, blockStyle.baseSizePt),
+      blockStyle,
+      gridLinePitchTwips: gridLinePitchTwips,
+    );
 
-    // A primeira linha tem largura própria: o recuo de primeira linha a
-    // encurta (positivo) ou alarga (pendente, negativo).
-    int lineWidthLimit() {
-      if (lines.isNotEmpty) return widthTwips;
-      final first = widthTwips - flow.firstLineIndentTwips;
-      return first < 400 ? 400 : first;
-    }
+    var reportedNarrowWrap = false;
 
-    int ordinarySpaceCount(String text) {
-      var count = 0;
-      for (final rune in text.runes) {
-        if (rune == 0x20) count++;
-      }
-      return count;
-    }
+    List<LineBox> composeLines(_WrapField field) {
+      final lines = <LineBox>[];
+      var current = <_Token>[];
+      var currentWidth = 0;
+      var currentCompressibleSpaceWidth = 0;
+      var currentHangingPunctuationWidth = 0;
+      var manualPageBreakBeforeNextLine = false;
+      var renderedBreakBeforeNextLine = false;
 
-    int compressibleSpaceWidth(_Token token) {
-      if (!token.isSpace) return 0;
-      final runeCount = token.text.runes.length;
-      if (runeCount == 0) return 0;
-      final spaces = ordinarySpaceCount(token.text);
-      if (spaces == 0) return 0;
-      // Na prática tokens OOXML são sequências homogêneas de U+0020. A
-      // proporção mantém correto também um token raro com whitespace misto.
-      return (token.widthTwips * spaces / runeCount).round();
-    }
+      // Topo da linha em construção, relativo à PRIMEIRA linha do bloco.
+      var pendingLineTopTwips = 0;
+      var insetsComputedForTop = -1;
+      var wrapLeftTwips = 0;
+      var wrapRightTwips = 0;
 
-    bool fitsWithWordJustification(int candidateWidth, int limit) {
-      if (candidateWidth <= limit) return true;
-      if (blockStyle.align != LayoutAlign.justify ||
-          currentCompressibleSpaceWidth <= 0) {
-        return false;
-      }
-      // O line breaker do Word admite no máximo 20% de contração do avanço
-      // dos espaços. A conta inteira evita instabilidade de arredondamento.
-      return candidateWidth * 5 - currentCompressibleSpaceWidth <= limit * 5;
-    }
-
-    bool fitsAutomaticHyphen(int candidateWidth, int limit) {
-      if (candidateWidth <= limit) return true;
-      if (blockStyle.align != LayoutAlign.justify ||
-          currentCompressibleSpaceWidth <= 0) {
-        return false;
-      }
-      // O Word evita escolher um ponto de hifenização que deixe a linha
-      // excessivamente apertada, mesmo quando a contração-limite ainda
-      // faria o texto caber. 20% reproduz essa escolha tipográfica e, por
-      // exemplo, prefere `obriga-` a `obrigató-` no corpus de referência.
-      return candidateWidth * 5 - currentCompressibleSpaceWidth <= limit * 5;
-    }
-
-    int hangingPunctuationWidth(_Token token) {
-      if (!_isHangingPunctuation(token.text)) return 0;
-      final prefix = token.text.substring(0, token.text.length - 1);
-      final prefixWidth = _ptToTwips(_measurePt(token.style, prefix));
-      final width = token.widthTwips - prefixWidth;
-      return width > 0 ? width : 0;
-    }
-
-    void flush({bool wrappedByWidth = false}) {
-      if (current.isEmpty) return;
-      // Espaços separadores são mantidos no modelo/DOM para o PositionMap,
-      // mas um espaço no fim da linha não participa da largura visual nem da
-      // distribuição de justificação do Word.
-      var lastVisibleToken = current.length - 1;
-      while (lastVisibleToken >= 0 &&
-          (current[lastVisibleToken].isSpace ||
-              current[lastVisibleToken].hardBreak ||
-              current[lastVisibleToken].isOpaqueInline ||
-              current[lastVisibleToken].textBox != null)) {
-        lastVisibleToken--;
-      }
-      var visibleWidth = 0;
-      var visibleSpaceCount = 0;
-      for (var i = 0; i <= lastVisibleToken; i++) {
-        visibleWidth += current[i].widthTwips;
-        visibleSpaceCount += ordinarySpaceCount(current[i].text);
-      }
-      var wordSpacingTwips = 0.0;
-      final effectiveVisibleWidth =
-          visibleWidth - currentHangingPunctuationWidth;
-      if (blockStyle.align == LayoutAlign.justify &&
-          visibleSpaceCount > 0 &&
-          (wrappedByWidth || effectiveVisibleWidth > lineWidthLimit())) {
-        wordSpacingTwips =
-            (lineWidthLimit() - effectiveVisibleWidth) / visibleSpaceCount;
-      }
-      // Segmentos: funde tokens adjacentes com o mesmo estilo.
-      final segments = <LineSegment>[];
-      for (final token in current) {
-        if (segments.isNotEmpty &&
-            segments.last.imageSrc == null &&
-            token.imageSrc == null &&
-            !segments.last.hardBreak &&
-            !token.hardBreak &&
-            !segments.last.isTab &&
-            !token.isTab &&
-            !segments.last.isOpaqueInline &&
-            !token.isOpaqueInline &&
-            !segments.last.isDiscretionaryHyphen &&
-            !token.isDiscretionaryHyphen &&
-            segments.last.textBox == null &&
-            token.textBox == null &&
-            identical(segments.last.style, token.style)) {
-          segments[segments.length - 1] = LineSegment(
-            text: segments.last.text + token.text,
-            style: segments.last.style,
-            widthTwips: segments.last.widthTwips + token.widthTwips,
-          );
-        } else {
-          segments.add(LineSegment(
-            text: token.text,
-            style: token.style,
-            widthTwips: token.widthTwips,
-            imageSrc: token.imageSrc,
-            imageHeightTwips: token.imageHeightTwips,
-            hardBreak: token.hardBreak,
-            isTab: token.isTab,
-            tabLeader: token.tabLeader,
-            isOpaqueInline: token.isOpaqueInline,
-            isDiscretionaryHyphen: token.isDiscretionaryHyphen,
-            textBox: token.textBox,
-          ));
+      void ensureInsets() {
+        if (insetsComputedForTop == pendingLineTopTwips) return;
+        insetsComputedForTop = pendingLineTopTwips;
+        if (field.isEmpty) {
+          wrapLeftTwips = 0;
+          wrapRightTwips = 0;
+          return;
         }
+        final insets = field.insetsFor(
+          topTwips: blockTopTwips + pendingLineTopTwips,
+          bottomTwips:
+              blockTopTwips + pendingLineTopTwips + probeLineHeightTwips,
+          blockLeftTwips: blockLeftTwips,
+          widthTwips: widthTwips,
+        );
+        wrapLeftTwips = insets.left;
+        wrapRightTwips = insets.right;
       }
-      var ascent = 0, height = 0;
-      for (final segment in segments) {
-        if (segment.isOpaqueInline || segment.textBox != null) continue;
-        final v = _verticalPt(segment.style);
-        final gap = _ptToTwips(v.lineGap);
-        final a = _ptToTwips(v.ascent) + gap ~/ 2;
-        final h = _ptToTwips(v.ascent) + _ptToTwips(v.descent) + gap;
-        if (a > ascent) ascent = a;
-        if (h > height) height = h;
-        if (segment.imageHeightTwips != null &&
-            segment.imageHeightTwips! > height) {
-          height = segment.imageHeightTwips!;
-        }
-      }
-      if (height == 0) {
-        height = _lineHeightTwips(baseFontFamily, blockStyle.baseSizePt);
-        ascent = height;
-      }
-      final naturalHeight = height;
-      height = _resolvedLineHeightTwips(
-        naturalHeight,
-        blockStyle,
-        gridLinePitchTwips: gridLinePitchTwips,
-      );
-      ascent += (height - naturalHeight) ~/ 2;
-      if (ascent < 0) ascent = 0;
-      if (ascent > height) ascent = height;
-      lines.add(LineBox(
-        segments: segments,
-        widthTwips: wordSpacingTwips == 0
-            ? currentWidth
-            : (visibleWidth + wordSpacingTwips * visibleSpaceCount).round(),
-        ascentTwips: ascent,
-        heightTwips: height,
-        charStart: current.first.charStart,
-        charEnd: current.last.charEnd,
-        // O recuo de primeira linha só vale para a PRIMEIRA linha do bloco.
-        indentTwips: lines.isEmpty ? flow.firstLineIndentTwips : 0,
-        wordSpacingTwips: wordSpacingTwips,
-        manualPageBreakBefore: manualPageBreakBeforeNextLine,
-        renderedPageBreakBefore: renderedBreakBeforeNextLine,
-      ));
-      current = [];
-      currentWidth = 0;
-      currentCompressibleSpaceWidth = 0;
-      currentHangingPunctuationWidth = 0;
-      manualPageBreakBeforeNextLine = false;
-      renderedBreakBeforeNextLine = false;
-    }
 
-    var endedWithHardBreak = false;
-    bool currentHasFlow() =>
-        current.any((token) => !token.isOpaqueInline && token.textBox == null);
-
-    for (var tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
-      var token = tokens[tokenIndex];
-      if (token.hardBreak) {
-        current.add(token);
-        flush();
-        if (token.pageBreak) manualPageBreakBeforeNextLine = true;
-        endedWithHardBreak = true;
-        continue;
-      }
-      if (token.isTab) {
-        token = _resolvedTabToken(
-            token, tokenIndex, tokens, blockStyle, currentWidth, lines.isEmpty);
-        if (currentWidth + token.widthTwips > lineWidthLimit() &&
-            currentHasFlow()) {
-          flush(wrappedByWidth: true);
-          token = _resolvedTabToken(
-              token, tokenIndex, tokens, blockStyle, currentWidth, false);
-        }
-        current.add(token);
-        currentWidth += token.widthTwips;
-        endedWithHardBreak = false;
-        continue;
-      }
-      if (token.renderedPageBreakHint && honorRenderedPageBreaks) {
-        // O marker fica imediatamente ANTES do primeiro conteúdo da página
-        // seguinte. Fechar a linha visível corrente aqui preserva inclusive
-        // markers no meio de um run, sem dar largura ou glifo ao nó opaco.
-        if (currentHasFlow()) flush();
-        renderedBreakBeforeNextLine = true;
-        current.add(token);
-        endedWithHardBreak = false;
-        continue;
-      }
-      if (token.isOpaqueInline || token.textBox != null) {
-        current.add(token);
-        endedWithHardBreak = false;
-        continue;
-      }
-      if (token.isSpace) {
-        if (!currentHasFlow()) continue; // colapsa espaço no início da linha
-        current.add(token);
-        currentWidth += token.widthTwips;
-        currentCompressibleSpaceWidth += compressibleSpaceWidth(token);
-        continue;
-      }
-      endedWithHardBreak = false;
-      final candidateWidth = currentWidth + token.widthTwips;
-      if (!fitsWithWordJustification(candidateWidth, lineWidthLimit()) &&
-          currentHasFlow()) {
-        final hangingWidth = hangingPunctuationWidth(token);
-        if (hangingWidth > 0 &&
-            fitsWithWordJustification(
-                candidateWidth - hangingWidth, lineWidthLimit())) {
-          // Pontuação pendurada ganha de hifenizar a palavra. O Word aplica
-          // isso em toda margem de linha, não apenas no fim do parágrafo.
-          currentHangingPunctuationWidth = hangingWidth;
-        } else {
-          var hyphenated = false;
-          // `w:hyphenationZone` is the amount of ragged whitespace Word
-          // accepts at the right edge before it tries a discretionary hyphen.
-          // Hyphenating every overflowing word ignores that zone and creates
-          // visibly more breaks than Word (for example demonstra-ção in the
-          // production TR). The whitespace token immediately before the word
-          // is trimmed when the line flushes, so exclude it from the gap.
-          var trailingSpaceTwips = 0;
-          for (final currentToken in current.reversed) {
-            if (!currentToken.isSpace) break;
-            trailingSpaceTwips += currentToken.widthTwips;
+      // A primeira linha tem largura própria: o recuo de primeira linha a
+      // encurta (positivo) ou alarga (pendente, negativo). A exclusão de um
+      // objeto flutuante encurta QUALQUER linha, e por isso entra depois.
+      int lineWidthLimit() {
+        ensureInsets();
+        final excluded = wrapLeftTwips + wrapRightTwips;
+        if (lines.isNotEmpty) {
+          if (excluded == 0) return widthTwips;
+          final limit = widthTwips - excluded;
+          if (limit >= _minimumWrappedLineTwips) return limit;
+          if (!reportedNarrowWrap) {
+            reportedNarrowWrap = true;
+            diagnostics.warnings.add(
+              'disposição do texto cobre a largura da linha em '
+              '${block.type.name}; largura mínima aplicada',
+            );
           }
-          final raggedGap = lineWidthLimit() -
-              (currentWidth - trailingSpaceTwips).clamp(0, currentWidth);
-          if (blockStyle.autoHyphenation &&
-              raggedGap > blockStyle.hyphenationZoneTwips &&
-              token.modelLength == token.text.length) {
-            final hyphenWidth = _ptToTwips(_measurePt(token.style, '-'));
-            final points = _automaticHyphenationPoints(token.text);
-            for (final cut in points.reversed) {
-              final headText = token.text.substring(0, cut);
-              final headWidth = _ptToTwips(_measurePt(token.style, headText));
-              if (!fitsAutomaticHyphen(
-                  currentWidth + headWidth + hyphenWidth, lineWidthLimit())) {
-                continue;
+          return _minimumWrappedLineTwips;
+        }
+        final first = widthTwips - flow.firstLineIndentTwips - excluded;
+        return first < 400 ? 400 : first;
+      }
+
+      int ordinarySpaceCount(String text) {
+        var count = 0;
+        for (final rune in text.runes) {
+          if (rune == 0x20) count++;
+        }
+        return count;
+      }
+
+      int compressibleSpaceWidth(_Token token) {
+        if (!token.isSpace) return 0;
+        final runeCount = token.text.runes.length;
+        if (runeCount == 0) return 0;
+        final spaces = ordinarySpaceCount(token.text);
+        if (spaces == 0) return 0;
+        // Na prática tokens OOXML são sequências homogêneas de U+0020. A
+        // proporção mantém correto também um token raro com whitespace misto.
+        return (token.widthTwips * spaces / runeCount).round();
+      }
+
+      bool fitsWithWordJustification(int candidateWidth, int limit) {
+        if (candidateWidth <= limit) return true;
+        if (blockStyle.align != LayoutAlign.justify ||
+            currentCompressibleSpaceWidth <= 0) {
+          return false;
+        }
+        // O line breaker do Word admite no máximo 20% de contração do avanço
+        // dos espaços. A conta inteira evita instabilidade de arredondamento.
+        return candidateWidth * 5 - currentCompressibleSpaceWidth <= limit * 5;
+      }
+
+      bool fitsAutomaticHyphen(int candidateWidth, int limit) {
+        if (candidateWidth <= limit) return true;
+        if (blockStyle.align != LayoutAlign.justify ||
+            currentCompressibleSpaceWidth <= 0) {
+          return false;
+        }
+        // O Word evita escolher um ponto de hifenização que deixe a linha
+        // excessivamente apertada, mesmo quando a contração-limite ainda
+        // faria o texto caber. 20% reproduz essa escolha tipográfica e, por
+        // exemplo, prefere `obriga-` a `obrigató-` no corpus de referência.
+        return candidateWidth * 5 - currentCompressibleSpaceWidth <= limit * 5;
+      }
+
+      int hangingPunctuationWidth(_Token token) {
+        if (!_isHangingPunctuation(token.text)) return 0;
+        final prefix = token.text.substring(0, token.text.length - 1);
+        final prefixWidth = _ptToTwips(_measurePt(token.style, prefix));
+        final width = token.widthTwips - prefixWidth;
+        return width > 0 ? width : 0;
+      }
+
+      void flush({bool wrappedByWidth = false}) {
+        if (current.isEmpty) return;
+        // Uma linha pode ser fechada sem que ninguém tenha perguntado a
+        // largura (quebra manual, por exemplo); sem isto ela herdaria a
+        // exclusão da linha anterior.
+        ensureInsets();
+        // Espaços separadores são mantidos no modelo/DOM para o PositionMap,
+        // mas um espaço no fim da linha não participa da largura visual nem da
+        // distribuição de justificação do Word.
+        var lastVisibleToken = current.length - 1;
+        while (lastVisibleToken >= 0 &&
+            (current[lastVisibleToken].isSpace ||
+                current[lastVisibleToken].hardBreak ||
+                current[lastVisibleToken].isOpaqueInline ||
+                current[lastVisibleToken].textBox != null)) {
+          lastVisibleToken--;
+        }
+        var visibleWidth = 0;
+        var visibleSpaceCount = 0;
+        for (var i = 0; i <= lastVisibleToken; i++) {
+          visibleWidth += current[i].widthTwips;
+          visibleSpaceCount += ordinarySpaceCount(current[i].text);
+        }
+        var wordSpacingTwips = 0.0;
+        final effectiveVisibleWidth =
+            visibleWidth - currentHangingPunctuationWidth;
+        if (blockStyle.align == LayoutAlign.justify &&
+            visibleSpaceCount > 0 &&
+            (wrappedByWidth || effectiveVisibleWidth > lineWidthLimit())) {
+          wordSpacingTwips =
+              (lineWidthLimit() - effectiveVisibleWidth) / visibleSpaceCount;
+        }
+        // Segmentos: funde tokens adjacentes com o mesmo estilo.
+        final segments = <LineSegment>[];
+        for (final token in current) {
+          if (segments.isNotEmpty &&
+              segments.last.imageSrc == null &&
+              token.imageSrc == null &&
+              !segments.last.hardBreak &&
+              !token.hardBreak &&
+              !segments.last.isTab &&
+              !token.isTab &&
+              !segments.last.isOpaqueInline &&
+              !token.isOpaqueInline &&
+              !segments.last.isDiscretionaryHyphen &&
+              !token.isDiscretionaryHyphen &&
+              segments.last.textBox == null &&
+              token.textBox == null &&
+              identical(segments.last.style, token.style)) {
+            segments[segments.length - 1] = LineSegment(
+              text: segments.last.text + token.text,
+              style: segments.last.style,
+              widthTwips: segments.last.widthTwips + token.widthTwips,
+            );
+          } else {
+            segments.add(LineSegment(
+              text: token.text,
+              style: token.style,
+              widthTwips: token.widthTwips,
+              imageSrc: token.imageSrc,
+              imageHeightTwips: token.imageHeightTwips,
+              hardBreak: token.hardBreak,
+              isTab: token.isTab,
+              tabLeader: token.tabLeader,
+              isOpaqueInline: token.isOpaqueInline,
+              isDiscretionaryHyphen: token.isDiscretionaryHyphen,
+              textBox: token.textBox,
+            ));
+          }
+        }
+        var ascent = 0, height = 0;
+        for (final segment in segments) {
+          if (segment.isOpaqueInline || segment.textBox != null) continue;
+          final v = _verticalPt(segment.style);
+          final gap = _ptToTwips(v.lineGap);
+          final a = _ptToTwips(v.ascent) + gap ~/ 2;
+          final h = _ptToTwips(v.ascent) + _ptToTwips(v.descent) + gap;
+          if (a > ascent) ascent = a;
+          if (h > height) height = h;
+          if (segment.imageHeightTwips != null &&
+              segment.imageHeightTwips! > height) {
+            height = segment.imageHeightTwips!;
+          }
+        }
+        if (height == 0) {
+          height = _lineHeightTwips(baseFontFamily, blockStyle.baseSizePt);
+          ascent = height;
+        }
+        final naturalHeight = height;
+        height = _resolvedLineHeightTwips(
+          naturalHeight,
+          blockStyle,
+          gridLinePitchTwips: gridLinePitchTwips,
+        );
+        ascent += (height - naturalHeight) ~/ 2;
+        if (ascent < 0) ascent = 0;
+        if (ascent > height) ascent = height;
+        lines.add(LineBox(
+          segments: segments,
+          widthTwips: wordSpacingTwips == 0
+              ? currentWidth
+              : (visibleWidth + wordSpacingTwips * visibleSpaceCount).round(),
+          ascentTwips: ascent,
+          heightTwips: height,
+          charStart: current.first.charStart,
+          charEnd: current.last.charEnd,
+          // O recuo de primeira linha só vale para a PRIMEIRA linha do bloco.
+          indentTwips: lines.isEmpty ? flow.firstLineIndentTwips : 0,
+          wrapLeftInsetTwips: wrapLeftTwips,
+          wrapRightInsetTwips: wrapRightTwips,
+          wordSpacingTwips: wordSpacingTwips,
+          manualPageBreakBefore: manualPageBreakBeforeNextLine,
+          renderedPageBreakBefore: renderedBreakBeforeNextLine,
+        ));
+        pendingLineTopTwips += height;
+        current = [];
+        currentWidth = 0;
+        currentCompressibleSpaceWidth = 0;
+        currentHangingPunctuationWidth = 0;
+        manualPageBreakBeforeNextLine = false;
+        renderedBreakBeforeNextLine = false;
+      }
+
+      var endedWithHardBreak = false;
+      bool currentHasFlow() => current
+          .any((token) => !token.isOpaqueInline && token.textBox == null);
+
+      for (var tokenIndex = 0; tokenIndex < tokens.length; tokenIndex++) {
+        var token = tokens[tokenIndex];
+        if (token.hardBreak) {
+          current.add(token);
+          flush();
+          if (token.pageBreak) manualPageBreakBeforeNextLine = true;
+          endedWithHardBreak = true;
+          continue;
+        }
+        if (token.isTab) {
+          token = _resolvedTabToken(token, tokenIndex, tokens, blockStyle,
+              currentWidth, lines.isEmpty);
+          if (currentWidth + token.widthTwips > lineWidthLimit() &&
+              currentHasFlow()) {
+            flush(wrappedByWidth: true);
+            token = _resolvedTabToken(
+                token, tokenIndex, tokens, blockStyle, currentWidth, false);
+          }
+          current.add(token);
+          currentWidth += token.widthTwips;
+          endedWithHardBreak = false;
+          continue;
+        }
+        if (token.renderedPageBreakHint && honorRenderedPageBreaks) {
+          // O marker fica imediatamente ANTES do primeiro conteúdo da página
+          // seguinte. Fechar a linha visível corrente aqui preserva inclusive
+          // markers no meio de um run, sem dar largura ou glifo ao nó opaco.
+          if (currentHasFlow()) flush();
+          renderedBreakBeforeNextLine = true;
+          current.add(token);
+          endedWithHardBreak = false;
+          continue;
+        }
+        if (token.isOpaqueInline || token.textBox != null) {
+          current.add(token);
+          endedWithHardBreak = false;
+          continue;
+        }
+        if (token.isSpace) {
+          if (!currentHasFlow()) continue; // colapsa espaço no início da linha
+          current.add(token);
+          currentWidth += token.widthTwips;
+          currentCompressibleSpaceWidth += compressibleSpaceWidth(token);
+          continue;
+        }
+        endedWithHardBreak = false;
+        final candidateWidth = currentWidth + token.widthTwips;
+        if (!fitsWithWordJustification(candidateWidth, lineWidthLimit()) &&
+            currentHasFlow()) {
+          final hangingWidth = hangingPunctuationWidth(token);
+          if (hangingWidth > 0 &&
+              fitsWithWordJustification(
+                  candidateWidth - hangingWidth, lineWidthLimit())) {
+            // Pontuação pendurada ganha de hifenizar a palavra. O Word aplica
+            // isso em toda margem de linha, não apenas no fim do parágrafo.
+            currentHangingPunctuationWidth = hangingWidth;
+          } else {
+            var hyphenated = false;
+            // `w:hyphenationZone` is the amount of ragged whitespace Word
+            // accepts at the right edge before it tries a discretionary hyphen.
+            // Hyphenating every overflowing word ignores that zone and creates
+            // visibly more breaks than Word (for example demonstra-ção in the
+            // production TR). The whitespace token immediately before the word
+            // is trimmed when the line flushes, so exclude it from the gap.
+            var trailingSpaceTwips = 0;
+            for (final currentToken in current.reversed) {
+              if (!currentToken.isSpace) break;
+              trailingSpaceTwips += currentToken.widthTwips;
+            }
+            final raggedGap = lineWidthLimit() -
+                (currentWidth - trailingSpaceTwips).clamp(0, currentWidth);
+            if (blockStyle.autoHyphenation &&
+                raggedGap > blockStyle.hyphenationZoneTwips &&
+                token.modelLength == token.text.length) {
+              final hyphenWidth = _ptToTwips(_measurePt(token.style, '-'));
+              final points = _automaticHyphenationPoints(token.text);
+              for (final cut in points.reversed) {
+                final headText = token.text.substring(0, cut);
+                final headWidth = _ptToTwips(_measurePt(token.style, headText));
+                if (!fitsAutomaticHyphen(
+                    currentWidth + headWidth + hyphenWidth, lineWidthLimit())) {
+                  continue;
+                }
+                current.add(_Token(
+                  text: headText,
+                  style: token.style,
+                  isSpace: false,
+                  widthTwips: headWidth,
+                  charStart: token.charStart,
+                  modelLength: cut,
+                ));
+                currentWidth += headWidth;
+                current.add(_Token(
+                  text: '-',
+                  style: token.style,
+                  isSpace: false,
+                  widthTwips: hyphenWidth,
+                  charStart: token.charStart + cut,
+                  modelLength: 0,
+                  isDiscretionaryHyphen: true,
+                ));
+                currentWidth += hyphenWidth;
+                flush(wrappedByWidth: true);
+                final tailText = token.text.substring(cut);
+                token = _Token(
+                  text: tailText,
+                  style: token.style,
+                  isSpace: false,
+                  widthTwips: _ptToTwips(_measurePt(token.style, tailText)),
+                  charStart: token.charStart + cut,
+                  modelLength: token.modelLength - cut,
+                );
+                hyphenated = true;
+                break;
               }
-              current.add(_Token(
-                text: headText,
-                style: token.style,
-                isSpace: false,
-                widthTwips: headWidth,
-                charStart: token.charStart,
-                modelLength: cut,
-              ));
-              currentWidth += headWidth;
-              current.add(_Token(
-                text: '-',
-                style: token.style,
-                isSpace: false,
-                widthTwips: hyphenWidth,
-                charStart: token.charStart + cut,
-                modelLength: 0,
-                isDiscretionaryHyphen: true,
-              ));
-              currentWidth += hyphenWidth;
+            }
+            if (!hyphenated) {
               flush(wrappedByWidth: true);
-              final tailText = token.text.substring(cut);
-              token = _Token(
-                text: tailText,
-                style: token.style,
-                isSpace: false,
-                widthTwips: _ptToTwips(_measurePt(token.style, tailText)),
-                charStart: token.charStart + cut,
-                modelLength: token.modelLength - cut,
-              );
-              hyphenated = true;
-              break;
             }
           }
-          if (!hyphenated) {
+        }
+        if (token.widthTwips > widthTwips && !currentHasFlow()) {
+          // Palavra maior que a coluna: corte duro por caracteres.
+          var rest = token;
+          while (rest.widthTwips > widthTwips && rest.text.length > 1) {
+            var cut = rest.text.length - 1;
+            while (cut > 1 &&
+                _ptToTwips(
+                        _measurePt(rest.style, rest.text.substring(0, cut))) >
+                    widthTwips) {
+              cut--;
+            }
+            final head = rest.text.substring(0, cut);
+            current.add(_Token(
+              text: head,
+              style: rest.style,
+              isSpace: false,
+              widthTwips: _ptToTwips(_measurePt(rest.style, head)),
+              charStart: rest.charStart,
+            ));
+            currentWidth += current.last.widthTwips;
             flush(wrappedByWidth: true);
+            rest = _Token(
+              text: rest.text.substring(cut),
+              style: rest.style,
+              isSpace: false,
+              widthTwips:
+                  _ptToTwips(_measurePt(rest.style, rest.text.substring(cut))),
+              charStart: rest.charStart + cut,
+            );
           }
+          current.add(rest);
+          currentWidth += rest.widthTwips;
+          continue;
         }
+        current.add(token);
+        currentWidth += token.widthTwips;
       }
-      if (token.widthTwips > widthTwips && !currentHasFlow()) {
-        // Palavra maior que a coluna: corte duro por caracteres.
-        var rest = token;
-        while (rest.widthTwips > widthTwips && rest.text.length > 1) {
-          var cut = rest.text.length - 1;
-          while (cut > 1 &&
-              _ptToTwips(_measurePt(rest.style, rest.text.substring(0, cut))) >
-                  widthTwips) {
-            cut--;
-          }
-          final head = rest.text.substring(0, cut);
-          current.add(_Token(
-            text: head,
-            style: rest.style,
-            isSpace: false,
-            widthTwips: _ptToTwips(_measurePt(rest.style, head)),
-            charStart: rest.charStart,
-          ));
-          currentWidth += current.last.widthTwips;
-          flush(wrappedByWidth: true);
-          rest = _Token(
-            text: rest.text.substring(cut),
-            style: rest.style,
-            isSpace: false,
-            widthTwips:
-                _ptToTwips(_measurePt(rest.style, rest.text.substring(cut))),
-            charStart: rest.charStart + cut,
-          );
-        }
-        current.add(rest);
-        currentWidth += rest.widthTwips;
-        continue;
+      flush();
+      if (endedWithHardBreak) {
+        final natural = _lineHeightTwips(
+            blockStyle.family ?? baseFontFamily, blockStyle.baseSizePt);
+        final height = _resolvedLineHeightTwips(
+          natural,
+          blockStyle,
+          gridLinePitchTwips: gridLinePitchTwips,
+        );
+        final ascent = natural + (height - natural) ~/ 2;
+        ensureInsets();
+        lines.add(LineBox(
+          segments: const [],
+          widthTwips: 0,
+          ascentTwips: ascent < 0 ? 0 : (ascent > height ? height : ascent),
+          heightTwips: height,
+          charStart: charOffset,
+          charEnd: charOffset,
+          wrapLeftInsetTwips: wrapLeftTwips,
+          wrapRightInsetTwips: wrapRightTwips,
+          manualPageBreakBefore: manualPageBreakBeforeNextLine,
+        ));
       }
-      current.add(token);
-      currentWidth += token.widthTwips;
+      return lines;
     }
-    flush();
-    if (endedWithHardBreak) {
-      final natural = _lineHeightTwips(
-          blockStyle.family ?? baseFontFamily, blockStyle.baseSizePt);
-      final height = _resolvedLineHeightTwips(
-        natural,
-        blockStyle,
-        gridLinePitchTwips: gridLinePitchTwips,
-      );
-      final ascent = natural + (height - natural) ~/ 2;
-      lines.add(LineBox(
-        segments: const [],
-        widthTwips: 0,
-        ascentTwips: ascent < 0 ? 0 : (ascent > height ? height : ascent),
-        heightTwips: height,
-        charStart: charOffset,
-        charEnd: charOffset,
-        manualPageBreakBefore: manualPageBreakBeforeNextLine,
-      ));
+
+    final lines = composeLines(wrapField);
+    if (!tokens.any((token) => token.textBox?.createsSideExclusion ?? false)) {
+      return lines;
     }
-    return lines;
+    final own = _wrapExclusionsOf(
+      lines,
+      blockTopTwips: blockTopTwips,
+      blockLeftTwips: blockLeftTwips,
+      blockWidthTwips: widthTwips,
+    );
+    return own.isEmpty ? lines : composeLines(wrapField.merged(own));
+  }
+
+  /// Disposição do texto de um nó `textBox`.
+  ///
+  /// O atributo `wrapMode` é a fonte autoritativa (a importação o extrai do
+  /// DrawingML e a UI o reescreve). Snapshots gravados antes dele só têm o
+  /// XML bruto em `word`, e para esses continua valendo a farejada textual —
+  /// jogá-los fora mudaria o layout de documentos já salvos.
+  TextWrapMode _wrapModeOf(PMNode node) {
+    final declared = node.attrs['wrapMode'];
+    if (declared is String && declared.isNotEmpty) {
+      return switch (declared) {
+        'square' => TextWrapMode.square,
+        'tight' => TextWrapMode.tight,
+        'through' => TextWrapMode.through,
+        'topAndBottom' => TextWrapMode.topAndBottom,
+        'behindText' => TextWrapMode.behindText,
+        _ => TextWrapMode.inFrontOfText,
+      };
+    }
+    final raw = node.attrs['word']?.toString() ?? '';
+    if (raw.contains('wrapTopAndBottom')) return TextWrapMode.topAndBottom;
+    if (raw.contains('wrapSquare')) return TextWrapMode.square;
+    if (raw.contains('wrapTight')) return TextWrapMode.tight;
+    if (raw.contains('wrapThrough')) return TextWrapMode.through;
+    return TextWrapMode.inFrontOfText;
+  }
+
+  TextWrapSide _wrapSideOf(Object? value) => switch ('$value') {
+        'left' => TextWrapSide.left,
+        'right' => TextWrapSide.right,
+        'largest' => TextWrapSide.largest,
+        _ => TextWrapSide.bothSides,
+      };
+
+  /// As exclusões criadas pelos objetos flutuantes ancorados em [lines].
+  ///
+  /// O retângulo é calculado com a MESMA aritmética que os renderers usam
+  /// para desenhar a caixa (`dom_renderer._renderTextBox`); qualquer
+  /// divergência aqui apareceria como texto encostando no objeto ou um
+  /// buraco ao lado dele.
+  List<_WrapExclusion> _wrapExclusionsOf(
+    List<LineBox> lines, {
+    required int blockTopTwips,
+    required int blockLeftTwips,
+    required int blockWidthTwips,
+  }) {
+    final result = <_WrapExclusion>[];
+    var lineTop = blockTopTwips;
+    for (final line in lines) {
+      for (final segment in line.segments) {
+        final box = segment.textBox;
+        if (box == null || !box.createsSideExclusion) continue;
+        final width = box.widthTwips > 0 ? box.widthTwips : 1;
+        final height = box.heightTwips > 0 ? box.heightTwips : 1;
+        final leftInBlock = switch (box.positionHAlign?.toLowerCase()) {
+          'center' => (blockWidthTwips - width) ~/ 2 + box.offsetXTwips,
+          'right' => blockWidthTwips - width + box.offsetXTwips,
+          _ => line.indentTwips + box.offsetXTwips,
+        };
+        final left = blockLeftTwips + leftInBlock;
+        final top = lineTop + box.offsetYTwips;
+        result.add(_WrapExclusion(
+          topTwips: top - box.wrapDistTopTwips,
+          bottomTwips: top + height + box.wrapDistBottomTwips,
+          leftTwips: left - box.wrapDistLeftTwips,
+          rightTwips: left + width + box.wrapDistRightTwips,
+          side: box.wrapSide,
+        ));
+      }
+      lineTop += line.heightTwips;
+    }
+    return result;
+  }
+
+  /// Fim da faixa vertical ocupada por objetos `wp:wrapTopAndBottom` de
+  /// [lines] — o ponto em que o corpo pode voltar a escrever.
+  int _topAndBottomBottomTwips(
+    List<LineBox> lines, {
+    required int blockTopTwips,
+  }) {
+    var bottom = blockTopTwips;
+    var lineTop = blockTopTwips;
+    for (final line in lines) {
+      for (final segment in line.segments) {
+        final box = segment.textBox;
+        if (box == null || !box.wrapTopAndBottom) continue;
+        final height = box.heightTwips > 0 ? box.heightTwips : 1;
+        final candidate =
+            lineTop + box.offsetYTwips + height + box.wrapDistBottomTwips;
+        if (candidate > bottom) bottom = candidate;
+      }
+      lineTop += line.heightTwips;
+    }
+    return bottom;
   }
 }
+
+/// Piso da largura de uma linha encurtada por um objeto flutuante.
+///
+/// Uma exclusão que cobre a largura inteira exigiria EMPURRAR a linha para
+/// baixo, e o PageGraph só sabe deslocar blocos (não linhas dentro de um
+/// bloco). Em vez de emitir uma linha de largura zero — que quebraria uma
+/// palavra por linha — a linha é mantida com esta largura mínima e o
+/// diagnóstico registra a perda.
+const int _minimumWrappedLineTwips = 400;
 
 extension _TableComposition on LayoutComposer {
   /// Larguras de coluna resolvidas em twips.
@@ -4689,6 +4927,83 @@ class _LayoutFieldState {
   String? command;
   bool inResult = false;
   bool emitted = false;
+}
+
+/// Retângulo que o texto do corpo não pode invadir (a "disposição do texto"
+/// de um objeto flutuante).
+///
+/// As coordenadas são as da CAIXA DE CONTEÚDO da página — x a partir da
+/// margem esquerda, y a partir do topo do corpo. É o único referencial comum
+/// entre blocos: cada parágrafo tem recuo próprio, e uma exclusão nascida no
+/// parágrafo âncora precisa continuar valendo nos parágrafos seguintes.
+class _WrapExclusion {
+  const _WrapExclusion({
+    required this.topTwips,
+    required this.bottomTwips,
+    required this.leftTwips,
+    required this.rightTwips,
+    required this.side,
+  });
+
+  final int topTwips;
+  final int bottomTwips;
+  final int leftTwips;
+  final int rightTwips;
+  final TextWrapSide side;
+}
+
+/// As exclusões que valem para um bloco enquanto ele é quebrado em linhas.
+class _WrapField {
+  const _WrapField(this.exclusions);
+
+  static const _WrapField empty = _WrapField(<_WrapExclusion>[]);
+
+  final List<_WrapExclusion> exclusions;
+
+  bool get isEmpty => exclusions.isEmpty;
+
+  _WrapField merged(List<_WrapExclusion> extra) => extra.isEmpty
+      ? this
+      : _WrapField(<_WrapExclusion>[...exclusions, ...extra]);
+
+  /// Quanto a caixa de linha que ocupa `[blockLeftTwips, +widthTwips]` entre
+  /// [topTwips] e [bottomTwips] tem de encolher de cada lado.
+  ///
+  /// Uma linha é UMA caixa no PageGraph, então não há como emitir texto dos
+  /// dois lados do mesmo objeto: `bothSides` cai no lado com mais espaço,
+  /// que é a decisão que o Word também toma quando o lado menor não comporta
+  /// nem uma palavra.
+  ({int left, int right}) insetsFor({
+    required int topTwips,
+    required int bottomTwips,
+    required int blockLeftTwips,
+    required int widthTwips,
+  }) {
+    var left = 0;
+    var right = 0;
+    final lineRight = blockLeftTwips + widthTwips;
+    for (final exclusion in exclusions) {
+      if (exclusion.bottomTwips <= topTwips) continue;
+      if (exclusion.topTwips >= bottomTwips) continue;
+      if (exclusion.rightTwips <= blockLeftTwips) continue;
+      if (exclusion.leftTwips >= lineRight) continue;
+      final roomLeft = exclusion.leftTwips - blockLeftTwips;
+      final roomRight = lineRight - exclusion.rightTwips;
+      final side = switch (exclusion.side) {
+        TextWrapSide.left => TextWrapSide.left,
+        TextWrapSide.right => TextWrapSide.right,
+        _ => roomLeft >= roomRight ? TextWrapSide.left : TextWrapSide.right,
+      };
+      if (side == TextWrapSide.left) {
+        final inset = lineRight - exclusion.leftTwips;
+        if (inset > right) right = inset;
+      } else {
+        final inset = exclusion.rightTwips - blockLeftTwips;
+        if (inset > left) left = inset;
+      }
+    }
+    return (left: left < 0 ? 0 : left, right: right < 0 ? 0 : right);
+  }
 }
 
 class _Token {

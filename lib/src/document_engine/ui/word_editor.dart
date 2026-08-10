@@ -112,6 +112,12 @@ export 'image_insert.dart'
         officeImageNode,
         officeImageAccept,
         officeTwipsPerPixel;
+export 'layout_options.dart'
+    show
+        buildLayoutOptionsEntries,
+        layoutOptionsButton,
+        officeLayoutOptionsGroup,
+        openLayoutOptionsPopover;
 export 'menu.dart' show OfficeMenuEntry, buildMenu, openMenu, openMenuAt;
 export 'object_adorner.dart' show OfficeObjectAdorner, officeResizableNodeTypes;
 export 'overlay.dart'

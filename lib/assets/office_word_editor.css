@@ -1067,6 +1067,44 @@
   touch-action: none;
 }
 
+/* Faixas de MOVER: só a borda arrasta — o miolo pertence ao duplo clique
+   que abre a edição in-place da caixa de texto. */
+.dq-office-objmove {
+  position: absolute;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: move;
+}
+
+.dq-office-objmove-n { left: 0; right: 0; top: -3px; height: 7px; }
+.dq-office-objmove-s { left: 0; right: 0; bottom: -3px; height: 7px; }
+.dq-office-objmove-w { top: 0; bottom: 0; left: -3px; width: 7px; }
+.dq-office-objmove-e { top: 0; bottom: 0; right: -3px; width: 7px; }
+
+/* O ícone "Opções de Layout", colado ao canto superior direito do objeto. */
+.dq-office-objanchor {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  margin-left: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 1px solid #b8c0c8;
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.dq-office-objanchor:hover {
+  border-color: #185abd;
+}
+
 .dq-office-objhandle-nw { left: 0; top: 0; cursor: nwse-resize; }
 .dq-office-objhandle-n { left: 50%; top: 0; cursor: ns-resize; }
 .dq-office-objhandle-ne { left: 100%; top: 0; cursor: nesw-resize; }

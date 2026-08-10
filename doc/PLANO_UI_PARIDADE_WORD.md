@@ -87,8 +87,10 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Clique seleciona o objeto (moldura de seleção) | ✅ | `ui/object_adorner.dart` (2026-08-09) |
 | Âncoras de redimensionamento (8 handles) em imagem | ✅ | arrasto sem reprojetar, UMA transação no pointerup, Shift mantém proporção (2026-08-09) |
 | Âncoras de redimensionamento em caixa de texto | ✅ | mesmo adorno (`officeResizableNodeTypes`) |
-| Arrastar para reposicionar objeto flutuante; ícone de âncora ⚓ | ❌ | schema já guarda `offsetX/offsetY/positionHAlign` (`office/schema.dart:156-178`) |
-| Opções de disposição do texto (inline, quadrado, atrás, na frente…) | ❌ | o compositor só honra `wrapTopAndBottom`; a UI espera o wrap real (senão o botão não mudaria nada) |
+| Arrastar para reposicionar objeto flutuante | ✅ (caixa de texto) | faixas de borda da moldura (`ui/object_adorner.dart`), UMA transação no `pointerup` somando `offsetX/offsetY`; imagem fica de fora porque a importação a achata em inline (`office/document/docx/reader.dart:641-643`) |
+| Opções de disposição do texto (quadrado, próximo, através, sup./inf., atrás, na frente) | ✅ | popover `ui/layout_options.dart` + botão na quickbar de objeto; o compositor honra o modo em `layout/layout_composer.dart` (`_wrapModeOf`, `_WrapField.insetsFor`, `_topAndBottomBottomTwips`) e a exportação o reescreve em `office/docx_codec.dart` (`_textBoxRawXmlWithWrap`) |
+| "Em linha com o texto" para caixa de texto | ❌ (item VISÍVEL e desabilitado, com o motivo) | a caixa é sempre flutuante no motor: o token dela tem largura zero (`layout_composer.dart`, ramo `textBox` de `_breakLines`) e o visual é `position:absolute` (`layout/dom_renderer.dart:_renderTextBox`) |
+| Disposição do texto para IMAGEM | ❌ (itens VISÍVEIS e desabilitados) | `wp:anchor` de imagem é lido como inline (`office/document/docx/reader.dart:641-643`); não há `offsetX/offsetY/wrapMode` no nó `image` |
 | Edição in-place da caixa de texto | ✅ | `ui/text_box_session.dart` (2026-08-09): duplo clique abre uma view sobre a caixa; o `w:txbxContent` é regerado na exportação quando a assinatura mudou (§2.10) |
 | Inserir imagem (aba Inserir → arquivo) | ✅ | `ui/image_insert.dart` (2026-08-09): tamanho natural lido do cabeçalho, limitado à área útil |
 | Inserir caixa de texto | ❌ | — |
@@ -245,6 +247,53 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
     silêncio (transação sem passos). Agora `mount` usa o schema DO
     DOCUMENTO por padrão e rejeita explicitamente um `schema:` incompatível.
     O próprio `example/office_editor` tinha esse defeito.
+
+### 2.11 Disposição do texto (wrap) no compositor e a UI que depende dela
+
+O botão de disposição do texto não existia porque o compositor não sabia
+desviar. Agora sabe, e é a exclusão de área — não o atributo — que os testes
+cobram (`test/unit/document_engine/layout/text_wrap_test.dart`).
+
+**Onde cada peça mora:**
+
+- `layout/page_graph.dart`: `TextWrapMode` / `TextWrapSide` no
+  `FloatingTextBoxLayout`, e `LineBox.wrapLeftInsetTwips` /
+  `wrapRightInsetTwips` — o encurtamento é da LINHA, separado do recuo de
+  parágrafo, porque muda a cada faixa vertical.
+- `layout/layout_composer.dart`: `_WrapExclusion`/`_WrapField` (retângulos em
+  coordenadas da caixa de conteúdo da página), `_wrapModeOf`,
+  `_wrapExclusionsOf`, `_topAndBottomBottomTwips`. As exclusões vivem POR
+  PÁGINA (`activeWrapExclusions`, zeradas em `closePage`), e `_breakLines`
+  roda uma segunda passada quando o próprio bloco ancora um objeto com
+  exclusão — é o laço âncora↔linha que o Word também itera.
+- `layout/dom_renderer.dart` e `layout/pdf_renderer.dart`: somam o inset ao
+  `left`/`right` da linha. O PDF consome o MESMO `PageGraph`, então a paridade
+  sai de graça; o que precisou de cuidado foi manter a caixa flutuante
+  posicionada pela largura do BLOCO, não pela largura já encurtada — senão a
+  caixa se afastaria de si mesma a cada recomposição.
+- `office/document/docx/reader.dart`: lê `wp:wrapSquare/Tight/Through/`
+  `TopAndBottom/None` + `wp:anchor/@behindDoc` + `distL/T/R/B`.
+- `office/docx_codec.dart`: `_textBoxRawXmlWithWrap` faz a cirurgia textual no
+  XML preservado da caixa (mesma decisão do `_replaceTextBoxContent`), inclui
+  o `wp:wrapPolygon` que `wrapTight/Through` exigem e mantém o `w10:wrap` do
+  fallback VML coerente. Salvar sem trocar o modo não mexe num byte.
+- `ui/layout_options.dart` + `ui/quickbar.dart` + `ui/object_adorner.dart`: o
+  popover, o botão da quickbar de objeto e o ícone colado ao canto do objeto.
+
+**Limites conhecidos (deliberados, não esquecidos):**
+
+1. `bothSides` degrada para "maior lado": uma linha é UMA caixa no PageGraph,
+   e não há como emitir a mesma linha dos dois lados do objeto.
+2. `tight`/`through` usam a caixa delimitadora, não o `wp:wrapPolygon`. O erro
+   é sempre para fora (o texto nunca invade o objeto).
+3. Uma exclusão que cobre a largura inteira NÃO empurra a linha para baixo: o
+   PageGraph desloca blocos, não linhas dentro de um bloco. A linha fica com
+   `_minimumWrappedLineTwips` e o diagnóstico registra.
+4. Um objeto só afeta a página em que sua âncora foi desenhada — que é a regra
+   do Word — mas um parágrafo que ATRAVESSA a fronteira de página conserva as
+   larguras da página em que começou.
+5. "Em linha com o texto" e qualquer disposição de IMAGEM ficam desabilitadas
+   com o motivo escrito no item (§1.4).
 
 ### 2.9 F10 parcial em 2026-08-09 (Localizar/Substituir, Link, Símbolo, ¶)
 
@@ -735,7 +784,7 @@ overlay/NodeSelection destravam tudo que envolve objeto.
 - **Critério:** selecionar palavra → mini toolbar como no screenshot; botão
   direito → menu do editor (não o do browser).
 
-### F3 — NodeSelection + imagem — **CONCLUÍDA 2026-08-09** (disposição do texto pendente: precisa de wrap no compositor)
+### F3 — NodeSelection + imagem — **CONCLUÍDA 2026-08-09** (disposição do texto entregue com o wrap do compositor; ver §2.11)
 - `NodeSelection` no estado; clique seleciona imagem; moldura + 8 handles;
   resize por arrasto (Shift mantém proporção) → transação em width/height;
   Delete remove; arrastar reposiciona (inline: drop no caret; flutuante:
@@ -792,7 +841,7 @@ overlay/NodeSelection destravam tudo que envolve objeto.
   modificar um estilo muda todos os parágrafos que o usam; DOCX exportado
   reflete no Word.
 
-### F9 — Caixa de texto completa — **PARCIAL 2026-08-09** (edição in-place e exportação feitas; inserir caixa nova e disposição do texto pendentes — ver §2.10)
+### F9 — Caixa de texto completa — **PARCIAL 2026-08-09** (edição in-place, exportação, disposição do texto e arrasto feitos; inserir caixa nova segue pendente — ver §2.10 e §2.11)
 - Inserir → Caixa de Texto; `NodeSelection` + handles (F3 reusa);
   edição in-place (view secundária sobre `textBoxDoc`, mesma técnica do
   header F6); opções de alinhamento/disposição; bordas/preenchimento.

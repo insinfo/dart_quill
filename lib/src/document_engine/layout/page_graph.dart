@@ -91,6 +91,51 @@ class ResolvedRunStyle {
   final int letterSpacingTwips;
 }
 
+/// Disposição do texto em torno de um objeto flutuante.
+///
+/// Espelha 1:1 o DrawingML: `wp:wrapSquare`, `wp:wrapTight`,
+/// `wp:wrapThrough`, `wp:wrapTopAndBottom` e `wp:wrapNone` — este último
+/// desdobrado em dois pelo atributo `wp:anchor/@behindDoc`, porque "atrás do
+/// texto" e "na frente do texto" são o MESMO wrap (nenhum) e diferem apenas
+/// na ordem de pintura.
+enum TextWrapMode {
+  /// `wp:wrapSquare` — exclusão retangular pela caixa delimitadora.
+  square,
+
+  /// `wp:wrapTight` — no Word, exclusão pelo polígono `wp:wrapPolygon`.
+  ///
+  /// Aqui a exclusão usa a MESMA caixa delimitadora do [square]: sem
+  /// rasterizar o contorno do objeto não há polígono confiável, e aproximar
+  /// pelo retângulo erra para fora (o texto nunca invade o objeto), que é o
+  /// lado seguro do erro.
+  tight,
+
+  /// `wp:wrapThrough` — idem [tight], mais os vazios internos do polígono.
+  /// Também aproximado pela caixa delimitadora.
+  through,
+
+  /// `wp:wrapTopAndBottom` — nenhuma linha divide a faixa vertical do objeto.
+  topAndBottom,
+
+  /// `wp:wrapNone` com `behindDoc="1"`: sem exclusão, atrás do texto.
+  behindText,
+
+  /// `wp:wrapNone` com `behindDoc="0"`: sem exclusão, na frente do texto.
+  inFrontOfText,
+}
+
+/// `wp:wrapSquare/@wrapText` — de que lado do objeto o texto pode correr.
+enum TextWrapSide {
+  /// `bothSides`. O PageGraph tem UMA caixa de linha por linha, então não há
+  /// como emitir a mesma linha dos dois lados do objeto; degrada para
+  /// [largest], que é o que o Word acaba fazendo quando um dos lados não
+  /// comporta nem uma palavra.
+  bothSides,
+  left,
+  right,
+  largest,
+}
+
 /// Caixa de texto ancorada a um run, mas fora do fluxo tipográfico.
 ///
 /// Todas as medidas já estão em twips. A caixa é metadado visual do segmento:
@@ -112,7 +157,12 @@ class FloatingTextBoxLayout {
     this.borderWidthTwips = 0,
     this.borderColor = '#000000',
     this.backgroundColor,
-    this.wrapTopAndBottom = false,
+    this.wrapMode = TextWrapMode.inFrontOfText,
+    this.wrapSide = TextWrapSide.bothSides,
+    this.wrapDistLeftTwips = 0,
+    this.wrapDistTopTwips = 0,
+    this.wrapDistRightTwips = 0,
+    this.wrapDistBottomTwips = 0,
     this.charStartInBlock = 0,
   });
 
@@ -135,9 +185,28 @@ class FloatingTextBoxLayout {
   final String borderColor;
   final String? backgroundColor;
 
+  /// Disposição do texto: quem decide se — e como — o corpo desvia da caixa.
+  final TextWrapMode wrapMode;
+
+  /// Lado permitido ao texto nos modos com exclusão lateral.
+  final TextWrapSide wrapSide;
+
+  /// `distL/distT/distR/distB` do wrap: a folga entre o objeto e o texto.
+  /// Ela infla o retângulo de exclusão, não o objeto desenhado.
+  final int wrapDistLeftTwips;
+  final int wrapDistTopTwips;
+  final int wrapDistRightTwips;
+  final int wrapDistBottomTwips;
+
   /// DrawingML `wp:wrapTopAndBottom`: a caixa continua flutuante na linha
   /// âncora, mas cria uma exclusão vertical para o corpo da página.
-  final bool wrapTopAndBottom;
+  bool get wrapTopAndBottom => wrapMode == TextWrapMode.topAndBottom;
+
+  /// Modos que ENCURTAM a linha do corpo em vez de só empurrá-la para baixo.
+  bool get createsSideExclusion =>
+      wrapMode == TextWrapMode.square ||
+      wrapMode == TextWrapMode.tight ||
+      wrapMode == TextWrapMode.through;
 
   /// Deslocamento do nó `textBox` dentro do CONTEÚDO do bloco âncora.
   ///
@@ -208,6 +277,8 @@ class LineBox {
     required this.charStart,
     required this.charEnd,
     this.indentTwips = 0,
+    this.wrapLeftInsetTwips = 0,
+    this.wrapRightInsetTwips = 0,
     this.wordSpacingTwips = 0,
     this.manualPageBreakBefore = false,
     this.renderedPageBreakBefore = false,
@@ -217,6 +288,17 @@ class LineBox {
   /// linha do Word. Negativo é o recuo pendente (hanging): a primeira
   /// linha fica à esquerda das demais.
   final int indentTwips;
+
+  /// Encurtamento DESTA linha por um objeto flutuante com disposição do
+  /// texto (`wp:wrapSquare` e afins).
+  ///
+  /// Fica separado de [indentTwips] e de `BlockFragment.rightIndentTwips`
+  /// porque não é recuo de parágrafo: muda de linha para linha conforme a
+  /// faixa vertical que o objeto ocupa, e some quando o objeto sai do
+  /// caminho. Misturá-lo ao recuo faria uma edição de recuo herdar o desvio
+  /// do objeto.
+  final int wrapLeftInsetTwips;
+  final int wrapRightInsetTwips;
 
   final List<LineSegment> segments;
   final int widthTwips;

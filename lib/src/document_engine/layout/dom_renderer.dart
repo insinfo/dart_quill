@@ -466,8 +466,11 @@ class PageGraphDomRenderer {
       lineElement.setAttribute(
           'style',
           'position:absolute;'
-              'left:${_n(_px(line.indentTwips))}px;'
-              'right:${_n(_px(fragment.rightIndentTwips))}px;'
+              // A exclusão do objeto flutuante encurta a caixa da LINHA, não
+              // o recuo do parágrafo: some sozinha quando o objeto sai da
+              // faixa vertical dela.
+              'left:${_n(_px(line.indentTwips + line.wrapLeftInsetTwips))}px;'
+              'right:${_n(_px(fragment.rightIndentTwips + line.wrapRightInsetTwips))}px;'
               'top:${_n(_px(y))}px;'
               'height:${_n(_px(line.heightTwips))}px;'
               'line-height:${_n(_px(line.heightTwips))}px;'

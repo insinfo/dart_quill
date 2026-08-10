@@ -565,12 +565,34 @@ class DocxReader {
 
     String? hAlign, vRelativeFrom;
     int? offX, offY, cx, cy;
+    String? wrapMode, wrapSide;
+    int? distL, distT, distR, distB;
     XmlElement? anchor;
     for (final a in el.descendantsNamed('wp:anchor')) {
       anchor = a;
       break;
     }
     if (anchor != null) {
+      final wrap = _wrapElementOf(anchor);
+      // `wp:wrapNone` (ou a ausência de qualquer wrap) só diz que o texto não
+      // desvia; quem separa "atrás" de "na frente" é `behindDoc` na âncora.
+      final behind = anchor.getAttribute('behindDoc');
+      wrapMode = switch (wrap?.qname) {
+        'wp:wrapSquare' => 'square',
+        'wp:wrapTight' => 'tight',
+        'wp:wrapThrough' => 'through',
+        'wp:wrapTopAndBottom' => 'topAndBottom',
+        _ => behind == '1' || behind == 'true' ? 'behindText' : 'inFrontOfText',
+      };
+      wrapSide = wrap?.getAttribute('wrapText');
+      distL = int.tryParse(
+          wrap?.getAttribute('distL') ?? anchor.getAttribute('distL') ?? '');
+      distT = int.tryParse(
+          wrap?.getAttribute('distT') ?? anchor.getAttribute('distT') ?? '');
+      distR = int.tryParse(
+          wrap?.getAttribute('distR') ?? anchor.getAttribute('distR') ?? '');
+      distB = int.tryParse(
+          wrap?.getAttribute('distB') ?? anchor.getAttribute('distB') ?? '');
       final posH = anchor.firstChild('wp:positionH');
       hAlign = posH?.firstChild('wp:align')?.text.trim();
       offX = int.tryParse(posH?.firstChild('wp:posOffset')?.text.trim() ?? '');
@@ -623,9 +645,33 @@ class DocxReader {
       borderWidthEmu: borderW,
       borderColorHex: borderColor,
       fillColorHex: fillColor,
+      wrapMode: wrapMode,
+      wrapSide: wrapSide,
+      wrapDistLeftEmu: distL,
+      wrapDistTopEmu: distT,
+      wrapDistRightEmu: distR,
+      wrapDistBottomEmu: distB,
       blocks: _parseBlocks(txbx),
       rawXml: el.toXmlString(),
     );
+  }
+
+  /// O elemento de disposição do texto de uma âncora DrawingML.
+  ///
+  /// A busca é entre os filhos DIRETOS: `wp:wrapPolygon` também tem `distL`,
+  /// e uma varredura por descendentes acharia o polígono antes do wrap.
+  static XmlElement? _wrapElementOf(XmlElement anchor) {
+    const wrapNames = {
+      'wp:wrapSquare',
+      'wp:wrapTight',
+      'wp:wrapThrough',
+      'wp:wrapTopAndBottom',
+      'wp:wrapNone',
+    };
+    for (final child in anchor.childElements) {
+      if (wrapNames.contains(child.qname)) return child;
+    }
+    return null;
   }
 
   WpDrawing _parseDrawing(XmlElement el) {

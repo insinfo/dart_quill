@@ -22,6 +22,7 @@ library;
 
 import '../../platform/dom.dart';
 import 'controller.dart';
+import 'layout_options.dart';
 import 'overlay.dart';
 import 'ribbon.dart';
 import 'ribbon_actions.dart' as actions;
@@ -57,10 +58,10 @@ class OfficeSelectionQuickbar {
   /// no canto superior direito dele — a posição do botão "Opções de Layout"
   /// do Word.
   ///
-  /// Traz só o que a projeção realmente honra hoje: alinhamento do objeto e
-  /// excluir. Disposição do texto (quadrado/atrás/na frente) espera o
-  /// compositor ganhar wrap de verdade; oferecer o controle antes disso
-  /// seria um botão que não muda nada.
+  /// Traz o que a projeção realmente honra: alinhamento do objeto,
+  /// disposição do texto e excluir. Os modos de disposição que o compositor
+  /// não sabe honrar aparecem desabilitados dentro do próprio menu
+  /// (`layout_options.dart`), nunca escondidos.
   void showForObject({required num x, required num y}) {
     if (!controller.viewReady) return;
     hide();
@@ -86,6 +87,8 @@ class OfficeSelectionQuickbar {
     row.append(_kit.button('⯈', 'Alinhar objeto à direita',
         () => actions.setObjectAlign(controller, 'right'),
         icon: 'align-right'));
+    row.append(_kit.el('span', 'dq-office-ribbon-sep'));
+    row.append(layoutOptionsButton(controller));
     row.append(_kit.el('span', 'dq-office-ribbon-sep'));
     row.append(_kit.button(
         '✕', 'Excluir objeto', () => actions.deleteSelectedObject(controller),

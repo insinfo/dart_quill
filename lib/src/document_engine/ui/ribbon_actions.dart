@@ -369,6 +369,49 @@ void setObjectAlign(OfficeWordController c, String align) {
   c.dispatch(tr);
 }
 
+/// Disposição do texto do objeto selecionado, ou null quando não há objeto.
+///
+/// Lê o MESMO atributo que o compositor consome (`wrapMode`), com a mesma
+/// farejada do XML bruto para snapshots gravados antes dele — a UI marcando
+/// um modo que o layout não usa seria pior do que não marcar nenhum.
+String? objectWrapMode(OfficeWordController c) {
+  final selection = c.activeView.state.selection;
+  if (selection is! NodeSelection) return null;
+  final node = selection.node;
+  if (node.type.name != 'textBox') return null;
+  final declared = node.attrs['wrapMode'];
+  if (declared is String && declared.isNotEmpty) return declared;
+  final raw = node.attrs['word']?.toString() ?? '';
+  if (raw.contains('wrapTopAndBottom')) return 'topAndBottom';
+  if (raw.contains('wrapSquare')) return 'square';
+  if (raw.contains('wrapTight')) return 'tight';
+  if (raw.contains('wrapThrough')) return 'through';
+  return 'inFrontOfText';
+}
+
+/// Troca a disposição do texto do objeto selecionado.
+///
+/// Só a caixa de texto aceita: ela é o único objeto que o motor modela como
+/// flutuante. A imagem chega do DOCX já achatada em inline
+/// (`office/document/docx/reader.dart`, "drawing flutuante (anchor) tratado
+/// como inline"), então não existe âncora para reposicionar nem exclusão
+/// para calcular.
+void setObjectWrap(OfficeWordController c, String mode) {
+  final state = c.activeView.state;
+  final selection = state.selection;
+  if (selection is! NodeSelection) return;
+  final node = selection.node;
+  if (node.type.name != 'textBox') return;
+  if (objectWrapMode(c) == mode) return;
+  final tr = state.tr
+    ..setNodeMarkup(selection.from, null, {
+      ...node.attrs,
+      'wrapMode': mode,
+    });
+  tr.setSelection(NodeSelection.create(tr.doc, selection.from));
+  c.dispatch(tr);
+}
+
 /// Apaga o objeto selecionado, deixando o caret onde ele estava.
 void deleteSelectedObject(OfficeWordController c) {
   final state = c.activeView.state;

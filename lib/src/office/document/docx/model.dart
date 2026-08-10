@@ -517,6 +517,26 @@ class WpTextBox extends WpRunContent {
   final int? borderWidthEmu;
   final String? borderColorHex; // sem '#'
   final String? fillColorHex; // sem '#'
+
+  /// Disposição do texto declarada no DrawingML, já normalizada para os
+  /// nomes que o motor usa: `square`, `tight`, `through`, `topAndBottom`,
+  /// `behindText` ou `inFrontOfText`.
+  ///
+  /// `wp:wrapNone` sozinho não distingue "atrás" de "na frente" — quem
+  /// distingue é `wp:anchor/@behindDoc`, e por isso os dois casos já chegam
+  /// resolvidos aqui.
+  final String? wrapMode;
+
+  /// `wp:wrapSquare/@wrapText`: `bothSides`, `left`, `right` ou `largest`.
+  final String? wrapSide;
+
+  /// `distL/distT/distR/distB` do elemento de wrap (folga entre objeto e
+  /// texto), em EMU.
+  final int? wrapDistLeftEmu;
+  final int? wrapDistTopEmu;
+  final int? wrapDistRightEmu;
+  final int? wrapDistBottomEmu;
+
   final List<WpBlock> blocks;
   final String rawXml;
 
@@ -534,6 +554,12 @@ class WpTextBox extends WpRunContent {
     this.borderWidthEmu,
     this.borderColorHex,
     this.fillColorHex,
+    this.wrapMode,
+    this.wrapSide,
+    this.wrapDistLeftEmu,
+    this.wrapDistTopEmu,
+    this.wrapDistRightEmu,
+    this.wrapDistBottomEmu,
     required this.blocks,
     required this.rawXml,
   });

@@ -1788,24 +1788,183 @@ class OfficeDocxCodec {
   /// (DrawingML em `mc:Choice`, VML em `mc:Fallback`), e atualizar só uma
   /// faria o texto mudar ou não conforme o leitor que abrisse o arquivo.
   String _textBoxRawXml(PMNode node, String rawXml) {
+    final xml = _textBoxRawXmlWithWrap(node, rawXml);
     final raw = node.attrs['textBoxDoc'];
-    if (raw is! Map) return rawXml;
+    if (raw is! Map) return xml;
     final signature = node.attrs['textBoxSourceSignature'];
     PMNode doc;
     try {
       doc = PMNode.fromJSON(node.type.schema, raw);
     } catch (_) {
-      return rawXml;
+      return xml;
     }
     if (signature is String &&
         signature == OfficeDocxCodec.nodeSignature(doc)) {
-      return rawXml;
+      return xml;
     }
     final content = StringBuffer();
     for (var i = 0; i < doc.childCount; i++) {
       content.write(DocxWriter.serializeBlock(_nodeToBlock(doc.child(i))));
     }
-    return _replaceTextBoxContent(rawXml, content.toString());
+    return _replaceTextBoxContent(xml, content.toString());
+  }
+
+  /// Reescreve a DISPOSIÇÃO DO TEXTO no XML preservado da caixa.
+  ///
+  /// Mesma decisão do `_replaceTextBoxContent`: cirurgia sobre a árvore que
+  /// veio do arquivo, nunca reserialização da caixa inteira — a forma, o
+  /// preenchimento e as extensões do produtor têm de sobreviver à troca de
+  /// um modo de wrap. A reescrita só acontece quando o modo pedido difere do
+  /// que está no arquivo, para que abrir e salvar sem tocar no objeto não
+  /// mexa num byte.
+  static String _textBoxRawXmlWithWrap(PMNode node, String rawXml) {
+    final mode = node.attrs['wrapMode'];
+    if (mode is! String || mode.isEmpty) return rawXml;
+    final XmlElement root;
+    try {
+      root = XmlDocument.parse(rawXml).rootElement;
+    } on XmlParseException {
+      return rawXml;
+    }
+    final side = node.attrs['wrapSide'] is String
+        ? node.attrs['wrapSide'] as String
+        : null;
+    var touched = false;
+    for (final anchor in root.descendantsNamed('wp:anchor').toList()) {
+      if (_applyWrapToAnchor(anchor, mode, side)) touched = true;
+    }
+    // Nada mudou no DrawingML: o arquivo já estava no modo pedido e não há
+    // razão para mexer num byte do fallback.
+    if (!touched) return rawXml;
+    // O Word grava a MESMA caixa duas vezes (DrawingML em `mc:Choice`, VML em
+    // `mc:Fallback`). O fallback só é lido por consumidores pré-2007, mas
+    // deixá-lo divergente faria a caixa mudar de disposição conforme quem
+    // abrisse o arquivo.
+    for (final wrap in root.descendantsNamed('w10:wrap').toList()) {
+      final vmlType = switch (mode) {
+        'square' => 'square',
+        'tight' => 'tight',
+        'through' => 'through',
+        'topAndBottom' => 'topAndBottom',
+        _ => 'none',
+      };
+      wrap.setAttribute('type', vmlType);
+    }
+    return root.toXmlString();
+  }
+
+  /// Substitui o elemento de wrap de UMA âncora DrawingML.
+  ///
+  /// Retorna se algo mudou. `wp:wrapNone` não distingue atrás/na frente: a
+  /// ordem de pintura mora em `@behindDoc`, e é por isso que os dois modos
+  /// sem exclusão mexem em dois lugares.
+  static bool _applyWrapToAnchor(
+    XmlElement anchor,
+    String mode,
+    String? side,
+  ) {
+    const wrapNames = {
+      'wp:wrapSquare',
+      'wp:wrapTight',
+      'wp:wrapThrough',
+      'wp:wrapTopAndBottom',
+      'wp:wrapNone',
+    };
+    final target = switch (mode) {
+      'square' => 'wp:wrapSquare',
+      'tight' => 'wp:wrapTight',
+      'through' => 'wp:wrapThrough',
+      'topAndBottom' => 'wp:wrapTopAndBottom',
+      _ => 'wp:wrapNone',
+    };
+    final behind = mode == 'behindText' ? '1' : '0';
+    var changed = false;
+    if (anchor.getAttribute('behindDoc') != behind) {
+      anchor.setAttribute('behindDoc', behind);
+      changed = true;
+    }
+
+    XmlElement? existing;
+    var insertAt = anchor.children.length;
+    for (var i = 0; i < anchor.children.length; i++) {
+      final child = anchor.children[i];
+      if (child is! XmlElement) continue;
+      if (wrapNames.contains(child.qname)) {
+        existing = child;
+        insertAt = i;
+        break;
+      }
+      // Ordem do CT_Anchor: o wrap vem depois de extent/effectExtent e antes
+      // de docPr. Sem respeitar a sequência o Word recusa o documento.
+      if (const {
+        'wp:docPr',
+        'wp:cNvGraphicFramePr',
+        'a:graphic',
+      }.contains(child.qname)) {
+        insertAt = i;
+        break;
+      }
+    }
+    if (existing != null && existing.qname == target) {
+      // Só o lado pode ter mudado.
+      if (target == 'wp:wrapSquare' ||
+          target == 'wp:wrapTight' ||
+          target == 'wp:wrapThrough') {
+        final wanted = side ?? existing.getAttribute('wrapText') ?? 'bothSides';
+        if (existing.getAttribute('wrapText') != wanted) {
+          existing.setAttribute('wrapText', wanted);
+          changed = true;
+        }
+      }
+      return changed;
+    }
+
+    final replacement = XmlElement(target);
+    if (existing != null) {
+      // A folga objeto↔texto é do OBJETO, não do modo: preservá-la evita que
+      // ir e voltar entre quadrado e comprimido zere o `distL` do autor.
+      for (final name in const ['distT', 'distB', 'distL', 'distR']) {
+        final value = existing.getAttribute(name);
+        if (value != null) replacement.setAttribute(name, value);
+      }
+      // `wp:wrapTight`/`wp:wrapThrough` exigem `wp:wrapPolygon` pelo schema;
+      // o polígono do arquivo é o contorno real do objeto e vale mais que
+      // qualquer retângulo que a gente inventasse.
+      final polygon = existing.firstChild('wp:wrapPolygon');
+      if (polygon != null) replacement.add(polygon);
+      anchor.remove(existing);
+      if (insertAt > anchor.children.length) insertAt = anchor.children.length;
+    }
+    if (target == 'wp:wrapSquare' ||
+        target == 'wp:wrapTight' ||
+        target == 'wp:wrapThrough') {
+      replacement.setAttribute('wrapText', side ?? 'bothSides');
+    }
+    if ((target == 'wp:wrapTight' || target == 'wp:wrapThrough') &&
+        replacement.firstChild('wp:wrapPolygon') == null) {
+      // Sem polígono herdado, o retângulo completo em coordenadas de forma
+      // (0..21600) é o contorno que o próprio Word grava para um retângulo —
+      // e é exatamente a aproximação que o compositor usa.
+      replacement.add(_rectangleWrapPolygon());
+    }
+    anchor.insert(insertAt, replacement);
+    return true;
+  }
+
+  static XmlElement _rectangleWrapPolygon() {
+    XmlElement point(String name, int x, int y) => XmlElement(name, [
+          XmlAttribute('x', '$x'),
+          XmlAttribute('y', '$y'),
+        ]);
+    return XmlElement('wp:wrapPolygon', [
+      XmlAttribute('edited', '0')
+    ], [
+      point('wp:start', 0, 0),
+      point('wp:lineTo', 0, 21600),
+      point('wp:lineTo', 21600, 21600),
+      point('wp:lineTo', 21600, 0),
+      point('wp:lineTo', 0, 0),
+    ]);
   }
 
   /// Troca o miolo de cada `<w:txbxContent>…</w:txbxContent>` por [inner].
@@ -3954,6 +4113,20 @@ class OfficeDocxCodec {
                   'background': textBox.fillColorHex == null
                       ? null
                       : '#${textBox.fillColorHex}',
+                  'wrapMode': textBox.wrapMode,
+                  'wrapSide': textBox.wrapSide,
+                  'wrapDistLeft': textBox.wrapDistLeftEmu == null
+                      ? null
+                      : emuToTwips(textBox.wrapDistLeftEmu!),
+                  'wrapDistTop': textBox.wrapDistTopEmu == null
+                      ? null
+                      : emuToTwips(textBox.wrapDistTopEmu!),
+                  'wrapDistRight': textBox.wrapDistRightEmu == null
+                      ? null
+                      : emuToTwips(textBox.wrapDistRightEmu!),
+                  'wrapDistBottom': textBox.wrapDistBottomEmu == null
+                      ? null
+                      : emuToTwips(textBox.wrapDistBottomEmu!),
                   'word': textBox.rawXml,
                 },
                 null,
