@@ -13,6 +13,7 @@ library;
 
 import '../../../platform/dom.dart';
 import '../controller.dart';
+import '../dialogs/page_setup_dialog.dart';
 import '../menu.dart';
 import '../ribbon.dart';
 import '../ribbon_actions.dart' as actions;
@@ -97,6 +98,13 @@ List<OfficeMenuEntry> _marginEntries(OfficeWordController c) {
           right: preset.right,
         ),
       ),
+    const OfficeMenuEntry.separator(),
+    OfficeMenuEntry(
+      label: 'Margens Personalizadas…',
+      description: 'Medidas em cm, incluindo a distância do cabeçalho e do '
+          'rodapé até a borda — que nenhuma predefinição toca',
+      onSelect: () => openPageSetupDialog(c),
+    ),
   ];
 }
 
@@ -134,6 +142,13 @@ List<OfficeMenuEntry> _paperEntries(OfficeWordController c) {
         checked: shorter == paper.width && longer == paper.height,
         onSelect: () => actions.setPaperTwips(c, paper.width, paper.height),
       ),
+    const OfficeMenuEntry.separator(),
+    OfficeMenuEntry(
+      label: 'Mais Tamanhos de Papel…',
+      description: 'Largura e altura em cm; trocar uma pela outra é o que '
+          'muda a orientação',
+      onSelect: () => openPageSetupDialog(c, focusPaper: true),
+    ),
   ];
 }
 
