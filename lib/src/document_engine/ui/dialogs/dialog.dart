@@ -34,10 +34,20 @@ class OfficeDialogField {
     this.min,
     this.max,
     this.hint,
+    this.group,
   });
 
   final String key;
   final String label;
+
+  /// Aba do diálogo a que o campo pertence ("Tabela", "Linha"…).
+  ///
+  /// Nulo em diálogos de página única (Fonte…, Parágrafo…). Quando pelo
+  /// menos um campo declara grupo, o diálogo desenha a régua de abas do
+  /// Word: os campos continuam TODOS montados e o OK continua lendo todos
+  /// de uma vez — trocar de aba não pode descartar o que já foi preenchido
+  /// na anterior.
+  final String? group;
 
   /// `text`, `number`, `select` ou `check`.
   final String kind;
@@ -63,17 +73,25 @@ class OfficeDialog {
     required this.title,
     required this.fields,
     required this.onApply,
+    this.initialGroup,
   }) : _kit = OfficeDomKit(controller.adapter);
 
   final OfficeWordController controller;
   final String title;
   final List<OfficeDialogField> fields;
 
+  /// A aba que abre selecionada. Serve ao comando que TEM um assunto — o
+  /// botão "Margens da Célula…" abre Propriedades da Tabela já na aba
+  /// Célula, em vez de largar o usuário na primeira.
+  final String? initialGroup;
+
   /// Chamado UMA vez, no OK, com todos os valores. Cancelar não chama nada.
   final void Function(Map<String, String> values) onApply;
 
   final OfficeDomKit _kit;
   final Map<String, DomElement> _inputs = {};
+  final Map<String, DomElement> _panels = {};
+  final Map<String, DomElement> _tabs = {};
   OfficePopupHandle? _handle;
 
   bool get isOpen => _handle?.isOpen ?? false;
@@ -89,9 +107,33 @@ class OfficeDialog {
     header.appendText(title);
     dialog.append(header);
 
+    final groups = <String>[
+      for (final field in fields)
+        if (field.group != null) field.group!,
+    ].toSet().toList();
+
     final body = _kit.el('div', 'dq-office-dialog-body');
-    for (final field in fields) {
-      body.append(_buildField(field));
+    if (groups.isEmpty) {
+      for (final field in fields) {
+        body.append(_buildField(field));
+      }
+    } else {
+      final active =
+          groups.contains(initialGroup) ? initialGroup! : groups.first;
+      dialog.append(_buildTabs(groups, active));
+      for (final group in groups) {
+        final panel = _kit.el('div', 'dq-office-dialog-panel');
+        panel.setAttribute('data-panel', group);
+        if (group != active) {
+          panel.setAttribute('style', 'display:none;');
+        }
+        for (final field in fields) {
+          if (field.group != group) continue;
+          panel.append(_buildField(field));
+        }
+        _panels[group] = panel;
+        body.append(panel);
+      }
     }
     dialog.append(body);
 
@@ -122,6 +164,43 @@ class OfficeDialog {
     controller.overlay.closeGroup(officeDialogGroup);
     _handle = null;
     _inputs.clear();
+    _panels.clear();
+    _tabs.clear();
+  }
+
+  /// A régua de abas do diálogo (Tabela / Linha / Coluna / Célula).
+  DomElement _buildTabs(List<String> groups, String active) {
+    final strip = _kit.el('div', 'dq-office-dialog-tabs');
+    strip.setAttribute('role', 'tablist');
+    for (final group in groups) {
+      final tab = _kit.el('button', 'dq-office-dialog-tab');
+      tab.setAttribute('type', 'button');
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('data-tab', group);
+      if (group == active) tab.classes.add('dq-office-dialog-tab-active');
+      tab.appendText(group);
+      tab.addEventListener('mousedown', (event) => event.preventDefault());
+      tab.addEventListener('click', (event) {
+        event.preventDefault();
+        _showGroup(group);
+      });
+      _tabs[group] = tab;
+      strip.append(tab);
+    }
+    return strip;
+  }
+
+  void _showGroup(String group) {
+    _panels.forEach((key, panel) {
+      panel.setAttribute('style', key == group ? '' : 'display:none;');
+    });
+    _tabs.forEach((key, tab) {
+      if (key == group) {
+        tab.classes.add('dq-office-dialog-tab-active');
+      } else {
+        tab.classes.remove('dq-office-dialog-tab-active');
+      }
+    });
   }
 
   void _apply() {

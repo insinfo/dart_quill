@@ -72,6 +72,16 @@ final class RibbonContext {
     _ribbon._markValueButtons[(mark: mark, value: value)] = button;
   }
 
+  /// Controle cujo realce NÃO vem de uma marca, de um estilo ou de uma chave
+  /// de `attrs['style']` — é o caso dos botões e campos de tabela, que
+  /// refletem atributos do nó `tableRow`/`tableCell` da seleção.
+  ///
+  /// O hook roda a cada [OfficeRibbon.refreshState] e só pode LER o modelo:
+  /// a UI reflete o documento, nunca o contrário. Sem ele, cada aba
+  /// contextual teria de reimplementar "o botão está aceso?" com um listener
+  /// próprio de seleção.
+  void registerRefresh(void Function() hook) => _ribbon._refreshHooks.add(hook);
+
   /// Cartão da GALERIA de estilos, indexado pelo `w:styleId`.
   ///
   /// Pelo ID e não pelo NOME: o nome é rótulo e muda (o menu do cartão
@@ -109,6 +119,7 @@ class OfficeRibbon {
   final Map<String, ({DomElement element, bool points})> _blockStyleFields = {};
   final Map<({String mark, String value}), DomElement> _markValueButtons = {};
   final Map<String, DomElement> _styleCards = {};
+  final List<void Function()> _refreshHooks = [];
   DomElement? _styleSelect;
   DomElement? _body;
 
@@ -203,6 +214,7 @@ class OfficeRibbon {
     _blockStyleFields.clear();
     _markValueButtons.clear();
     _styleCards.clear();
+    _refreshHooks.clear();
     _styleSelect = null;
 
     final context = RibbonContext(controller, kit, this);
@@ -348,5 +360,9 @@ class OfficeRibbon {
         card.classes.remove('dq-office-stylecard-active');
       }
     });
+
+    for (final hook in _refreshHooks) {
+      hook();
+    }
   }
 }

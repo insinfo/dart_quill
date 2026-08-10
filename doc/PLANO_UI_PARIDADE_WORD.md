@@ -108,10 +108,10 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Mesclar/dividir células | 🟡 | mesclar concatena o conteúdo e soma os spans; dividir só na horizontal (2026-08-09) |
 | Galeria de estilos de tabela na ribbon (Design da Tabela) | ❌ | o compositor NÃO resolve `w:tblStyle` (nenhuma ocorrência em `layout/`); a galeria gravaria um atributo ignorado — depende de F8 |
 | Bordas/sombreamento de célula | ✅ | `table_ops.setCellBorders/setCellShading` + aba Design (2026-08-09); honrados em `layout_composer.dart:3582,3846-3871` e `3577,4300-4306` |
-| Alinhamento vertical/horizontal da célula, direção do texto, margens | 🟡 | vertical feito (`setCellVerticalAlign`, honrado em `layout_composer.dart:3578,3814-3818`); horizontal é alinhamento de parágrafo (já existe na Página Inicial); direção do texto e margens de célula continuam sem UI |
-| Repetir linha de cabeçalho | 🟡 | renderer já REPETE header importado (`dom_renderer.dart:259-269`); sem UI para ligar/desligar |
-| Distribuir linhas/colunas, AutoAjuste, propriedades da tabela | 🟡 | distribuir linhas e colunas feito (2026-08-09); AutoAjuste e o diálogo de propriedades continuam ausentes |
-| Marcadores de coluna de tabela na régua | ❌ | `rulers.dart` não conhece tabela |
+| Alinhamento vertical/horizontal da célula, direção do texto, margens | 🟡 | vertical feito (`setCellVerticalAlign`, honrado em `layout_composer.dart:3578,3814-3818`); horizontal é alinhamento de parágrafo (já existe na Página Inicial); margens de célula feitas (2026-08-09) — `w:tcMar`/`w:tblCellMar` no diálogo Propriedades, honrados em `layout_composer.dart:3520-3532,3560,3584-3591`. **Direção do texto continua DESABILITADA** com o motivo escrito: `w:textDirection` não é lido em nenhum arquivo de `layout/` |
+| Repetir linha de cabeçalho | ✅ | `table_ops.setTableHeaderRows` + botão "Repetir Linhas de Cabeçalho" na aba Tabela Layout (2026-08-09); compositor conta a corrida inicial em `layout_composer.dart:994-996` e repete em `:1029-1035`, renderer em `dom_renderer.dart:262-276`, exportação em `docx_codec.dart:3217`/`writer.dart:577` |
+| Distribuir linhas/colunas, AutoAjuste, propriedades da tabela | ✅ | distribuir feito (2026-08-09); AutoAjuste com "à Janela" e "Largura Fixa" honráveis e "ao Conteúdo" DESABILITADO (o compositor nunca mede conteúdo para decidir a grade — `layout_composer.dart:3383-3416`); diálogo Propriedades da Tabela em 4 abas (`ui/dialogs/table_properties_dialog.dart`), só com campos que o compositor lê |
+| Marcadores de coluna de tabela na régua | ✅ | `rulers.dart` (2026-08-09): um marcador por divisa quando o cursor está na tabela, posição vinda do `PageGraph` (`ui/table_geometry.dart`), arrasto com guia e UMA transação no `pointerup` por `table_ops.setTableColumnWidth` |
 
 ### 1.6 Cabeçalho e rodapé
 
@@ -151,7 +151,7 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Régua vertical acompanhando a página da seleção | ✅ | `rulers.dart:182-233`, `word_editor.dart:689-705` |
 | Arrastar MARGENS pela régua (fronteira cinza/branco) | ✅ | `rulers.dart` (2026-08-09): alça na fronteira, guia durante o gesto, UMA repaginação no pointerup |
 | Tab stops: clicar na régua cria parada; seletor de tipo no canto (L girando) | ✅ | `rulers.dart` (2026-08-09): canto gira entre esquerda/centro/direita/decimal; grava `style['tabs']`, que o compositor JÁ honrava (`layout_composer.dart:2664-2745`) |
-| Régua contextual de tabela (marcadores de borda de coluna) | ❌ | — |
+| Régua contextual de tabela (marcadores de borda de coluna) | ✅ | `rulers.dart` (2026-08-09): `.dq-office-colmark` por divisa, só com o cursor dentro da tabela; a posição é a PROJETADA (`table_geometry.officeTableColumnEdges`) e o commit é o mesmo `setTableColumnWidth` da alça sobre a tabela |
 | Régua esmaecida/segmentada no modo cabeçalho/rodapé | ❌ | — |
 
 ### 1.9 Estilos (criação e gestão)

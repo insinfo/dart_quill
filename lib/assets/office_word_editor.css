@@ -581,6 +581,31 @@
   color: #185abd;
 }
 
+/* divisas de coluna da tabela do cursor: a régua contextual do Word */
+.dq-office-ruler-cols {
+  z-index: 5;
+}
+
+.dq-office-colmark {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  width: 7px;
+  transform: translateX(-50%);
+  cursor: col-resize;
+  touch-action: none;
+  pointer-events: auto;
+  background: #b7c3cd;
+  border: 1px solid #8a97a1;
+  border-radius: 1px;
+  box-sizing: border-box;
+}
+
+.dq-office-colmark:hover {
+  background: #185abd;
+  border-color: #124a9c;
+}
+
 .dq-office-ruler-tick-half {
   height: 5px;
 }
@@ -927,9 +952,49 @@
   color: #242424;
 }
 
+/* régua de abas dos diálogos com mais de um assunto (Propriedades da
+   Tabela). Trocar de aba só ESCONDE o painel: os campos continuam montados,
+   e o OK lê todos de uma vez. */
+.dq-office-dialog-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 14px 0;
+  border-bottom: 1px solid #e1dfdd;
+}
+
+.dq-office-dialog-tab {
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 3px 3px 0 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: #444;
+  cursor: pointer;
+}
+
+.dq-office-dialog-tab:hover {
+  background: #f3f2f1;
+}
+
+.dq-office-dialog-tab-active {
+  border-color: #e1dfdd;
+  background: #fff;
+  color: #185abd;
+  font-weight: 600;
+  margin-bottom: -1px;
+}
+
 .dq-office-dialog-body {
   padding: 10px 14px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dq-office-dialog-panel {
   display: flex;
   flex-direction: column;
   gap: 8px;

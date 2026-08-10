@@ -208,12 +208,19 @@ bool splitSelectedCell(
 /// tabela (a grade declarada, `w:tblGrid`) e o `width` de cada célula
 /// daquela coluna. Escrever só um deles faz o Word e a nossa projeção
 /// discordarem sobre a largura real.
+///
+/// [projectedWidths] são as larguras que o compositor resolveu (o chrome as
+/// obtém de `table_geometry.officeTableColumnWidths`). Elas completam as
+/// colunas que a tabela NÃO declara: sem elas a grade sairia com zeros, e o
+/// compositor descarta entradas não positivas — o que empurraria a largura
+/// gravada para a coluna errada.
 bool setTableColumnWidth(
   EditorState state,
   void Function(Transaction) dispatch, {
   required int tablePos,
   required int columnIndex,
   required int widthTwips,
+  List<int> projectedWidths = const [],
 }) {
   if (widthTwips <= 0) return false;
   final map = OfficeTableMap.of(state.doc, tablePos);
@@ -232,16 +239,7 @@ bool setTableColumnWidth(
         cell.pos, null, _cellAttrsWithWidth(cell.node, widthTwips));
   }
 
-  final widths = <int>[];
-  final declared = map.table.attrs['colWidths'];
-  if (declared is List) {
-    for (final value in declared) {
-      widths.add(value is num ? value.toInt() : 0);
-    }
-  }
-  while (widths.length < map.columns) {
-    widths.add(0);
-  }
+  final widths = _declaredColumnWidths(map, projectedWidths);
   widths[columnIndex] = widthTwips;
   tr.setNodeMarkup(tablePos, null, {
     ...map.table.attrs,
@@ -249,6 +247,85 @@ bool setTableColumnWidth(
   });
   dispatch(tr);
   return true;
+}
+
+/// Grava a grade INTEIRA de uma vez.
+///
+/// É o caminho de tudo que mexe em mais de uma coluna (distribuir e
+/// AutoAjuste): a alternativa — chamar [setTableColumnWidth] em laço —
+/// produziria uma transação por coluna e um Ctrl+Z por coluna, quando o
+/// usuário pediu uma operação só. Vale a mesma regra dos dois lugares:
+/// `colWidths` (a grade declarada) e o `width` de cada célula simples.
+bool applyTableColumnWidths(
+  EditorState state,
+  void Function(Transaction) dispatch,
+  OfficeTableMap map,
+  List<int> widths,
+) {
+  if (widths.length != map.columns || widths.any((width) => width <= 0)) {
+    return false;
+  }
+  final tr = state.tr;
+  for (final cell in map.cells.reversed) {
+    if (cell.columnSpan != 1) continue;
+    tr.setNodeMarkup(
+        cell.pos, null, _cellAttrsWithWidth(cell.node, widths[cell.column]));
+  }
+  tr.setNodeMarkup(map.tablePos, null, {
+    ...map.table.attrs,
+    'colWidths': widths,
+  });
+  dispatch(tr);
+  return true;
+}
+
+/// O que o botão AutoAjuste do Word oferece — menos "ao conteúdo", que este
+/// motor não sabe fazer (ver `tabs/table_layout_tab.dart`).
+enum OfficeTableAutoFit {
+  /// Estica a grade até ocupar a largura útil, preservando a PROPORÇÃO entre
+  /// as colunas — o "AutoAjuste à Janela".
+  window,
+
+  /// Congela na tabela a grade que está na tela.
+  fixed,
+}
+
+/// Aplica o AutoAjuste sobre [currentWidths], que são as larguras REALMENTE
+/// projetadas (vindas do `PageGraph`, ver `table_geometry.dart`).
+///
+/// As larguras vêm de fora porque só a projeção conhece a grade resolvida:
+/// uma tabela sem `w:tblGrid` completo tem colunas que o compositor preenche
+/// com a sobra da página, e uma tabela mais larga que a área útil é escalada
+/// por ele. Partir dos atributos crus daria um "à janela" que ajusta uma
+/// largura que ninguém vê.
+bool setTableAutoFit(
+  EditorState state,
+  void Function(Transaction) dispatch, {
+  required OfficeTableAutoFit mode,
+  required List<int> currentWidths,
+  required int availableTwips,
+}) {
+  final map = OfficeTableMap.at(state.doc, state.selection.from);
+  if (map == null || map.columns == 0) return false;
+  if (currentWidths.length != map.columns) return false;
+  if (currentWidths.any((width) => width <= 0)) return false;
+
+  if (mode == OfficeTableAutoFit.fixed) {
+    return applyTableColumnWidths(state, dispatch, map, currentWidths);
+  }
+  if (availableTwips <= 0) return false;
+
+  final total = currentWidths.fold<int>(0, (sum, width) => sum + width);
+  if (total <= 0) return false;
+  final widths = [
+    for (final width in currentWidths) (width * availableTwips / total).round(),
+  ];
+  // A sobra do arredondamento vai para a última coluna, senão a borda
+  // direita da tabela pararia um ou dois twips antes da margem.
+  final scaled = widths.fold<int>(0, (sum, width) => sum + width);
+  widths[widths.length - 1] += availableTwips - scaled;
+  if (widths.any((width) => width <= 0)) return false;
+  return applyTableColumnWidths(state, dispatch, map, widths);
 }
 
 // -- formatação de célula -----------------------------------------------------
@@ -417,6 +494,267 @@ bool setCellShading(
   return true;
 }
 
+// -- edição em BLOCO: um patch, uma transação --------------------------------
+
+/// Acumula mudanças de ATRIBUTO de vários nós para saírem numa transação só.
+///
+/// Existe por uma armadilha concreta: `setNodeMarkup` chamado duas vezes
+/// sobre o MESMO nó na mesma transação parte, das duas vezes, dos atributos
+/// ORIGINAIS — a segunda chamada apaga o que a primeira gravou. O diálogo
+/// Propriedades da Tabela mexe em largura, alinhamento e margens da mesma
+/// célula de uma vez; sem acumular, duas das três se perderiam.
+///
+/// E a transação única é o contrato do diálogo: um Ctrl+Z desfaz o OK
+/// inteiro, não a última caixinha tocada.
+class _TablePatch {
+  final Map<int, Map<String, dynamic>> _nodes = {};
+  final Set<(int, String)> _copied = {};
+
+  Map<String, dynamic> attrsOf(int pos, PMNode node) =>
+      _nodes.putIfAbsent(pos, () => {...node.attrs});
+
+  /// O sub-mapa [key] dos atributos do nó, já COPIADO: os mapas que vêm do
+  /// documento são compartilhados com a árvore antiga e mutá-los no lugar
+  /// corromperia o estado anterior (e com ele o undo).
+  Map<String, dynamic> mapOf(int pos, PMNode node, String key) {
+    final attrs = attrsOf(pos, node);
+    if (_copied.add((pos, key))) {
+      final copy = _mapOf(attrs[key]);
+      attrs[key] = copy;
+      return copy;
+    }
+    return attrs[key] as Map<String, dynamic>;
+  }
+
+  bool commit(EditorState state, void Function(Transaction) dispatch) {
+    if (_nodes.isEmpty) return false;
+    final tr = state.tr;
+    final positions = _nodes.keys.toList()..sort();
+    // Ordem decrescente, como no resto do arquivo: nenhum passo anterior
+    // desloca as posições dos seguintes.
+    for (final pos in positions.reversed) {
+      tr.setNodeMarkup(pos, null, _nodes[pos]!);
+    }
+    dispatch(tr);
+    return true;
+  }
+}
+
+/// Um sub-mapa aninhado (`word.margins`), copiado antes de ser escrito.
+Map<String, dynamic> _nested(Map<String, dynamic> parent, String key) {
+  final copy = _mapOf(parent[key]);
+  parent[key] = copy;
+  return copy;
+}
+
+/// `{top: 108, …}` no dialeto `{value, type}` do OOXML.
+Map<String, dynamic> _marginSides(Map<String, int> sides) => {
+      for (final entry in sides.entries)
+        entry.key: {'value': entry.value, 'type': 'dxa'},
+    };
+
+void _patchCellWidth(_TablePatch patch, OfficeTableCell cell, int widthTwips) {
+  patch.mapOf(cell.pos, cell.node, 'cell')['width'] = widthTwips;
+  patch.mapOf(cell.pos, cell.node, 'word')['width'] = {
+    'value': widthTwips,
+    'type': 'dxa',
+  };
+}
+
+void _patchCellVerticalAlign(
+    _TablePatch patch, OfficeTableCell cell, String value) {
+  patch.mapOf(cell.pos, cell.node, 'cell')['verticalAlign'] = value;
+  patch.mapOf(cell.pos, cell.node, 'word')['vAlign'] = value;
+}
+
+void _patchCellMargins(
+    _TablePatch patch, OfficeTableCell cell, Map<String, int> sides) {
+  final word = patch.mapOf(cell.pos, cell.node, 'word');
+  _nested(word, 'margins').addAll(_marginSides(sides));
+}
+
+/// Aplica de uma vez tudo que o diálogo Propriedades da Tabela oferece.
+///
+/// Cada parâmetro nulo é "não opinei" e o nó correspondente nem é tocado.
+/// Todos eles são propriedades que o COMPOSITOR lê — nenhuma existe aqui só
+/// para completar o diálogo:
+///
+/// * [tableCellMargins] → `w:tblCellMar` (`layout_composer.dart:3520-3532`);
+/// * [rowHeightTwips]/[rowHeightRule] → `w:trHeight` (`:3548-3549`);
+/// * [rowCantSplit] → `w:cantSplit` (`:3550`, honrado em `_splitTableRow`);
+/// * [repeatHeaderRows] → `w:tblHeader` (`:3551`, repetido em `:994-1035`);
+/// * [columnWidthTwips] → `w:tblGrid` + `w:tcW` (`:3639`);
+/// * [cellWidthTwips] → `w:tcW` da célula;
+/// * [cellVerticalAlign] → `w:vAlign` (`:3579`);
+/// * [cellMargins] → `w:tcMar` (`:3560, 3584-3591`).
+///
+/// [projectedColumnWidths] tem o mesmo papel que em [setTableColumnWidth]:
+/// completar a grade das colunas que a tabela não declara.
+bool applyTableProperties(
+  EditorState state,
+  void Function(Transaction) dispatch, {
+  Map<String, int>? tableCellMargins,
+  int? rowHeightTwips,
+  String? rowHeightRule,
+  bool? rowCantSplit,
+  bool? repeatHeaderRows,
+  int? columnWidthTwips,
+  int? cellWidthTwips,
+  String? cellVerticalAlign,
+  Map<String, int>? cellMargins,
+  List<int> projectedColumnWidths = const [],
+}) {
+  final scope = tableFormatScope(state);
+  if (scope == null) return false;
+  final map = scope.map;
+  final patch = _TablePatch();
+
+  if (tableCellMargins != null && tableCellMargins.isNotEmpty) {
+    if (tableCellMargins.values.any((value) => value < 0)) return false;
+    final word = patch.mapOf(map.tablePos, map.table, 'word');
+    _nested(word, 'cellMargins').addAll(_marginSides(tableCellMargins));
+  }
+
+  if (columnWidthTwips != null) {
+    if (columnWidthTwips <= 0) return false;
+    final columnIndex = scope.cells.first.column;
+    if (columnIndex >= map.columns) return false;
+    final widths = _declaredColumnWidths(map, projectedColumnWidths);
+    widths[columnIndex] = columnWidthTwips;
+    patch.attrsOf(map.tablePos, map.table)['colWidths'] = widths;
+    // Só as células DAQUELA coluna: reescrever o `w:tcW` das outras
+    // inventaria uma largura declarada onde a tabela não tinha nenhuma.
+    for (final cell in map.cells) {
+      if (cell.columnSpan == 1 && cell.column == columnIndex) {
+        _patchCellWidth(patch, cell, columnWidthTwips);
+      }
+    }
+  }
+
+  if (rowHeightTwips != null || rowCantSplit != null) {
+    if (rowHeightTwips != null && rowHeightTwips < 0) return false;
+    for (final pos in selectedRowPositions(state)) {
+      final row = state.doc.nodeAt(pos);
+      if (row == null) continue;
+      final word = patch.mapOf(pos, row, 'word');
+      if (rowHeightTwips != null) {
+        // Altura zero é como o Word diz "automática": a chave tem de SUMIR,
+        // senão o compositor leria um piso de 0 twips e a linha continuaria
+        // presa à regra antiga.
+        if (rowHeightTwips == 0) {
+          word.remove('heightTwips');
+          word.remove('heightRule');
+        } else {
+          word['heightTwips'] = rowHeightTwips;
+          word['heightRule'] = rowHeightRule ?? 'atLeast';
+        }
+      }
+      if (rowCantSplit != null) word['cantSplit'] = rowCantSplit;
+    }
+  }
+
+  // Nada a decidir aqui quando não há o que mudar: o patch continua vazio e
+  // o commit devolve false sozinho.
+  if (repeatHeaderRows != null) {
+    _patchHeaderRows(patch, state, scope, repeat: repeatHeaderRows);
+  }
+
+  if (cellWidthTwips != null) {
+    if (cellWidthTwips <= 0) return false;
+    for (final cell in scope.cells) {
+      _patchCellWidth(patch, cell, cellWidthTwips);
+    }
+  }
+  if (cellVerticalAlign != null) {
+    for (final cell in scope.cells) {
+      _patchCellVerticalAlign(patch, cell, cellVerticalAlign);
+    }
+  }
+  if (cellMargins != null && cellMargins.isNotEmpty) {
+    if (cellMargins.values.any((value) => value < 0)) return false;
+    for (final cell in scope.cells) {
+      _patchCellMargins(patch, cell, cellMargins);
+    }
+  }
+
+  return patch.commit(state, dispatch);
+}
+
+/// A grade declarada da tabela, completada até [OfficeTableMap.columns] com
+/// as larguras PROJETADAS.
+///
+/// Zero fica só quando não há nem declaração nem projeção — aí não existe
+/// número honesto para a coluna, e inventar um mudaria a tabela num lugar
+/// que o usuário não tocou.
+List<int> _declaredColumnWidths(OfficeTableMap map, List<int> projected) {
+  final widths = <int>[];
+  final declared = map.table.attrs['colWidths'];
+  if (declared is List) {
+    for (final value in declared) {
+      widths.add(value is num ? value.toInt() : 0);
+    }
+  }
+  while (widths.length < map.columns) {
+    widths.add(0);
+  }
+  final result = widths.take(map.columns).toList();
+  for (var c = 0; c < result.length; c++) {
+    if (result[c] <= 0 && c < projected.length && projected[c] > 0) {
+      result[c] = projected[c];
+    }
+  }
+  return result;
+}
+
+/// Marca/desmarca a corrida inicial de linhas de cabeçalho. Devolve false
+/// quando não havia o que mudar.
+bool _patchHeaderRows(
+  _TablePatch patch,
+  EditorState state,
+  ({OfficeTableMap map, List<OfficeTableCell> cells}) scope, {
+  required bool repeat,
+}) {
+  final map = scope.map;
+  var first = map.rows;
+  var last = 0;
+  for (final cell in scope.cells) {
+    if (cell.row < first) first = cell.row;
+    if (cell.rowEnd - 1 > last) last = cell.rowEnd - 1;
+  }
+  // Só a corrida INICIAL conta para o compositor: uma seleção que não alcança
+  // a primeira linha gravaria um atributo que nunca vira pixel.
+  if (first != 0) return false;
+
+  final positions = tableRowPositions(map);
+  if (positions.isEmpty) return false;
+  // Ao desligar, a corrida atual pode ser mais longa que a seleção; deixar
+  // metade dela marcada manteria o cabeçalho se repetindo.
+  final existing = tableHeaderRowCount(map) - 1;
+  final upTo = repeat ? last : (existing > last ? existing : last);
+  if (upTo < 0 || upTo >= positions.length) return false;
+
+  var changed = false;
+  for (var index = 0; index <= upTo; index++) {
+    final pos = positions[index];
+    final row = state.doc.nodeAt(pos);
+    if (row == null) continue;
+    // A leitura vem do DOCUMENTO, antes de tocar no patch: registrar o nó
+    // para depois descobrir que ele já estava certo produziria uma transação
+    // que não muda nada (e um passo de undo vazio).
+    if ((_mapOf(row.attrs['word'])['tblHeader'] == true) == repeat) continue;
+    final word = patch.mapOf(pos, row, 'word');
+    if (repeat) {
+      word['tblHeader'] = true;
+    } else {
+      word.remove('tblHeader');
+    }
+    changed = true;
+  }
+  return changed;
+}
+
+// -- propriedades de célula, linha e cabeçalho --------------------------------
+
 /// Alinhamento vertical do conteúdo das células do escopo.
 ///
 /// [align] aceita `top`, `center` (ou `middle`) e `bottom`. Grava em
@@ -435,20 +773,76 @@ bool setCellVerticalAlign(
     _ => null,
   };
   if (value == null) return false;
+  return applyTableProperties(state, dispatch, cellVerticalAlign: value);
+}
+
+/// As posições dos nós `tableRow` alcançados pelo escopo da seleção.
+List<int> selectedRowPositions(EditorState state) {
+  final scope = tableFormatScope(state);
+  if (scope == null) return const [];
+  final rows = <int>{for (final cell in scope.cells) cell.rowIndex};
+  final positions = tableRowPositions(scope.map);
+  return [
+    for (final index in rows)
+      if (index >= 0 && index < positions.length) positions[index],
+  ]..sort();
+}
+
+/// Altura e quebra das linhas do escopo (`w:trHeight`, `w:cantSplit`).
+bool setRowProperties(
+  EditorState state,
+  void Function(Transaction) dispatch, {
+  int? heightTwips,
+  String? heightRule,
+  bool? cantSplit,
+}) =>
+    applyTableProperties(
+      state,
+      dispatch,
+      rowHeightTwips: heightTwips,
+      rowHeightRule: heightRule,
+      rowCantSplit: cantSplit,
+    );
+
+/// Quantas linhas do TOPO da tabela se repetem como cabeçalho.
+///
+/// O compositor conta a CORRIDA INICIAL de linhas com `tblHeader`
+/// (`layout_composer.dart:994-996`): marcar a terceira linha sem marcar as
+/// duas primeiras não repete nada. Toda a UI de cabeçalho parte deste número.
+int tableHeaderRowCount(OfficeTableMap map) {
+  var count = 0;
+  for (var r = 0; r < map.table.childCount; r++) {
+    final row = map.table.child(r);
+    if (row.type.name != 'tableRow') continue;
+    if (_mapOf(row.attrs['word'])['tblHeader'] != true) break;
+    count++;
+  }
+  return count;
+}
+
+/// A seleção está dentro da faixa de cabeçalho repetido?
+bool tableHeaderRowsActive(EditorState state) {
+  final map = OfficeTableMap.at(state.doc, state.selection.from);
+  if (map == null) return false;
+  final count = tableHeaderRowCount(map);
+  if (count == 0) return false;
   final scope = tableFormatScope(state);
   if (scope == null) return false;
-
-  final tr = state.tr;
-  for (final cell in scope.cells.reversed) {
-    tr.setNodeMarkup(cell.pos, null, {
-      ...cell.node.attrs,
-      'cell': {..._mapOf(cell.node.attrs['cell']), 'verticalAlign': value},
-      'word': {..._mapOf(cell.node.attrs['word']), 'vAlign': value},
-    });
-  }
-  dispatch(tr);
-  return true;
+  return scope.cells.any((cell) => cell.row < count);
 }
+
+/// Liga/desliga "repetir linha de cabeçalho" (`w:tblHeader`).
+///
+/// Ligar marca da PRIMEIRA linha até a última linha selecionada, e desligar
+/// limpa a corrida inteira — ver [_patchHeaderRows] para o porquê. A operação
+/// FALHA quando a seleção não alcança a primeira linha, que é exatamente
+/// quando o Word desabilita o botão.
+bool setTableHeaderRows(
+  EditorState state,
+  void Function(Transaction) dispatch, {
+  required bool repeat,
+}) =>
+    applyTableProperties(state, dispatch, repeatHeaderRows: repeat);
 
 // -- distribuir ---------------------------------------------------------------
 
@@ -503,20 +897,9 @@ bool distributeTableColumns(
       c == map.columns - 1 ? total - each * (map.columns - 1) : each,
   ];
 
-  final tr = state.tr;
   // Mesma regra de `setTableColumnWidth`: a grade e o `width` das células
   // simples têm de concordar, senão a projeção e o Word discordam.
-  for (final cell in map.cells.reversed) {
-    if (cell.columnSpan != 1 || cell.column >= widths.length) continue;
-    tr.setNodeMarkup(
-        cell.pos, null, _cellAttrsWithWidth(cell.node, widths[cell.column]));
-  }
-  tr.setNodeMarkup(map.tablePos, null, {
-    ...map.table.attrs,
-    'colWidths': widths,
-  });
-  dispatch(tr);
-  return true;
+  return applyTableColumnWidths(state, dispatch, map, widths);
 }
 
 /// Iguala a altura das linhas da tabela da seleção em [heightTwips].

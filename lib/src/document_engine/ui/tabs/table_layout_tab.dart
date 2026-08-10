@@ -12,7 +12,10 @@ library;
 import '../../../platform/dom.dart';
 import '../../layout/dom_renderer.dart';
 import '../controller.dart';
+import '../dialogs/table_properties_dialog.dart';
+import '../menu.dart';
 import '../ribbon.dart';
+import '../table_geometry.dart';
 import '../table_map.dart';
 import '../table_ops.dart' as ops;
 
@@ -44,6 +47,11 @@ List<DomElement> buildTableLayoutTab(RibbonContext ctx) {
             extraClass: 'dq-office-btn-labeled'),
         kit.button('Tabela', 'Selecionar tabela',
             () => run(() => ops.selectWholeTable(c.view.state, c.dispatch)),
+            extraClass: 'dq-office-btn-labeled'),
+      ]),
+      kit.row([
+        kit.button('Propriedades', 'Propriedades da Tabela',
+            () => run(() => openTablePropertiesDialog(c)),
             extraClass: 'dq-office-btn-labeled'),
       ]),
     ]),
@@ -103,12 +111,19 @@ List<DomElement> buildTableLayoutTab(RibbonContext ctx) {
     ]),
     kit.group('Tamanho da Célula', [
       kit.row([
+        _rowHeightSpinner(ctx),
+        _columnWidthSpinner(ctx),
+      ]),
+      kit.row([
         kit.button('Distribuir Linhas', 'Distribuir linhas uniformemente',
             () => run(() => _distributeRows(c)),
             extraClass: 'dq-office-btn-labeled', icon: 'distribute-rows'),
         kit.button('Distribuir Colunas', 'Distribuir colunas uniformemente',
             () => run(() => _distributeColumns(c)),
             extraClass: 'dq-office-btn-labeled', icon: 'distribute-columns'),
+        menuButton(c, 'AutoAjuste', 'AutoAjuste', 'table:autofit',
+            () => _autoFitEntries(c),
+            icon: 'advanced-ratio'),
       ]),
     ]),
     kit.group('Alinhamento', [
@@ -125,8 +140,245 @@ List<DomElement> buildTableLayoutTab(RibbonContext ctx) {
                   ops.setCellVerticalAlign(c.view.state, c.dispatch, value)),
               icon: icon),
       ]),
+      kit.row([
+        kit.button(
+            'Margens da Célula',
+            'Margens internas da célula (w:tcMar)',
+            () => run(() =>
+                openTablePropertiesDialog(c, initialGroup: officeCellTab)),
+            extraClass: 'dq-office-btn-labeled'),
+        menuButton(c, 'Direção do Texto', 'Direção do Texto',
+            'table:textdirection', _textDirectionEntries),
+      ]),
+    ]),
+    kit.group('Dados', [
+      kit.row([
+        _repeatHeaderButton(ctx),
+      ]),
     ]),
   ];
+}
+
+/// O menu AutoAjuste.
+///
+/// "À Janela" e "Largura Fixa" são as duas que este motor sabe honrar, e as
+/// duas partem da grade REALMENTE projetada (`table_geometry.dart`), não dos
+/// atributos crus — uma tabela sem `w:tblGrid` completo tem colunas que o
+/// compositor preenche com a sobra da página.
+///
+/// "Ao Conteúdo" fica visível e DESABILITADA: o compositor resolve largura de
+/// coluna só a partir de `colWidths` e da área útil
+/// (`layout_composer.dart:3384-3416`) e nunca mede o conteúdo para decidir a
+/// grade. Habilitá-la exigiria calcular largura mínima/máxima de texto por
+/// coluna dentro do compositor; até lá, o item explica o motivo em vez de
+/// gravar um `w:tblLayout` que a tela ignora.
+List<OfficeMenuEntry> _autoFitEntries(OfficeWordController c) => [
+      OfficeMenuEntry(
+        label: 'AutoAjuste à Janela',
+        description: 'Estica a tabela até a margem, mantendo a proporção '
+            'entre as colunas',
+        onSelect: () => _autoFit(c, ops.OfficeTableAutoFit.window),
+      ),
+      OfficeMenuEntry(
+        label: 'Largura Fixa da Coluna',
+        description: 'Congela na tabela a grade que está na tela — mudar a '
+            'margem ou o papel deixa de redistribuir as colunas',
+        onSelect: () => _autoFit(c, ops.OfficeTableAutoFit.fixed),
+      ),
+      const OfficeMenuEntry(
+        label: 'AutoAjuste ao Conteúdo',
+        description: 'O compositor nunca mede o conteúdo para decidir a '
+            'largura das colunas',
+        enabled: false,
+      ),
+    ];
+
+/// O menu Direção do Texto — inteiro desabilitado, de propósito.
+///
+/// `w:textDirection` não é lido em lugar nenhum de
+/// `lib/src/document_engine/layout/`: o compositor mede e posiciona todo run
+/// na horizontal (o `LineBox` só tem largura e altura, sem eixo), e o
+/// renderer desenha a célula sem transformação. Gravar o atributo giraria o
+/// texto no Word e não giraria nada aqui — o pior defeito possível, porque o
+/// arquivo passaria a discordar da tela.
+List<OfficeMenuEntry> _textDirectionEntries() {
+  const pending = 'O compositor escreve todo run na horizontal '
+      '(w:textDirection não é lido em layout/)';
+  return const [
+    OfficeMenuEntry(
+      label: 'Horizontal',
+      description: 'O layout atual do editor',
+      checked: true,
+      enabled: false,
+    ),
+    OfficeMenuEntry(
+      label: 'Girar todo o texto em 90°',
+      description: pending,
+      enabled: false,
+    ),
+    OfficeMenuEntry(
+      label: 'Girar todo o texto em 270°',
+      description: pending,
+      enabled: false,
+    ),
+  ];
+}
+
+void _autoFit(OfficeWordController c, ops.OfficeTableAutoFit mode) {
+  final state = c.view.state;
+  final map = OfficeTableMap.at(state.doc, state.selection.from);
+  if (map == null) return;
+  ops.setTableAutoFit(
+    state,
+    c.dispatch,
+    mode: mode,
+    currentWidths: officeTableColumnWidths(c.view.pageGraph, map.tablePos,
+        columns: map.columns),
+    availableTwips: c.pageSetup.contentWidthTwips,
+  );
+}
+
+/// O botão "Repetir Linhas de Cabeçalho", com o realce ligado ao modelo.
+///
+/// Ele ACENDE quando a seleção está na faixa de cabeçalho, como no Word — e
+/// o realce vem de `registerRefresh`, então mover o cursor para outra tabela
+/// atualiza o botão sem que esta aba tenha um listener próprio.
+DomElement _repeatHeaderButton(RibbonContext ctx) {
+  final c = ctx.controller;
+  late final DomElement button;
+  button = ctx.kit.button(
+    'Repetir Linhas de Cabeçalho',
+    'Repetir a(s) linha(s) de cabeçalho no topo de cada página',
+    () {
+      c.syncSelection();
+      ops.setTableHeaderRows(c.view.state, c.dispatch,
+          repeat: !ops.tableHeaderRowsActive(c.view.state));
+    },
+    extraClass: 'dq-office-btn-labeled',
+    icon: 'menu-header',
+  );
+  ctx.registerRefresh(() {
+    if (!c.viewReady) return;
+    if (ops.tableHeaderRowsActive(c.view.state)) {
+      button.classes.add('dq-office-btn-active');
+    } else {
+      button.classes.remove('dq-office-btn-active');
+    }
+  });
+  return button;
+}
+
+/// Spinner de ALTURA da linha, em centímetros.
+///
+/// Grava `w:trHeight` com a regra `atLeast` — a mesma escolha de "Distribuir
+/// Linhas": `exact` cortaria em silêncio o conteúdo que não coubesse. Zero
+/// devolve a linha à altura automática.
+DomElement _rowHeightSpinner(RibbonContext ctx) {
+  final c = ctx.controller;
+  return _cellSizeSpinner(
+    ctx,
+    'Altura',
+    'Altura da linha (cm)',
+    onCommit: (twips) => ops.setRowProperties(c.view.state, c.dispatch,
+        heightTwips: twips, heightRule: 'atLeast'),
+    read: () {
+      final positions = ops.selectedRowPositions(c.view.state);
+      if (positions.isEmpty) return null;
+      final row = c.view.state.doc.nodeAt(positions.first);
+      final word = row?.attrs['word'];
+      final value = word is Map ? word['heightTwips'] : null;
+      return value is num ? value.toInt() : 0;
+    },
+  );
+}
+
+/// Spinner de LARGURA da coluna, em centímetros.
+///
+/// O valor exibido é o PROJETADO (a largura que o compositor resolveu), e
+/// não o declarado: numa tabela sem `w:tblGrid` completo os dois diferem, e
+/// mostrar o declarado colocaria no campo um número que não corresponde a
+/// nada na tela.
+DomElement _columnWidthSpinner(RibbonContext ctx) {
+  final c = ctx.controller;
+  ({OfficeTableMap map, int column})? target() {
+    final state = c.view.state;
+    final map = OfficeTableMap.at(state.doc, state.selection.from);
+    final cell = map?.cellAt(state.selection.from);
+    if (map == null || cell == null) return null;
+    return (map: map, column: cell.column);
+  }
+
+  return _cellSizeSpinner(
+    ctx,
+    'Largura',
+    'Largura da coluna (cm)',
+    onCommit: (twips) {
+      final current = target();
+      if (current == null || twips <= 0) return;
+      ops.setTableColumnWidth(
+        c.view.state,
+        c.dispatch,
+        tablePos: current.map.tablePos,
+        columnIndex: current.column,
+        widthTwips: twips,
+        projectedWidths: officeTableColumnWidths(
+            c.view.pageGraph, current.map.tablePos,
+            columns: current.map.columns),
+      );
+    },
+    read: () {
+      final current = target();
+      if (current == null) return null;
+      final widths = officeTableColumnWidths(
+          c.view.pageGraph, current.map.tablePos,
+          columns: current.map.columns);
+      return current.column < widths.length ? widths[current.column] : null;
+    },
+  );
+}
+
+/// O par de spinners de "Tamanho da Célula": rótulo, campo em cm e o mesmo
+/// laço de reflexo do modelo dos spinners da aba Layout.
+DomElement _cellSizeSpinner(
+  RibbonContext ctx,
+  String label,
+  String title, {
+  required void Function(int twips) onCommit,
+  required int? Function() read,
+}) {
+  final c = ctx.controller;
+  final kit = ctx.kit;
+  final wrap = kit.el('label', 'dq-office-spinner');
+  final caption = kit.el('span', 'dq-office-spinner-label');
+  caption.appendText(label);
+  wrap.append(caption);
+
+  final input = kit.el('input', 'dq-office-spinner-input');
+  input.setAttribute('type', 'number');
+  input.setAttribute('step', '0.1');
+  input.setAttribute('min', '0');
+  input.setAttribute('title', title);
+  input.addEventListener('change', (_) {
+    final typed = double.tryParse(input.value.replaceAll(',', '.'));
+    if (typed == null || typed < 0) return;
+    c.syncSelection();
+    onCommit((typed * 567).round());
+  });
+  wrap.append(input);
+
+  ctx.registerRefresh(() {
+    if (!c.viewReady) return;
+    final twips = read();
+    if (twips == null) {
+      input.value = '';
+      return;
+    }
+    final value = twips / 567.0;
+    input.value = value == value.roundToDouble()
+        ? '${value.round()}'
+        : value.toStringAsFixed(2);
+  });
+  return wrap;
 }
 
 /// Distribui as colunas preservando a largura da tabela.

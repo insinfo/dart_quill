@@ -15,6 +15,7 @@ import '../../platform/dom.dart';
 import '../layout/dom_renderer.dart';
 import '../state/index.dart';
 import 'controller.dart';
+import 'table_geometry.dart';
 import 'table_map.dart';
 import 'table_ops.dart' as ops;
 
@@ -256,12 +257,21 @@ class OfficeTableAdorner {
       refresh();
       return;
     }
+    final state = controller.view.state;
     ops.setTableColumnWidth(
-      controller.view.state,
+      state,
       controller.dispatch,
       tablePos: drag.tablePos,
       columnIndex: drag.columnIndex,
       widthTwips: width,
+      // A grade das colunas que a tabela não declara vem da PROJEÇÃO: sem
+      // ela sobrariam zeros no `w:tblGrid`, e o compositor descarta entradas
+      // não positivas — a largura acabaria na coluna errada.
+      projectedWidths: officeTableColumnWidths(
+        controller.view.pageGraph,
+        drag.tablePos,
+        columns: OfficeTableMap.of(state.doc, drag.tablePos).columns,
+      ),
     );
   }
 

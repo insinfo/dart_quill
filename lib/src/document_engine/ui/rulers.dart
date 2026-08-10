@@ -28,11 +28,20 @@
 ///    paradas vão em `attrs['style']['tabs']`, que é exatamente o formato
 ///    que o compositor lê (`LayoutComposer._nextTabStop`) — nenhuma delas é
 ///    um atributo decorativo.
+/// 4. **Divisas de coluna de tabela** — com o cursor dentro de uma tabela, a
+///    régua ganha um marcador por borda de coluna, como no Word. A posição
+///    vem da PROJEÇÃO (`table_geometry.dart`), não dos atributos crus, e o
+///    arrasto termina na MESMA `table_ops.setTableColumnWidth` que a alça
+///    sobre a tabela usa — o mesmo gesto por dois caminhos não pode gravar
+///    de dois jeitos.
 library;
 
 import '../../platform/dom.dart';
 import 'controller.dart';
 import 'ribbon_actions.dart' as actions;
+import 'table_geometry.dart';
+import 'table_map.dart';
+import 'table_ops.dart' as table_ops;
 
 const int _quarterCmTwips = 142; // 0,25 cm
 
@@ -42,6 +51,11 @@ const int _minContentTwips = 567; // 1 cm
 /// Deslocamento vertical (px) a partir do qual soltar o ponteiro REMOVE a
 /// parada de tabulação, como no Word: arrastá-la para fora da régua a apaga.
 const int _tabDropOutPx = 18;
+
+/// Largura mínima de coluna (0,5 cm), a mesma da alça sobre a tabela: uma
+/// coluna de 0 twips some da tela e não há como pegá-la de volta com o
+/// ponteiro.
+const int _minColumnTwips = 283;
 
 /// Os tipos de parada que o COMPOSITOR honra, na ordem em que o canto gira.
 ///
@@ -66,6 +80,7 @@ class OfficeHorizontalRuler {
   DomElement? _center;
   DomElement? _content;
   DomElement? _tabLayer;
+  DomElement? _tableLayer;
   DomElement? _corner;
   DomElement? _guide;
 
@@ -89,6 +104,16 @@ class OfficeHorizontalRuler {
   /// `style['tabs']` (inclusive as entradas `clear`, que não têm marcador
   /// mas continuam contando).
   ({int index, num startX, num startY, int startTwips})? _tabDrag;
+
+  /// Arrasto de DIVISA DE COLUNA em curso. `startWidthTwips` é a largura da
+  /// coluna à esquerda da divisa — é ela que o gesto redimensiona.
+  ({
+    int tablePos,
+    int columnIndex,
+    num startX,
+    int startWidthTwips,
+    int startEdgeTwips,
+  })? _columnDrag;
 
   String get activeTabStopKind => officeTabStopKinds[_tabKindIndex].val;
 
@@ -155,6 +180,12 @@ class OfficeHorizontalRuler {
     // do centro procurando o que apagar.
     _tabLayer = _kit.el('div', 'dq-office-ruler-tabs');
     center.append(_tabLayer!);
+
+    // As divisas de coluna também são reconstruídas a cada mudança de
+    // seleção (elas só existem enquanto o cursor está numa tabela) e pela
+    // mesma razão ganham camada própria.
+    _tableLayer = _kit.el('div', 'dq-office-ruler-tabs dq-office-ruler-cols');
+    center.append(_tableLayer!);
 
     _guide = _kit.el('span', 'dq-office-ruler-guide');
     _guide!.setAttribute('style', 'display:none;');
@@ -377,6 +408,69 @@ class OfficeHorizontalRuler {
       _snapTabPosition(
           drag.startTwips + ((x - drag.startX) / controller.pxPerTwip).round());
 
+  // -- divisas de coluna de tabela -------------------------------------------
+
+  /// Redesenha os marcadores de coluna da tabela da seleção.
+  ///
+  /// Fora de tabela a camada fica VAZIA: um marcador que não corresponde a
+  /// nenhuma divisa visível seria pior que marcador nenhum. As posições vêm
+  /// do `PageGraph` (a grade que o compositor resolveu), então o marcador
+  /// cai exatamente sobre a linha desenhada na página.
+  void _renderTableColumns({({int index, int twips})? override}) {
+    final layer = _tableLayer;
+    if (layer == null) return;
+    _kit.clear(layer);
+    if (!controller.viewReady) return;
+    final state = controller.view.state;
+    final map = OfficeTableMap.at(state.doc, state.selection.from);
+    if (map == null || map.columns == 0) return;
+    final edges = officeTableColumnEdges(
+        controller.view.pageGraph, map.tablePos,
+        columns: map.columns);
+    if (edges.isEmpty) return;
+
+    final marginLeft = controller.pageSetup.marginLeftTwips;
+    for (var i = 0; i < edges.length; i++) {
+      final edge =
+          override != null && override.index == i ? override.twips : edges[i];
+      final marker = _kit.el('span', 'dq-office-colmark');
+      marker.setAttribute(
+          'style', 'left:${(marginLeft + edge) * controller.pxPerTwip}px;');
+      marker.setAttribute('title', 'Mover a divisa da coluna ${i + 1}');
+      marker.setAttribute('data-column', '$i');
+      marker.setAttribute('data-edge-twips', '$edge');
+      final startWidth = i == 0 ? edges[0] : edges[i] - edges[i - 1];
+      marker.addEventListener('pointerdown', (event) {
+        if (event is! DomMouseEvent) return;
+        event.preventDefault();
+        _columnDrag = (
+          tablePos: map.tablePos,
+          columnIndex: i,
+          startX: event.clientX,
+          startWidthTwips: startWidth,
+          startEdgeTwips: edges[i],
+        );
+      });
+      layer.append(marker);
+    }
+  }
+
+  /// A largura da coluna arrastada, com o mesmo piso da alça sobre a tabela.
+  int _columnDragWidth(
+    ({
+      int tablePos,
+      int columnIndex,
+      num startX,
+      int startWidthTwips,
+      int startEdgeTwips,
+    }) drag,
+    num x,
+  ) {
+    final delta = ((x - drag.startX) / controller.pxPerTwip).round();
+    final width = drag.startWidthTwips + delta;
+    return width < _minColumnTwips ? _minColumnTwips : width;
+  }
+
   // -- laço de ponteiro ------------------------------------------------------
 
   /// Chamado pelo orquestrador nos pointermove/pointerup do canvas E da
@@ -385,6 +479,17 @@ class OfficeHorizontalRuler {
   /// nenhum `pointermove`.
   void handlePointerMove(DomEvent event) {
     if (event is! DomMouseEvent) return;
+    final columnDrag = _columnDrag;
+    if (columnDrag != null) {
+      event.preventDefault();
+      final width = _columnDragWidth(columnDrag, event.clientX);
+      final edge =
+          columnDrag.startEdgeTwips - columnDrag.startWidthTwips + width;
+      _renderTableColumns(
+          override: (index: columnDrag.columnIndex, twips: edge));
+      _previewGuide(controller.pageSetup.marginLeftTwips + edge);
+      return;
+    }
     final marginDrag = _marginDrag;
     if (marginDrag != null) {
       event.preventDefault();
@@ -409,6 +514,28 @@ class OfficeHorizontalRuler {
 
   void handlePointerUp(DomEvent event) {
     if (event is! DomMouseEvent) return;
+
+    final columnDrag = _columnDrag;
+    if (columnDrag != null) {
+      // Zerar o arrasto ANTES de aplicar, como no gesto de margem: a
+      // transação repagina e reconstrói a régua inteira.
+      _columnDrag = null;
+      _hideGuide();
+      final state = controller.view.state;
+      table_ops.setTableColumnWidth(
+        state,
+        controller.dispatch,
+        tablePos: columnDrag.tablePos,
+        columnIndex: columnDrag.columnIndex,
+        widthTwips: _columnDragWidth(columnDrag, event.clientX),
+        projectedWidths: officeTableColumnWidths(
+          controller.view.pageGraph,
+          columnDrag.tablePos,
+          columns: OfficeTableMap.of(state.doc, columnDrag.tablePos).columns,
+        ),
+      );
+      return;
+    }
 
     final marginDrag = _marginDrag;
     if (marginDrag != null) {
@@ -500,6 +627,7 @@ class OfficeHorizontalRuler {
     _right!.setAttribute('style',
         'left:${px(setup.widthTwips - setup.marginRightTwips - right)}px;');
     _renderTabStops();
+    _renderTableColumns();
   }
 
   /// As alças de margem NÃO dependem da view: elas refletem a geometria, que
@@ -526,12 +654,13 @@ class OfficeHorizontalRuler {
       leftOverride: drag.left ? value : null,
       rightOverride: drag.left ? null : value,
     );
-    final guide = _guide;
-    if (guide == null) return;
     final setup = controller.pageSetup;
-    final x = drag.left ? value : setup.widthTwips - value;
-    guide.setAttribute('style', 'left:${x * controller.pxPerTwip}px;');
+    _previewGuide(drag.left ? value : setup.widthTwips - value);
   }
+
+  /// A guia tracejada em [twips] contados da borda esquerda do papel.
+  void _previewGuide(int twips) =>
+      _guide?.setAttribute('style', 'left:${twips * controller.pxPerTwip}px;');
 
   void _hideGuide() => _guide?.setAttribute('style', 'display:none;');
 }
