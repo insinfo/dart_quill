@@ -113,6 +113,7 @@ class FloatingTextBoxLayout {
     this.borderColor = '#000000',
     this.backgroundColor,
     this.wrapTopAndBottom = false,
+    this.charStartInBlock = 0,
   });
 
   final String text;
@@ -137,6 +138,15 @@ class FloatingTextBoxLayout {
   /// DrawingML `wp:wrapTopAndBottom`: a caixa continua flutuante na linha
   /// âncora, mas cria uma exclusão vertical para o corpo da página.
   final bool wrapTopAndBottom;
+
+  /// Deslocamento do nó `textBox` dentro do CONTEÚDO do bloco âncora.
+  ///
+  /// O visual flutuante é filho do fragmento, não da linha, então ele não
+  /// herda os offsets de caractere que o mapa de posições usa. Guardar aqui
+  /// o offset é o que permite ao renderer marcar a caixa com o
+  /// `data-doc-pos` do nó — e sem isso não há como um duplo clique saber
+  /// QUAL caixa abrir.
+  final int charStartInBlock;
 }
 
 /// Um segmento de linha: texto contíguo com um único estilo.

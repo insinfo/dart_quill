@@ -1736,6 +1736,75 @@ class OfficeDocxCodec {
     };
   }
 
+  /// O XML da caixa de texto na exportação.
+  ///
+  /// O caminho normal é o carimbo: devolver o `rawXml` importado intacto
+  /// (preservação D1). Mas se o conteúdo da caixa FOI EDITADO (F9), carimbar o
+  /// original gravaria no arquivo um texto que não é o que está na tela — o
+  /// mesmo problema que os cabeçalhos tinham antes de `_applyEditedRegions`.
+  ///
+  /// A detecção é por assinatura: `textBoxSourceSignature` é a assinatura do
+  /// `textBoxDoc` como ele veio do arquivo. Diferente da atual, o
+  /// `w:txbxContent` é regerado a partir dos blocos editados.
+  ///
+  /// A substituição atinge TODAS as ocorrências de `w:txbxContent` no XML da
+  /// caixa: o Word escreve a caixa duas vezes dentro de `mc:AlternateContent`
+  /// (DrawingML em `mc:Choice`, VML em `mc:Fallback`), e atualizar só uma
+  /// faria o texto mudar ou não conforme o leitor que abrisse o arquivo.
+  String _textBoxRawXml(PMNode node, String rawXml) {
+    final raw = node.attrs['textBoxDoc'];
+    if (raw is! Map) return rawXml;
+    final signature = node.attrs['textBoxSourceSignature'];
+    PMNode doc;
+    try {
+      doc = PMNode.fromJSON(node.type.schema, raw);
+    } catch (_) {
+      return rawXml;
+    }
+    if (signature is String &&
+        signature == OfficeDocxCodec.nodeSignature(doc)) {
+      return rawXml;
+    }
+    final content = StringBuffer();
+    for (var i = 0; i < doc.childCount; i++) {
+      content.write(DocxWriter.serializeBlock(_nodeToBlock(doc.child(i))));
+    }
+    return _replaceTextBoxContent(rawXml, content.toString());
+  }
+
+  /// Troca o miolo de cada `<w:txbxContent>…</w:txbxContent>` por [inner].
+  ///
+  /// A varredura é textual de propósito: reserializar a caixa inteira jogaria
+  /// fora tudo que não é conteúdo (a forma, o preenchimento, as extensões do
+  /// produtor), que é justamente o que a preservação D1 existe para manter.
+  static String _replaceTextBoxContent(String xml, String inner) {
+    const openPrefix = '<w:txbxContent';
+    const close = '</w:txbxContent>';
+    final buffer = StringBuffer();
+    var cursor = 0;
+    while (true) {
+      final open = xml.indexOf(openPrefix, cursor);
+      if (open < 0) break;
+      final openEnd = xml.indexOf('>', open);
+      if (openEnd < 0) break;
+      // `<w:txbxContent/>` vazio: não há miolo para trocar, e forçar um
+      // fecharia a tag por conta própria.
+      if (xml[openEnd - 1] == '/') {
+        buffer.write(xml.substring(cursor, openEnd + 1));
+        cursor = openEnd + 1;
+        continue;
+      }
+      final end = xml.indexOf(close, openEnd);
+      if (end < 0) break;
+      buffer
+        ..write(xml.substring(cursor, openEnd + 1))
+        ..write(inner);
+      cursor = end;
+    }
+    buffer.write(xml.substring(cursor));
+    return buffer.toString();
+  }
+
   WpBlock _nodeToBlock(PMNode node, {WpBlock? base}) {
     switch (node.type.name) {
       case 'table':
@@ -1822,7 +1891,7 @@ class OfficeDocxCodec {
         final word = child.attrs['word'];
         if (word is String) {
           inlines.add(WpRun(content: [
-            WpTextBox(blocks: const [], rawXml: word),
+            WpTextBox(blocks: const [], rawXml: _textBoxRawXml(child, word)),
           ]));
         }
         continue;

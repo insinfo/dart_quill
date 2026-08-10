@@ -482,6 +482,9 @@ class PageGraphDomRenderer {
             lineIndentTwips: line.indentTwips,
             blockWidthTwips: availableTwips - fragment.indentTwips,
             rightIndentTwips: fragment.rightIndentTwips,
+            // `docPos` do fragmento JÁ é o início do CONTEÚDO do bloco — é
+            // dele que o mapa de posições parte ao somar `data-char-start`.
+            blockContentPos: projectedCopy ? null : fragment.docPos,
           ));
           // The floating visual lives at block level, but its anchor still
           // occupies one inline model position at this exact place in the
@@ -592,6 +595,7 @@ class PageGraphDomRenderer {
     required int lineIndentTwips,
     required int blockWidthTwips,
     required int rightIndentTwips,
+    int? blockContentPos,
   }) {
     final box = segment.textBox!;
     final width = box.widthTwips > 0 ? box.widthTwips : 1;
@@ -607,6 +611,14 @@ class PageGraphDomRenderer {
     element.setAttribute('contenteditable', 'false');
     element.setAttribute('data-model-length', '1');
     element.setAttribute('data-position-h-align', box.positionHAlign ?? 'left');
+    if (blockContentPos != null) {
+      // A posição do NÓ `textBox` no documento. O visual é filho do
+      // fragmento, não da linha, então ele não herda os offsets de
+      // caractere — sem esta âncora um duplo clique não saberia qual caixa
+      // abrir nem onde gravar o que for digitado.
+      element.setAttribute(
+          'data-doc-pos', '${blockContentPos + box.charStartInBlock}');
+    }
     final background =
         box.backgroundColor == null ? '' : 'background:${box.backgroundColor};';
     final border = box.borderWidthTwips > 0

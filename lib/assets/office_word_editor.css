@@ -1307,6 +1307,44 @@
    raiz, posicionado no overlay sobre a faixa da página ativa. O fundo branco
    cobre a projeção ANTIGA da região (que só é recomposta ao fechar) e o
    overflow recorta a folha virtual em que a região é composta. */
+/* F9 — a caixa de texto editada in-place.
+   A superfície cobre a ÁREA INTERNA da caixa (a que respeita os insets do
+   `wps:bodyPr`), e não a caixa inteira: escrever a partir da borda faria o
+   texto sair de onde ele é desenhado quando a sessão fecha. O fundo é
+   transparente para a borda e o preenchimento da própria caixa continuarem
+   visíveis por baixo. */
+.dq-office-tb-surface {
+  position: absolute;
+  z-index: 33;
+  pointer-events: auto;
+  overflow: hidden;
+  background: transparent;
+}
+
+.dq-office-tb-surface .dq-office-page {
+  background: transparent;
+  box-shadow: none;
+}
+
+.dq-office-tb-surface .dq-office-page-content:focus {
+  outline: none;
+}
+
+/* Moldura de hachura do Word ao editar a caixa. Não intercepta o ponteiro:
+   quem recebe o clique é a superfície logo abaixo. */
+.dq-office-tb-frame {
+  position: absolute;
+  z-index: 34;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 1px dashed #2b579a;
+}
+
+/* A página que continha a caixa saiu da janela virtualizada. */
+.dq-office-tb-offscreen {
+  display: none;
+}
+
 .dq-office-hf-surface {
   position: absolute;
   z-index: 33;

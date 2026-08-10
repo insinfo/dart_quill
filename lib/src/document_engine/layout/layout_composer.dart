@@ -2975,6 +2975,7 @@ class LayoutComposer {
             backgroundColor: child.attrs['background']?.toString(),
             wrapTopAndBottom: (child.attrs['word']?.toString() ?? '')
                 .contains('wrapTopAndBottom'),
+            charStartInBlock: charOffset,
           ),
           modelLength: child.nodeSize,
         ));

@@ -2297,6 +2297,126 @@ void main() {
       expect(reopenedHeaders['default']!.textContent, contains(marker));
     });
 
+    test('edição de CAIXA DE TEXTO regenera o w:txbxContent (F9)', () {
+      final bytes = Uint8List.fromList(
+          File('test/assets/docx/etp_corpus.docx').readAsBytesSync());
+      final codec = OfficeDocxCodec(schema: schema);
+      final imported = codec.import(bytes, includePackageResources: false);
+      final variants =
+          OfficeDocxCodec.regionVariantsOf(imported.snapshot.headers, schema);
+
+      PMNode? findTextBox(PMNode node) {
+        if (node.type.name == 'textBox') return node;
+        for (var i = 0; i < node.childCount; i++) {
+          final found = findTextBox(node.child(i));
+          if (found != null) return found;
+        }
+        return null;
+      }
+
+      String? variantKey;
+      PMNode? region;
+      PMNode? box;
+      for (final entry in variants.entries) {
+        final found = findTextBox(entry.value);
+        if (found != null) {
+          variantKey = entry.key;
+          region = entry.value;
+          box = found;
+          break;
+        }
+      }
+      if (box == null) {
+        markTestSkipped('o corpus versionado não tem caixa de texto');
+        return;
+      }
+      final original = PMNode.fromJSON(schema, box.attrs['textBoxDoc'] as Map)
+          .child(0)
+          .textContent;
+      expect(original, isNotEmpty);
+
+      // O que a sessão do F9 grava ao sair: `textBoxDoc` novo, assinatura de
+      // origem intocada (é ela que denuncia a edição).
+      const marker = 'CAIXA_EDITADA_F9';
+      final editedInner = schema.node(
+        'doc',
+        null,
+        Fragment.from([
+          schema.node('paragraph', null, Fragment.from([schema.text(marker)])),
+        ]),
+      );
+      PMNode replaceBox(PMNode node) {
+        if (node.type.name == 'textBox') {
+          return node.type.create(
+            {...node.attrs, 'textBoxDoc': editedInner.toJSON(), 'text': marker},
+            node.content,
+            node.marks,
+          );
+        }
+        if (node.childCount == 0) return node;
+        return node.copy(Fragment.from([
+          for (var i = 0; i < node.childCount; i++) replaceBox(node.child(i)),
+        ]));
+      }
+
+      final exported = codec.exportEditedFromDocx(
+        bytes,
+        imported.snapshot.sourceMap,
+        PMNode.fromJSON(schema, imported.snapshot.body),
+        headers: {variantKey!: replaceBox(region!)},
+      );
+
+      final archive = ZipArchive.decodeBytes(exported);
+      var partsWithMarker = 0;
+      var partsWithOriginal = 0;
+      for (final name in archive.entries.map((entry) => entry.name)) {
+        if (!name.startsWith('word/header')) continue;
+        final xml = archive.readString(name) ?? '';
+        if (xml.contains(marker)) partsWithMarker++;
+        if (xml.contains(original)) partsWithOriginal++;
+      }
+      expect(partsWithMarker, 1,
+          reason: 'o texto novo tem de estar DENTRO do w:txbxContent gravado');
+      expect(partsWithOriginal, 0,
+          reason: 'carimbar o rawXml original gravaria o texto antigo — é '
+              'exatamente o que esta correção existe para impedir');
+
+      // E a caixa continua sendo uma caixa: a forma, o preenchimento e as
+      // extensões do produtor não podem ter sido reserializados junto.
+      final reopened = codec.import(exported, includePackageResources: false);
+      final reopenedBox = findTextBox(OfficeDocxCodec.regionVariantsOf(
+          reopened.snapshot.headers, schema)[variantKey]!);
+      expect(reopenedBox, isNotNull,
+          reason: 'a caixa sobreviveu ao round-trip');
+      expect(
+          PMNode.fromJSON(schema, reopenedBox!.attrs['textBoxDoc'] as Map)
+              .textContent,
+          marker);
+      expect(reopenedBox.attrs['width'], box.attrs['width'],
+          reason: 'a geometria da forma veio do XML preservado');
+    });
+
+    test('caixa NÃO editada continua sendo carimbo byte a byte', () {
+      final bytes = Uint8List.fromList(
+          File('test/assets/docx/etp_corpus.docx').readAsBytesSync());
+      final codec = OfficeDocxCodec(schema: schema);
+      final imported = codec.import(bytes, includePackageResources: false);
+
+      final exported = codec.exportEditedFromDocx(
+        bytes,
+        imported.snapshot.sourceMap,
+        PMNode.fromJSON(schema, imported.snapshot.body),
+      );
+
+      final before = ZipArchive.decodeBytes(bytes);
+      final after = ZipArchive.decodeBytes(exported);
+      for (final name in before.entries.map((entry) => entry.name)) {
+        if (!name.startsWith('word/header')) continue;
+        expect(after.readString(name), before.readString(name),
+            reason: '$name não foi editada e não pode mudar');
+      }
+    });
+
     test('sem regiões editadas as partes de cabeçalho ficam intactas', () {
       if (!hasProductionEtpCorpus) return;
       final bytes = productionEtpCorpus();

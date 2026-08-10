@@ -65,6 +65,7 @@ import 'ribbon_actions.dart' as ribbon_actions;
 import 'rulers.dart';
 import 'status_bar.dart';
 import 'table_adorner.dart';
+import 'text_box_session.dart';
 import 'title_bar.dart';
 import 'word_options.dart';
 
@@ -144,6 +145,8 @@ class OfficeWordEditor implements OfficeWordController {
   late final OfficeTableAdorner _tableAdorner = OfficeTableAdorner(this);
   late final OfficeHeaderFooterSession _headerFooter =
       OfficeHeaderFooterSession(this, onChanged: _refresh);
+  late final OfficeTextBoxSession _textBox =
+      OfficeTextBoxSession(this, onChanged: _refresh);
   OfficeSelectionQuickbar? _quickbar;
   OfficeContextMenu? _contextMenu;
   DomEventListener? _contextMenuListener;
@@ -212,9 +215,13 @@ class OfficeWordEditor implements OfficeWordController {
   /// seguem para lá enquanto o modo cabeçalho/rodapé está aberto. Réguas,
   /// status bar e adornos continuam usando [view] — eles falam da PÁGINA.
   @override
-  OfficeEditorView get activeView => _headerFooter.regionView ?? _view;
+  OfficeEditorView get activeView =>
+      _textBox.boxView ?? _headerFooter.regionView ?? _view;
   @override
   OfficeHeaderFooterSession get headerFooter => _headerFooter;
+
+  /// A sessão de edição de caixa de texto (F9).
+  OfficeTextBoxSession get textBoxSession => _textBox;
   @override
   bool get titlePage => _titlePage;
   @override
@@ -697,6 +704,7 @@ class OfficeWordEditor implements OfficeWordController {
     // O modo cabeçalho/rodapé descreve o documento que está saindo: manter a
     // sessão viva editaria uma região que não existe mais.
     _headerFooter.dispose();
+    _textBox.dispose();
     _bodyEditable = true;
     host.classes.remove('dq-office-app-hf');
     // Só um novo DOCX inicia outro ciclo de validade. Abrir Delta ou outro
@@ -870,6 +878,7 @@ class OfficeWordEditor implements OfficeWordController {
       _objectAdorner.refresh();
       _tableAdorner.refresh();
       _headerFooter.reposition();
+      _textBox.reposition();
     });
 
     if (options.mode != OfficeWordMode.view) {
@@ -1002,6 +1011,12 @@ class OfficeWordEditor implements OfficeWordController {
 
   void _handleDoubleClick(DomEvent event) {
     if (_disposed) return;
+    // A CAIXA vem antes: uma caixa desenhada sobre a faixa do cabeçalho é
+    // clicada por cima dele, e é nela que o duplo clique cai no Word.
+    if (_textBox.handleDoubleClick(event)) {
+      event.preventDefault();
+      return;
+    }
     if (_headerFooter.handleDoubleClick(event)) event.preventDefault();
   }
 
@@ -1155,6 +1170,7 @@ class OfficeWordEditor implements OfficeWordController {
     // A superfície da região vive no overlay, que não rola com as páginas —
     // ela reacompanha a página exatamente como os adornos.
     _headerFooter.reposition();
+    _textBox.reposition();
     _hRuler?.positionMarkers();
     _positionVerticalRuler();
   }
@@ -1192,6 +1208,7 @@ class OfficeWordEditor implements OfficeWordController {
     _objectAdorner.clear();
     _tableAdorner.clear();
     _headerFooter.dispose();
+    _textBox.dispose();
     _overlay.dispose();
     _view.dispose();
     _kit.clear(host);
