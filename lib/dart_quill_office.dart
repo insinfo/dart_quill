@@ -35,6 +35,7 @@ export 'src/document_engine/office/numbering.dart';
 export 'src/document_engine/office/pdf_service.dart';
 export 'src/document_engine/office/snapshot.dart';
 export 'src/document_engine/office/style_catalog.dart';
+export 'src/document_engine/office/text_box_drawing.dart';
 export 'src/document_engine/state/index.dart';
 export 'src/document_engine/transform/index.dart' hide lift, setBlockType;
 export 'src/document_engine/view/clipboard.dart';

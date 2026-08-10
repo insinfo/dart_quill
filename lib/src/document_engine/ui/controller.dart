@@ -17,6 +17,7 @@ import '../state/index.dart';
 import '../view/editor_view.dart';
 import 'header_footer.dart';
 import 'overlay.dart';
+import 'text_box_session.dart';
 import 'word_options.dart';
 
 abstract interface class OfficeWordController {
@@ -64,6 +65,14 @@ abstract interface class OfficeWordController {
   /// A sessão de edição de cabeçalho/rodapé (F6). Sempre existe; pergunte
   /// [OfficeHeaderFooterSession.isActive] antes de reagir a ela.
   OfficeHeaderFooterSession get headerFooter;
+
+  /// A sessão de edição in-place de caixa de texto (F9). Sempre existe;
+  /// pergunte [OfficeTextBoxSession.isActive] antes de reagir a ela.
+  ///
+  /// Está no contrato porque quem INSERE uma caixa precisa abri-la em
+  /// seguida: no Word o cursor nasce dentro da caixa nova, e sem isso o
+  /// usuário teria de adivinhar que é um duplo clique que o coloca lá.
+  OfficeTextBoxSession get textBoxSession;
 
   /// `w:titlePg` — a primeira página usa as variantes `first`.
   bool get titlePage;

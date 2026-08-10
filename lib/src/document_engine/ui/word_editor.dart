@@ -135,6 +135,16 @@ export 'symbol_picker.dart'
 export 'table_adorner.dart'
     show OfficeTableAdorner, officeColumnResizeTolerancePx;
 export 'table_map.dart' show OfficeTableMap, OfficeTableCell;
+export 'cover_page.dart'
+    show
+        OfficeCoverPageLayout,
+        officeCoverPageLayouts,
+        insertCoverPage,
+        officeCoverTitlePlaceholder,
+        officeCoverSubtitlePlaceholder,
+        officeCoverAuthorPlaceholder;
+export 'text_box_insert.dart' show insertTextBox;
+export 'text_box_session.dart' show OfficeTextBoxSession, OfficeTextBoxRef;
 export 'word_options.dart';
 
 class OfficeWordEditor implements OfficeWordController {
@@ -268,6 +278,7 @@ class OfficeWordEditor implements OfficeWordController {
   OfficeHeaderFooterSession get headerFooter => _headerFooter;
 
   /// A sessão de edição de caixa de texto (F9).
+  @override
   OfficeTextBoxSession get textBoxSession => _textBox;
   @override
   bool get titlePage => _titlePage;
@@ -1048,6 +1059,7 @@ class OfficeWordEditor implements OfficeWordController {
     _renderer = PageGraphDomRenderer(
       document: adapter.document,
       editable: _rendererEditable,
+      spellcheck: options.spellcheck,
       pxPerPt: 96 / 72 * _zoom,
       pageGapPx: options.mode == OfficeWordMode.flow ? 0 : 26,
       scrollTopInsetPx: 26,

@@ -15,11 +15,17 @@
 library;
 
 import '../../../platform/dom.dart';
+import '../../model/index.dart';
+import '../controller.dart';
+import '../cover_page.dart';
 import '../dialogs/link_dialog.dart';
+import '../header_footer.dart';
 import '../image_insert.dart';
+import '../menu.dart';
 import '../ribbon.dart';
 import '../ribbon_actions.dart' as actions;
 import '../symbol_picker.dart';
+import '../text_box_insert.dart';
 
 /// Dimensões do grid do Word: 10 colunas × 8 linhas.
 const int _gridColumns = 10;
@@ -30,6 +36,11 @@ List<DomElement> buildInsertTab(RibbonContext ctx) {
   final kit = ctx.kit;
   return [
     kit.group('Páginas', [
+      kit.row([
+        menuButton(c, 'Folha de Rosto', 'Folha de Rosto', 'insert:cover',
+            () => _coverEntries(c),
+            icon: 'blankpage'),
+      ]),
       kit.row([
         kit.button('▤', 'Página em Branco (insere uma página vazia)',
             () => actions.insertBlankPage(c),
@@ -59,9 +70,138 @@ List<DomElement> buildInsertTab(RibbonContext ctx) {
             extraClass: 'dq-office-btn-labeled', icon: 'hyperlink'),
       ]),
     ]),
+    kit.group('Cabeçalho e Rodapé', [
+      kit.row([
+        menuButton(c, 'Cabeçalho', 'Cabeçalho', 'insert:header',
+            () => _regionEntries(c, header: true),
+            icon: 'editheader'),
+        menuButton(c, 'Rodapé', 'Rodapé', 'insert:footer',
+            () => _regionEntries(c, header: false),
+            icon: 'menu-header'),
+      ]),
+      kit.row([
+        menuButton(c, 'Número de Página', 'Número de Página',
+            'insert:pagenumber', () => _pageNumberEntries(c),
+            icon: 'pagenum'),
+      ]),
+    ]),
+    kit.group('Texto', [
+      kit.row([
+        kit.button(
+            '▭',
+            'Caixa de Texto (um quadro flutuante, na frente do texto — '
+                'o cursor entra nele)',
+            () => insertTextBox(c),
+            extraClass: 'dq-office-btn-labeled',
+            icon: 'text'),
+      ]),
+    ]),
     kit.group('Símbolos', [
       kit.row([_symbolButton(ctx)]),
     ]),
+  ];
+}
+
+/// A galeria de Folha de Rosto.
+///
+/// Duas capas TIPOGRÁFICAS, e o menu diz isso: as galerias com faixas
+/// coloridas do Word dependem de formas decorativas que o compositor não
+/// desenha, e gravá-las produziria um arquivo diferente do que está na tela
+/// (ver `cover_page.dart`).
+List<OfficeMenuEntry> _coverEntries(OfficeWordController c) => [
+      for (final layout in officeCoverPageLayouts)
+        OfficeMenuEntry(
+          label: layout.name,
+          description: layout.description,
+          onSelect: () => insertCoverPage(c, layout.id),
+        ),
+    ];
+
+/// Os dropdowns Cabeçalho e Rodapé.
+///
+/// Não há motor novo aqui: "Editar" é a MESMA sessão que o duplo clique na
+/// região abre ([OfficeHeaderFooterSession]), e é assim de propósito — dois
+/// caminhos para entrar no cabeçalho têm de terminar no mesmo estado, senão
+/// um deles vira o caminho com bugs.
+///
+/// A página é a VISÍVEL, não a primeira: com `w:titlePg` ou páginas
+/// pares/ímpares diferentes, cada página tem a sua variante, e abrir sempre
+/// a da página 1 faria o usuário editar um cabeçalho que não está na tela.
+List<OfficeMenuEntry> _regionEntries(
+  OfficeWordController c, {
+  required bool header,
+}) {
+  final name = header ? 'Cabeçalho' : 'Rodapé';
+  final pageIndex = c.viewReady ? c.view.visiblePageIndex : 0;
+  final ref = c.viewReady ? c.regionForPage(pageIndex, isHeader: header) : null;
+  final hasContent = (ref?.doc?.textContent ?? '').isNotEmpty;
+  return [
+    OfficeMenuEntry(
+      label: 'Editar $name',
+      description: 'Abre a região para edição, como o duplo clique nela',
+      onSelect: () =>
+          c.headerFooter.enter(header: header, pageIndex: pageIndex),
+    ),
+    OfficeMenuEntry(
+      label: 'Remover $name',
+      description: hasContent
+          ? 'Esvazia a região desta página'
+          : 'A região já está vazia',
+      enabled: hasContent,
+      onSelect: ref == null ? null : () => _clearRegion(c, ref),
+    ),
+  ];
+}
+
+/// Esvazia a região: um documento de um parágrafo vazio, que é o que o
+/// compositor e a exportação sabem tratar. Remover a PARTE do pacote seria
+/// outra operação (e mexeria nas referências de `sectPr`).
+void _clearRegion(OfficeWordController c, OfficeRegionRef ref) {
+  c.headerFooter.exit();
+  c.setRegionDocument(
+    ref,
+    c.schema.node('doc', null, Fragment.from([c.schema.node('paragraph')])),
+    recompose: true,
+  );
+}
+
+/// O dropdown Número de Página.
+///
+/// Os quatro itens inserem o CAMPO `PAGE`/`NUMPAGES`
+/// ([actions.insertPageField]), nunca o número como texto: o compositor
+/// resolve o valor por página e o Word reconhece o campo no arquivo. As duas
+/// primeiras opções abrem a região antes de inserir — é o que a posição
+/// "Início/Fim da Página" significa no Word.
+List<OfficeMenuEntry> _pageNumberEntries(OfficeWordController c) {
+  final pageIndex = c.viewReady ? c.view.visiblePageIndex : 0;
+
+  void insertInRegion({required bool header}) {
+    c.headerFooter.enter(header: header, pageIndex: pageIndex);
+    actions.insertPageField(c);
+  }
+
+  return [
+    OfficeMenuEntry(
+      label: 'Início da Página',
+      description: 'Abre o cabeçalho e insere o campo PAGE',
+      onSelect: () => insertInRegion(header: true),
+    ),
+    OfficeMenuEntry(
+      label: 'Fim da Página',
+      description: 'Abre o rodapé e insere o campo PAGE',
+      onSelect: () => insertInRegion(header: false),
+    ),
+    OfficeMenuEntry(
+      label: 'Posição Atual',
+      description: 'Insere o campo PAGE onde o cursor está',
+      onSelect: () => actions.insertPageField(c),
+    ),
+    const OfficeMenuEntry.separator(),
+    OfficeMenuEntry(
+      label: 'Total de Páginas',
+      description: 'Campo NUMPAGES (para "página 1 de N")',
+      onSelect: () => actions.insertPageField(c, command: 'NUMPAGES'),
+    ),
   ];
 }
 

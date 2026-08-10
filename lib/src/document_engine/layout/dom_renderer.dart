@@ -74,6 +74,7 @@ class PageGraphDomRenderer {
     required this.document,
     this.pxPerPt = 96 / 72,
     this.editable = false,
+    this.spellcheck = false,
     this.pageGapPx = 0,
     this.scrollTopInsetPx = 0,
   });
@@ -93,6 +94,24 @@ class PageGraphDomRenderer {
   /// digitação cair no lugar errado. Quem troca o valor precisa reprojetar
   /// ([OfficeEditorView.reproject]); o grafo não muda.
   bool editable;
+
+  /// Corretor ortográfico NATIVO do browser na superfície editável (F10).
+  ///
+  /// DESLIGADO por padrão, e a razão não é preguiça. O sublinhado é pintado
+  /// pelo browser, não escrito no DOM, então ele não fere a regra de ouro —
+  /// mas aceitar uma sugestão do menu do browser chega como `beforeinput`
+  /// com `inputType: insertReplacementText`, e esse evento **não é
+  /// cancelável em todos os browsers** (o WebKit o entrega sem
+  /// cancelabilidade). Onde não for, o browser reescreve a projeção por
+  /// baixo do modelo — a corrupção silenciosa que o `editor_view` existe
+  /// para impedir.
+  ///
+  /// Onde ELE É cancelável (Chromium e Gecko) o caminho está fechado: a view
+  /// converte `insertReplacementText` numa transação sobre o intervalo que o
+  /// browser aponta, então a correção entra pelo modelo como qualquer outra
+  /// edição. Por isso a opção existe e é do hospedeiro: quem sabe em que
+  /// browser o produto roda é ele.
+  final bool spellcheck;
 
   /// Geometria externa da projeção, usada pela virtualização para mapear
   /// `scrollTop` em página sem medir o DOM a cada evento.
@@ -152,9 +171,11 @@ class PageGraphDomRenderer {
     content.classes.add('$officeCssPrefix-page-content');
     if (editable) {
       content.setAttribute('contenteditable', 'true');
-      // A superfície do Word Web também desliga o spellcheck nativo: o
-      // sublinhado do browser desalinha do nosso layout próprio.
-      content.setAttribute('spellcheck', 'false');
+      // O atributo é escrito nos DOIS casos (não só quando falso): num
+      // contenteditable o padrão do browser é herdar `spellcheck` do
+      // ancestral, e deixar de escrever deixaria a decisão com a página
+      // hospedeira em vez de com o editor.
+      content.setAttribute('spellcheck', spellcheck ? 'true' : 'false');
     }
     content.setAttribute(
         'style',

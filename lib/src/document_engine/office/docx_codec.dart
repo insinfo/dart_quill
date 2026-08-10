@@ -46,6 +46,7 @@ import 'schema.dart';
 import 'style_catalog.dart';
 import 'sha256.dart';
 import 'snapshot.dart';
+import 'text_box_drawing.dart';
 
 /// Vínculo persistente entre um nó editável e sua origem no OOXML.
 ///
@@ -1968,6 +1969,62 @@ class OfficeDocxCodec {
     ]);
   }
 
+  /// O XML de uma caixa que NASCEU no editor (F9 — inserir).
+  ///
+  /// Aqui não há nada a preservar: a forma inteira sai dos atributos do nó,
+  /// que é justamente o que faz um redimensionamento pelas alças chegar ao
+  /// arquivo — uma caixa nova não tem `wp:extent` velho para ficar mentindo.
+  ///
+  /// O miolo usa o MESMO serializador de bloco do corpo (`DocxWriter`), então
+  /// negrito, alinhamento e listas dentro da caixa saem com a gramática de
+  /// parágrafo já testada, e não com uma segunda inventada aqui.
+  String _newTextBoxRawXml(PMNode node) {
+    int twips(String key, int fallback) {
+      final raw = node.attrs[key];
+      if (raw is num) return raw.toInt();
+      return int.tryParse('$raw') ?? fallback;
+    }
+
+    final content = StringBuffer();
+    final raw = node.attrs['textBoxDoc'];
+    PMNode? doc;
+    if (raw is Map) {
+      try {
+        doc = PMNode.fromJSON(node.type.schema, raw);
+      } catch (_) {
+        // `textBoxDoc` corrompido não pode impedir a caixa de ser gravada:
+        // o fallback de texto plano abaixo ainda preserva o que está na tela.
+      }
+    }
+    if (doc != null && doc.type.name == 'doc' && doc.childCount > 0) {
+      for (var i = 0; i < doc.childCount; i++) {
+        content.write(DocxWriter.serializeBlock(_nodeToBlock(doc.child(i))));
+      }
+    } else {
+      for (final line in '${node.attrs['text'] ?? ''}'.split('\n')) {
+        content.write(DocxWriter.serializeParagraph(WpParagraph(inlines: [
+          if (line.isNotEmpty) WpRun(content: [WpText(line)]),
+        ])));
+      }
+    }
+
+    return officeNewTextBoxXml(
+      innerXml: content.toString(),
+      shapeId: _docPrId++,
+      widthTwips: twips('width', officeDefaultTextBoxWidthTwips),
+      heightTwips: twips('height', officeDefaultTextBoxHeightTwips),
+      insetLeftTwips: twips('insetLeft', officeDefaultTextBoxInsetXTwips),
+      insetTopTwips: twips('insetTop', officeDefaultTextBoxInsetYTwips),
+      insetRightTwips: twips('insetRight', officeDefaultTextBoxInsetXTwips),
+      insetBottomTwips: twips('insetBottom', officeDefaultTextBoxInsetYTwips),
+      offsetXTwips: twips('offsetX', 0),
+      offsetYTwips: twips('offsetY', 0),
+      borderWidthTwips: twips('borderWidth', officeDefaultTextBoxBorderTwips),
+      borderColor: node.attrs['borderColor']?.toString(),
+      fillColor: node.attrs['background']?.toString(),
+    );
+  }
+
   /// Troca o miolo de cada `<w:txbxContent>…</w:txbxContent>` por [inner].
   ///
   /// A varredura é textual de propósito: reserializar a caixa inteira jogaria
@@ -2085,11 +2142,15 @@ class OfficeDocxCodec {
       }
       if (child.type.name == 'textBox') {
         final word = child.attrs['word'];
-        if (word is String) {
-          inlines.add(WpRun(content: [
-            WpTextBox(blocks: const [], rawXml: _textBoxRawXml(child, word)),
-          ]));
-        }
+        // Sem `word` a caixa NASCEU no editor: não há carimbo para devolver, e
+        // pular o nó (o que este ramo fazia) apagaria do arquivo uma caixa que
+        // está na tela. A forma inteira é gerada a partir dos atributos.
+        final rawXml = word is String
+            ? _textBoxRawXml(child, word)
+            : _newTextBoxRawXml(child);
+        inlines.add(WpRun(content: [
+          WpTextBox(blocks: const [], rawXml: rawXml),
+        ]));
         continue;
       }
       if (child.type.name == 'opaqueInline') {

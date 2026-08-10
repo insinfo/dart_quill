@@ -30,6 +30,7 @@ class OfficeWordEditorOptions {
     this.showTitleBar = false,
     this.fonts = const LayoutFontSet([]),
     this.progressivePagination,
+    this.spellcheck = false,
   });
 
   final OfficeWordMode mode;
@@ -64,4 +65,16 @@ class OfficeWordEditorOptions {
   /// compõe todas as páginas antes da primeira projeção — o comportamento
   /// determinístico que os testes e integrações existentes esperam.
   final OfficeProgressivePagination? progressivePagination;
+
+  /// Verificação ortográfica NATIVA do browser na superfície editável.
+  ///
+  /// Desligada por padrão porque a decisão depende do browser em que o
+  /// produto roda, e só o hospedeiro sabe disso: aceitar uma sugestão do
+  /// menu do corretor chega como `beforeinput/insertReplacementText`, que o
+  /// WebKit entrega NÃO cancelável — e um evento não cancelável é o browser
+  /// escrevendo na projeção por baixo do modelo. Em Chromium e Gecko o
+  /// evento é cancelável e a correção entra como transação normal.
+  ///
+  /// O sublinhado em si é seguro em qualquer browser: é pintura, não DOM.
+  final bool spellcheck;
 }

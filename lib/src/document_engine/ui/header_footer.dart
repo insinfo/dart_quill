@@ -333,6 +333,10 @@ class OfficeHeaderFooterSession {
       renderer: PageGraphDomRenderer(
         document: controller.adapter.document,
         editable: true,
+        // A mesma opção do corpo: o corretor não pode ligar num pedaço da
+        // superfície e desligar em outro, senão o usuário conclui que ele
+        // está quebrado.
+        spellcheck: controller.options.spellcheck,
         pxPerPt: 96 / 72 * controller.zoom,
       ),
       // Os hints `lastRenderedPageBreak` descrevem o CORPO gravado pelo Word;

@@ -236,6 +236,9 @@ class OfficeTextBoxSession {
       renderer: PageGraphDomRenderer(
         document: controller.adapter.document,
         editable: true,
+        // A mesma opção do corpo: o corretor não pode valer no texto da
+        // página e não valer dentro da caixa.
+        spellcheck: controller.options.spellcheck,
         pxPerPt: 96 / 72 * controller.zoom,
       ),
       // Os hints `lastRenderedPageBreak` descrevem o CORPO gravado pelo Word;

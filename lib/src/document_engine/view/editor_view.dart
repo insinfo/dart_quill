@@ -847,6 +847,23 @@ class OfficeEditorView {
     var range = readNativeSelection();
     if (range == null) return;
 
+    // Correção do corretor ortográfico NATIVO (`spellcheck=true`): o alvo é a
+    // palavra errada, que o browser aponta em `getTargetRanges` — a seleção
+    // nativa continua colapsada dentro dela. Usar a seleção aqui inseriria a
+    // sugestão NO MEIO da palavra em vez de substituí-la; sem o intervalo,
+    // aceitar uma sugestão não faria nada, que é a versão silenciosa do
+    // mesmo bug.
+    if (event.inputType == 'insertReplacementText') {
+      ({int from, int to})? targetRange;
+      for (final target in event.getTargetRanges()) {
+        if (target.collapsed) continue;
+        targetRange = _modelRangeFor(target);
+        break;
+      }
+      if (targetRange == null) return;
+      range = targetRange;
+    }
+
     // Para apagamentos colapsados, getTargetRanges e a fonte mais fiel: o
     // browser ja calculou o grafema, a palavra ou a linha visual atingida.
     // Eventos sinteticos e alguns browsers nao o fornecem; nesses casos os
@@ -882,7 +899,10 @@ class OfficeEditorView {
 
   static OfficeInputAction? _actionFor(String? inputType) =>
       switch (inputType) {
-        'insertText' => OfficeInputAction.insertText,
+        // `insertReplacementText` é a sugestão aceita no menu do corretor do
+        // browser. Ela é uma inserção comum — o que muda é o INTERVALO, que
+        // vem de `getTargetRanges` em `_handleBeforeInput`.
+        'insertText' || 'insertReplacementText' => OfficeInputAction.insertText,
         'insertParagraph' => OfficeInputAction.insertParagraph,
         'insertLineBreak' => OfficeInputAction.insertLineBreak,
         'deleteContentBackward' => OfficeInputAction.deleteBackward,

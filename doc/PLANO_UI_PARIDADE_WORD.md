@@ -47,7 +47,7 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Localizar/Substituir (Ctrl+F/Ctrl+H) | ✅ | `ui/find_replace.dart` (2026-08-09): painel no overlay, contador "N de M", Anterior/Próximo, opções de caixa e palavra inteira; Substituir Tudo em UMA transação. Sem realce visual das OUTRAS ocorrências (ver §2.8) |
 | Marcas de formatação ¶ (mostrar/ocultar) | 🟡 | `ui/formatting_marks.dart` + CSS `.dq-office-marks` (2026-08-09): pilcrow e seta de tabulação por pseudo-elemento. Ponto médio no espaço NÃO é viável por CSS (ver §2.8) |
 | Hyperlink (inserir/editar/abrir) | 🟡 | `ui/dialogs/link_dialog.dart` (2026-08-09): Ctrl+K insere/edita/remove a marca `link` com a aparência do estilo Hiperlink. Falta ABRIR o link (Ctrl+clique) |
-| Verificação ortográfica | ❌ | `spellcheck` nem é setado na projeção |
+| Verificação ortográfica | 🟡 | `OfficeWordEditorOptions.spellcheck` (2026-08-09) liga o corretor NATIVO na projeção (corpo, cabeçalho e caixa juntos). **Desligado por padrão** e a decisão é do hospedeiro: aceitar uma sugestão chega como `beforeinput/insertReplacementText`, que o WebKit entrega NÃO cancelável — e evento não cancelável é o browser escrevendo na projeção. Em Chromium/Gecko o caminho está fechado (`view/editor_view.dart` converte o evento em transação sobre o `getTargetRanges`), verificado em Chrome real (`test/browser/office_spellcheck_test.dart`). Corretor PRÓPRIO (dicionário, painel de revisão) continua fora |
 | Fonte de ícones com cobertura para as fases seguintes | ✅ | 116 ícones (era 35) gerados de `resources/onlyoffice_ribbon_icons` por `tool/build_icon_font.dart` (2026-08-09): bordas, disposição de texto, cabeçalho/rodapé, colunas, hifenização, numeração de linhas, marca-d'água, alinhamento de tabela e busca |
 
 ### 1.2 Ribbon — estrutura e reatividade
@@ -93,7 +93,7 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Disposição do texto para IMAGEM | ❌ (itens VISÍVEIS e desabilitados) | `wp:anchor` de imagem é lido como inline (`office/document/docx/reader.dart:641-643`); não há `offsetX/offsetY/wrapMode` no nó `image` |
 | Edição in-place da caixa de texto | ✅ | `ui/text_box_session.dart` (2026-08-09): duplo clique abre uma view sobre a caixa; o `w:txbxContent` é regerado na exportação quando a assinatura mudou (§2.10) |
 | Inserir imagem (aba Inserir → arquivo) | ✅ | `ui/image_insert.dart` (2026-08-09): tamanho natural lido do cabeçalho, limitado à área útil |
-| Inserir caixa de texto | ❌ | — |
+| Inserir caixa de texto | ✅ | `ui/text_box_insert.dart` (2026-08-09): a caixa nasce SEM `word`, e é essa ausência que faz a exportação GERAR o `wps:wsp` + `w:txbxContent` (`office/text_box_drawing.dart`) em vez de carimbar um XML velho — round-trip provado e aberto no Word real (shape `msoTextBox`, `wrapNone`, `Saved=True`) |
 | Girar objeto (handle de rotação) | ❌ | — |
 
 ### 1.5 Tabelas
@@ -175,10 +175,10 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Formas / Ícones / SmartArt / Gráfico | ❌ (fora do escopo mínimo, exceto formas básicas) |
 | Link (Ctrl+K) / Indicador / Referência cruzada | 🟡 (Link feito em 2026-08-09; indicador e referência cruzada não) |
 | Comentário | ❌ |
-| Cabeçalho / Rodapé / Número de Página (dropdowns) | ❌ |
-| Caixa de Texto / Partes Rápidas / WordArt / Letra Capitular | ❌ (mínimo: Caixa de Texto) |
+| Cabeçalho / Rodapé / Número de Página (dropdowns) | ✅ (2026-08-09: Editar/Remover caem na MESMA sessão do duplo clique; Nº de Página usa `insertPageField` — nenhum motor novo) |
+| Caixa de Texto / Partes Rápidas / WordArt / Letra Capitular | 🟡 (Caixa de Texto feita em 2026-08-09; as outras três não) |
 | Equação / Símbolo | 🟡 (Símbolo feito em 2026-08-09: galeria de 42 sinais; Equação não) |
-| Folha de Rosto / Página em Branco | 🟡 (Página em Branco feita; Folha de Rosto não) |
+| Folha de Rosto / Página em Branco | 🟡 (2026-08-09: duas capas TIPOGRÁFICAS em `ui/cover_page.dart`, paginadas e exportadas com corpo/quebra reais. As galerias com faixas coloridas do Word dependem de forma decorativa que o compositor não desenha e ficam de fora — o menu diz isso) |
 
 ---
 
@@ -460,9 +460,31 @@ ocorrências de `w:txbxContent` (o Word escreve a caixa duas vezes dentro de
 `mc:AlternateContent`; atualizar uma só faria o texto mudar conforme o
 leitor). O resto do XML da forma segue carimbado.
 
-**Pendente do F9:** inserir caixa de texto nova (é criação de estrutura
-DrawingML, não edição), e as opções de disposição do texto, que dependem do
-compositor honrar wrap além de `wrapTopAndBottom`.
+**Inserir caixa nova — concluído em 2026-08-09.** `ui/text_box_insert.dart`
+cria o nó e ABRE a sessão (o cursor do Word nasce dentro da caixa);
+`office/text_box_drawing.dart` gera o `mc:AlternateContent` na exportação.
+Três decisões que valem registrar:
+
+- a caixa nova nasce **sem `word`**, e é essa ausência que roteia a
+  exportação para o gerador. Nascer com um XML pronto faria a primeira alça
+  arrastada gravar uma largura no modelo e outra no arquivo, porque o
+  `wp:extent` carimbado não acompanha o resize;
+- é `mc:AlternateContent`, não `w:drawing` puro: o nosso próprio leitor só
+  reconhece caixa dentro dele (`docx/reader._parseTextBox`), e um `w:drawing`
+  solto voltaria como IMAGEM;
+- os namespaces (`mc`, `wp`, `a`, `wps`, `v`, `o`) são declarados NO elemento
+  gerado, porque o `w:document` de um documento novo declara só `w` e `r`
+  (`docx/reader.createEmpty`) — prefixo não declarado é o diálogo de reparo.
+
+Verificado contra o Word real (COM, §5): `caixa_nova.docx` e o corpus com uma
+caixa inserida abrem com `Document.Saved == True` (sem reparo), a forma é
+`msoTextBox` (type 17) com o texto certo e `WrapFormat.Type == wdWrapNone`.
+
+**Pendente do F9:** as opções de disposição do texto, que dependem do
+compositor honrar wrap além de `wrapTopAndBottom`; e o redimensionamento de
+uma caixa IMPORTADA, que continua sem chegar ao arquivo — `_textBoxRawXml`
+(`office/docx_codec.dart`) regenera só o `w:txbxContent`, então o `wp:extent`
+carimbado mantém o tamanho de origem.
 
 ### 2.8 F8 (estilos dinâmicos) concluída em 2026-08-09
 
