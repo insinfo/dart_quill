@@ -57,11 +57,11 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Abas Arquivo/Página Inicial/Inserir/Layout | ✅ | `ui/ribbon.dart:83-99` |
 | Aba contextual de Tabela (aparece/some com a seleção) | ✅ | `ribbon.dart:155-167` |
 | Duas abas contextuais de tabela ("Design da Tabela" + "Tabela Layout") | ✅ | `tabs/table_design_tab.dart` + `tabs/table_layout_tab.dart`, registradas em `ribbon.dart:tableTabKeys` (2026-08-09) |
-| Aba contextual "Cabeçalho e Rodapé" | ❌ | — |
+| Aba contextual "Cabeçalho e Rodapé" | ✅ | `tabs/header_footer_tab.dart` (2026-08-09): aparece com a sessão do F6, com Ir para Cabeçalho/Rodapé, Primeira Página Diferente, Pares/Ímpares e Nº de Página |
 | Aba contextual "Forma de Formato" (imagem/caixa selecionada) | ❌ | — |
 | Realce de estado: negrito/itálico/sub/sobre acesos conforme seleção | ✅ | `ribbon.dart:171-219` |
 | Fonte e tamanho refletem a seleção | ✅ | `ribbon_actions.effectiveInlineValue` (2026-08-09): varre os runs, VAZIO em seleção mista, e resolve marca → estilo do DOCX → padrão do compositor |
-| Galeria de estilos reflete o bloco corrente | 🟡 | `ribbon.dart:221-235` — só Normal/Título 1–3 fixos; não mostra os estilos DO DOCUMENTO (ex.: "Nível 01", "Nível 1-Se…" do ETP) |
+| Galeria de estilos reflete o bloco corrente | ✅ | `OfficeStyleCatalog` + `home_tab.buildStyleGallery` (2026-08-09): cartões vêm do `styles.xml` do documento, ordenados por `uiPriority`, com preview da cascata resolvida e realce por `currentStyleId` (§2.8) |
 | Combobox editável de fonte (27 faces, preview na própria fonte) e de tamanho (aceita 10,5 e vírgula decimal) | ✅ | `OfficeComboBox` em `ui/controller.dart` + `buildFontFamilyCombo`/`buildFontSizeCombo` (2026-08-09) |
 | Line spacing, sombreamento, bordas de parágrafo no grupo Parágrafo | ❌ | `tabs/home_tab.dart:158-181` só tem listas/recuo/alinhamento |
 | Dropdown de marcadores/numeração (galeria de bullets, multinível) | ❌ | botões liga/desliga apenas (a infraestrutura de menu já existe: `ui/menu.dart`) |
@@ -121,8 +121,8 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Linha tracejada + etiqueta "Cabeçalho"/"Rodapé" no modo de edição | ✅ | a etiqueta diz QUAL variante está aberta (primeira página / par) |
 | Corpo esmaecido durante a edição do cabeçalho | ✅ | tira o `contenteditable`, não só a opacidade — senão o caret voltaria ao texto pelo teclado |
 | Aba contextual "Cabeçalho e Rodapé" | ✅ | `ui/tabs/header_footer_tab.dart` (2026-08-09) |
-| Inserir nº de página / campo no cabeçalho | ❌ | o compositor RESOLVE PAGE/NUMPAGES (`layout_composer.dart:1886-1935`) mas não há caminho de CRIAÇÃO do par de field markers; um botão que escrevesse "1" fixo daria cabeçalho errado nas outras páginas |
-| Edições no cabeçalho exportadas no DOCX | ❌ | a EDIÇÃO funciona e o orquestrador mantém as variantes; falta o codec aceitá-las — `exportEditedFromDocx` só recebe o corpo e `header*.xml` fica byte a byte |
+| Inserir nº de página / campo no cabeçalho | ✅ | `ribbon_actions.insertPageField` (2026-08-09): cria a sequência begin/instrução/separate/end com o `officeXml` do OOXML, então o compositor resolve 1, 2, 3 por página e o Word reconhece o campo |
+| Edições no cabeçalho exportadas no DOCX | ✅ | `docx_codec._applyEditedRegions` (2026-08-09): reescreve só as variantes editadas preservando o invólucro `<w:hdr …>`; partes não tocadas seguem byte a byte |
 
 ### 1.7 Layout de página e seções
 
@@ -130,9 +130,9 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 |---|---|---|
 | Orientação retrato/paisagem | ✅ | dropdown com ✓ na vigente (2026-08-09) |
 | Tamanho do papel | 🟡 | dropdown com 8 papéis e as medidas em cm, preservando a orientação (2026-08-09); falta "Mais Tamanhos de Papel…" |
-| Margens | 🟡 | dropdown com 4 predefinições do Word e as 4 medidas em cm, ✓ na vigente; `headerDistance`/`footerDistance` agora PRESERVADOS (2026-08-09). Falta "Margens Personalizadas…"; `setPageSetup` ainda apaga as seções importadas (B3) |
+| Margens | 🟡 | dropdown com 4 predefinições do Word e as 4 medidas em cm, ✓ na vigente; `headerDistance`/`footerDistance` agora PRESERVADOS (2026-08-09). Falta "Margens Personalizadas…" |
 | Múltiplas seções com geometrias diferentes (importadas) | ✅ | `word_editor.dart:126`, composer usa `sections` |
-| Editar UMA seção (aba Layout por seção) | ❌ | qualquer mudança vira documento inteiro |
+| Editar UMA seção (aba Layout por seção) | 🟡 | `word_editor.setPageSetup`/`pageSetup` (2026-08-09, B3): leitura e escrita seguem a seção do cursor, e "Quebras › Próxima Página" cria seção. Na EXPORTAÇÃO só a última seção chega ao arquivo — `_editedFile` aplica o override ao `sectPr` do corpo (§2, B3) |
 | Colunas (1/2/3, esquerda, direita) | ❌ | dropdown existe em `tabs/layout_tab.dart`, todos os itens DESABILITADOS: nenhuma leitura de `w:cols` em `layout/`, e o compositor documenta o fluxo monocoluna (`layout_composer.dart:2914-2916`) |
 | Quebras: página/coluna/seção (próxima página, contínua, par, ímpar) | 🟡 | dropdown em `tabs/layout_tab.dart` (2026-08-09): Página, Coluna, Disposição do Texto e **Próxima Página** habilitadas e honradas (`layout_composer.dart:930, 1480, 2913`); Contínua sairia como quebra de página (o compositor sempre fecha a página na fronteira) e Par/Ímpar exigem página em branco de paridade — as três seguem desabilitadas com o motivo escrito |
 | Números de linha | ❌ | — |
