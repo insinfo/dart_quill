@@ -246,6 +246,189 @@ void toggleCase(OfficeWordController c) {
   c.dispatch(state.tr..insertText(next, selection.from, selection.to));
 }
 
+// -- grupo Parágrafo: entrelinha e espaçamento --------------------------------
+
+/// A escada do menu "Espaçamento entre Linhas e Parágrafos" do Word.
+///
+/// O valor é `w:spacing/@line` com regra `auto`, onde **240 = uma linha**:
+/// apesar do nome histórico `lineTwips`, nessa regra o número é um múltiplo
+/// em vinte avos de linha, não uma distância absoluta (é como o compositor o
+/// interpreta em `layout_composer.dart`, `_resolvedLineHeightTwips`).
+///
+/// Esta tabela é a fonte única: o dropdown da ribbon e o campo Entrelinha do
+/// diálogo Parágrafo… leem daqui. Duas listas para a mesma propriedade
+/// acabariam mostrando "Simples" num parágrafo que a ribbon deixou em 1,15.
+const List<({String label, int twips})> officeLineSpacingSteps = [
+  (label: '1,0', twips: 240),
+  (label: '1,15', twips: 276),
+  (label: '1,5', twips: 360),
+  (label: '2,0', twips: 480),
+  (label: '2,5', twips: 600),
+  (label: '3,0', twips: 720),
+];
+
+/// Quanto vale "Adicionar Espaço Antes/Depois do Parágrafo" no menu do Word:
+/// 12 pt, o mesmo valor que o comando aplica lá.
+const int officeParagraphSpaceStepTwips = 240;
+
+/// Entrelinha dos blocos da seleção.
+void setLineSpacing(OfficeWordController c, int twips) {
+  c.syncSelection();
+  // A regra viaja junto: sem `auto`, um parágrafo importado com
+  // `lineRule="exact"` interpretaria 360 como 18 pt fixos em vez de 1,5 linha.
+  c.applyBlockStyle({'lineTwips': twips, 'lineRule': 'auto'});
+}
+
+/// A entrelinha vigente (em `w:line`), ou null quando o bloco não opinou.
+int? currentLineTwips(OfficeWordController c) {
+  if (!c.viewReady) return null;
+  final value = c.currentBlockStyle()?['lineTwips'];
+  return value is num ? value.toInt() : null;
+}
+
+/// "Adicionar/Remover Espaço Antes (ou Depois) do Parágrafo".
+void setParagraphSpace(OfficeWordController c,
+    {required bool before, required int twips}) {
+  c.syncSelection();
+  c.applyBlockStyle({before ? 'spaceBeforeTwips' : 'spaceAfterTwips': twips});
+}
+
+/// O espaçamento vigente antes/depois, em twips (0 quando ausente).
+int currentParagraphSpace(OfficeWordController c, {required bool before}) {
+  if (!c.viewReady) return 0;
+  final value =
+      c.currentBlockStyle()?[before ? 'spaceBeforeTwips' : 'spaceAfterTwips'];
+  return value is num ? value.toInt() : 0;
+}
+
+// -- grupo Parágrafo: sombreamento e bordas -----------------------------------
+
+/// Uma aresta visível de parágrafo — meio ponto, preta, como o padrão do
+/// Word (`w:sz` é medido em oitavos de ponto).
+const Map<String, dynamic> officeVisibleParagraphBorder = {
+  'val': 'single',
+  'sizeEighths': 4,
+  'color': 'auto',
+};
+
+/// Ausência EXPLÍCITA de aresta, pela mesma razão de `officeNoCellBorder`:
+/// omitir a chave é "não opinei" e deixaria a aresta herdada de pé; `nil`
+/// é "não quero", que é o que "Sem Bordas" precisa dizer ao Word.
+const Map<String, dynamic> officeNoParagraphBorder = {'val': 'nil'};
+
+/// As combinações de borda de parágrafo oferecidas pela ribbon.
+enum OfficeParagraphBorders {
+  none,
+  box,
+  top,
+  bottom,
+  left,
+  right,
+  topAndBottom
+}
+
+/// Bordas nos parágrafos da seleção.
+///
+/// Grava em `attrs['word']['borders']` — o MESMO mapa que
+/// `LayoutComposer._blockDecorationOf` lê e que `docx_codec` devolve para o
+/// `w:pBdr`. Não existe um segundo dialeto: o que aparece na tela é o que sai
+/// no arquivo.
+void setParagraphBorders(OfficeWordController c, OfficeParagraphBorders which) {
+  const visible = officeVisibleParagraphBorder;
+  const hidden = officeNoParagraphBorder;
+  final sides = switch (which) {
+    OfficeParagraphBorders.none => {
+        for (final side in _paragraphBorderSides) side: hidden,
+      },
+    OfficeParagraphBorders.box => {
+        for (final side in _paragraphBorderSides) side: visible,
+      },
+    OfficeParagraphBorders.topAndBottom => {
+        'top': visible,
+        'bottom': visible,
+        'left': hidden,
+        'right': hidden,
+      },
+    OfficeParagraphBorders.top => {'top': visible},
+    OfficeParagraphBorders.bottom => {'bottom': visible},
+    OfficeParagraphBorders.left => {'left': visible},
+    OfficeParagraphBorders.right => {'right': visible},
+  };
+  _patchBlockWord(c, (word) {
+    final current = word['borders'];
+    return {
+      ...word,
+      // As arestas não mencionadas ficam intactas: pedir "borda superior" não
+      // apaga a inferior, como no Word.
+      'borders': {
+        if (current is Map) ...current.cast<String, dynamic>(),
+        ...sides,
+      },
+    };
+  });
+}
+
+const List<String> _paragraphBorderSides = ['top', 'bottom', 'left', 'right'];
+
+/// Sombreamento dos parágrafos da seleção. [color] em `#rrggbb`; null limpa.
+///
+/// O OOXML quer o hexa SEM `#` (`w:fill="D9D9D9"`), e é essa a forma gravada;
+/// o compositor normaliza de volta para CSS ao compor.
+void setParagraphShading(OfficeWordController c, String? color) {
+  final fill = color == null
+      ? null
+      : (color.startsWith('#') ? color.substring(1) : color).toUpperCase();
+  _patchBlockWord(c, (word) {
+    final next = {...word};
+    if (fill == null) {
+      next.remove('shading');
+    } else {
+      next['shading'] = {'val': 'clear', 'color': 'auto', 'fill': fill};
+    }
+    return next;
+  });
+}
+
+/// O sombreamento vigente do bloco do cursor, em `#rrggbb`, ou null.
+String? currentParagraphShading(OfficeWordController c) {
+  if (!c.viewReady) return null;
+  final word = c.activeView.state.selection.fromRes.parent.attrs['word'];
+  if (word is! Map) return null;
+  final shading = word['shading'];
+  if (shading is! Map) return null;
+  final fill = shading['fill'];
+  if (fill is! String || fill.isEmpty || fill.toLowerCase() == 'auto') {
+    return null;
+  }
+  return fill.startsWith('#') ? fill : '#$fill';
+}
+
+/// Reescreve `attrs['word']` dos blocos da seleção numa transação só.
+///
+/// Existe aqui, e não como método do controller, porque `applyBlockStyle`
+/// governa o mapa de APRESENTAÇÃO (`attrs['style']`) e este governa o mapa
+/// OOXML — misturar os dois num único ponto de escrita faria uma paleta de
+/// cor apagar um `w:pBdr` importado sem querer.
+void _patchBlockWord(OfficeWordController c,
+    Map<String, dynamic> Function(Map<String, dynamic> word) patch) {
+  c.syncSelection();
+  final state = c.activeView.state;
+  final tr = state.tr;
+  var changed = false;
+  state.doc.nodesBetween(state.selection.from, state.selection.to,
+      (node, pos, parent, index) {
+    if (!node.isTextblock) return true;
+    final raw = node.attrs['word'];
+    final word = raw is Map
+        ? Map<String, dynamic>.from(raw.cast<String, dynamic>())
+        : <String, dynamic>{};
+    tr.setNodeMarkup(pos, null, {...node.attrs, 'word': patch(word)});
+    changed = true;
+    return false;
+  });
+  if (changed) c.dispatch(tr);
+}
+
 /// Aumentar/Diminuir Recuo (o passo de 1,27 cm do Word).
 void indentBy(OfficeWordController c, int deltaTwips) {
   c.syncSelection();
@@ -434,7 +617,10 @@ void toggleList(OfficeWordController c, String kind) {
       ? cmd.setBlockType(c.schema.nodes['paragraph']!, (PMNode node) {
           return {
             'word': _wordAttrs(node, clearNumbering: true),
-            'style': _styleWithoutListMarker(node),
+            // Desligar a lista leva junto o formato escolhido na galeria:
+            // deixá-lo no parágrafo faria o próximo clique no botão ressuscitar
+            // um marcador que o usuário não pediu de novo.
+            'style': _styleWithoutListFormat(node),
           };
         })
       : cmd.setBlockType(c.schema.nodes['listItem']!, (PMNode node) {
@@ -444,6 +630,113 @@ void toggleList(OfficeWordController c, String kind) {
           };
         });
   command(c.activeView.state, c.dispatch);
+}
+
+/// Aplica um formato das galerias de Marcadores/Numeração/Vários Níveis.
+///
+/// [lvlText] e [numFmt] são o vocabulário do `w:lvl` do OOXML — um valor por
+/// esquema, ou uma LISTA com um valor por nível (a galeria de vários níveis).
+/// São exatamente as chaves que `LayoutComposer._listMarkerOf` desenha e que
+/// `docx_codec._numberingForList` grava no `numbering.xml` gerado; escolher
+/// "▪" ou "I." muda a tela e o arquivo pelo mesmo dado.
+///
+/// O `marker` congelado da IMPORTAÇÃO é removido de propósito: ele é o rótulo
+/// que o `numbering.xml` de origem produzia e ganharia do formato novo,
+/// deixando o usuário clicando numa galeria que não muda nada.
+void applyListFormat(
+  OfficeWordController c, {
+  required String kind,
+  required Object lvlText,
+  required Object numFmt,
+}) {
+  c.syncSelection();
+  final command = cmd.setBlockType(c.schema.nodes['listItem']!, (PMNode node) {
+    final raw = node.attrs['style'];
+    final style = <String, dynamic>{
+      if (raw is Map) ...raw.cast<String, dynamic>(),
+      'lvlText': lvlText,
+      'numFmt': numFmt,
+    }..remove('marker');
+    return {
+      'kind': kind,
+      // Um parágrafo comum vira item de nível 0; um item que já era lista
+      // conserva o nível dele — trocar a galeria não pode desmontar o recuo.
+      'indent': node.type.name == 'listItem' ? node.attrs['indent'] : null,
+      'style': style,
+    };
+  });
+  command(c.activeView.state, c.dispatch);
+}
+
+/// "Nenhum" das galerias: o item volta a ser parágrafo.
+void removeList(OfficeWordController c) {
+  c.syncSelection();
+  final command = cmd.setBlockType(c.schema.nodes['paragraph']!, (PMNode node) {
+    return {
+      'word': _wordAttrs(node, clearNumbering: true),
+      'style': _styleWithoutListFormat(node),
+    };
+  });
+  command(c.activeView.state, c.dispatch);
+}
+
+/// "Aumentar/Diminuir Nível da Lista".
+///
+/// Muda só `attrs['indent']` — o nível OOXML (`w:ilvl`). O recuo visual sai
+/// dele (`layout_composer._heuristicStyleOf`, caso `listItem`) e, num esquema
+/// de vários níveis, o MARCADOR também: as chaves por nível são resolvidas na
+/// composição, então o rótulo acompanha sem a ação reescrever nada.
+///
+/// Devolve false quando não há item de lista na seleção — o chamador
+/// desabilita o comando em vez de oferecer um clique inerte.
+bool changeListLevel(OfficeWordController c, int delta) {
+  c.syncSelection();
+  final state = c.activeView.state;
+  final tr = state.tr;
+  var changed = false;
+  state.doc.nodesBetween(state.selection.from, state.selection.to,
+      (node, pos, parent, index) {
+    if (!node.isTextblock) return true;
+    if (node.type.name != 'listItem') return false;
+    final raw = node.attrs['indent'];
+    final level = raw is num ? raw.toInt() : int.tryParse('$raw') ?? 0;
+    // O Word para em 0 e em 8 (nove níveis); passar disso geraria um `w:ilvl`
+    // que o próprio Word recusa.
+    final next = (level + delta).clamp(0, 8);
+    if (next == level) return false;
+    tr.setNodeMarkup(pos, null, {...node.attrs, 'indent': next});
+    changed = true;
+    return false;
+  });
+  if (changed) c.dispatch(tr);
+  return changed;
+}
+
+/// A seleção está sobre um item de lista? (Os comandos de nível e o ✓ das
+/// galerias dependem disto.)
+bool selectionIsList(OfficeWordController c) {
+  if (!c.viewReady) return false;
+  return c.activeView.state.selection.fromRes.parent.type.name == 'listItem';
+}
+
+/// O `lvlText` gravado no item do cursor, para marcar o ✓ na galeria.
+///
+/// Devolve o valor CRU (String ou List) — comparar com o esquema da galeria é
+/// responsabilidade de quem monta o menu, que é quem conhece os esquemas.
+Object? currentListLvlText(OfficeWordController c) =>
+    _currentListStyleKey(c, 'lvlText');
+
+/// O `numFmt` gravado no item do cursor. Separa "1." de "I.", que têm o
+/// mesmo `lvlText` e só divergem no formato do contador.
+Object? currentListNumFmt(OfficeWordController c) =>
+    _currentListStyleKey(c, 'numFmt');
+
+Object? _currentListStyleKey(OfficeWordController c, String key) {
+  if (!c.viewReady) return null;
+  final block = c.activeView.state.selection.fromRes.parent;
+  if (block.type.name != 'listItem') return null;
+  final style = block.attrs['style'];
+  return style is Map ? style[key] : null;
 }
 
 void applyNamedStyle(OfficeWordController c, String name) {
@@ -465,7 +758,7 @@ void applyNamedStyle(OfficeWordController c, String name) {
         styleId: styleId,
         clearNumbering: node.type.name == 'listItem',
       ),
-      if (node.type.name == 'listItem') 'style': _styleWithoutListMarker(node),
+      if (node.type.name == 'listItem') 'style': _styleWithoutListFormat(node),
     };
   });
   command(c.activeView.state, c.dispatch);
@@ -496,6 +789,18 @@ dynamic _styleWithoutListMarker(PMNode node) {
   if (raw is! Map) return raw;
   final style = Map<String, dynamic>.from(raw.cast<String, dynamic>());
   style.remove('marker');
+  return style.isEmpty ? null : style;
+}
+
+/// O mesmo, mais o formato de galeria (`lvlText`/`numFmt`) — para quando o
+/// bloco deixa de ser lista.
+dynamic _styleWithoutListFormat(PMNode node) {
+  final raw = node.attrs['style'];
+  if (raw is! Map) return raw;
+  final style = Map<String, dynamic>.from(raw.cast<String, dynamic>())
+    ..remove('marker')
+    ..remove('lvlText')
+    ..remove('numFmt');
   return style.isEmpty ? null : style;
 }
 

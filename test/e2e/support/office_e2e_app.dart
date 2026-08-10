@@ -1274,7 +1274,7 @@ final class OfficeE2eApp {
     if (!placed) throw StateError('No separate body block for list scenario');
     await page.keyboard.type(' $token', delay: const Duration(milliseconds: 5));
     await _waitForRenderedToken(token);
-    await _clickHomeControl('Lista numerada');
+    await _clickHomeControl('Numeração');
     await page.waitForFunction(
       '''() => [...document.querySelectorAll('.dq-office-run')].some(run => {
         if (![...run.childNodes].some(node =>

@@ -399,6 +399,46 @@ class PageGraphPdfRenderer {
     }
   }
 
+  /// Sombreamento e bordas do PARÁGRAFO, na mesma geometria do DOM.
+  ///
+  /// A caixa cobre só as LINHAS ([top] já vem depois do `spaceBefore`), e as
+  /// arestas horizontais somem nas fatias interiores de um parágrafo partido
+  /// entre páginas — é a mesma regra do `_blockDecoration` do renderer DOM,
+  /// porque o PDF é projeção do MESMO grafo, não uma segunda composição.
+  void _renderBlockDecoration(
+    PdfContentBuilder builder,
+    BlockFragment fragment, {
+    required double x,
+    required double top,
+    required double available,
+  }) {
+    final borders = fragment.borders;
+    final background = fragment.backgroundColor;
+    if (background == null && borders == null) return;
+    final heightTwips = fragment.heightTwips -
+        fragment.spaceBeforeTwips -
+        fragment.spaceAfterTwips;
+    if (heightTwips <= 0) return;
+    final height = _twipsToPt(heightTwips);
+    final width = available - _twipsToPt(fragment.rightIndentTwips);
+    if (width <= 0) return;
+
+    if (_shouldPaintPdfBackground(background)) {
+      builder.fillRect(x, top, width, height, background!);
+    }
+    if (borders == null) return;
+    if (!fragment.continuesFromPreviousPage) {
+      _strokeBorder(builder, borders.top, x, top, x + width, top);
+    }
+    if (!fragment.continuesOnNextPage) {
+      _strokeBorder(
+          builder, borders.bottom, x, top + height, x + width, top + height);
+    }
+    _strokeBorder(builder, borders.left, x, top, x, top + height);
+    _strokeBorder(
+        builder, borders.right, x + width, top, x + width, top + height);
+  }
+
   void _renderCellBorders(PdfContentBuilder builder, TableCellBorders borders,
       double x, double y, double width, double height) {
     final sides = [borders.top, borders.right, borders.bottom, borders.left];
@@ -453,6 +493,8 @@ class PageGraphPdfRenderer {
     required List<_PdfFloatingTextBoxPaint> floatingTextBoxes,
   }) {
     var y = top + _twipsToPt(fragment.spaceBeforeTwips);
+    _renderBlockDecoration(builder, fragment,
+        x: x, top: y, available: available);
     if (withMarker && fragment.marker != null && fragment.lines.isEmpty) {
       final style = _markerStyle(fragment, null);
       final lineHeightTwips = fragment.heightTwips -

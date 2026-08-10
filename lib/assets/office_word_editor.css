@@ -1299,6 +1299,36 @@
   vertical-align: middle;
 }
 
+/* Botão dividido (Marcadores, Numeração): a ação padrão no corpo e a galeria
+   na setinha ao lado, colados como no Word. */
+.dq-office-splitbtn {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.dq-office-splitbtn > .dq-office-btn {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.dq-office-splitbtn-arrow .dq-office-btn {
+  min-width: 0;
+  padding-left: 2px;
+  padding-right: 4px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.dq-office-splitbtn-arrow .dq-office-btn::after {
+  margin-left: 0;
+}
+
+/* Camada de sombreamento/bordas do parágrafo: pura pintura, atrás do texto e
+   fora de qualquer interação — o caret nunca pousa nela. */
+.dq-office-block-decoration {
+  user-select: none;
+}
+
 /* Botões grandes de Configurar Página: ícone em cima, rótulo embaixo. */
 .dq-office-menuwrap-big .dq-office-btn {
   flex-direction: column;

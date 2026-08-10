@@ -457,7 +457,7 @@ void main() {
     void click(DomElement b) => (b as FakeDomElement)
         .dispatchEvent('click', FakeDomMouseEvent(type: 'click', target: b));
 
-    click(byTitle('Lista com marcadores'));
+    click(byTitle('Marcadores'));
     expect(editor.state.doc.child(0).type.name, 'listItem');
     expect(editor.state.doc.child(0).attrs['kind'], 'bullet');
     // O marcador vem do layout, como projeção.
@@ -469,11 +469,11 @@ void main() {
         isNotNull);
 
     // Mesmo tipo de novo: volta a parágrafo.
-    click(byTitle('Lista com marcadores'));
+    click(byTitle('Marcadores'));
     expect(editor.state.doc.child(0).type.name, 'paragraph');
 
     // Numerada: troca o tipo direto.
-    click(byTitle('Lista numerada'));
+    click(byTitle('Numeração'));
     expect(editor.state.doc.child(0).attrs['kind'], 'ordered');
 
     // A lista da ribbon precisa continuar sendo lista no arquivo Word, não

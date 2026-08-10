@@ -381,6 +381,8 @@ class BlockFragment extends PageFragment {
     this.widowControl = true,
     this.spaceBeforeTwips = 0,
     this.spaceAfterTwips = 0,
+    this.backgroundColor,
+    this.borders,
     super.continuesFromPreviousPage,
     super.continuesOnNextPage,
   });
@@ -402,6 +404,17 @@ class BlockFragment extends PageFragment {
   final int spaceBeforeTwips;
   final int spaceAfterTwips;
 
+  /// Sombreamento do parágrafo (`w:pBdr`/`w:shd`), já resolvido para uma cor
+  /// CSS. Null quando o parágrafo não tem sombreamento próprio — `auto` do
+  /// OOXML chega aqui como null, não como branco: pintar branco apagaria o
+  /// sombreamento da célula ou da página por baixo.
+  final String? backgroundColor;
+
+  /// Bordas do parágrafo. Null (e não um [BlockBorders] vazio) quando o
+  /// parágrafo não opinou: é o que distingue "sem `w:pBdr`" de "quatro
+  /// arestas explicitamente `nil`".
+  final BlockBorders? borders;
+
   @override
   BlockFragment shifted(int docPosDelta) => BlockFragment(
         nodeId: nodeId,
@@ -419,6 +432,8 @@ class BlockFragment extends PageFragment {
         widowControl: widowControl,
         spaceBeforeTwips: spaceBeforeTwips,
         spaceAfterTwips: spaceAfterTwips,
+        backgroundColor: backgroundColor,
+        borders: borders,
         continuesFromPreviousPage: continuesFromPreviousPage,
         continuesOnNextPage: continuesOnNextPage,
       );
@@ -469,7 +484,24 @@ class TableCellBorders {
   final TableBorder? right;
   final TableBorder? bottom;
   final TableBorder? left;
+
+  /// Alguma aresta desenha alguma coisa? Sem isto, um `w:pBdr` inteiro com
+  /// `val="nil"` (o que "Sem Bordas" grava) faria os renderers criarem uma
+  /// moldura invisível em todo parágrafo do documento.
+  bool get hasVisibleSide =>
+      (top?.isVisible ?? false) ||
+      (right?.isVisible ?? false) ||
+      (bottom?.isVisible ?? false) ||
+      (left?.isVisible ?? false);
 }
+
+/// Bordas de um BLOCO (`w:pBdr`).
+///
+/// É o mesmo dado das bordas de célula — quatro arestas já resolvidas — e os
+/// dois renderers já sabem projetá-lo. Um tipo novo idêntico só produziria
+/// duas funções de desenho para a mesma figura, que é como as bordas de
+/// tabela e de parágrafo divergem em silêncio.
+typedef BlockBorders = TableCellBorders;
 
 /// Célula composta: blocos internos com posição relativa ao topo da célula.
 class TableCellBox {

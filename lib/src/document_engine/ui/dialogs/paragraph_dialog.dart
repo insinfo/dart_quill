@@ -10,17 +10,31 @@
 library;
 
 import '../controller.dart';
+import '../ribbon_actions.dart' as actions;
 import 'dialog.dart';
 
 /// Nomes da entrelinha do Word e o `lineRule`/`lineTwips` de cada um.
 ///
-/// `auto` é múltiplo da linha (240 = simples, no OOXML); `exact` e
-/// `atLeast` são medidas absolutas em twips.
-const Map<String, ({String rule, int twips})> officeLineSpacings = {
-  'Simples': (rule: 'auto', twips: 240),
-  '1,5 linha': (rule: 'auto', twips: 360),
-  'Duplo': (rule: 'auto', twips: 480),
+/// A escada de VALORES vem de `actions.officeLineSpacingSteps`, a mesma que
+/// alimenta o dropdown "Espaçamento entre Linhas e Parágrafos" da ribbon —
+/// duas tabelas para a mesma propriedade acabariam divergindo, e o diálogo
+/// mostraria "Simples" num parágrafo que a ribbon deixou em 1,15. Aqui só os
+/// RÓTULOS mudam, porque o diálogo do Word nomeia os três clássicos.
+///
+/// A regra é sempre `auto`: nela 240 é UM múltiplo de linha, não uma
+/// distância. `exact`/`atLeast` são outro controle (o campo "Em", que ainda
+/// não existe) e não podem compartilhar a mesma caixa de seleção.
+final Map<String, ({String rule, int twips})> officeLineSpacings = {
+  for (final step in actions.officeLineSpacingSteps)
+    _lineSpacingLabel(step.label): (rule: 'auto', twips: step.twips),
 };
+
+String _lineSpacingLabel(String step) => switch (step) {
+      '1,0' => 'Simples',
+      '1,5' => '1,5 linha',
+      '2,0' => 'Duplo',
+      _ => step,
+    };
 
 /// Abre o diálogo para os blocos da seleção.
 void openParagraphDialog(OfficeWordController controller) {

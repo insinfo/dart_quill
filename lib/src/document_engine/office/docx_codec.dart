@@ -668,8 +668,9 @@ class OfficeDocxCodec {
   bool _validatedRenderedPageBreaks = false;
 
   /// Numbering instances created while exporting UI-authored lists. One
-  /// instance per kind keeps adjacent items in the same sequence and avoids
-  /// adding duplicate definitions for every paragraph.
+  /// instance per FORMAT (`numFmt|lvlText`) keeps adjacent items of the same
+  /// gallery choice in one sequence, while "•" and "▪" — or "1." and "I." —
+  /// still get separate definitions instead of overwriting each other.
   final Map<String, int> _generatedListNumIds = {};
 
   /// Quebras de seção encontradas nos parágrafos, na ordem do documento.
@@ -2123,9 +2124,19 @@ class OfficeDocxCodec {
         _withPreservedParagraphProperties(properties, base?.properties);
     if (node.type.name == 'listItem') {
       final kind = node.attrs['kind'] == 'ordered' ? 'ordered' : 'bullet';
+      final style = _asMap(node.attrs['style']);
       properties = _withParagraphNumbering(
         properties,
-        _numberingForList(kind, properties?.numPr),
+        _numberingForList(
+          kind,
+          properties?.numPr,
+          // O formato escolhido na galeria da ribbon viaja no MESMO
+          // vocabulário que o `w:lvl` usa; sem passá-lo adiante, um "I." ou
+          // um "▪" viraria o "1." genérico ao salvar.
+          numFmt: style?['numFmt'],
+          lvlText: style?['lvlText'],
+          ilvl: _intValue(node.attrs['indent']) ?? 0,
+        ),
       );
     }
     if (properties?.styleId == null &&
@@ -2195,25 +2206,79 @@ class OfficeDocxCodec {
     return _paragraphPropertiesFromJson(json)!;
   }
 
+  /// O nível [level] de uma chave de lista que pode descrever um valor único
+  /// ou um por NÍVEL — a mesma regra de `LayoutComposer._atListLevel`, para
+  /// que arquivo e tela concordem sobre qual marcador pertence a qual nível.
+  static String? _listSchemeAt(Object? raw, int level) {
+    if (raw is String) return raw;
+    if (raw is! List || raw.isEmpty) return null;
+    final index =
+        level < 0 ? 0 : (level >= raw.length ? raw.length - 1 : level);
+    final value = raw[index];
+    return value is String ? value : null;
+  }
+
+  static int _listSchemeLength(Object? raw) => raw is List ? raw.length : 1;
+
   /// Keeps a valid imported numbering reference when it already represents
-  /// the requested kind. UI-authored or kind-switched lists receive a small
-  /// generated definition that is added to the existing numbering part
+  /// the requested format. UI-authored or format-switched lists receive a
+  /// small generated definition that is added to the existing numbering part
   /// without rewriting its unknown XML.
-  WpNumPr _numberingForList(String kind, WpNumPr? current) {
+  ///
+  /// [numFmt] e [lvlText] aceitam String (um nível) ou List (um por nível,
+  /// o caso da galeria "Lista de Vários Níveis"). [ilvl] é o nível DESTE
+  /// parágrafo: sem ele, um item recuado sairia no nível zero e o Word
+  /// desenharia a lista inteira achatada.
+  WpNumPr _numberingForList(
+    String kind,
+    WpNumPr? current, {
+    Object? numFmt,
+    Object? lvlText,
+    int ilvl = 0,
+  }) {
     final file = _activeFile;
     if (file == null) {
       throw StateError('lista DOCX exportada sem pacote ativo');
     }
+    final bullet = kind == 'bullet';
+    final levelCount = [
+      _listSchemeLength(numFmt),
+      _listSchemeLength(lvlText),
+      ilvl + 1,
+    ].reduce((a, b) => a > b ? a : b);
+    final scheme = [
+      for (var level = 0; level < levelCount; level++)
+        (
+          numFmt:
+              _listSchemeAt(numFmt, level) ?? (bullet ? 'bullet' : 'decimal'),
+          lvlText: _listSchemeAt(lvlText, level) ?? (bullet ? '•' : '%1.'),
+        ),
+    ];
+    final wanted = scheme[ilvl];
+
     final currentId = current?.numId;
     if (currentId != null && currentId != 0) {
       final level = file.numbering.levelOf(currentId, current!.ilvl);
-      if (level != null && (level.numFmt == 'bullet') == (kind == 'bullet')) {
+      // A definição importada só é preservada quando ela JÁ desenha o mesmo
+      // rótulo. Comparar só bullet/ordered devolvia "1." para um parágrafo
+      // que a galeria acabou de mudar para "I." — o modelo dizia uma coisa e
+      // o arquivo saía com outra.
+      if (level != null &&
+          level.numFmt == wanted.numFmt &&
+          level.lvlText == wanted.lvlText) {
         return current;
       }
     }
 
-    final cached = _generatedListNumIds[kind];
-    if (cached != null) return WpNumPr(numId: cached);
+    // A chave é o ESQUEMA inteiro: um documento com marcadores "•" e "▪"
+    // precisa de duas definições, não de uma que a segunda escolha
+    // sobrescreve. Dois itens do mesmo esquema em níveis diferentes, ao
+    // contrário, têm de compartilhar o `numId` — senão cada nível vira uma
+    // sequência própria.
+    final cacheKey =
+        scheme.map((level) => '${level.numFmt}|${level.lvlText}').join(' ');
+    final cached = _generatedListNumIds[cacheKey];
+    if (cached != null) return WpNumPr(numId: cached, ilvl: ilvl);
 
     var abstractNumId = 0;
     for (final id in file.numbering.abstractNums.keys) {
@@ -2224,19 +2289,24 @@ class OfficeDocxCodec {
       if (id >= numId) numId = id + 1;
     }
 
-    final bullet = kind == 'bullet';
-    final level = WpNumberingLevel(
-      ilvl: 0,
-      numFmt: bullet ? 'bullet' : 'decimal',
-      lvlText: bullet ? '•' : '%1.',
-      lvlJc: 'left',
-      indent: const WpIndent(leftTwips: 720, hangingTwips: 360),
-      runProperties: bullet ? const WpRunProperties(fontAscii: 'Arial') : null,
-    );
     file.numbering.abstractNums[abstractNumId] = WpAbstractNum(
       id: abstractNumId,
-      multiLevelType: 'singleLevel',
-      levels: {0: level},
+      multiLevelType: levelCount > 1 ? 'hybridMultilevel' : 'singleLevel',
+      levels: {
+        for (var level = 0; level < levelCount; level++)
+          level: WpNumberingLevel(
+            ilvl: level,
+            numFmt: scheme[level].numFmt,
+            lvlText: scheme[level].lvlText,
+            lvlJc: 'left',
+            indent: WpIndent(
+                leftTwips: _listLevelIndentTwips * (level + 1),
+                hangingTwips: 360),
+            runProperties: scheme[level].numFmt == 'bullet'
+                ? const WpRunProperties(fontAscii: 'Arial')
+                : null,
+          ),
+      },
     );
     file.numbering.nums[numId] = WpNum(
       numId: numId,
@@ -2246,37 +2316,52 @@ class OfficeDocxCodec {
       file,
       abstractNumId: abstractNumId,
       numId: numId,
-      bullet: bullet,
+      levels: scheme,
     );
-    _generatedListNumIds[kind] = numId;
-    return WpNumPr(numId: numId);
+    _generatedListNumIds[cacheKey] = numId;
+    return WpNumPr(numId: numId, ilvl: ilvl);
   }
+
+  /// A escada de recuo de lista gravada no `w:lvl` (o padrão do Word).
+  static const int _listLevelIndentTwips = 720;
 
   void _appendNumberingDefinition(
     DocxFile file, {
     required int abstractNumId,
     required int numId,
-    required bool bullet,
+    required List<({String numFmt, String lvlText})> levels,
   }) {
     const partName = 'word/numbering.xml';
     const contentType =
         'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml';
     final package = file.package;
-    final fragment = '<w:abstractNum w:abstractNumId="$abstractNumId">'
-        '<w:multiLevelType w:val="singleLevel"/>'
-        '<w:lvl w:ilvl="0">'
-        '<w:start w:val="1"/>'
-        '<w:numFmt w:val="${bullet ? 'bullet' : 'decimal'}"/>'
-        '<w:lvlText w:val="${bullet ? '•' : '%1.'}"/>'
-        '<w:lvlJc w:val="left"/>'
-        '<w:pPr><w:tabs><w:tab w:val="num" w:pos="720"/>'
-        '</w:tabs><w:ind w:left="720" w:hanging="360"/></w:pPr>'
-        '${bullet ? '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/></w:rPr>' : ''}'
-        '</w:lvl>'
-        '</w:abstractNum>'
-        '<w:num w:numId="$numId">'
-        '<w:abstractNumId w:val="$abstractNumId"/>'
-        '</w:num>';
+    final buffer =
+        StringBuffer('<w:abstractNum w:abstractNumId="$abstractNumId">'
+            '<w:multiLevelType w:val="'
+            '${levels.length > 1 ? 'hybridMultilevel' : 'singleLevel'}"/>');
+    for (var level = 0; level < levels.length; level++) {
+      final indent = _listLevelIndentTwips * (level + 1);
+      buffer
+        ..write('<w:lvl w:ilvl="$level">')
+        ..write('<w:start w:val="1"/>')
+        ..write('<w:numFmt w:val="'
+            '${XmlEscape.attribute(levels[level].numFmt)}"/>')
+        ..write('<w:lvlText w:val="'
+            '${XmlEscape.attribute(levels[level].lvlText)}"/>')
+        ..write('<w:lvlJc w:val="left"/>')
+        ..write('<w:pPr><w:tabs><w:tab w:val="num" w:pos="$indent"/>'
+            '</w:tabs><w:ind w:left="$indent" w:hanging="360"/></w:pPr>')
+        ..write(levels[level].numFmt == 'bullet'
+            ? '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/></w:rPr>'
+            : '')
+        ..write('</w:lvl>');
+    }
+    buffer
+      ..write('</w:abstractNum>')
+      ..write('<w:num w:numId="$numId">')
+      ..write('<w:abstractNumId w:val="$abstractNumId"/>')
+      ..write('</w:num>');
+    final fragment = buffer.toString();
 
     final source = package.partString(partName);
     if (source == null) {

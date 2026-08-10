@@ -24,6 +24,7 @@ import '../../office/document/fonts/font_metrics.dart';
 import '../../office/document/fonts/font_registry.dart';
 import '../model/index.dart';
 import '../office/ids.dart';
+import '../office/numbering.dart';
 import 'fonts.dart';
 import 'page_graph.dart';
 
@@ -1207,6 +1208,9 @@ class LayoutComposer {
         }
       }
       final blockFlow = _paragraphFlow(blockStyle);
+      // Uma vez por BLOCO, não por fragmento: um parágrafo que atravessa
+      // páginas produz vários fragmentos com a mesma moldura.
+      final blockDecoration = _blockDecorationOf(block);
       final importedPageBreakOnly = _isImportedPageBreakOnlyParagraph(block);
       List<LineBox> breakBlockLines() => importedPageBreakOnly
           ? <LineBox>[]
@@ -1478,6 +1482,8 @@ class LayoutComposer {
           widowControl: blockStyle.widowControl,
           spaceBeforeTwips: spaceBefore,
           spaceAfterTwips: spaceAfter,
+          backgroundColor: blockDecoration.background,
+          borders: blockDecoration.borders,
           continuesFromPreviousPage: !firstLineOfBlock,
           continuesOnNextPage: i + take < lines.length,
         ));
@@ -1589,6 +1595,8 @@ class LayoutComposer {
           widowControl: blockStyle.widowControl,
           spaceBeforeTwips: before,
           spaceAfterTwips: after,
+          backgroundColor: blockDecoration.background,
+          borders: blockDecoration.borders,
         ));
         // The zero-height paragraph is only the imported page-break carrier;
         // the spacing rule belongs to the first visible paragraph after it.
@@ -1762,6 +1770,7 @@ class LayoutComposer {
       }
       final style = _blockStyleOf(block, 0);
       final flow = _paragraphFlow(style);
+      final decoration = _blockDecorationOf(block);
       final before =
           _collapsedSpaceBefore(style.spaceBeforeTwips, previousAfterTwips);
       final lines = _breakLines(
@@ -1794,6 +1803,8 @@ class LayoutComposer {
         widowControl: style.widowControl,
         spaceBeforeTwips: before,
         spaceAfterTwips: style.spaceAfterTwips,
+        backgroundColor: decoration.background,
+        borders: decoration.borders,
       ));
       y += height;
       previousAfterTwips = style.spaceAfterTwips;
@@ -1857,6 +1868,7 @@ class LayoutComposer {
 
       final style = _blockStyleOf(block, 0);
       final flow = _paragraphFlow(style);
+      final decoration = _blockDecorationOf(block);
       final before =
           _collapsedSpaceBefore(style.spaceBeforeTwips, previousAfterTwips);
       final rawLineWidth =
@@ -1894,6 +1906,8 @@ class LayoutComposer {
         widowControl: style.widowControl,
         spaceBeforeTwips: before,
         spaceAfterTwips: style.spaceAfterTwips,
+        backgroundColor: decoration.background,
+        borders: decoration.borders,
       ));
       y += height;
       previousAfterTwips = style.spaceAfterTwips;
@@ -2418,6 +2432,52 @@ class LayoutComposer {
     );
   }
 
+  /// O rótulo de um `listItem` que a UI criou (as galerias de Marcadores,
+  /// Numeração e Lista de Vários Níveis da Página Inicial).
+  ///
+  /// O vocabulário é o do OOXML — `numFmt` e `lvlText` em `attrs['style']` —
+  /// e não um segundo dialeto: é literalmente o que a exportação grava no
+  /// `w:lvl` gerado, então o que se vê aqui é o que o Word desenha depois de
+  /// salvar. Um item IMPORTADO não passa por aqui: ele já traz o rótulo
+  /// resolvido de `numbering.xml` em `style['marker']`, e esse ganha
+  /// (`_resolvedStyleOf`).
+  ///
+  /// Numa lista de vários níveis as duas chaves são LISTAS, uma entrada por
+  /// nível — é o que faz Tab/Aumentar Recuo trocar o marcador sozinho, sem
+  /// que a ação precise reescrever o rótulo a cada mudança de nível.
+  ///
+  /// Sem `lvlText` o rótulo cai no padrão histórico (`1. ` / `• `), que é o
+  /// que documentos antigos do editor e Deltas do Quill carregam.
+  String _listMarkerOf(PMNode block, Object? kind, int level, int listOrdinal) {
+    final style = block.attrs['style'];
+    final raw = style is Map ? style : const {};
+    final ordered = kind == 'ordered';
+    final template = _atListLevel(raw['lvlText'], level);
+    if (template == null) return ordered ? '$listOrdinal. ' : '• ';
+    if (!ordered) return '$template ';
+    final format = _atListLevel(raw['numFmt'], level) ?? 'decimal';
+    // `%1` é o contador DESTE nível. Um `%2` de lista multinível numerada
+    // ficaria sem valor: o compositor mantém UM ordinal para o documento
+    // inteiro (`listOrdinal`), não um por nível — por isso a galeria de
+    // vários níveis só oferece esquemas de MARCADOR.
+    final label = template.replaceAll(
+        '%1', OfficeNumberingCounter.formatNumber(listOrdinal, format));
+    return '$label ';
+  }
+
+  /// Uma chave de lista que pode ser um valor único ou um por NÍVEL.
+  ///
+  /// O último nível descrito vale para os mais profundos — o Word também não
+  /// deixa um item de nível 9 sem marcador quando o esquema descreve três.
+  static String? _atListLevel(Object? raw, int level) {
+    if (raw is String) return raw;
+    if (raw is! List || raw.isEmpty) return null;
+    final index =
+        level < 0 ? 0 : (level >= raw.length ? raw.length - 1 : level);
+    final value = raw[index];
+    return value is String ? value : null;
+  }
+
   _BlockStyle _heuristicStyleOf(PMNode block, int listOrdinal) {
     final align = switch (block.attrs['align']) {
       'center' => LayoutAlign.center,
@@ -2451,7 +2511,7 @@ class LayoutComposer {
           align: align,
           baseSizePt: baseFontSizePt,
           indentTwips: _listIndentTwips * (1 + level),
-          marker: kind == 'ordered' ? '$listOrdinal. ' : '• ',
+          marker: _listMarkerOf(block, kind, level, listOrdinal),
         );
       case 'blockquote':
         return _BlockStyle(
@@ -3944,6 +4004,7 @@ extension _TableComposition on LayoutComposer {
           }
           final style = _blockStyleOf(inner, 0);
           final flow = _paragraphFlow(style);
+          final decoration = _blockDecorationOf(inner);
           final before =
               _collapsedSpaceBefore(style.spaceBeforeTwips, previousAfterTwips);
           var textWidth =
@@ -3984,6 +4045,8 @@ extension _TableComposition on LayoutComposer {
             widowControl: style.widowControl,
             spaceBeforeTwips: before,
             spaceAfterTwips: style.spaceAfterTwips,
+            backgroundColor: decoration.background,
+            borders: decoration.borders,
           ));
           y += blockHeight;
           previousAfterTwips = style.spaceAfterTwips;
@@ -4357,6 +4420,8 @@ extension _TableComposition on LayoutComposer {
           widowControl: block.widowControl,
           spaceBeforeTwips: before,
           spaceAfterTwips: after,
+          backgroundColor: block.backgroundColor,
+          borders: block.borders,
           continuesFromPreviousPage: from,
           continuesOnNextPage: on,
         );
@@ -4535,6 +4600,42 @@ extension _TableComposition on LayoutComposer {
         'bottom' => TableCellVerticalAlign.bottom,
         _ => TableCellVerticalAlign.top,
       };
+
+  /// Sombreamento e bordas DIRETOS de um bloco (`w:shd` e `w:pBdr`).
+  ///
+  /// A leitura é do mapa `word` — exatamente o que `docx_codec` devolve para
+  /// o OOXML. Não existe um segundo dialeto de apresentação para o parágrafo,
+  /// e é por isso que um DOCX importado já chega pintado sem conversão
+  /// nenhuma no meio do caminho.
+  ///
+  /// Só formatação DIRETA: o que vem da cascata de estilos não está em
+  /// `word`, e resolvê-la aqui exigiria o catálogo de estilos dentro do
+  /// compositor. Pintar apenas o que o parágrafo diz é o comportamento
+  /// honesto — nunca aparece uma moldura que o modelo não carrega.
+  ({String? background, BlockBorders? borders}) _blockDecorationOf(
+      PMNode block) {
+    const empty = (background: null, borders: null);
+    final word = _map(block.attrs['word']);
+    if (word == null) return empty;
+    final rawShading = _map(word['shading']);
+    final rawBorders = _map(word['borders']);
+    if (rawShading == null && rawBorders == null) return empty;
+    final background = _cssColor(rawShading?['fill']);
+    if (rawBorders == null) return (background: background, borders: null);
+    final borders = BlockBorders(
+      top: _border(rawBorders['top']),
+      right: _border(rawBorders['right']),
+      bottom: _border(rawBorders['bottom']),
+      left: _border(rawBorders['left']),
+    );
+    // Quatro arestas `nil` (o que "Sem Bordas" grava) descrevem a AUSÊNCIA de
+    // moldura. Devolvê-las mesmo assim faria os renderers desenhar uma caixa
+    // invisível em volta de todo parágrafo já editado.
+    return (
+      background: background,
+      borders: borders.hasVisibleSide ? borders : null,
+    );
+  }
 
   String? _cellBackground(Map? cell, Map? word) {
     final direct = cell?['background'] ??

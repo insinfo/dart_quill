@@ -63,8 +63,8 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Fonte e tamanho refletem a seleção | ✅ | `ribbon_actions.effectiveInlineValue` (2026-08-09): varre os runs, VAZIO em seleção mista, e resolve marca → estilo do DOCX → padrão do compositor |
 | Galeria de estilos reflete o bloco corrente | ✅ | `OfficeStyleCatalog` + `home_tab.buildStyleGallery` (2026-08-09): cartões vêm do `styles.xml` do documento, ordenados por `uiPriority`, com preview da cascata resolvida e realce por `currentStyleId` (§2.8) |
 | Combobox editável de fonte (27 faces, preview na própria fonte) e de tamanho (aceita 10,5 e vírgula decimal) | ✅ | `OfficeComboBox` em `ui/controller.dart` + `buildFontFamilyCombo`/`buildFontSizeCombo` (2026-08-09) |
-| Line spacing, sombreamento, bordas de parágrafo no grupo Parágrafo | ❌ | `tabs/home_tab.dart:158-181` só tem listas/recuo/alinhamento |
-| Dropdown de marcadores/numeração (galeria de bullets, multinível) | ❌ | botões liga/desliga apenas (a infraestrutura de menu já existe: `ui/menu.dart`) |
+| Line spacing, sombreamento, bordas de parágrafo no grupo Parágrafo | ✅ | `tabs/home_tab.dart` (2026-08-09): dropdown de entrelinha 1,0–3,0 + Adicionar/Remover Espaço Antes/Depois, paleta de sombreamento e menu de bordas. O compositor passou a DESENHAR sombreamento e bordas de bloco (`layout_composer._blockDecorationOf`, `BlockFragment.backgroundColor/borders`, `dom_renderer._blockDecoration`, `pdf_renderer._renderBlockDecoration`) — ver §2.11 |
+| Dropdown de marcadores/numeração (galeria de bullets, multinível) | 🟡 | `tabs/home_tab.dart` (2026-08-09): botões DIVIDIDOS com galeria de 7 marcadores e 6 formatos numéricos (`style.lvlText`/`style.numFmt`, honrados em `layout_composer._listMarkerOf` e gravados por `docx_codec._numberingForList`). Vários níveis: esquemas de MARCADOR por nível funcionam; os numerados ("1.1.1") ficam desabilitados — o compositor tem UM `listOrdinal`, não um por nível |
 | Botões Colar/Recortar/Copiar do sistema na ribbon | 🟡 | usam clipboard INTERNO (`ui/ribbon_actions.dart:166-195`); falta tentar Async Clipboard API com fallback |
 | Pincel de formatação | 🟡 | só marcas de caractere, one-shot (`ribbon_actions.dart:199-224`); Word copia também formatação de parágrafo e duplo-clique trava o pincel |
 
@@ -294,6 +294,72 @@ cobram (`test/unit/document_engine/layout/text_wrap_test.dart`).
    larguras da página em que começou.
 5. "Em linha com o texto" e qualquer disposição de IMAGEM ficam desabilitadas
    com o motivo escrito no item (§1.4).
+
+### 2.12 O grupo Parágrafo completo (2026-08-09)
+
+**Entrelinha e espaçamento.** Dropdown com 1,0 / 1,15 / 1,5 / 2,0 / 2,5 / 3,0 e
+os quatro comandos de Adicionar/Remover Espaço Antes/Depois (12 pt, como no
+Word). O compositor já resolvia `lineTwips`/`lineRule`: lê em
+`layout_composer.dart:2326-2331` (`_resolvedStyleOf`) e aplica em
+`:2508-2537` (`_resolvedLineHeightTwips`, onde 240 = uma linha na regra
+`auto`). A exportação grava em `docx_codec.dart:3106-3123` → `WpSpacing` →
+`writer.dart:276-290` (`w:line`/`w:lineRule`). A escada de valores é **uma
+só**, em `ribbon_actions.officeLineSpacingSteps`: o diálogo Parágrafo… deriva
+os rótulos dela, senão o dropdown e o diálogo divergiriam.
+
+**Sombreamento e bordas de parágrafo — o compositor passou a desenhar.** Antes
+desta fase nada em `layout/` lia `w:shd`/`w:pBdr` de PARÁGRAFO (só de célula),
+então a regra do plano deixava duas saídas: implementar o desenho ou
+desabilitar o controle. Foi implementado, e é uma mudança pequena porque o
+dado já existia ponta a ponta:
+
+- `page_graph.dart` — `BlockFragment.backgroundColor` e `.borders`
+  (`BlockBorders` é um `typedef` de `TableCellBorders`: são as mesmas quatro
+  arestas resolvidas, e duplicar o tipo produziria duas funções de desenho
+  para a mesma figura);
+- `layout_composer._blockDecorationOf` — lê `attrs['word']['shading']` e
+  `['borders']`, isto é, **o mesmo mapa que a exportação devolve para o
+  OOXML**. Não há segundo dialeto de apresentação, e por isso um DOCX
+  importado com borda direta já abre pintado;
+- `dom_renderer._blockDecoration` e `pdf_renderer._renderBlockDecoration` —
+  uma camada inerte (`data-model-length=0`, `contenteditable=false`) cobrindo
+  só as LINHAS, não o `spaceBefore/After`, como o Word desenha. Num parágrafo
+  partido entre páginas a aresta superior some nas fatias que continuam e a
+  inferior nas que seguem: repetir as duas desenharia um traço no meio do
+  parágrafo.
+
+Duas decisões de contrato: quatro arestas `nil` (o que "Sem Borda" grava) são
+tratadas como AUSÊNCIA de moldura, senão todo parágrafo já editado ganharia uma
+caixa invisível; e a leitura é só de formatação DIRETA — o que vem da cascata
+de estilos não está em `word`, e resolvê-la exigiria o catálogo dentro do
+compositor.
+
+**Ficou de fora, com motivo:** "Todas as Bordas", que no Word desenha também a
+aresta `w:between` entre parágrafos vizinhos com a mesma moldura. Cada
+parágrafo é uma caixa independente no `PageGraph`; o item fica visível e
+desabilitado com essa frase.
+
+**Galerias de lista.** Marcadores (7 caracteres) e numeração (1. / 1) / I. /
+i. / A. / a)) em botões DIVIDIDOS — o corpo liga/desliga, a setinha abre a
+galeria. O vocabulário gravado é o do OOXML (`style['numFmt']` e
+`style['lvlText']`), lido em `layout_composer._listMarkerOf` e gravado por
+`docx_codec._numberingForList`, que agora gera **uma definição por formato**
+(a chave de cache era só "bullet"/"ordered", e a segunda escolha sobrescrevia
+a primeira) e só reaproveita o `numId` importado quando ele já desenha o mesmo
+rótulo.
+
+**Lista de vários níveis, honestamente parcial.** As duas chaves aceitam uma
+LISTA — um valor por nível —, o compositor indexa por `attrs['indent']` e a
+exportação gera um `w:abstractNum` `hybridMultilevel` com um `w:lvl` por
+nível, agora carregando também o `w:ilvl` do parágrafo (sem ele a lista saía
+achatada no nível zero). Com isso "Aumentar/Diminuir Nível da Lista" troca o
+marcador sozinho, sem a ação reescrever o parágrafo. Os esquemas NUMERADOS
+("1.1.1", "I. A. 1.") ficam visíveis e desabilitados: o compositor mantém UM
+`listOrdinal` para o documento inteiro (`layout_composer.dart:821,1179`, e ele
+ainda viaja em `PageSignature.carryListOrdinal` e `PageGraphResume`), então o
+primeiro subitem sairia "1.2" em vez de "1.1". Trocar o contador por um vetor
+por nível toca assinatura de página e resume da paginação progressiva — é uma
+mudança do MOTOR, não da ribbon.
 
 ### 2.9 F10 parcial em 2026-08-09 (Localizar/Substituir, Link, Símbolo, ¶)
 

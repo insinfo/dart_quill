@@ -401,6 +401,9 @@ class PageGraphDomRenderer {
       return element;
     }
 
+    final decoration = _blockDecoration(fragment);
+    if (decoration != null) element.append(decoration);
+
     if (withMarker && fragment.marker != null) {
       final marker = document.createElement('span');
       marker.classes.add('$officeCssPrefix-marker');
@@ -507,6 +510,53 @@ class PageGraphDomRenderer {
       element.append(lineElement);
       y += line.heightTwips;
     }
+    return element;
+  }
+
+  /// Sombreamento e bordas do parágrafo, numa camada PRÓPRIA atrás do texto.
+  ///
+  /// Não são CSS do elemento do bloco por duas razões concretas:
+  /// * o bloco tem largura e altura em px derivadas do grafo, e uma `border`
+  ///   nele deslocaria (ou inflaria) a caixa que o mapa de posições mede;
+  /// * o Word desenha a moldura em volta das LINHAS, não do espaçamento antes
+  ///   e depois — que é justamente o pedaço que a altura do bloco inclui.
+  ///
+  /// A camada é inerte (`contenteditable=false`, `data-model-length=0`), então
+  /// não cria alvo de caret nem desloca um único offset do documento.
+  DomElement? _blockDecoration(BlockFragment fragment) {
+    final borders = fragment.borders;
+    final background = fragment.backgroundColor;
+    if (background == null && borders == null) return null;
+    final height = fragment.heightTwips -
+        fragment.spaceBeforeTwips -
+        fragment.spaceAfterTwips;
+    if (height <= 0) return null;
+
+    final element = document.createElement('div');
+    element.classes.add('$officeCssPrefix-block-decoration');
+    element.setAttribute('contenteditable', 'false');
+    element.setAttribute('aria-hidden', 'true');
+    element.setAttribute('data-model-length', '0');
+    final buffer = StringBuffer()
+      ..write('position:absolute;left:0;')
+      ..write('right:${_n(_px(fragment.rightIndentTwips))}px;')
+      ..write('top:${_n(_px(fragment.spaceBeforeTwips))}px;')
+      ..write('height:${_n(_px(height))}px;')
+      ..write('box-sizing:border-box;pointer-events:none;');
+    if (background != null) buffer.write('background-color:$background;');
+    if (borders != null) {
+      // Parágrafo partido entre páginas: o Word fecha a moldura só nas
+      // extremidades REAIS. Repetir a aresta em cada fatia desenharia um
+      // traço no meio do parágrafo, onde não há fim de nada.
+      buffer
+        ..write(
+            'border-top:${fragment.continuesFromPreviousPage ? 'none' : _borderCssValue(borders.top)};')
+        ..write('border-right:${_borderCssValue(borders.right)};')
+        ..write(
+            'border-bottom:${fragment.continuesOnNextPage ? 'none' : _borderCssValue(borders.bottom)};')
+        ..write('border-left:${_borderCssValue(borders.left)};');
+    }
+    element.setAttribute('style', buffer.toString());
     return element;
   }
 

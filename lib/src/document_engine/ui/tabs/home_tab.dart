@@ -12,6 +12,7 @@ import '../controller.dart';
 import '../find_replace.dart';
 import '../formatting_marks.dart';
 import '../dialogs/dialog.dart';
+import '../dialogs/paragraph_dialog.dart';
 import '../dialogs/style_dialog.dart';
 import '../menu.dart';
 import '../ribbon.dart';
@@ -128,16 +129,34 @@ List<DomElement> buildHomeTab(RibbonContext ctx) {
     ]),
     kit.group('Parágrafo', [
       kit.row([
-        kit.button(
-            '•—', 'Lista com marcadores', () => actions.toggleList(c, 'bullet'),
-            icon: 'setmarkers'),
-        kit.button(
-            '1—', 'Lista numerada', () => actions.toggleList(c, 'ordered'),
-            icon: 'numbering'),
+        _splitButton(
+          ctx,
+          text: '•—',
+          title: 'Marcadores',
+          icon: 'setmarkers',
+          onClick: () => actions.toggleList(c, 'bullet'),
+          menuGroup: 'home:bullets',
+          menuTitle: 'Biblioteca de Marcadores',
+          entries: () => _bulletEntries(c),
+        ),
+        _splitButton(
+          ctx,
+          text: '1—',
+          title: 'Numeração',
+          icon: 'numbering',
+          onClick: () => actions.toggleList(c, 'ordered'),
+          menuGroup: 'home:numbering',
+          menuTitle: 'Biblioteca de Numeração',
+          entries: () => _numberingEntries(c),
+        ),
+        menuButton(c, '⋮≡', 'Lista de Vários Níveis', 'home:multilevel',
+            () => _multilevelEntries(c),
+            icon: 'multilevels'),
         kit.button('⇤', 'Diminuir Recuo', () => actions.indentBy(c, -720),
             icon: 'decoffset'),
         kit.button('⇥', 'Aumentar Recuo', () => actions.indentBy(c, 720),
             icon: 'incoffset'),
+        buildFormattingMarksButton(c),
       ]),
       kit.row([
         kit.button('⯇', 'Alinhar à esquerda', () => actions.setAlign(c, 'left'),
@@ -148,7 +167,13 @@ List<DomElement> buildHomeTab(RibbonContext ctx) {
             icon: 'align-right'),
         kit.button('▤', 'Justificar', () => actions.setAlign(c, 'justify'),
             icon: 'align-just'),
-        buildFormattingMarksButton(c),
+        menuButton(c, '↕≡', 'Espaçamento entre Linhas e Parágrafos',
+            'home:linespacing', () => _lineSpacingEntries(c),
+            icon: 'linespace'),
+        buildParagraphShadingButton(ctx),
+        menuButton(c, '▤', 'Bordas', 'home:paraborders',
+            () => _paragraphBorderEntries(c),
+            icon: 'border-all'),
       ]),
     ]),
     kit.group('Estilos', [
@@ -167,6 +192,328 @@ List<DomElement> buildHomeTab(RibbonContext ctx) {
       ]),
     ]),
   ];
+}
+
+// -- grupo Parágrafo: galerias de lista, entrelinha, sombreamento e bordas ----
+
+/// A biblioteca de marcadores.
+///
+/// São caracteres Unicode, não os code points da faixa privada de
+/// Wingdings/Symbol que o Word grava: o navegador desenha um quadrado vazio
+/// para aqueles (é a mesma razão de `OfficeNumberingCounter._unicodeBullet`
+/// traduzir os importados).
+const List<({String char, String name})> officeBulletGallery = [
+  (char: '•', name: 'Círculo cheio'),
+  (char: '○', name: 'Círculo vazado'),
+  (char: '▪', name: 'Quadrado cheio'),
+  (char: '◦', name: 'Círculo pequeno'),
+  (char: '➢', name: 'Seta'),
+  (char: '✓', name: 'Marca de seleção'),
+  (char: '❖', name: 'Losango'),
+];
+
+/// A biblioteca de numeração: o `w:numFmt` e o `w:lvlText` de cada formato.
+const List<({String sample, String numFmt, String lvlText})>
+    officeNumberingGallery = [
+  (sample: '1.  2.  3.', numFmt: 'decimal', lvlText: '%1.'),
+  (sample: '1)  2)  3)', numFmt: 'decimal', lvlText: '%1)'),
+  (sample: 'I.  II.  III.', numFmt: 'upperRoman', lvlText: '%1.'),
+  (sample: 'i.  ii.  iii.', numFmt: 'lowerRoman', lvlText: '%1.'),
+  (sample: 'A.  B.  C.', numFmt: 'upperLetter', lvlText: '%1.'),
+  (sample: 'a)  b)  c)', numFmt: 'lowerLetter', lvlText: '%1)'),
+];
+
+/// Os esquemas de "Lista de Vários Níveis" que o editor entrega.
+///
+/// São todos de MARCADOR, e não por gosto: um esquema numerado precisaria de
+/// um contador POR NÍVEL, e o compositor mantém um só para o documento
+/// inteiro (`layout_composer.dart`, `listOrdinal`). Os esquemas numerados
+/// aparecem no menu desabilitados, com o motivo escrito — ver
+/// [_multilevelEntries].
+const List<({String name, List<String> levels})> officeMultilevelBulletSchemes =
+    [
+  (name: '●  ○  ▪', levels: ['•', '○', '▪']),
+  (name: '▪  •  ◦', levels: ['▪', '•', '◦']),
+  (name: '➢  ▪  ◦', levels: ['➢', '▪', '◦']),
+];
+
+/// Cores de sombreamento de parágrafo. É a mesma grade do sombreamento de
+/// célula — no Word é literalmente a mesma paleta.
+const List<String?> officeParagraphShadingColors = [
+  null, // Sem cor — remove o `w:shd`
+  '#000000', '#c00000', '#ff0000', '#ffc000', '#ffff00', '#92d050',
+  '#00b050', '#00b0f0', '#0070c0', '#002060', '#7030a0',
+  '#ffffff', '#f2f2f2', '#d9d9d9', '#bfbfbf', '#a6a6a6', '#808080',
+];
+
+/// A biblioteca de marcadores: cada item aplica um `lvlText` diferente.
+List<OfficeMenuEntry> _bulletEntries(OfficeWordController c) {
+  c.syncSelection();
+  final current = actions.currentListLvlText(c);
+  return [
+    OfficeMenuEntry(
+      label: 'Nenhum',
+      description: 'O parágrafo deixa de ser item de lista',
+      checked: !actions.selectionIsList(c),
+      onSelect: () => actions.removeList(c),
+    ),
+    const OfficeMenuEntry.separator(),
+    for (final bullet in officeBulletGallery)
+      OfficeMenuEntry(
+        label: '${bullet.char}   ${bullet.char}   ${bullet.char}',
+        description: bullet.name,
+        checked: current == bullet.char,
+        onSelect: () => actions.applyListFormat(
+          c,
+          kind: 'bullet',
+          lvlText: bullet.char,
+          numFmt: 'bullet',
+        ),
+      ),
+  ];
+}
+
+/// A biblioteca de numeração.
+List<OfficeMenuEntry> _numberingEntries(OfficeWordController c) {
+  c.syncSelection();
+  final current = actions.currentListLvlText(c);
+  return [
+    OfficeMenuEntry(
+      label: 'Nenhum',
+      description: 'O parágrafo deixa de ser item de lista',
+      checked: !actions.selectionIsList(c),
+      onSelect: () => actions.removeList(c),
+    ),
+    const OfficeMenuEntry.separator(),
+    for (final format in officeNumberingGallery)
+      OfficeMenuEntry(
+        label: format.sample,
+        // O ✓ compara o PAR: "1." e "I." têm o mesmo `lvlText` e só o
+        // `numFmt` os separa.
+        checked: current == format.lvlText &&
+            actions.currentListNumFmt(c) == format.numFmt,
+        onSelect: () => actions.applyListFormat(
+          c,
+          kind: 'ordered',
+          lvlText: format.lvlText,
+          numFmt: format.numFmt,
+        ),
+      ),
+  ];
+}
+
+/// O menu "Lista de Vários Níveis".
+///
+/// Os esquemas de marcador funcionam ponta a ponta: o marcador de cada nível
+/// é resolvido na composição a partir da lista gravada em `style.lvlText`, e
+/// a exportação gera um `w:abstractNum` `hybridMultilevel` com um `w:lvl` por
+/// nível — Tab/Aumentar Nível troca o marcador sem reescrever o parágrafo.
+///
+/// Os esquemas NUMERADOS ("1.1.1") ficam visíveis e desabilitados. O motivo é
+/// verificável: o compositor mantém UM contador de lista para o documento
+/// (`layout_composer.dart`, a variável `listOrdinal`, que também viaja na
+/// assinatura de página e no resume da paginação progressiva). Sem um
+/// contador por nível, "1.1" sairia como "1.2" no primeiro subitem — um
+/// número errado é pior que um item indisponível.
+List<OfficeMenuEntry> _multilevelEntries(OfficeWordController c) {
+  c.syncSelection();
+  final isList = actions.selectionIsList(c);
+  final current = actions.currentListLvlText(c);
+  const numberedReason = 'Precisa de um contador por NÍVEL; o compositor '
+      'mantém um só para o documento inteiro';
+  return [
+    for (final scheme in officeMultilevelBulletSchemes)
+      OfficeMenuEntry(
+        label: scheme.name,
+        description: 'Um marcador por nível',
+        checked: current is List &&
+            current.length == scheme.levels.length &&
+            List.generate(
+                    scheme.levels.length, (i) => current[i] == scheme.levels[i])
+                .every((equal) => equal),
+        onSelect: () => actions.applyListFormat(
+          c,
+          kind: 'bullet',
+          lvlText: List<String>.from(scheme.levels),
+          numFmt: List<String>.filled(scheme.levels.length, 'bullet'),
+        ),
+      ),
+    const OfficeMenuEntry.separator(),
+    OfficeMenuEntry(
+      label: 'Aumentar Nível da Lista',
+      icon: 'incoffset',
+      enabled: isList,
+      onSelect: () => actions.changeListLevel(c, 1),
+    ),
+    OfficeMenuEntry(
+      label: 'Diminuir Nível da Lista',
+      icon: 'decoffset',
+      enabled: isList,
+      onSelect: () => actions.changeListLevel(c, -1),
+    ),
+    const OfficeMenuEntry.separator(),
+    const OfficeMenuEntry(
+      label: '1.  1.1.  1.1.1.',
+      description: numberedReason,
+      enabled: false,
+    ),
+    const OfficeMenuEntry(
+      label: 'I.  A.  1.',
+      description: numberedReason,
+      enabled: false,
+    ),
+  ];
+}
+
+/// O menu "Espaçamento entre Linhas e Parágrafos".
+List<OfficeMenuEntry> _lineSpacingEntries(OfficeWordController c) {
+  c.syncSelection();
+  final current = actions.currentLineTwips(c);
+  final before = actions.currentParagraphSpace(c, before: true);
+  final after = actions.currentParagraphSpace(c, before: false);
+  return [
+    for (final step in actions.officeLineSpacingSteps)
+      OfficeMenuEntry(
+        label: step.label,
+        // Sem `w:line` o parágrafo usa a caixa real da fonte, que é
+        // exatamente o que 1,0 significa — por isso o ✓ cai em 1,0 quando o
+        // bloco não opinou.
+        checked: current == null ? step.twips == 240 : current == step.twips,
+        onSelect: () => actions.setLineSpacing(c, step.twips),
+      ),
+    const OfficeMenuEntry.separator(),
+    OfficeMenuEntry(
+      label: before > 0
+          ? 'Remover Espaço Antes do Parágrafo'
+          : 'Adicionar Espaço Antes do Parágrafo',
+      description: '12 pt, como o comando do Word',
+      onSelect: () => actions.setParagraphSpace(
+        c,
+        before: true,
+        twips: before > 0 ? 0 : actions.officeParagraphSpaceStepTwips,
+      ),
+    ),
+    OfficeMenuEntry(
+      label: after > 0
+          ? 'Remover Espaço Depois do Parágrafo'
+          : 'Adicionar Espaço Depois do Parágrafo',
+      description: '12 pt, como o comando do Word',
+      onSelect: () => actions.setParagraphSpace(
+        c,
+        before: false,
+        twips: after > 0 ? 0 : actions.officeParagraphSpaceStepTwips,
+      ),
+    ),
+    const OfficeMenuEntry.separator(),
+    OfficeMenuEntry(
+      label: 'Opções de Espaçamento de Linha…',
+      onSelect: () => openParagraphDialog(c),
+    ),
+  ];
+}
+
+/// O menu Bordas do grupo Parágrafo.
+///
+/// "Todas as Bordas" do Word desenha também a linha ENTRE parágrafos vizinhos
+/// com a mesma moldura (`w:between`). O modelo importa a chave, mas nem o
+/// compositor nem os renderers desenham essa aresta — cada parágrafo é uma
+/// caixa independente no `PageGraph`. O item fica visível e desabilitado; as
+/// sete combinações restantes são desenhadas de verdade, na tela e no PDF.
+List<OfficeMenuEntry> _paragraphBorderEntries(OfficeWordController c) {
+  return [
+    for (final (which, label, icon) in const [
+      (actions.OfficeParagraphBorders.none, 'Sem Borda', 'border-no'),
+      (actions.OfficeParagraphBorders.box, 'Caixa', 'border-out'),
+      (
+        actions.OfficeParagraphBorders.topAndBottom,
+        'Bordas Superior e Inferior',
+        'border-insidehor'
+      ),
+      (actions.OfficeParagraphBorders.top, 'Borda Superior', 'border-top'),
+      (
+        actions.OfficeParagraphBorders.bottom,
+        'Borda Inferior',
+        'border-bottom'
+      ),
+      (actions.OfficeParagraphBorders.left, 'Borda Esquerda', 'border-left'),
+      (actions.OfficeParagraphBorders.right, 'Borda Direita', 'border-right'),
+    ])
+      OfficeMenuEntry(
+        label: label,
+        icon: icon,
+        onSelect: () => actions.setParagraphBorders(c, which),
+      ),
+    const OfficeMenuEntry.separator(),
+    const OfficeMenuEntry(
+      label: 'Todas as Bordas',
+      description: 'Exigiria a aresta w:between entre parágrafos vizinhos, '
+          'que o compositor não desenha',
+      icon: 'border-all',
+      enabled: false,
+    ),
+  ];
+}
+
+/// Botão de sombreamento de PARÁGRAFO, com a mesma paleta dos outros.
+///
+/// Não deu para reusar [buildPaletteButton]: lá a cor vira uma MARCA sobre o
+/// texto e aqui vira `w:shd` do parágrafo — o popup é o mesmo, o
+/// destinatário não.
+DomElement buildParagraphShadingButton(RibbonContext ctx) {
+  final kit = ctx.kit;
+  final c = ctx.controller;
+  final wrap = kit.el('span', 'dq-office-colorwrap');
+  const group = 'palette:paragraphShading';
+
+  DomElement buildPalette() {
+    final palette = kit.el('div', 'dq-office-palette');
+    for (final color in officeParagraphShadingColors) {
+      final swatch = kit.el('button',
+          'dq-office-swatch${color == null ? ' dq-office-swatch-none' : ''}');
+      swatch.setAttribute('type', 'button');
+      swatch.setAttribute('title', color ?? 'Sem cor');
+      swatch.setAttribute('data-paragraph-shading', color ?? 'none');
+      if (color != null) swatch.setAttribute('style', 'background:$color;');
+      swatch.addEventListener('click', (event) {
+        event.preventDefault();
+        c.overlay.closeGroup(group);
+        c.syncSelection();
+        actions.setParagraphShading(c, color);
+      });
+      palette.append(swatch);
+    }
+    return palette;
+  }
+
+  wrap.append(kit.button('▩', 'Sombreamento', () {
+    if (c.overlay.closeGroup(group)) return;
+    c.overlay.open(group, buildPalette(), anchor: wrap);
+  }, icon: 'paracolor'));
+  return wrap;
+}
+
+/// Botão dividido do Word: o corpo executa a ação padrão, a setinha ao lado
+/// abre a galeria. Um botão só obrigaria dois cliques para ligar uma lista
+/// simples, que é a operação mais comum do grupo.
+DomElement _splitButton(
+  RibbonContext ctx, {
+  required String text,
+  required String title,
+  required String icon,
+  required void Function() onClick,
+  required String menuGroup,
+  required String menuTitle,
+  required List<OfficeMenuEntry> Function() entries,
+}) {
+  final kit = ctx.kit;
+  final wrap = kit.el('span', 'dq-office-splitbtn');
+  wrap.append(kit.button(text, title, onClick, icon: icon));
+  final arrow = kit.el('span', 'dq-office-splitbtn-arrow');
+  arrow.append(kit.button('', menuTitle, () {
+    openMenu(ctx.controller, menuGroup, arrow, entries());
+  }, extraClass: 'dq-office-btn-menu'));
+  wrap.append(arrow);
+  return wrap;
 }
 
 /// As famílias que o seletor de fonte oferece.
