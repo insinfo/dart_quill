@@ -1013,3 +1013,22 @@ Windows como ORÁCULO:
   bifurcar correções.
 - Cada fase deve rodar **somente os testes do escopo afetado** localmente
   (`dart test -j 1 test/<área>`); a suíte completa fica para a CI.
+
+Colunas fechadas — o último bloqueio estrutural saiu. 2417 testes passando, CI verde nos três jobs.
+
+Como ficou
+O que define colunas não é a largura das linhas, é o fluxo: a coluna 1 enche até o rodapé e o texto continua no topo da coluna 2, na mesma página. A implementação acabou pequena porque reaproveita a máquina existente — closePage passou a tentar closeColumn antes de emitir a página. O fragmento carrega o columnIndex, não o x já calculado, e os dois renderers resolvem o deslocamento pela mesma geometria que o compositor usou.
+
+Duas coisas que os testes pegaram, e que valem mais que a feature
+O flush final parou de emitir página. Assim que closePage passou a avançar de coluna, um documento que termina antes de encher todas as colunas não produzia página nenhuma. Isso obrigou a separar "acabou o espaço" (continua ao lado) de "acabou a página" (quebra manual, quebra de seção, flush final) — uma distinção que num grafo monocoluna simplesmente não existia. Pelo mesmo motivo, w:br type="column" e type="page" deixaram de poder compartilhar um sinal.
+
+Eu ia achatar o w:cols de quem nunca pediu. Minha primeira versão gravava sempre a contagem do editor, e dois testes de preservação de sectPr mostraram o resultado: um documento com w:num="2" importado saía com w:num="1" porque o chamador montou a geometria só para trocar margens. É exatamente a corrupção silenciosa que recusei no B3. A causa era de modelagem — columnCount = 1 não distinguia "uma coluna" de "não declarado". Agora é anulável, e o arquivo só recebe w:cols quando a contagem mudou; w:equalWidth e os w:col do produtor ficam onde estavam.
+
+De brinde, _copySetup descartava a grade de texto do documento: trocar o tamanho do papel mudava a métrica de linha do arquivo inteiro sem ninguém pedir.
+
+Desabilitado, com o motivo
+"À Esquerda" e "À Direita" são as colunas de larguras diferentes do Word. A geometria só modela colunas iguais, então habilitá-las produziria duas colunas iguais com o nome errado. Ficam visíveis e desligadas, com isso escrito na descrição.
+
+Ainda em aberto no tema: linha separadora (w:sep) e balanceamento de colunas no fim da seção.
+
+Sobra agora, do que era estrutural, só w:tblStyle (galeria de Design da Tabela) e os campos de cor/itálico/sublinhado em _BlockStyle. O resto da lista é UI sobre motor que já existe.
