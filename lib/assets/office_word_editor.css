@@ -363,6 +363,31 @@
   font-size: 10px;
 }
 
+/* Galeria dinâmica (F8): a amostra recebe fonte/corpo/cor REAIS do estilo
+   por atributo `style` inline, calculado em `home_tab._previewCss`. As
+   regras acima continuam valendo como PADRÃO — só o que o estilo declara é
+   sobrescrito, então um estilo sem fonte própria segue com a do cartão. */
+.dq-office-stylecard-sample {
+  max-height: 30px;
+}
+
+/* "Criar um Estilo": ocupa um slot de cartão para a fileira não quebrar. */
+.dq-office-btn.dq-office-stylecard-new {
+  width: 58px;
+  height: 58px;
+  border: 1px dashed #b9b9b9;
+  background: #fff;
+  color: #444;
+  font-size: 11px;
+  line-height: 14px;
+  white-space: normal;
+}
+
+.dq-office-btn.dq-office-stylecard-new:hover {
+  border-color: #5b9bd5;
+  background: #eaf3fb;
+}
+
 /* Régua horizontal: faixa própria imediatamente abaixo da ribbon. */
 .dq-office-ruler-wrap {
   position: relative;

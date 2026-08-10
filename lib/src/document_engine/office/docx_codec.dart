@@ -43,6 +43,7 @@ import '../model/index.dart';
 import 'ids.dart';
 import 'quill_codec.dart' show OfficeCompatibilityReport;
 import 'schema.dart';
+import 'style_catalog.dart';
 import 'sha256.dart';
 import 'snapshot.dart';
 
@@ -95,6 +96,7 @@ class OfficeDocxImport {
     required this.snapshot,
     required this.report,
     required this.anchors,
+    this.styleCatalog,
   });
 
   final OfficeDocumentSnapshot snapshot;
@@ -103,6 +105,14 @@ class OfficeDocxImport {
   final OfficeCompatibilityReport report;
 
   final List<OfficeSourceAnchor> anchors;
+
+  /// Os estilos do documento como ENTIDADES (F8), para a galeria da ribbon.
+  ///
+  /// Vem por aqui e não pelo snapshot porque a UI importa com
+  /// `includePackageResources: false`: sem as partes opacas o `styles.xml`
+  /// não sobrevive ao envelope, e reabrir o pacote só para listar a galeria
+  /// custaria outro unzip do documento inteiro.
+  final OfficeStyleCatalog? styleCatalog;
 }
 
 /// Nomes de entrada que são XML de texto; o resto vira asset binário.
@@ -1091,6 +1101,7 @@ class OfficeDocxCodec {
       ),
       report: report,
       anchors: anchors,
+      styleCatalog: OfficeStyleCatalog.fromStyleSheet(docx.styles),
     );
   }
 
@@ -1135,6 +1146,7 @@ class OfficeDocxCodec {
     OfficeDocumentSnapshot snapshot,
     PMNode doc, {
     PageSetupTwips? pageSetup,
+    OfficeStyleCatalog? styleCatalog,
   }) {
     // O pacote reconstruído é a base: todas as outras partes vêm dele
     // intocadas. Reabrir é o que devolve os blocos com o XML de origem.
@@ -1148,6 +1160,7 @@ class OfficeDocxCodec {
         semanticTableAnchorHashes:
             _usesSemanticTableAnchorHashes(snapshot.sourceMap),
         pageSetup: pageSetup,
+        styleCatalog: styleCatalog,
       );
     } finally {
       _endSignatureOperation(signatures);
@@ -1167,6 +1180,7 @@ class OfficeDocxCodec {
     PageSetupTwips? pageSetup,
     Map<String, PMNode> headers = const {},
     Map<String, PMNode> footers = const {},
+    OfficeStyleCatalog? styleCatalog,
   }) {
     final signatures = _beginSignatureOperation();
     try {
@@ -1178,6 +1192,7 @@ class OfficeDocxCodec {
         doc,
         semanticTableAnchorHashes: _usesSemanticTableAnchorHashes(sourceMap),
         pageSetup: pageSetup,
+        styleCatalog: styleCatalog,
       );
     } finally {
       _endSignatureOperation(signatures);
@@ -1248,6 +1263,7 @@ class OfficeDocxCodec {
     PageSetupTwips? pageSetup,
     Map<String, PMNode> headers = const {},
     Map<String, PMNode> footers = const {},
+    OfficeStyleCatalog? styleCatalog,
     Map<String, int>? timings,
   }) async {
     final signatures = _beginSignatureOperation();
@@ -1273,6 +1289,7 @@ class OfficeDocxCodec {
         doc,
         semanticTableAnchorHashes: _usesSemanticTableAnchorHashes(sourceMap),
         pageSetup: pageSetup,
+        styleCatalog: styleCatalog,
         timings: timings,
       );
     } finally {
@@ -1287,6 +1304,7 @@ class OfficeDocxCodec {
     PMNode doc, {
     required bool semanticTableAnchorHashes,
     PageSetupTwips? pageSetup,
+    OfficeStyleCatalog? styleCatalog,
   }) {
     _activeFile = docx;
     _prepareDrawingExport(docx);
@@ -1354,6 +1372,7 @@ class OfficeDocxCodec {
       documentChanged = true;
     }
 
+    _applyStyleCatalog(docx, styleCatalog);
     return DocxWriter.write(
         _editedFile(
           docx,
@@ -1369,6 +1388,7 @@ class OfficeDocxCodec {
     PMNode doc, {
     required bool semanticTableAnchorHashes,
     PageSetupTwips? pageSetup,
+    OfficeStyleCatalog? styleCatalog,
     Map<String, int>? timings,
   }) async {
     _activeFile = docx;
@@ -1451,12 +1471,28 @@ class OfficeDocxCodec {
     patchWatch.stop();
     timings?['patchUs'] = patchWatch.elapsedMicroseconds;
     clock.finish();
+    _applyStyleCatalog(docx, styleCatalog);
     await Future<void>.delayed(Duration.zero);
     return DocxWriter.writeAsync(
       _editedFile(docx, blocks, pageSetup: pageSetup),
       timings: timings,
       invalidateRenderedPageBreaks: documentChanged || pageSetup != null,
     );
+  }
+
+  /// Grava no pacote o `styles.xml` com os estilos criados/alterados.
+  ///
+  /// Só quando houve edição: sem isso, salvar um documento em que ninguém
+  /// tocou nos estilos reescreveria a parte e quebraria o contrato de
+  /// "partes intactas voltam byte a byte". O patch em si é textual e mora
+  /// no catálogo — aqui só decidimos QUANDO aplicá-lo.
+  static void _applyStyleCatalog(DocxFile docx, OfficeStyleCatalog? catalog) {
+    if (catalog == null || !catalog.hasEdits) return;
+    const part = 'word/styles.xml';
+    final original = docx.package.partString(part);
+    if (original == null) return;
+    final patched = catalog.patchStylesXml(original);
+    if (patched != original) docx.package.setPartString(part, patched);
   }
 
   DocxFile _editedFile(

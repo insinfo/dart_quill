@@ -49,6 +49,7 @@ import '../layout/layout_composer.dart';
 import '../layout/page_graph.dart';
 import '../model/index.dart';
 import '../office/docx_codec.dart';
+import '../office/style_catalog.dart';
 import '../office/pdf_service.dart';
 import '../office/snapshot.dart';
 import '../state/index.dart';
@@ -192,6 +193,7 @@ class OfficeWordEditor implements OfficeWordController {
   OfficeDocumentSnapshot? _sourceSnapshot;
   Uint8List? _sourceDocxBytes;
   Map<String, dynamic>? _sourceMap;
+  OfficeStyleCatalog? _styleCatalog;
 
   /// `lastRenderedPageBreak` é um cache do Word válido apenas para o estado
   /// recém-aberto. A primeira edição ou alteração de papel/margens o invalida
@@ -284,6 +286,18 @@ class OfficeWordEditor implements OfficeWordController {
 
   @override
   void syncSelection() => activeView.syncSelectionFromDom();
+
+  @override
+  OfficeStyleCatalog? get styleCatalog => _styleCatalog;
+
+  @override
+  void styleCatalogChanged() {
+    // Renomear/tirar da galeria não produz transação, então o `dirty` e a
+    // reconstrução do chrome precisam ser explícitos — senão a galeria
+    // mostraria o nome antigo e o Salvar acharia que nada mudou.
+    _markDirty();
+    _ribbon?.rebuildActiveTab();
+  }
 
   @override
   Map? currentBlockStyle() {
@@ -386,6 +400,7 @@ class OfficeWordEditor implements OfficeWordController {
         pageSetup: pageSetupOverride,
         headers: _editedRegions(_header, _headerVariants),
         footers: _editedRegions(_footer, _footerVariants),
+        styleCatalog: _styleCatalog,
       );
     }
     final source = _sourceSnapshot;
@@ -395,6 +410,7 @@ class OfficeWordEditor implements OfficeWordController {
             source,
             _view.state.doc,
             pageSetup: pageSetupOverride,
+            styleCatalog: _styleCatalog,
           );
   }
 
@@ -410,6 +426,7 @@ class OfficeWordEditor implements OfficeWordController {
         pageSetup: _pageSetupDirty ? _setup : null,
         headers: _editedRegions(_header, _headerVariants),
         footers: _editedRegions(_footer, _footerVariants),
+        styleCatalog: _styleCatalog,
         timings: timings,
       );
     }
@@ -698,6 +715,7 @@ class OfficeWordEditor implements OfficeWordController {
     Uint8List? sourceDocxBytes,
     Map<String, dynamic>? sourceMap,
     String? sourceFileName,
+    OfficeStyleCatalog? styleCatalog,
   }) {
     if (_disposed) return;
     _changeRevision++;
@@ -737,6 +755,13 @@ class OfficeWordEditor implements OfficeWordController {
         sourceDocxBytes == null ? null : Uint8List.fromList(sourceDocxBytes);
     _sourceMap =
         sourceMap == null ? null : Map<String, dynamic>.unmodifiable(sourceMap);
+    // Sem catálogo explícito, tenta o snapshot: um envelope persistido com
+    // as partes opacas ainda carrega o `styles.xml`. O caminho rápido da UI
+    // (que importa sem as partes) passa o catálogo por parâmetro.
+    _styleCatalog = styleCatalog ??
+        (sourceSnapshot == null
+            ? null
+            : OfficeStyleCatalog.fromSnapshot(sourceSnapshot));
     _pageSetupDirty = sourceSnapshot == null && sourceDocxBytes == null;
     _setDirty(false);
     _updateTitleBar();
@@ -749,6 +774,12 @@ class OfficeWordEditor implements OfficeWordController {
       doc: doc,
       plugins: OfficeExtensionSet(_extensions).plugins,
     )));
+    // A galeria de estilos é construída a partir do CATÁLOGO, e o catálogo
+    // acabou de ser trocado: sem refazer a aba, abrir um DOCX deixaria na
+    // tela os cartões do documento anterior. `refreshState` não bastaria —
+    // ele reflete a seleção nos controles que já existem, não a fonte de
+    // dados deles.
+    _ribbon?.rebuildActiveTab();
   }
 
   @override

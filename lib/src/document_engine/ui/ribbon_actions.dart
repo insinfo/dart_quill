@@ -9,6 +9,7 @@ import '../commands/index.dart' as cmd;
 import '../layout/layout_composer.dart';
 import '../layout/page_graph.dart';
 import '../model/index.dart';
+import '../office/style_catalog.dart';
 import '../state/index.dart';
 import 'controller.dart';
 
@@ -752,3 +753,367 @@ PageSetupTwips _copySetup(PageSetupTwips setup,
       headerDistanceTwips: setup.headerDistanceTwips,
       footerDistanceTwips: setup.footerDistanceTwips,
     );
+
+// -- estilos do documento (F8) ------------------------------------------------
+
+/// As chaves de `attrs['style']` que um ESTILO governa.
+///
+/// É a interseção honesta entre o que [OfficeStyleCatalog] sabe resolver e o
+/// que `LayoutComposer._resolvedStyleOf` sabe ler. Cor, itálico e sublinhado
+/// ficam de fora porque `_BlockStyle` não tem esses campos: gravá-los aqui
+/// mudaria o modelo sem mudar um pixel na tela.
+const List<String> officeStyleGovernedKeys = [
+  'family',
+  'sizePt',
+  'bold',
+  'align',
+  'indentTwips',
+  'rightIndentTwips',
+  'firstLineIndentTwips',
+  'spaceBeforeTwips',
+  'spaceAfterTwips',
+  'lineTwips',
+  'lineRule',
+];
+
+/// O `w:styleId` do bloco corrente.
+///
+/// A ordem é a da cascata: o `w:pStyle` DIRETO do parágrafo manda; sem ele
+/// vale o id efetivo que a importação resolveu (que já cai no estilo
+/// `w:default`); e num documento sem cascata nenhuma — Delta do Quill — o
+/// nível do heading é tudo que existe.
+String? currentStyleId(OfficeWordController c) {
+  if (!c.viewReady) return null;
+  final block = c.activeView.state.selection.fromRes.parent;
+  return blockStyleId(block) ??
+      c.styleCatalog?.defaultParagraphStyle?.id ??
+      'Normal';
+}
+
+/// O `w:styleId` de um bloco qualquer, sem consultar o catálogo.
+String? blockStyleId(PMNode block) {
+  final word = block.attrs['word'];
+  if (word is Map) {
+    final id = word['styleId'];
+    if (id is String && id.isNotEmpty) return id;
+  }
+  final style = block.attrs['style'];
+  if (style is Map) {
+    final id = style['wordStyleId'];
+    if (id is String && id.isNotEmpty) return id;
+  }
+  final level = block.attrs['level'];
+  if (block.type.name == 'heading' && level is int) return 'Heading$level';
+  return null;
+}
+
+/// Aplica um estilo DO CATÁLOGO na seleção.
+///
+/// Três coisas viajam juntas e nenhuma delas é opcional:
+/// * `word.styleId`, que é o que a exportação grava como `w:pStyle`;
+/// * o mapa resolvido em `attrs['style']`, que é o que o compositor desenha
+///   (sem ele o parágrafo continuaria com a apresentação do estilo antigo,
+///   porque a cascata só é resolvida na IMPORTAÇÃO);
+/// * as marcas de fonte/tamanho/negrito dos runs, pela regra de
+///   [_retargetRunMarks] — um DOCX importado já carrega essas marcas
+///   ACHATADAS do estilo antigo, e no compositor elas ganham do bloco.
+void applyCatalogStyle(OfficeWordController c, String styleId) {
+  final catalog = c.styleCatalog;
+  final definition = catalog?[styleId];
+  if (catalog == null || definition == null) return;
+  c.syncSelection();
+  final state = c.activeView.state;
+  final tr = state.tr;
+  final heading = officeHeadingLevelOfStyle(styleId, definition);
+  final headingType = c.schema.nodes['heading'];
+  final paragraphType = c.schema.nodes['paragraph'];
+
+  var changed = false;
+  state.doc.nodesBetween(state.selection.from, state.selection.to,
+      (node, pos, parent, index) {
+    if (!node.isTextblock) return true;
+    final previous = catalog[blockStyleId(node)]?.formatting;
+    // Um estilo de título transforma o bloco em `heading` (é o que dá o
+    // outline e o que a exportação usa); qualquer outro devolve um heading
+    // ao corpo do texto. `listItem` fica como está: aplicar "Nível 01" a um
+    // item de lista não pode destruir a lista.
+    final target = heading != null
+        ? headingType
+        : (node.type.name == 'heading' ? paragraphType : null);
+    final word = <String, dynamic>{
+      if (node.attrs['word'] is Map)
+        ...(node.attrs['word'] as Map).cast<String, dynamic>(),
+      'styleId': styleId,
+    };
+    tr.setNodeMarkup(pos, target == node.type ? null : target, {
+      ...node.attrs,
+      if (heading != null) 'level': heading,
+      'word': word,
+      'style': mergedCatalogBlockStyle(
+        node.attrs['style'],
+        previous: previous,
+        next: definition.formatting,
+        styleId: styleId,
+      ),
+    });
+    _retargetRunMarks(c, tr, node, pos, previous, definition.formatting);
+    changed = true;
+    return false;
+  });
+  if (changed) c.dispatch(tr);
+}
+
+/// Grava a definição de um estilo e RE-RESOLVE os blocos que o usam.
+///
+/// A re-resolução é obrigatória porque a cascata do Word só roda na
+/// importação: `attrs['style']` é o resultado achatado, e sem reescrevê-lo
+/// "Modificar estilo" mudaria o `styles.xml` exportado sem mudar a tela.
+///
+/// Age só no CORPO. Cabeçalhos e rodapés são raízes próprias com sessão de
+/// edição própria (F6); re-resolvê-los daqui exigiria um caminho de
+/// transação por região que ainda não existe.
+void applyStyleDefinition(
+    OfficeWordController c, OfficeStyleDefinition definition) {
+  final catalog = c.styleCatalog;
+  if (catalog == null) return;
+  final previous = catalog[definition.id]?.formatting;
+  catalog.upsert(definition);
+
+  final state = c.view.state;
+  final tr = state.tr;
+  var changed = false;
+  state.doc.nodesBetween(0, state.doc.content.size, (node, pos, parent, index) {
+    if (!node.isTextblock) return true;
+    if (blockStyleId(node) != definition.id) return false;
+    tr.setNodeMarkup(pos, null, {
+      ...node.attrs,
+      'style': mergedCatalogBlockStyle(
+        node.attrs['style'],
+        previous: previous,
+        next: definition.formatting,
+        styleId: definition.id,
+      ),
+    });
+    _retargetRunMarks(c, tr, node, pos, previous, definition.formatting);
+    changed = true;
+    return false;
+  });
+  if (changed) {
+    c.view.dispatch(tr);
+  } else {
+    // Nenhum parágrafo usa o estilo ainda (um estilo recém-criado): o
+    // documento não muda, mas o catálogo e o `dirty` mudaram.
+    c.styleCatalogChanged();
+  }
+}
+
+/// "Atualizar para Corresponder à Seleção": o estilo passa a valer o que o
+/// parágrafo do cursor mostra hoje.
+void updateStyleToMatchSelection(OfficeWordController c, String styleId) {
+  final catalog = c.styleCatalog;
+  final definition = catalog?[styleId];
+  if (catalog == null || definition == null) return;
+  c.syncSelection();
+  final formatting = styleFormattingOfSelection(c);
+  applyStyleDefinition(
+      c,
+      definition.copyWith(
+        formatting: formatting,
+        preview: officeStylePreviewOf(formatting, definition.preview),
+      ));
+}
+
+void renameCatalogStyle(OfficeWordController c, String styleId, String name) {
+  final catalog = c.styleCatalog;
+  if (catalog == null) return;
+  catalog.rename(styleId, name);
+  c.styleCatalogChanged();
+}
+
+/// "Remover da Galeria": tira o `w:qFormat`, nunca o estilo — os parágrafos
+/// que o referenciam continuam válidos.
+void removeStyleFromGallery(OfficeWordController c, String styleId) {
+  final catalog = c.styleCatalog;
+  if (catalog == null) return;
+  catalog.setInGallery(styleId, false);
+  c.styleCatalogChanged();
+}
+
+/// A formatação EFETIVA do bloco do cursor, no vocabulário do catálogo.
+OfficeStyleFormatting styleFormattingOfSelection(OfficeWordController c) {
+  final state = c.activeView.state;
+  final selection = state.selection;
+  final block = selection.fromRes.parent;
+  final raw = block.attrs['style'];
+  final style = raw is Map ? raw : const {};
+  int? twips(String key) {
+    final value = style[key];
+    return value is num ? value.toInt() : null;
+  }
+
+  final size = effectiveInlineValue(c, 'size');
+  final boldType = c.schema.marks['bold'];
+  final marks = selection.empty
+      ? (state.storedMarks ?? selection.fromRes.marks())
+      : state.doc.resolve(selection.from + 1).marks();
+  final bold = boldType != null && marks.any((mark) => mark.type == boldType);
+
+  return OfficeStyleFormatting(
+    family: effectiveInlineValue(c, 'font'),
+    sizePt: size == null ? null : double.tryParse(size),
+    bold: bold || style['bold'] == true,
+    align: (style['align'] ?? block.attrs['align']) as String?,
+    indentTwips: twips('indentTwips'),
+    rightIndentTwips: twips('rightIndentTwips'),
+    firstLineIndentTwips: twips('firstLineIndentTwips'),
+    spaceBeforeTwips: twips('spaceBeforeTwips'),
+    spaceAfterTwips: twips('spaceAfterTwips'),
+    lineTwips: twips('lineTwips'),
+    lineRule: style['lineRule'] as String?,
+  );
+}
+
+/// O preview de um estilo cuja FORMATAÇÃO mudou: o que o editor governa vem
+/// da formatação nova, o que ele não governa (itálico, sublinhado, cor)
+/// continua descrevendo a definição original.
+OfficeStylePreview officeStylePreviewOf(
+        OfficeStyleFormatting formatting, OfficeStylePreview base) =>
+    OfficeStylePreview(
+      family: formatting.family ?? base.family,
+      sizePt: formatting.sizePt ?? base.sizePt,
+      bold: formatting.bold ?? base.bold,
+      italic: base.italic,
+      underline: base.underline,
+      color: base.color,
+      align: formatting.align ?? base.align,
+    );
+
+/// `Heading1`, `Ttulo2`, `heading 3`… — o nível vem do dígito no fim do id,
+/// como no importador; o nome do estilo muda por idioma, o padrão do id não.
+int? officeHeadingLevelOfStyle(String styleId, OfficeStyleDefinition? style) {
+  final pattern = RegExp('heading|titulo|ttulo', caseSensitive: false);
+  final basedOn = style?.basedOn;
+  final source = pattern.hasMatch(styleId)
+      ? styleId
+      : (basedOn != null && pattern.hasMatch(basedOn) ? basedOn : null);
+  if (source == null) return null;
+  final digits = RegExp(r'(\d+)$').firstMatch(source)?.group(1);
+  final level = digits == null ? null : int.tryParse(digits);
+  return level != null && level >= 1 && level <= 6 ? level : null;
+}
+
+/// Funde o mapa de `attrs['style']` do bloco com o do estilo NOVO.
+///
+/// A regra decide quem vence chave a chave: um valor que ainda é o do estilo
+/// ANTIGO (ou que nunca existiu) veio da cascata e é substituído; um valor
+/// diferente é formatação DIRETA do usuário e sobrevive — que é exatamente o
+/// que o Word faz ao modificar um estilo. Sem essa distinção, "Modificar"
+/// apagaria em silêncio todo recuo e espaçamento ajustado à mão.
+Map<String, dynamic> mergedCatalogBlockStyle(
+  Object? existing, {
+  required OfficeStyleFormatting? previous,
+  required OfficeStyleFormatting next,
+  required String styleId,
+}) {
+  final result = <String, dynamic>{
+    if (existing is Map) ...existing.cast<String, dynamic>(),
+  };
+  final before = previous?.toBlockStyle() ?? const <String, dynamic>{};
+  final after = next.toBlockStyle();
+  for (final key in officeStyleGovernedKeys) {
+    final current = result[key];
+    if (current != null && !_sameStyleValue(current, before[key])) continue;
+    if (after.containsKey(key)) {
+      result[key] = after[key];
+    } else {
+      result.remove(key);
+    }
+  }
+  result['wordStyleId'] = styleId;
+  return result;
+}
+
+bool _sameStyleValue(Object? a, Object? b) {
+  if (a is num && b is num) return a.toDouble() == b.toDouble();
+  return a == b;
+}
+
+/// Reescreve as marcas `font`/`size`/`bold` dos runs de [block] quando o
+/// estilo dele muda.
+///
+/// Por que isto é necessário: a importação ACHATA a cascata em marcas de
+/// run, e no compositor a marca ganha do bloco
+/// (`layout_composer._styleOfText`). Sem tocar nas marcas, mudar a fonte de
+/// um estilo não mudaria uma letra de um DOCX importado.
+///
+/// Por que só as marcas que COINCIDEM com o estilo antigo: é o único sinal
+/// disponível para separar "isto veio do estilo" de "isto o usuário pôs em
+/// negrito à mão". Um run que já divergia do estilo é formatação direta e
+/// fica intacto.
+void _retargetRunMarks(
+  OfficeWordController c,
+  Transaction tr,
+  PMNode block,
+  int blockPos,
+  OfficeStyleFormatting? previous,
+  OfficeStyleFormatting next,
+) {
+  final fontType = c.schema.marks['font'];
+  final sizeType = c.schema.marks['size'];
+  final boldType = c.schema.marks['bold'];
+  final familyChanged = previous?.family != next.family;
+  final sizeChanged = previous?.sizePt != next.sizePt;
+  final boldChanged = (previous?.bold ?? false) != (next.bold ?? false);
+  if (!familyChanged && !sizeChanged && !boldChanged) return;
+
+  var offset = 0;
+  for (var i = 0; i < block.childCount; i++) {
+    final child = block.child(i);
+    final from = blockPos + 1 + offset;
+    final to = from + child.nodeSize;
+    offset += child.nodeSize;
+    if (!child.isText) continue;
+
+    String? valueOf(MarkType type) {
+      for (final mark in child.marks) {
+        if (mark.type == type) return '${mark.attrs['value']}';
+      }
+      return null;
+    }
+
+    if (familyChanged && fontType != null) {
+      if (valueOf(fontType) == previous?.family) {
+        tr.removeMark(from, to, fontType);
+        if (next.family != null) {
+          tr.addMark(from, to, fontType.create({'value': next.family}));
+        }
+      }
+    }
+    if (sizeChanged && sizeType != null) {
+      if (_sizePtOf(valueOf(sizeType)) == previous?.sizePt) {
+        tr.removeMark(from, to, sizeType);
+        if (next.sizePt != null) {
+          tr.addMark(from, to,
+              sizeType.create({'value': officeSizeMarkValue(next.sizePt!)}));
+        }
+      }
+    }
+    if (boldChanged && boldType != null) {
+      final current = child.marks.any((mark) => mark.type == boldType);
+      if (current == (previous?.bold ?? false)) {
+        if (next.bold == true) {
+          tr.addMark(from, to, boldType.create());
+        } else {
+          tr.removeMark(from, to, boldType);
+        }
+      }
+    }
+  }
+}
+
+double? _sizePtOf(String? raw) =>
+    raw == null ? null : double.tryParse(raw.replaceAll('pt', '').trim());
+
+/// `14.0` → `14pt`, `10.5` → `10.5pt` — a mesma forma que a importação grava.
+String officeSizeMarkValue(double points) =>
+    points == points.roundToDouble() ? '${points.round()}pt' : '${points}pt';

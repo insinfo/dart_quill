@@ -72,10 +72,14 @@ final class RibbonContext {
     _ribbon._markValueButtons[(mark: mark, value: value)] = button;
   }
 
-  /// Cartão da GALERIA de estilos (Normal, Título 1…): registrado para o
-  /// realce do estilo do bloco corrente.
-  void registerStyleCard(String name, DomElement card) {
-    _ribbon._styleCards[name] = card;
+  /// Cartão da GALERIA de estilos, indexado pelo `w:styleId`.
+  ///
+  /// Pelo ID e não pelo NOME: o nome é rótulo e muda (o menu do cartão
+  /// renomeia), enquanto o id é o que o bloco carrega em `word.styleId`.
+  /// Comparar nomes também quebraria em qualquer DOCX não-português, onde o
+  /// "Título 1" da galeria se chama `Heading1` no modelo.
+  void registerStyleCard(String styleId, DomElement card) {
+    _ribbon._styleCards[styleId] = card;
   }
 }
 
@@ -107,6 +111,10 @@ class OfficeRibbon {
   final Map<String, DomElement> _styleCards = {};
   DomElement? _styleSelect;
   DomElement? _body;
+
+  /// A aba em exibição — para [rebuildActiveTab] refazer a MESMA aba quando
+  /// o catálogo de estilos muda por fora de uma transação.
+  String _activeTabKey = 'home';
 
   /// Estado anterior da sessão de cabeçalho/rodapé — a aba contextual só é
   /// forçada na TRANSIÇÃO para ativa.
@@ -167,9 +175,17 @@ class OfficeRibbon {
     return ribbon;
   }
 
+  /// Reconstrói a aba corrente. É o caminho de quem mexeu numa FONTE de
+  /// dados da ribbon (a galeria de estilos), não no estado da seleção —
+  /// [refreshState] só reflete o modelo nos controles que já existem.
+  void rebuildActiveTab() {
+    if (_body != null) showTab(_activeTabKey);
+  }
+
   void showTab(String key) {
     final body = _body;
     if (body == null) return;
+    _activeTabKey = key;
     _tabs.forEach((tabKey, tab) {
       if (tabKey == key) {
         tab.classes.add('dq-office-ribbon-tab-active');
@@ -321,8 +337,12 @@ class OfficeRibbon {
     final style = _styleSelect;
     if (style != null) style.value = current;
 
-    _styleCards.forEach((name, card) {
-      if (name == current) {
+    // O cartão aceso é o do ESTILO do bloco, resolvido pelo id — o nome do
+    // cartão pode ter sido trocado pelo menu de contexto e não identifica
+    // mais nada.
+    final currentStyleId = actions.currentStyleId(controller);
+    _styleCards.forEach((styleId, card) {
+      if (styleId == currentStyleId) {
         card.classes.add('dq-office-stylecard-active');
       } else {
         card.classes.remove('dq-office-stylecard-active');

@@ -7,7 +7,11 @@
 library;
 
 import '../../../platform/dom.dart';
+import '../../office/style_catalog.dart';
 import '../controller.dart';
+import '../dialogs/dialog.dart';
+import '../dialogs/style_dialog.dart';
+import '../menu.dart';
 import '../ribbon.dart';
 import '../ribbon_actions.dart' as actions;
 
@@ -145,15 +149,7 @@ List<DomElement> buildHomeTab(RibbonContext ctx) {
       ]),
     ]),
     kit.group('Estilos', [
-      kit.row([
-        for (final (name, preview) in const [
-          ('Normal', 'AaBbCcD'),
-          ('Título 1', 'AaBbC'),
-          ('Título 2', 'AaBbCcD'),
-          ('Título 3', 'AaBbCcD'),
-        ])
-          _styleCard(ctx, name, preview),
-      ]),
+      kit.row(buildStyleGallery(ctx)),
     ]),
     kit.group('Edição', [
       kit.row([
@@ -321,25 +317,182 @@ DomElement buildPaletteButton(RibbonContext ctx,
   return wrap;
 }
 
-/// Cartão da galeria de Estilos (AaBbCcD + rótulo), com realce do ativo.
-DomElement _styleCard(RibbonContext ctx, String name, String preview) {
+/// A GALERIA de estilos: os do documento aberto, ou os quatro fixos.
+///
+/// Com um DOCX importado, os cartões são os estilos `w:qFormat` do próprio
+/// arquivo, com o nome e o preview reais — é a diferença entre oferecer
+/// "Título 1" a um documento cujo estilo se chama "Nível 01" e mostrar a
+/// galeria que o Word mostraria.
+///
+/// Sem catálogo (documento novo, Delta do Quill) a galeria continua sendo a
+/// fixa de Normal/Título 1–3. Não é um placeholder: um documento sem
+/// `styles.xml` não TEM estilos nomeados, e esses quatro são exatamente os
+/// que [actions.applyNamedStyle] sabe aplicar pela heurística de heading.
+List<DomElement> buildStyleGallery(RibbonContext ctx) {
+  final catalog = ctx.controller.styleCatalog;
+  final gallery = catalog?.gallery ?? const <OfficeStyleDefinition>[];
+  if (gallery.isEmpty) {
+    return [
+      for (final (name, styleId, preview) in const [
+        ('Normal', 'Normal', 'AaBbCcD'),
+        ('Título 1', 'Heading1', 'AaBbC'),
+        ('Título 2', 'Heading2', 'AaBbCcD'),
+        ('Título 3', 'Heading3', 'AaBbCcD'),
+      ])
+        _fixedStyleCard(ctx, name, styleId, preview),
+    ];
+  }
+  return [
+    for (final style in gallery) _catalogStyleCard(ctx, style),
+    // "Criar um Estilo" do Word: só existe com catálogo, porque criar um
+    // estilo sem `styles.xml` para gravá-lo seria um cartão que some no
+    // próximo save.
+    ctx.kit.button(
+      '+ Estilo',
+      'Criar Novo Estilo a partir da formatação da seleção',
+      () => openCreateStyleDialog(ctx.controller),
+      extraClass: 'dq-office-stylecard-new',
+    ),
+  ];
+}
+
+/// Cartão dos quatro estilos embutidos (sem catálogo).
+DomElement _fixedStyleCard(
+    RibbonContext ctx, String name, String styleId, String preview) {
+  final card = _cardShell(ctx, name, styleId, preview);
+  card.addEventListener('click', (event) {
+    event.preventDefault();
+    actions.applyNamedStyle(ctx.controller, name);
+  });
+  return card;
+}
+
+/// Cartão de um estilo DO DOCUMENTO: preview com a fonte, o corpo, a cor e
+/// os atributos reais, mais o menu de contexto de gestão.
+DomElement _catalogStyleCard(RibbonContext ctx, OfficeStyleDefinition style) {
+  final preview = style.preview;
+  final card = _cardShell(
+    ctx,
+    style.name,
+    style.id,
+    // O Word encurta a amostra quando a fonte é grande, senão o cartão só
+    // mostraria "Aa". A régua é o corpo do próprio estilo.
+    (preview.sizePt ?? 12) >= 16 ? 'AaBbC' : 'AaBbCcDd',
+    preview: preview,
+  );
+  card.addEventListener('click', (event) {
+    event.preventDefault();
+    actions.applyCatalogStyle(ctx.controller, style.id);
+  });
+  card.addEventListener('contextmenu', (event) {
+    event.preventDefault();
+    _openStyleCardMenu(ctx.controller, style, event);
+  });
+  return card;
+}
+
+DomElement _cardShell(
+  RibbonContext ctx,
+  String name,
+  String styleId,
+  String sampleText, {
+  OfficeStylePreview? preview,
+}) {
   final kit = ctx.kit;
   final card = kit.el(
       'button', 'dq-office-stylecard dq-office-stylecard-${styleSlug(name)}');
   card.setAttribute('type', 'button');
   card.setAttribute('title', name);
+  // O id fica no DOM porque é a identidade do cartão para teste e
+  // automação: o rótulo pode ser renomeado pelo menu de contexto.
+  card.setAttribute('data-style-id', styleId);
   final sample = kit.el('span', 'dq-office-stylecard-sample');
-  sample.appendText(preview);
+  if (preview != null) {
+    final css = _previewCss(preview);
+    if (css.isNotEmpty) sample.setAttribute('style', css);
+  }
+  sample.appendText(sampleText);
   card.append(sample);
   final label = kit.el('span', 'dq-office-stylecard-label');
   label.appendText(name);
   card.append(label);
-  card.addEventListener('click', (event) {
-    event.preventDefault();
-    actions.applyNamedStyle(ctx.controller, name);
-  });
-  ctx.registerStyleCard(name, card);
+  ctx.registerStyleCard(styleId, card);
   return card;
+}
+
+/// O CSS da amostra do cartão.
+///
+/// O corpo é escalado e travado entre 9 e 20 px: um estilo de 36 pt
+/// desenhado em tamanho real arrebentaria a altura da faixa de opções, e um
+/// de 6 pt viraria um borrão. A proporção entre os cartões continua legível,
+/// que é a informação que o preview carrega.
+String _previewCss(OfficeStylePreview preview) {
+  final buffer = StringBuffer();
+  if (preview.family != null) {
+    buffer.write("font-family:'${preview.family}';");
+  }
+  final size = preview.sizePt;
+  if (size != null) {
+    final px = (size * 96 / 72 * 0.62).clamp(9.0, 20.0);
+    buffer.write('font-size:${px.toStringAsFixed(1)}px;');
+  }
+  if (preview.bold) buffer.write('font-weight:700;');
+  if (preview.italic) buffer.write('font-style:italic;');
+  if (preview.underline) buffer.write('text-decoration:underline;');
+  if (preview.color != null) buffer.write('color:${preview.color};');
+  if (preview.align == 'center') buffer.write('text-align:center;');
+  if (preview.align == 'right') buffer.write('text-align:right;');
+  return buffer.toString();
+}
+
+/// O menu de botão direito do cartão — os quatro comandos do Word.
+void _openStyleCardMenu(
+    OfficeWordController controller, OfficeStyleDefinition style, DomEvent e) {
+  final position = e is DomMouseEvent ? (e.clientX, e.clientY) : (0.0, 0.0);
+  openMenuAt(controller, 'stylecard:${style.id}', position.$1, position.$2, [
+    OfficeMenuEntry(
+      label: 'Atualizar ${style.name} para Corresponder à Seleção',
+      icon: 'copystyle',
+      onSelect: () => actions.updateStyleToMatchSelection(controller, style.id),
+    ),
+    OfficeMenuEntry(
+      label: 'Modificar…',
+      icon: 'clearstyle',
+      onSelect: () => openModifyStyleDialog(controller, style.id),
+    ),
+    OfficeMenuEntry(
+      label: 'Renomear…',
+      onSelect: () => _openRenameDialog(controller, style),
+    ),
+    const OfficeMenuEntry.separator(),
+    OfficeMenuEntry(
+      label: 'Remover da Galeria',
+      // Desabilitado no estilo default: sem "Normal" a galeria não teria
+      // caminho de volta ao corpo do texto.
+      enabled: !style.isDefault,
+      onSelect: () => actions.removeStyleFromGallery(controller, style.id),
+    ),
+  ]);
+}
+
+void _openRenameDialog(
+    OfficeWordController controller, OfficeStyleDefinition style) {
+  OfficeDialog(
+    controller: controller,
+    title: 'Renomear Estilo',
+    fields: [
+      OfficeDialogField(
+        key: 'name',
+        label: 'Nome',
+        kind: 'text',
+        value: style.name,
+        hint: 'o identificador do estilo (${style.id}) não muda — é ele que '
+            'os parágrafos referenciam',
+      ),
+    ],
+    onApply: (values) =>
+        actions.renameCatalogStyle(controller, style.id, values['name'] ?? ''),
+  ).open();
 }
 
 /// B4: nome de estilo → sufixo de classe CSS seguro.

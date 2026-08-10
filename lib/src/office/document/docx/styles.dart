@@ -10,6 +10,18 @@ class WpStyle {
   final String? basedOn;
   final String? link;
   final bool isDefault;
+
+  /// `w:qFormat` — o estilo é "recomendado", e é ISSO que o Word usa para
+  /// decidir quem aparece na galeria da faixa de opções. Sem esta leitura a
+  /// galeria mostraria os ~90 estilos de um DOCX real (inclusive os
+  /// `Char` de caractere e os de comentário), que não é o que o Word faz.
+  final bool qFormat;
+
+  /// `w:uiPriority` — a ORDEM da galeria. Ausente vale 0, o default do
+  /// elemento em ECMA-376: um estilo local do documento (que costuma vir sem
+  /// a marca) aparece antes dos internos do Word, como no Word.
+  final int uiPriority;
+
   final WpParagraphProperties? paragraphProperties;
   final WpRunProperties? runProperties;
 
@@ -23,10 +35,20 @@ class WpStyle {
     this.basedOn,
     this.link,
     this.isDefault = false,
+    this.qFormat = false,
+    this.uiPriority = 0,
     this.paragraphProperties,
     this.runProperties,
     this.tableProperties,
   });
+}
+
+/// `w:val` on/off de um elemento-flag do OOXML: ausente = falso, presente
+/// sem `w:val` = verdadeiro, e `0`/`false` desligam explicitamente.
+bool _onOffElement(XmlElement? el) {
+  if (el == null) return false;
+  final value = el.getAttribute('w:val');
+  return value == null || value == '1' || value == 'true' || value == 'on';
 }
 
 /// Catálogo de estilos (`styles.xml`) com docDefaults e cadeias basedOn
@@ -67,6 +89,15 @@ class WpStyleSheet {
         link: styleEl.firstChild('w:link')?.getAttribute('w:val'),
         isDefault: styleEl.getAttribute('w:default') == '1' ||
             styleEl.getAttribute('w:default') == 'true',
+        // `<w:qFormat/>` sem atributo é ligado; `w:val="0"` desliga — a
+        // convenção on/off do OOXML, não a presença do elemento.
+        qFormat: _onOffElement(styleEl.firstChild('w:qFormat')),
+        uiPriority:
+            int.tryParse(styleEl.firstChild('w:uiPriority')?.getAttribute(
+                          'w:val',
+                        ) ??
+                    '') ??
+                0,
         paragraphProperties:
             WpParagraphProperties.fromXml(styleEl.firstChild('w:pPr')),
         runProperties: WpRunProperties.fromXml(styleEl.firstChild('w:rPr')),

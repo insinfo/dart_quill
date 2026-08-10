@@ -30,13 +30,13 @@ List<DomElement> buildFileTab(RibbonContext ctx) {
               final readerTimings = <String, int>{};
               final importTimings = <String, int>{};
               final codecWatch = Stopwatch()..start();
-              final snapshot = (await codec.importAsync(
+              final imported = await codec.importAsync(
                 bytes,
                 includePackageResources: false,
                 readerTimings: readerTimings,
                 importTimings: importTimings,
-              ))
-                  .snapshot;
+              );
+              final snapshot = imported.snapshot;
               codecWatch.stop();
               final readerUs = readerTimings['totalUs'] ?? 0;
               phaseTimings['readerMs'] = readerUs / 1000;
@@ -136,6 +136,11 @@ List<DomElement> buildFileTab(RibbonContext ctx) {
                   sourceDocxBytes: bytes,
                   sourceMap: snapshot.sourceMap,
                   sourceFileName: name,
+                  // A galeria de estilos (F8) vem do codec, não do snapshot:
+                  // com `includePackageResources: false` o `styles.xml` não
+                  // viaja no envelope, e reabrir o pacote só para listar os
+                  // estilos custaria outro unzip do documento inteiro.
+                  styleCatalog: imported.styleCatalog,
                 );
               });
               openWatch.stop();

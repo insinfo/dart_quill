@@ -12,6 +12,7 @@ import '../../platform/dom.dart';
 import '../layout/page_graph.dart';
 import '../model/index.dart';
 import '../office/snapshot.dart';
+import '../office/style_catalog.dart';
 import '../state/index.dart';
 import '../view/editor_view.dart';
 import 'header_footer.dart';
@@ -102,6 +103,23 @@ abstract interface class OfficeWordController {
   /// Puxa a seleção nativa para o modelo (guardada pelo host da view).
   void syncSelection();
 
+  /// Os estilos DO DOCUMENTO aberto (F8), ou null quando não há um pacote de
+  /// origem — documento novo, ou Delta do Quill, que não tem `styles.xml`.
+  ///
+  /// A galeria da Página Inicial é construída daqui; sem catálogo ela cai nos
+  /// quatro cartões fixos (Normal/Título 1–3), que é o comportamento
+  /// histórico e continua correto para um documento sem estilos nomeados.
+  OfficeStyleCatalog? get styleCatalog;
+
+  /// Avisa que o CATÁLOGO mudou sem que o documento mudasse — renomear um
+  /// estilo, tirá-lo da galeria.
+  ///
+  /// Existe separado de [dispatch] porque essas duas operações não produzem
+  /// transação: sem um aviso explícito a galeria continuaria mostrando o
+  /// nome antigo até a próxima troca de aba, e o botão Salvar não saberia
+  /// que há algo novo para gravar no `styles.xml`.
+  void styleCatalogChanged();
+
   /// O mapa `style` do bloco corrente, ou null.
   Map? currentBlockStyle();
 
@@ -141,6 +159,7 @@ abstract interface class OfficeWordController {
     Uint8List? sourceDocxBytes,
     Map<String, dynamic>? sourceMap,
     String? sourceFileName,
+    OfficeStyleCatalog? styleCatalog,
   });
 
   /// Prepares font and table geometry in cooperative slices before opening a
