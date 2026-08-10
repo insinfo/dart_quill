@@ -9,6 +9,8 @@ library;
 import '../../../platform/dom.dart';
 import '../../office/style_catalog.dart';
 import '../controller.dart';
+import '../find_replace.dart';
+import '../formatting_marks.dart';
 import '../dialogs/dialog.dart';
 import '../dialogs/style_dialog.dart';
 import '../menu.dart';
@@ -146,6 +148,7 @@ List<DomElement> buildHomeTab(RibbonContext ctx) {
             icon: 'align-right'),
         kit.button('▤', 'Justificar', () => actions.setAlign(c, 'justify'),
             icon: 'align-just'),
+        buildFormattingMarksButton(c),
       ]),
     ]),
     kit.group('Estilos', [
@@ -155,6 +158,12 @@ List<DomElement> buildHomeTab(RibbonContext ctx) {
       kit.row([
         kit.button('Selecionar Tudo', 'Selecionar Tudo (Ctrl+A)',
             () => c.runCommand('selectAll')),
+        kit.button('🔍', 'Localizar (Ctrl+F)',
+            () => officeFindPanel(c).open(withReplace: false),
+            icon: 'search'),
+        kit.button('⇄', 'Substituir (Ctrl+H)',
+            () => officeFindPanel(c).open(withReplace: true),
+            icon: 'replace'),
       ]),
     ]),
   ];

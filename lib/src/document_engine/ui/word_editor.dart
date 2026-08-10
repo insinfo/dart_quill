@@ -44,6 +44,7 @@ import 'dart:typed_data';
 
 import '../../platform/dom.dart';
 import '../diagnostics/open_document_timing.dart';
+import '../layout/dom_position_map.dart';
 import '../layout/dom_renderer.dart';
 import '../layout/layout_composer.dart';
 import '../layout/page_graph.dart';
@@ -57,6 +58,9 @@ import '../view/editor_view.dart';
 import '../view/extension.dart';
 import 'context_menu.dart';
 import 'controller.dart';
+import 'dialogs/link_dialog.dart';
+import 'find_replace.dart';
+import 'formatting_marks.dart';
 import 'header_footer.dart';
 import 'object_adorner.dart';
 import 'overlay.dart';
@@ -73,6 +77,31 @@ import 'word_options.dart';
 export 'controller.dart'
     show OfficeWordController, OfficeDomKit, OfficeComboBox;
 export 'context_menu.dart' show OfficeContextMenu;
+export 'dialogs/link_dialog.dart'
+    show
+        openLinkDialog,
+        officeApplyLink,
+        officeRemoveLink,
+        officeLinkAt,
+        officeNormalizeHref,
+        officeHyperlinkColor,
+        OfficeLinkRange;
+export 'find_replace.dart'
+    show
+        OfficeFindReplacePanel,
+        OfficeSearchMatch,
+        OfficeSearchOptions,
+        officeFindAll,
+        officeFindPanel,
+        officeReplaceAll,
+        officeSelectMatch;
+export 'formatting_marks.dart'
+    show
+        buildFormattingMarksButton,
+        officeFormattingMarksClass,
+        officeFormattingMarksVisible,
+        officeSetFormattingMarks,
+        officeToggleFormattingMarks;
 export 'header_footer.dart' show OfficeHeaderFooterSession, OfficeRegionRef;
 export 'image_insert.dart'
     show
@@ -90,6 +119,13 @@ export 'overlay.dart'
 export 'quickbar.dart' show OfficeSelectionQuickbar;
 export 'ribbon.dart' show OfficeRibbon, RibbonContext;
 export 'rulers.dart' show OfficeHorizontalRuler, OfficeVerticalRuler;
+export 'symbol_picker.dart'
+    show
+        OfficeSymbol,
+        officeSymbols,
+        officeInsertSymbol,
+        buildSymbolGallery,
+        openSymbolGallery;
 export 'table_adorner.dart'
     show OfficeTableAdorner, officeColumnResizeTolerancePx;
 export 'table_map.dart' show OfficeTableMap, OfficeTableCell;
@@ -180,6 +216,7 @@ class OfficeWordEditor implements OfficeWordController {
   final LayoutTableCache _layoutTableCache = LayoutTableCache();
   final LayoutTableLineCache _layoutTableLineCache = LayoutTableLineCache();
   late final DomEventListener _saveShortcut;
+  late final DomEventListener _chromeShortcut;
 
   late PageSetupTwips _setup = options.setup;
   late String _documentBaseName = _fileStem(options.title);
@@ -210,6 +247,8 @@ class OfficeWordEditor implements OfficeWordController {
   Schema get schema => _schema;
   @override
   OfficeOverlay get overlay => _overlay;
+  @override
+  DomElement get hostElement => host;
   @override
   OfficeEditorView get view => _view;
 
@@ -286,6 +325,40 @@ class OfficeWordEditor implements OfficeWordController {
 
   @override
   void syncSelection() => activeView.syncSelectionFromDom();
+
+  /// Rola o canvas até a seleção, medindo o BLOCO projetado.
+  ///
+  /// A medida é do elemento porque é o que existe: `getRangeBounds` depende
+  /// de uma seleção nativa já escrita, e ela pode estar num `<input>` do
+  /// painel que acabou de comandar a navegação. Sem geometria (VM/fake DOM)
+  /// os retângulos são todos iguais e a conta simplesmente não rola nada —
+  /// nunca rola para o lugar errado.
+  @override
+  void revealSelection() {
+    if (_disposed || !_viewReady) return;
+    final position = const OfficeDomPositionMap()
+        .domPositionFor(_pagesHost, view.state.selection.from);
+    if (position == null) return;
+    DomNode? node = position.node;
+    while (node != null && node is! DomElement) {
+      node = node.parentNode;
+    }
+    final element = node is DomElement ? node : _pagesHost;
+    final bounds = adapter.getElementBounds(element, relativeTo: _canvas);
+    if (bounds == null) return;
+    final top = _numOf(bounds['top']);
+    final height = _numOf(bounds['height']);
+    final viewport = _canvas.clientHeight.toDouble();
+    if (viewport <= 0) return;
+    // Uma folga de meia tela acima deixa a ocorrência no meio do viewport, e
+    // não colada na borda de onde ela sairia com o próximo passo.
+    const margin = 40.0;
+    if (top < margin) {
+      _canvas.scrollBy(0, top - margin);
+    } else if (top + height > viewport - margin) {
+      _canvas.scrollBy(0, top + height - viewport + margin);
+    }
+  }
 
   @override
   OfficeStyleCatalog? get styleCatalog => _styleCatalog;
@@ -842,6 +915,8 @@ class OfficeWordEditor implements OfficeWordController {
     _setDirty(false);
     _saveShortcut = _handleSaveShortcut;
     host.addEventListener('keydown', _saveShortcut);
+    _chromeShortcut = _handleChromeShortcut;
+    host.addEventListener('keydown', _chromeShortcut);
     if (options.mode == OfficeWordMode.flow) {
       host.classes.add('dq-office-app-flow');
     }
@@ -905,7 +980,9 @@ class OfficeWordEditor implements OfficeWordController {
     // fecha em vez de deixar um menu órfão flutuando. A moldura do objeto
     // NÃO é popup: ela pertence ao objeto e apenas reacompanha a geometria.
     _canvas.addEventListener('scroll', (_) {
-      _overlay.closeAll();
+      // `closeTransient` e não `closeAll`: quem rolou o documento pode ter
+      // sido o próprio painel Localizar, indo até a ocorrência seguinte.
+      _overlay.closeTransient();
       _objectAdorner.refresh();
       _tableAdorner.refresh();
       _headerFooter.reposition();
@@ -1038,6 +1115,28 @@ class OfficeWordEditor implements OfficeWordController {
     event.preventDefault();
     event.stopPropagation();
     unawaited(saveDocx());
+  }
+
+  /// Ctrl+F, Ctrl+H e Ctrl+K.
+  ///
+  /// Estes três NÃO passam pelo keymap das extensões: lá vivem comandos que
+  /// agem sobre o `EditorState` (`view/extension.dart`), e abrir um painel ou
+  /// um diálogo é chrome, não transação. Ficam ao lado do Ctrl+S pelo mesmo
+  /// motivo dele — e com o mesmo `preventDefault`, sem o qual o Ctrl+F do
+  /// browser abriria a busca da PÁGINA por cima do documento.
+  void _handleChromeShortcut(DomEvent event) {
+    if (_disposed || event is! DomKeyboardEvent || event.isComposing) return;
+    if ((!event.ctrlKey && !event.metaKey) || event.altKey) return;
+    final key = event.key.toLowerCase();
+    if (key != 'f' && key != 'h' && key != 'k') return;
+    if (event.shiftKey) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (key == 'k') {
+      openLinkDialog(this);
+      return;
+    }
+    officeFindPanel(this).open(withReplace: key == 'h');
   }
 
   void _handleDoubleClick(DomEvent event) {
@@ -1232,6 +1331,7 @@ class OfficeWordEditor implements OfficeWordController {
     if (_disposed) return;
     _disposed = true;
     host.removeEventListener('keydown', _saveShortcut);
+    host.removeEventListener('keydown', _chromeShortcut);
     final contextMenu = _contextMenuListener;
     if (contextMenu != null) {
       _canvas.removeEventListener('contextmenu', contextMenu);
@@ -1245,5 +1345,6 @@ class OfficeWordEditor implements OfficeWordController {
     _kit.clear(host);
     host.classes.remove('dq-office-app');
     host.classes.remove('dq-office-app-flow');
+    host.classes.remove(officeFormattingMarksClass);
   }
 }

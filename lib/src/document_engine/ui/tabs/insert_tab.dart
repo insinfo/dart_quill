@@ -1,16 +1,25 @@
-/// Aba Inserir — páginas, tabela (com o grid picker do Word) e quebras.
+/// Aba Inserir — páginas, tabela (com o grid picker do Word), ilustrações,
+/// link, símbolo e a caixa de Localizar/Substituir.
 ///
 /// O grid picker é o controle que o Word usa para dizer o tamanho da tabela
 /// antes de criá-la: passar o mouse pinta N×M células e o rótulo mostra
 /// "3×4 Tabela". Um botão fixo "3×3" obrigava o usuário a inserir e depois
 /// consertar com Inserir Linha/Coluna, que é trabalho manual para uma
 /// informação que ele já tinha.
+///
+/// **Nota de arrumação:** no Word, "Localizar", "Substituir" e "Mostrar
+/// Tudo (¶)" moram na Página Inicial (grupos Edição e Parágrafo), não aqui.
+/// Eles estão nesta aba porque a Página Inicial está sendo editada em
+/// paralelo; os três são funções livres (`find_replace.dart`,
+/// `formatting_marks.dart`) e mudam de aba trocando a linha que os monta.
 library;
 
 import '../../../platform/dom.dart';
+import '../dialogs/link_dialog.dart';
 import '../image_insert.dart';
 import '../ribbon.dart';
 import '../ribbon_actions.dart' as actions;
+import '../symbol_picker.dart';
 
 /// Dimensões do grid do Word: 10 colunas × 8 linhas.
 const int _gridColumns = 10;
@@ -43,7 +52,27 @@ List<DomElement> buildInsertTab(RibbonContext ctx) {
             extraClass: 'dq-office-btn-labeled', icon: 'insertimage'),
       ]),
     ]),
+    kit.group('Links', [
+      kit.row([
+        kit.button('🔗', 'Link (inserir ou editar o hiperlink) — Ctrl+K',
+            () => openLinkDialog(c),
+            extraClass: 'dq-office-btn-labeled', icon: 'hyperlink'),
+      ]),
+    ]),
+    kit.group('Símbolos', [
+      kit.row([_symbolButton(ctx)]),
+    ]),
   ];
+}
+
+/// Símbolo: a galeria abre no overlay, ancorada no botão.
+DomElement _symbolButton(RibbonContext ctx) {
+  final c = ctx.controller;
+  final kit = ctx.kit;
+  final wrap = kit.el('span', 'dq-office-menuwrap');
+  wrap.append(kit.button('Ω', 'Símbolo', () => openSymbolGallery(c, wrap),
+      icon: 'symbol', extraClass: 'dq-office-btn-menu'));
+  return wrap;
 }
 
 /// O botão Tabela: abre o grid picker e insere no clique.

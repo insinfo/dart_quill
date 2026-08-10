@@ -41,12 +41,23 @@ enum OfficePopupPlacement {
 /// Um popup aberto. O chamador guarda isto para fechá-lo por conta própria
 /// (o normal é deixar o host fechar).
 class OfficePopupHandle {
-  OfficePopupHandle._(this.group, this.element, this._host);
+  OfficePopupHandle._(this.group, this.element, this._host,
+      {this.persistent = false});
 
   /// Popups do MESMO grupo se excluem: abrir um fecha o outro, como as
   /// galerias da ribbon do Word.
   final String group;
   final DomElement element;
+
+  /// Sobrevive à rolagem do documento.
+  ///
+  /// A regra normal é a do Word: rolar tira o popup do lugar a que ele se
+  /// ancorou, então ele fecha em vez de flutuar órfão. O painel
+  /// Localizar/Substituir é o contrário — ele NÃO tem âncora e é justamente
+  /// ele quem manda o documento rolar até a ocorrência; fechá-lo no
+  /// resultado do próprio comando seria absurdo.
+  final bool persistent;
+
   final OfficeOverlay _host;
 
   bool get isOpen => _host._open.contains(this);
@@ -98,6 +109,7 @@ class OfficeOverlay {
     num? x,
     num? y,
     String? extraClass,
+    bool persistent = false,
   }) {
     closeGroup(group);
     final layer = _layer;
@@ -110,7 +122,8 @@ class OfficeOverlay {
     popup.append(content);
     layer?.append(popup);
 
-    final handle = OfficePopupHandle._(group, popup, this);
+    final handle =
+        OfficePopupHandle._(group, popup, this, persistent: persistent);
     _open.add(handle);
     _anchors[handle] = anchor;
     _position(popup, anchor, placement, x, y);
@@ -135,6 +148,15 @@ class OfficeOverlay {
 
   void closeAll() {
     for (final handle in [..._open]) {
+      close(handle);
+    }
+  }
+
+  /// Fecha só o que a rolagem invalida: tudo que se ancorou num controle.
+  /// Os popups [OfficePopupHandle.persistent] ficam.
+  void closeTransient() {
+    for (final handle in [..._open]) {
+      if (handle.persistent) continue;
       close(handle);
     }
   }

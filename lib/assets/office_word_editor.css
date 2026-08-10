@@ -1238,6 +1238,182 @@
   border-color: #185abd;
 }
 
+/* ---- galeria de símbolos (Inserir → Símbolo) ---- */
+
+.dq-office-symbols {
+  padding: 8px;
+  max-width: 268px;
+}
+
+.dq-office-symbols-label {
+  padding-bottom: 6px;
+  font-size: 12px;
+  color: #444;
+  text-align: center;
+}
+
+.dq-office-symbols-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 32px);
+  gap: 2px;
+}
+
+.dq-office-symbol {
+  width: 32px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: #fff;
+  font-size: 15px;
+  line-height: 1;
+  color: #242424;
+  cursor: pointer;
+}
+
+.dq-office-symbol:hover {
+  background: #cfe4fa;
+  border-color: #185abd;
+}
+
+/* ---- painel Localizar/Substituir ---- */
+
+/* Faixa fixa no alto do editor, como o painel de navegação do Word: o
+   posicionamento do overlay (que trabalha com âncoras) é sobrescrito porque
+   este painel não pertence a nenhum controle. */
+.dq-office-find-popup {
+  left: auto !important;
+  top: 8px !important;
+  right: 16px;
+  padding: 8px 10px;
+  min-width: 360px;
+}
+
+.dq-office-find {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dq-office-find-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dq-office-find-row-hidden {
+  display: none;
+}
+
+.dq-office-find-input {
+  flex: 1 1 auto;
+  min-width: 140px;
+  height: 24px;
+  border: 1px solid #c7c7c7;
+  border-radius: 2px;
+  padding: 0 6px;
+  font: inherit;
+  font-size: 12.5px;
+  color: #242424;
+}
+
+.dq-office-find-input:focus {
+  outline: none;
+  border-color: #185abd;
+}
+
+.dq-office-find-count {
+  min-width: 74px;
+  font-size: 11.5px;
+  color: #767676;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dq-office-find-step,
+.dq-office-find-close {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  font-size: 13px;
+  color: #444;
+  cursor: pointer;
+}
+
+.dq-office-find-step:hover,
+.dq-office-find-close:hover {
+  background: #eaeaea;
+  border-color: #c7c7c7;
+}
+
+.dq-office-find-action {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #c7c7c7;
+  border-radius: 2px;
+  background: #fff;
+  font-size: 12px;
+  color: #242424;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dq-office-find-action:hover {
+  background: #eaeaea;
+}
+
+.dq-office-find-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: #444;
+}
+
+/* ---- marcas de formatação (¶) ---- */
+
+/* Tudo aqui é PSEUDO-ELEMENTO: `::after`/`::before` não existem no DOM, logo
+   não entram na soma de `data-model-length` do mapa de posições e não podem
+   deslocar a seleção. Um ¶ inserido como nó de texto deslocaria o caret um
+   caractere por parágrafo. */
+.dq-office-marks .dq-office-block:not([data-continues-on]) > .dq-office-line:last-child::after {
+  content: '\00b6';
+  color: #2b579a;
+  opacity: .55;
+  pointer-events: none;
+}
+
+/* A seta da tabulação ocupa a faixa sem empurrar o `\t` que sustenta o
+   offset do caret: fora do fluxo, dentro do próprio run de tab. */
+.dq-office-marks .dq-office-tab {
+  position: relative;
+}
+
+.dq-office-marks .dq-office-tab::before {
+  content: '\2192';
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #2b579a;
+  opacity: .55;
+  pointer-events: none;
+}
+
+/* ---- hiperlink projetado ---- */
+
+/* O renderer escreve `data-link` no run (dom_renderer.dart). A COR fica no
+   `style` inline (o run pode ter cor própria vinda do DOCX) e é a marca
+   `color` aplicada pelo diálogo que a define; o que a folha acrescenta é o
+   que não conflita com o inline: sublinhado quando o run não tem decoração
+   nenhuma, e o cursor que denuncia o link. */
+.dq-office-run[data-link] {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* ---- spinners de recuo/espaçamento (aba Layout) ---- */
 
 .dq-office-spinner {

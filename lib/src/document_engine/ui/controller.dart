@@ -29,6 +29,14 @@ abstract interface class OfficeWordController {
   /// garante uma única regra de fechamento e nenhum popup recortado.
   OfficeOverlay get overlay;
 
+  /// O elemento que hospeda o editor INTEIRO (chrome, páginas e overlay).
+  ///
+  /// Existe para as duas coisas que valem para o componente todo e não para
+  /// uma peça dele: uma classe de modo (as marcas de formatação ¶) e um
+  /// popup que não pode fechar quando o usuário clica no documento (o painel
+  /// Localizar). Nenhum componente monta nada aqui dentro por conta própria.
+  DomElement get hostElement;
+
   /// Nome base do documento corrente, sem caminho nem extensão.
   ///
   /// Um arquivo aberto substitui o título inicial para que salvar/exportar
@@ -119,6 +127,15 @@ abstract interface class OfficeWordController {
   /// nome antigo até a próxima troca de aba, e o botão Salvar não saberia
   /// que há algo novo para gravar no `styles.xml`.
   void styleCatalogChanged();
+
+  /// Rola o viewport até a seleção corrente, se ela estiver fora dele.
+  ///
+  /// Despachar uma seleção já FIXA a página na janela virtualizada e escreve
+  /// a seleção nativa, mas o browser não rola por conta própria quando quem
+  /// moveu o caret foi o programa e não o usuário. Sem isto, "Próximo" no
+  /// painel Localizar acha a ocorrência na página 40 e deixa o usuário
+  /// olhando para a página 1.
+  void revealSelection();
 
   /// O mapa `style` do bloco corrente, ou null.
   Map? currentBlockStyle();
