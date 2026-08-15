@@ -693,7 +693,12 @@ class PageGraphDomRenderer {
     element.setAttribute('contenteditable', 'false');
     element.setAttribute('data-model-length', '1');
     element.setAttribute('data-position-h-align', box.positionHAlign ?? 'left');
-    if (blockContentPos != null) {
+    // `docPos < 0` é a projeção REPETIDA de cabeçalho/rodapé: ela não
+    // corresponde a nenhuma posição do corpo, e somar o offset de caractere
+    // a -1 produziria uma posição positiva que apontaria para outro nó
+    // qualquer. Sem âncora, o clique nessa cópia inerte não seleciona nada —
+    // que é o certo: a caixa do cabeçalho é editada na sessão da REGIÃO.
+    if (blockContentPos != null && blockContentPos >= 0) {
       // A posição do NÓ `textBox` no documento. O visual é filho do
       // fragmento, não da linha, então ele não herda os offsets de
       // caractere — sem esta âncora um duplo clique não saberia qual caixa

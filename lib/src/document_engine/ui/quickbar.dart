@@ -175,7 +175,9 @@ class OfficeSelectionQuickbar {
   /// geometria da própria seleção.
   void showForSelection({num? anchorX, num? anchorY}) {
     if (!controller.viewReady) return;
-    final selection = controller.view.state.selection;
+    // A view ATIVA: a seleção que a barra formata pode estar dentro do
+    // cabeçalho ou de uma caixa de texto.
+    final selection = controller.activeView.state.selection;
     if (selection.empty) {
       hide();
       return;

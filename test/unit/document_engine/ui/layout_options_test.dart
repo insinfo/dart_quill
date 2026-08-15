@@ -149,7 +149,7 @@ void main() {
       expect(inline.description, contains('flutuante'));
     });
 
-    test('imagem tem todos os modos desabilitados, com o motivo', () {
+    test('imagem: modos desabilitados com o motivo, e "em linha" MARCADO', () {
       final editor = mount(docWithImage());
       selectNode(editor, 'image');
 
@@ -157,7 +157,12 @@ void main() {
       expect(entries.every((entry) => !entry.enabled), isTrue);
       expect(entries.every((entry) => entry.description!.contains('em linha')),
           isTrue);
-      expect(entries.any((entry) => entry.checked), isFalse);
+      // O modo VIGENTE da imagem é "em linha com o texto" — o Word o mostra
+      // marcado, e uma lista inteiramente apagada dizia ao usuário que o
+      // editor não sabe o que a imagem é.
+      final checked = entries.where((entry) => entry.checked).toList();
+      expect(checked, hasLength(1));
+      expect(checked.single.label, 'Em linha com o texto');
     });
 
     test('escolher um modo grava o MESMO atributo que o compositor lê', () {

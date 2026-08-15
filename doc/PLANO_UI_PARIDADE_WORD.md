@@ -58,7 +58,7 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Aba contextual de Tabela (aparece/some com a seleção) | ✅ | `ribbon.dart:155-167` |
 | Duas abas contextuais de tabela ("Design da Tabela" + "Tabela Layout") | ✅ | `tabs/table_design_tab.dart` + `tabs/table_layout_tab.dart`, registradas em `ribbon.dart:tableTabKeys` (2026-08-09) |
 | Aba contextual "Cabeçalho e Rodapé" | ✅ | `tabs/header_footer_tab.dart` (2026-08-09): aparece com a sessão do F6, com Ir para Cabeçalho/Rodapé, Primeira Página Diferente, Pares/Ímpares e Nº de Página |
-| Aba contextual "Forma de Formato" (imagem/caixa selecionada) | ❌ | — |
+| Aba contextual "Formato de Imagem"/"Formato da Forma" (imagem/caixa selecionada) | ✅ | `tabs/object_format_tab.dart` (2026-08-15): aparece e some com a seleção do objeto, o RÓTULO segue o tipo (como no Word), grupos Organizar (alinhar + disposição do texto + excluir) e Tamanho (altura/largura em cm com trava de proporção, pelo MESMO `setObjectSizeTwips` da alça). Correções/cor/efeitos/moldura de imagem ficam de fora com o motivo escrito no cabeçalho do arquivo — o `PageGraph` projeta a imagem só com `src`, largura e altura |
 | Realce de estado: negrito/itálico/sub/sobre acesos conforme seleção | ✅ | `ribbon.dart:171-219` |
 | Fonte e tamanho refletem a seleção | ✅ | `ribbon_actions.effectiveInlineValue` (2026-08-09): varre os runs, VAZIO em seleção mista, e resolve marca → estilo do DOCX → padrão do compositor |
 | Galeria de estilos reflete o bloco corrente | ✅ | `OfficeStyleCatalog` + `home_tab.buildStyleGallery` (2026-08-09): cartões vêm do `styles.xml` do documento, ordenados por `uiPriority`, com preview da cascata resolvida e realce por `currentStyleId` (§2.8) |
@@ -74,9 +74,9 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 |---|---|---|
 | Mini toolbar flutuante ao selecionar texto (fonte, tamanho, N/I/S, cor, realce, listas) | ✅ | `ui/quickbar.dart` (2026-08-09): nasce no mouseup/keyup que TERMINA a seleção, some ao digitar/colapsar, altura medida para não cobrir o texto |
 | Mini toolbar de tabela (ao selecionar/clicar na âncora ⊞) | ✅ | `quickbar.showForTable` (2026-08-09) |
-| Mini toolbar de imagem (alinhamento, excluir) | 🟡 | `quickbar.showForObject` (2026-08-09); disposição do texto espera wrap no compositor |
+| Mini toolbar de imagem (alinhamento, excluir) | ✅ | `quickbar.showForObject`; em 2026-08-15 ela passou a abrir também para objeto DENTRO do cabeçalho e para a caixa flutuante (§2.14), e "Alinhar" da caixa deixou de lançar (B12) |
 | Menu de botão direito (recortar/copiar/colar, marcas, recuo, itens de tabela) | ✅ | `ui/context_menu.dart` (2026-08-09): contextual, itens indisponíveis desabilitados; falta Fonte…/Parágrafo… (diálogos, F2 restante) |
-| Popover "Opções de Layout" (ícone ao lado do objeto selecionado) | ❌ | — |
+| Popover "Opções de Layout" (ícone ao lado do objeto selecionado) | ✅ | `ui/layout_options.dart` + o ícone `dq-office-objanchor` da moldura; numa IMAGEM os modos flutuantes seguem desabilitados com o motivo, mas "Em linha com o texto" aparece MARCADO (2026-08-15) — é o modo vigente dela, e o Word o mostra assim |
 
 ### 1.4 Objetos: imagem e caixa de texto
 
@@ -85,13 +85,13 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Renderização de imagem inline (tamanho em twips) | ✅ | `layout/dom_renderer.dart:541-551` |
 | Renderização de imagem/objeto ancorado (flutuante) e textBox | ✅ | `dom_renderer.dart:472-486, 590-601` (contenteditable=false) |
 | Clique seleciona o objeto (moldura de seleção) | ✅ | `ui/object_adorner.dart` (2026-08-09) |
-| Âncoras de redimensionamento (8 handles) em imagem | ✅ | arrasto sem reprojetar, UMA transação no pointerup, Shift mantém proporção (2026-08-09) |
-| Âncoras de redimensionamento em caixa de texto | ✅ | mesmo adorno (`officeResizableNodeTypes`) |
+| Âncoras de redimensionamento (8 handles) em imagem | ✅ | arrasto sem reprojetar, UMA transação no pointerup, Shift mantém proporção (2026-08-09); em 2026-08-15 passou a valer também para a imagem DENTRO do cabeçalho/rodapé (§2.14, B11) |
+| Âncoras de redimensionamento em caixa de texto | ✅ | mesmo adorno (`officeResizableNodeTypes`); só começou a APARECER em 2026-08-15 — clicar na caixa não selecionava o nó (B13) |
 | Arrastar para reposicionar objeto flutuante | ✅ (caixa de texto) | faixas de borda da moldura (`ui/object_adorner.dart`), UMA transação no `pointerup` somando `offsetX/offsetY`; imagem fica de fora porque a importação a achata em inline (`office/document/docx/reader.dart:641-643`) |
 | Opções de disposição do texto (quadrado, próximo, através, sup./inf., atrás, na frente) | ✅ | popover `ui/layout_options.dart` + botão na quickbar de objeto; o compositor honra o modo em `layout/layout_composer.dart` (`_wrapModeOf`, `_WrapField.insetsFor`, `_topAndBottomBottomTwips`) e a exportação o reescreve em `office/docx_codec.dart` (`_textBoxRawXmlWithWrap`) |
 | "Em linha com o texto" para caixa de texto | ❌ (item VISÍVEL e desabilitado, com o motivo) | a caixa é sempre flutuante no motor: o token dela tem largura zero (`layout_composer.dart`, ramo `textBox` de `_breakLines`) e o visual é `position:absolute` (`layout/dom_renderer.dart:_renderTextBox`) |
 | Disposição do texto para IMAGEM | ❌ (itens VISÍVEIS e desabilitados) | `wp:anchor` de imagem é lido como inline (`office/document/docx/reader.dart:641-643`); não há `offsetX/offsetY/wrapMode` no nó `image` |
-| Edição in-place da caixa de texto | ✅ | `ui/text_box_session.dart` (2026-08-09): duplo clique abre uma view sobre a caixa; o `w:txbxContent` é regerado na exportação quando a assinatura mudou (§2.10) |
+| Edição in-place da caixa de texto | ✅ | `ui/text_box_session.dart` (2026-08-09): duplo clique abre uma view sobre a caixa; o `w:txbxContent` é regerado na exportação quando a assinatura mudou (§2.10). Em 2026-08-15 a sessão ganhou a view DONA: a caixa do CABEÇALHO (o quadro "Continuação de Processo" do timbre) também abre, e a gravação volta para o documento da região (§2.14) |
 | Inserir imagem (aba Inserir → arquivo) | ✅ | `ui/image_insert.dart` (2026-08-09): tamanho natural lido do cabeçalho, limitado à área útil |
 | Inserir caixa de texto | ✅ | `ui/text_box_insert.dart` (2026-08-09): a caixa nasce SEM `word`, e é essa ausência que faz a exportação GERAR o `wps:wsp` + `w:txbxContent` (`office/text_box_drawing.dart`) em vez de carimbar um XML velho — round-trip provado e aberto no Word real (shape `msoTextBox`, `wrapNone`, `Saved=True`) |
 | Girar objeto (handle de rotação) | ❌ | — |
@@ -120,7 +120,7 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Renderização (inclusive variantes par/ímpar/primeira página) | ✅ | `dom_renderer.dart:164-205`; variantes em `word_editor.dart:129-131` |
 | Campos PAGE/NUMPAGES resolvidos por página | ✅ | `layout/layout_composer.dart:399-401, 1886-1935` |
 | Duplo clique entra no modo cabeçalho/rodapé | ✅ | `ui/header_footer.dart` + `word_editor.dart` (2026-08-09) |
-| Linha tracejada + etiqueta "Cabeçalho"/"Rodapé" no modo de edição | ✅ | a etiqueta diz QUAL variante está aberta (primeira página / par) |
+| Linha tracejada + etiqueta "Cabeçalho"/"Rodapé" no modo de edição | ✅ | a etiqueta diz QUAL variante está aberta (primeira página / par). A ÁREA foi corrigida em 2026-08-15 (B14): ela vai da borda da folha até a linha divisória, como no Word — antes o tracejado cobria só a faixa composta e a tira do topo do papel ficava de fora |
 | Corpo esmaecido durante a edição do cabeçalho | ✅ | tira o `contenteditable`, não só a opacidade — senão o caret voltaria ao texto pelo teclado |
 | Aba contextual "Cabeçalho e Rodapé" | ✅ | `ui/tabs/header_footer_tab.dart` (2026-08-09) |
 | Inserir nº de página / campo no cabeçalho | ✅ | `ribbon_actions.insertPageField` (2026-08-09): cria a sequência begin/instrução/separate/end com o `officeXml` do OOXML, então o compositor resolve 1, 2, 3 por página e o Word reconhece o campo |
@@ -159,7 +159,7 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Funcionalidade | Status | Evidência |
 |---|---|---|
 | Aplicar Normal/Título 1–3 | ✅ | `ribbon_actions.applyNamedStyle` (grava `styleId` no attr `word`) |
-| Galeria dinâmica com os estilos DO DOCUMENTO (nome + preview real) | ✅ | `office/style_catalog.dart` + `tabs/home_tab.buildStyleGallery` (2026-08-09); cartões `w:qFormat` ordenados por `uiPriority`, preview com fonte/corpo/cor/negrito reais |
+| Galeria dinâmica com os estilos DO DOCUMENTO (nome + preview real) | ✅ | `office/style_catalog.dart` + `tabs/home_tab.buildStyleGallery` (2026-08-09); cartões `w:qFormat` ordenados por `uiPriority`, preview com fonte/corpo/cor/negrito reais. Desde 2026-08-15 a galeria é uma JANELA com ▲ ▼ e "Mais" (B15) — antes ela era uma fileira solta e um DOCX com 30 estilos punha uma barra de rolagem horizontal atravessando a ribbon inteira |
 | Criar estilo a partir da seleção (diálogo "Criar Novo Estilo…") | ✅ | `dialogs/style_dialog.openCreateStyleDialog` (2026-08-09) |
 | Modificar estilo (diálogo com fonte/parágrafo/baseado em) | 🟡 | `dialogs/style_dialog.openModifyStyleDialog` (2026-08-09): família, corpo, negrito, alinhamento, recuos, espaçamento e entrelinha. Cor/itálico/sublinhado FICAM DE FORA — `LayoutComposer._BlockStyle` (4617-4671) não tem esses campos e `_styleOfText` (2539-2570) só os obtém de marcas de run |
 | Menu de contexto do cartão (Atualizar para corresponder, Renomear, Remover) | ✅ | `tabs/home_tab._openStyleCardMenu` (2026-08-09), pelo `ui/menu.dart` |
@@ -247,6 +247,81 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
     silêncio (transação sem passos). Agora `mount` usa o schema DO
     DOCUMENTO por padrão e rejeita explicitamente um `schema:` incompatível.
     O próprio `example/office_editor` tinha esse defeito.
+
+11. ~~**B11 — objeto dentro do cabeçalho não tinha moldura nem alça**~~ —
+    **CORRIGIDO 2026-08-15**: `OfficeObjectAdorner` olhava para
+    `controller.view` (o CORPO). Com o modo cabeçalho/rodapé aberto, a
+    seleção do brasão existe na view da REGIÃO, e o adorno perguntava a uma
+    view onde nada estava selecionado — nenhuma alça era desenhada. Agora ele
+    segue `activeView`, e `moveBy`/`resizeTo` montam a transação a partir da
+    MESMA view em que a aplicam (antes liam o corpo e despachavam na região,
+    que é a "mismatched transaction" que o estado recusa).
+12. ~~**B12 — "Alinhar" da caixa de texto lançava**~~ — **CORRIGIDO
+    2026-08-15**: `setObjectAlign` criava a `NodeSelection` a partir de
+    `state.doc` DEPOIS do `setNodeMarkup`; a seleção tem de apontar para
+    `tr.doc`. O erro morria dentro do handler do clique, então o botão
+    simplesmente não fazia nada — na quickbar do objeto e no menu.
+13. ~~**B13 — clicar numa caixa de texto flutuante não selecionava nada**~~ —
+    **CORRIGIDO 2026-08-15**: o visual da caixa é filho do FRAGMENTO, não da
+    linha, e `OfficeDomPositionMap.modelPositionAt` exige um ancestral
+    `.dq-office-line` — devolvia null. Sem `NodeSelection` não há moldura,
+    alça, ícone de Opções de Layout nem arrasto: a caixa era inerte. A view
+    passou a ler a âncora `data-doc-pos` que o renderer já carimbava. No
+    mesmo movimento, o renderer deixou de carimbar essa âncora na projeção
+    REPETIDA de cabeçalho/rodapé (`docPos = -1` somado ao offset de caractere
+    produzia uma posição positiva apontando para outro nó qualquer).
+14. ~~**B14 — a área do cabeçalho não cobria o topo da página**~~ —
+    **CORRIGIDO 2026-08-15**: o tracejado era desenhado sobre a FAIXA
+    composta (a partir da distância do cabeçalho). No Word a área vai da
+    borda da folha até a linha divisória, e a tira entre o topo do papel e o
+    conteúdo faz parte dela. A moldura e a superfície editável passaram a ter
+    geometrias separadas: a superfície continua onde o conteúdo é composto, a
+    moldura cobre a área inteira (e o rodapé é o simétrico, da linha até a
+    borda de baixo). A etiqueta foi para fora da linha, como no Word.
+15. ~~**B15 — a galeria de estilos punha uma barra de rolagem horizontal na
+    ribbon**~~ — **CORRIGIDO 2026-08-15**: os cartões eram despejados numa
+    `dq-office-ribbon-row`, e um DOCX real traz dezenas de estilos `qFormat`
+    (o ETP 20, o TR mais de 30). A faixa crescia sem limite e o
+    `overflow-x:auto` do painel virava uma barra atravessando o editor. Agora
+    a galeria é uma JANELA (trilha recortada + ▲ ▼ e "Mais", como no Word), o
+    grupo Estilos é o elástico da faixa e a ribbon não rola mais na
+    horizontal.
+16. ~~**B16 — o fake DOM não propagava eventos**~~ — **CORRIGIDO
+    2026-08-15**: `FakeDomElement.dispatchEvent` disparava só os listeners do
+    próprio elemento. É a mesma família do B8: um teste que dispara no filho
+    e passa, enquanto no browser real o evento não chega a ninguém, é pior
+    que teste nenhum — e foi exatamente essa cegueira que deixou B11/B13
+    passarem. Agora o fake sobe a árvore de elementos e honra
+    `stopPropagation`. A subida para na raiz dos ELEMENTOS: quem escuta no
+    `document` continua recebendo só o que é disparado nele.
+
+### 2.14 Objetos dentro da região (2026-08-15)
+
+O timbre do documento real (brasão + quadro "Continuação de Processo" no
+cabeçalho) juntava quatro defeitos, e todos tinham a mesma raiz: **o chrome
+de objeto assumia que só existe uma view**.
+
+- **O adorno** (moldura, alças, ícone de layout) lia a view do corpo.
+- **A sessão da caixa** procurava o nó `textBox` no documento do corpo; para
+  a caixa do cabeçalho ela não achava nada e desistia em silêncio. Agora a
+  sessão guarda a view DONA (`ownerView`), resolvida pelo elemento clicado, e
+  é para ela que o `_commit` volta — a gravação de uma caixa do cabeçalho
+  entra no documento da região, que a sessão do F6 leva ao `header*.xml`.
+- **Os eventos não chegavam.** Região e caixa são projetadas no OVERLAY, que
+  é irmão do canvas: `dblclick`, `mouseup`, `keyup` e o `pointermove`/`up` do
+  arrasto de alça viviam no canvas e nunca eram entregues. Passaram para o
+  HOST, com dois filtros que substituem a garantia que o canvas dava de
+  graça: as sessões só entram/saem a partir de uma projeção de documento (um
+  duplo clique na ribbon não fecha mais nada) e a quickbar só nasce de um
+  evento da área de edição.
+- **Sair de uma caixa do cabeçalho destravava o corpo**, porque o `exit`
+  chamava `setBodyEditingSuspended(false)` sem perguntar se a sessão da
+  região ainda estava aberta.
+
+O que continua fora, com motivo: a caixa flutuante ainda não pode ser
+"em linha com o texto" (§2.11) e a imagem continua sem âncora flutuante no
+modelo — o popover diz isso, agora com "Em linha com o texto" MARCADO, que é
+o estado verdadeiro dela.
 
 ### 2.13 Colunas: fluxo de jornal (2026-08-09)
 

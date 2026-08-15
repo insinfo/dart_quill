@@ -684,7 +684,18 @@ DomElement buildPaletteButton(RibbonContext ctx,
 /// fixa de Normal/Título 1–3. Não é um placeholder: um documento sem
 /// `styles.xml` não TEM estilos nomeados, e esses quatro são exatamente os
 /// que [actions.applyNamedStyle] sabe aplicar pela heurística de heading.
-List<DomElement> buildStyleGallery(RibbonContext ctx) {
+/// **A galeria é uma JANELA, não uma fileira.** Um DOCX real traz dezenas de
+/// estilos `w:qFormat` (o ETP traz 20, o TR mais de 30); despejá-los todos
+/// numa `dq-office-ribbon-row` fazia a faixa de opções crescer sem limite e
+/// nascer com uma barra de rolagem horizontal atravessando a ribbon inteira —
+/// o que o Word nunca faz. O Word mostra os cartões que cabem e oferece
+/// ▲/▼ para percorrer, mais o botão "Mais" que abre a galeria completa num
+/// painel. É exatamente esta a estrutura abaixo.
+List<DomElement> buildStyleGallery(RibbonContext ctx) =>
+    [_styleGalleryViewport(ctx)];
+
+/// Os cartões da galeria, na ordem do Word (o `w:default` primeiro).
+List<DomElement> _styleCards(RibbonContext ctx, {required bool register}) {
   final catalog = ctx.controller.styleCatalog;
   final gallery = catalog?.gallery ?? const <OfficeStyleDefinition>[];
   if (gallery.isEmpty) {
@@ -695,11 +706,12 @@ List<DomElement> buildStyleGallery(RibbonContext ctx) {
         ('Título 2', 'Heading2', 'AaBbCcD'),
         ('Título 3', 'Heading3', 'AaBbCcD'),
       ])
-        _fixedStyleCard(ctx, name, styleId, preview),
+        _fixedStyleCard(ctx, name, styleId, preview, register: register),
     ];
   }
   return [
-    for (final style in gallery) _catalogStyleCard(ctx, style),
+    for (final style in gallery)
+      _catalogStyleCard(ctx, style, register: register),
     // "Criar um Estilo" do Word: só existe com catálogo, porque criar um
     // estilo sem `styles.xml` para gravá-lo seria um cartão que some no
     // próximo save.
@@ -712,10 +724,67 @@ List<DomElement> buildStyleGallery(RibbonContext ctx) {
   ];
 }
 
+/// A janela: trilha recortada (`overflow:hidden`) + a coluna ▲ ▼ ⌄.
+DomElement _styleGalleryViewport(RibbonContext ctx) {
+  final kit = ctx.kit;
+  final viewport = kit.el('div', 'dq-office-stylegallery');
+  final track = kit.el('div', 'dq-office-stylegallery-track');
+  for (final card in _styleCards(ctx, register: true)) {
+    track.append(card);
+  }
+  viewport.append(track);
+
+  // Uma "página" é a largura visível da trilha — o mesmo passo do ▲/▼ do
+  // Word, que anda uma fileira inteira e não um cartão.
+  void step(int direction) {
+    final page = track.clientWidth > 0 ? track.clientWidth.toDouble() : 300.0;
+    track.scrollBy(direction * page, 0);
+  }
+
+  final nav = kit.el('div', 'dq-office-stylegallery-nav');
+  nav.append(kit.button('▲', 'Fileira anterior', () => step(-1),
+      extraClass: 'dq-office-stylegallery-arrow'));
+  nav.append(kit.button('▼', 'Próxima fileira', () => step(1),
+      extraClass: 'dq-office-stylegallery-arrow'));
+  nav.append(kit.button(
+    '⌄',
+    'Mais estilos',
+    () => _openStyleGalleryPanel(ctx, viewport),
+    extraClass: 'dq-office-stylegallery-arrow dq-office-stylegallery-more',
+  ));
+  viewport.append(nav);
+  return viewport;
+}
+
+const String officeStyleGalleryGroup = 'home:stylegallery';
+
+/// O painel "Mais" — a galeria inteira em grade, ancorada no próprio botão.
+///
+/// Os cartões daqui NÃO se registram no realce de estado: o mapa da ribbon é
+/// indexado por `styleId`, e registrar os dois faria o cartão do painel
+/// (descartado ao fechar) substituir o da faixa, apagando o realce da
+/// galeria que fica na tela.
+void _openStyleGalleryPanel(RibbonContext ctx, DomElement anchor) {
+  final controller = ctx.controller;
+  if (controller.overlay.closeGroup(officeStyleGalleryGroup)) return;
+  final grid = ctx.kit.el('div', 'dq-office-stylegallery-panel');
+  final current = actions.currentStyleId(controller);
+  for (final card in _styleCards(ctx, register: false)) {
+    if (card.getAttribute('data-style-id') == current) {
+      card.classes.add('dq-office-stylecard-active');
+    }
+    card.addEventListener('click',
+        (_) => controller.overlay.closeGroup(officeStyleGalleryGroup));
+    grid.append(card);
+  }
+  controller.overlay.open(officeStyleGalleryGroup, grid, anchor: anchor);
+}
+
 /// Cartão dos quatro estilos embutidos (sem catálogo).
 DomElement _fixedStyleCard(
-    RibbonContext ctx, String name, String styleId, String preview) {
-  final card = _cardShell(ctx, name, styleId, preview);
+    RibbonContext ctx, String name, String styleId, String preview,
+    {bool register = true}) {
+  final card = _cardShell(ctx, name, styleId, preview, register: register);
   card.addEventListener('click', (event) {
     event.preventDefault();
     actions.applyNamedStyle(ctx.controller, name);
@@ -725,7 +794,8 @@ DomElement _fixedStyleCard(
 
 /// Cartão de um estilo DO DOCUMENTO: preview com a fonte, o corpo, a cor e
 /// os atributos reais, mais o menu de contexto de gestão.
-DomElement _catalogStyleCard(RibbonContext ctx, OfficeStyleDefinition style) {
+DomElement _catalogStyleCard(RibbonContext ctx, OfficeStyleDefinition style,
+    {bool register = true}) {
   final preview = style.preview;
   final card = _cardShell(
     ctx,
@@ -735,6 +805,7 @@ DomElement _catalogStyleCard(RibbonContext ctx, OfficeStyleDefinition style) {
     // mostraria "Aa". A régua é o corpo do próprio estilo.
     (preview.sizePt ?? 12) >= 16 ? 'AaBbC' : 'AaBbCcDd',
     preview: preview,
+    register: register,
   );
   card.addEventListener('click', (event) {
     event.preventDefault();
@@ -753,6 +824,7 @@ DomElement _cardShell(
   String styleId,
   String sampleText, {
   OfficeStylePreview? preview,
+  bool register = true,
 }) {
   final kit = ctx.kit;
   final card = kit.el(
@@ -772,7 +844,7 @@ DomElement _cardShell(
   final label = kit.el('span', 'dq-office-stylecard-label');
   label.appendText(name);
   card.append(label);
-  ctx.registerStyleCard(styleId, card);
+  if (register) ctx.registerStyleCard(styleId, card);
   return card;
 }
 

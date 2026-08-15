@@ -15,6 +15,7 @@ import 'tabs/header_footer_tab.dart';
 import 'tabs/home_tab.dart';
 import 'tabs/insert_tab.dart';
 import 'tabs/layout_tab.dart';
+import 'tabs/object_format_tab.dart';
 import 'tabs/table_design_tab.dart';
 import 'tabs/table_layout_tab.dart';
 
@@ -104,11 +105,18 @@ class OfficeRibbon {
   /// Tabela") são grupos grandes demais para caber numa aba só.
   static const List<String> tableTabKeys = ['tableDesign', 'tableLayout'];
 
+  /// A aba de OBJETO (imagem ou caixa de texto selecionada). O rótulo troca
+  /// com o tipo do objeto, como no Word ("Formato de Imagem" × "Formato da
+  /// Forma"), e por isso ele é escrito em [refreshContextual], não na
+  /// construção.
+  static const String objectTabKey = 'objectFormat';
+
   /// Todas as abas que nascem escondidas e aparecem por CONTEXTO: as duas de
-  /// tabela e a de cabeçalho/rodapé.
+  /// tabela, a de cabeçalho/rodapé e a de objeto.
   static const List<String> contextualTabKeys = [
     ...tableTabKeys,
     'headerfooter',
+    objectTabKey,
   ];
 
   final Map<String, DomElement> _tabs = {};
@@ -131,6 +139,10 @@ class OfficeRibbon {
   /// forçada na TRANSIÇÃO para ativa.
   bool _headerFooterWasActive = false;
 
+  /// O mesmo, para a seleção de objeto; e o rótulo em exibição na aba dele.
+  bool _objectWasSelected = false;
+  String _objectTabLabel = 'Formato de Imagem';
+
   /// A ribbon completa (modo word), com abas.
   DomElement build() {
     final ribbon = kit.el('div', 'dq-office-ribbon');
@@ -144,6 +156,7 @@ class OfficeRibbon {
       ('tableDesign', 'Design da Tabela'),
       ('tableLayout', 'Tabela Layout'),
       ('headerfooter', 'Cabeçalho e Rodapé'),
+      (objectTabKey, 'Formato de Imagem'),
     ]) {
       final tab = kit.el('button', 'dq-office-ribbon-tab');
       tab.setAttribute('type', 'button');
@@ -225,6 +238,7 @@ class OfficeRibbon {
       'tableDesign' => buildTableDesignTab(context),
       'tableLayout' => buildTableLayoutTab(context),
       'headerfooter' => buildHeaderFooterTab(context),
+      objectTabKey => buildObjectFormatTab(context),
       _ => buildHomeTab(context),
     };
     for (final group in groups) {
@@ -243,6 +257,29 @@ class OfficeRibbon {
     for (final key in tableTabKeys) {
       final tab = _tabs[key];
       if (tab != null) _setContextualVisible(tab, inTable);
+    }
+
+    // Aba de OBJETO: existe enquanto há imagem/caixa selecionada, e o rótulo
+    // segue o tipo — o Word chama a mesma faixa de "Formato de Imagem" ou
+    // "Formato da Forma" conforme o que está selecionado.
+    final objectTab = _tabs[objectTabKey];
+    if (objectTab != null) {
+      final target = actions.selectedObject(controller);
+      if (target != null) {
+        final label = officeObjectFormatTabLabel(controller);
+        if (_objectTabLabel != label) {
+          _objectTabLabel = label;
+          kit.setText(objectTab, label);
+          // A aba visível descreve o objeto ERRADO enquanto não é refeita:
+          // trocar de uma imagem para uma caixa muda o rótulo e os controles.
+          if (_activeTabKey == objectTabKey) showTab(objectTabKey);
+        }
+      }
+      _setContextualVisible(objectTab, target != null);
+      // Selecionar um objeto TROCA a aba, como no Word. Só na transição, para
+      // não impedir o usuário de olhar outra aba com o objeto selecionado.
+      if (target != null && !_objectWasSelected) showTab(objectTabKey);
+      _objectWasSelected = target != null;
     }
 
     final region = _tabs['headerfooter'];

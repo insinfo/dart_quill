@@ -594,10 +594,33 @@ class FakeDomElement extends FakeDomNode implements DomElement {
     _listeners[type]?.remove(listener);
   }
 
+  /// Dispara [event] neste elemento e SOBE a árvore, como o browser.
+  ///
+  /// O fake não borbulhava, e isso escondia uma classe inteira de defeito:
+  /// o chrome do editor registra handlers no host (a superfície de edição da
+  /// região de cabeçalho e a da caixa de texto vivem no overlay, que é irmão
+  /// do canvas — sem bubbling nenhum gesto dentro delas chegaria ao
+  /// orquestrador). Um teste que dispara no filho e passa, com o browser
+  /// real não entregando o evento a ninguém, é pior que teste nenhum.
+  ///
+  /// [stopPropagation] interrompe a subida, e os listeners do próprio
+  /// elemento sempre rodam — a mesma semântica do DOM.
+  ///
+  /// A subida para na raiz da árvore de ELEMENTOS: o `document` continua
+  /// recebendo só o que é disparado nele diretamente. Quem escuta no
+  /// documento aqui são atalhos globais, e um teste que clica num botão não
+  /// deve arrastar junto o fechamento de popup do editor inteiro.
   void dispatchEvent(String type, DomEvent event) {
-    for (final listener
-        in List<DomEventListener>.from(_listeners[type] ?? const [])) {
-      listener(event);
+    FakeDomNode? node = this;
+    while (node != null) {
+      if (node is FakeDomElement) {
+        for (final listener
+            in List<DomEventListener>.from(node._listeners[type] ?? const [])) {
+          listener(event);
+        }
+      }
+      if (event is FakeDomEvent && event.propagationStopped) return;
+      node = node.parentNode;
     }
   }
 
@@ -1148,9 +1171,13 @@ class FakeDomEvent implements DomEvent {
     defaultPrevented = true;
   }
 
+  /// Propagação interrompida por [stopPropagation]: o `dispatchEvent` do
+  /// elemento para de subir a árvore quando isto vira true.
+  bool propagationStopped = false;
+
   @override
   void stopPropagation() {
-    // No-op for fake implementation.
+    propagationStopped = true;
   }
 }
 

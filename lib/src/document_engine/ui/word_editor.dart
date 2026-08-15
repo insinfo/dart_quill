@@ -1008,26 +1008,29 @@ class OfficeWordEditor implements OfficeWordController {
 
     if (options.mode != OfficeWordMode.view) {
       // Duplo clique é o gesto do Word para entrar e sair do cabeçalho: na
-      // região entra (ou troca de página/região), no corpo sai. Um único
-      // handler no canvas mantém os dois lados simétricos.
-      _canvas.addEventListener('dblclick', _handleDoubleClick);
+      // região entra (ou troca de página/região), no corpo sai.
+      //
+      // O listener é do HOST, não do canvas: a superfície da região e a da
+      // caixa de texto vivem no OVERLAY, que é irmão do canvas — um duplo
+      // clique numa caixa desenhada dentro do cabeçalho nunca chegaria aqui.
+      // As duas sessões filtram o alvo (só uma projeção de documento entra ou
+      // sai), então o gesto continua não valendo para ribbon e réguas.
+      host.addEventListener('dblclick', _handleDoubleClick);
     }
 
     if (options.mode != OfficeWordMode.view) {
-      // O arrasto de alça pertence ao canvas inteiro: soltar o ponteiro fora
-      // do objeto ainda tem de encerrar (e aplicar) o redimensionamento.
       // A divisa de coluna tem prioridade sobre a seleção de texto: o
       // ponteiro sobre a borda inicia o redimensionamento, como no Word.
+      // Isso é do canvas — tabela só existe no corpo.
       _canvas.addEventListener(
           'pointerdown', (event) => _tableAdorner.handlePointerDown(event));
-      _canvas.addEventListener('pointermove', (event) {
-        _objectAdorner.handlePointerMove(event);
-        _tableAdorner.handlePointerMove(event);
-      });
-      _canvas.addEventListener('pointerup', (event) {
-        _objectAdorner.handlePointerUp(event);
-        _tableAdorner.handlePointerUp(event);
-      });
+      _canvas.addEventListener('pointermove', _tableAdorner.handlePointerMove);
+      _canvas.addEventListener('pointerup', _tableAdorner.handlePointerUp);
+      // O arrasto de ALÇA, por sua vez, pertence ao editor inteiro: as alças
+      // moram no overlay (que não borbulha para o canvas) e soltar o ponteiro
+      // fora do objeto ainda tem de aplicar o redimensionamento.
+      host.addEventListener('pointermove', _objectAdorner.handlePointerMove);
+      host.addEventListener('pointerup', _objectAdorner.handlePointerUp);
     }
 
     if (options.mode != OfficeWordMode.view) {
@@ -1036,12 +1039,16 @@ class OfficeWordEditor implements OfficeWordController {
       _contextMenuListener = installContextMenu(this, _canvas, _contextMenu!);
       // A quickbar nasce quando o usuário TERMINA de selecionar — durante o
       // arrasto ela cobriria justamente o texto que ele está mirando.
-      _canvas.addEventListener('mouseup', _handleSelectionFinished);
-      _canvas.addEventListener('keyup', _handleSelectionFinishedByKeyboard);
+      //
+      // No HOST, com filtro de alvo: a seleção também termina dentro da
+      // região de cabeçalho e da caixa de texto, que são projetadas no
+      // overlay. Sem o filtro, um clique na ribbon reabriria a barra.
+      host.addEventListener('mouseup', _handleSelectionFinished);
+      host.addEventListener('keyup', _handleSelectionFinishedByKeyboard);
       // Digitar/apagar dispensa a barra: a formatação é sobre uma seleção,
       // e ela deixou de existir no momento em que a tecla substituiu o
       // texto.
-      _canvas.addEventListener('keydown', (_) => _quickbar?.hide());
+      host.addEventListener('keydown', (_) => _quickbar?.hide());
     }
 
     _mountView(EditorState.create(EditorStateConfig(
@@ -1174,22 +1181,24 @@ class OfficeWordEditor implements OfficeWordController {
   /// resultado.
   void _handleSelectionFinished(DomEvent event) {
     if (_disposed) return;
-    // Explicitamente a view do CORPO: este handler vive no canvas e fala das
-    // páginas, mesmo que a edição corrente esteja numa região.
-    _view.syncSelectionFromDom();
-    if (_view.state.selection.empty) {
+    if (!_insideProjection(event)) return;
+    // A view ATIVA: com o cabeçalho ou uma caixa de texto abertos, a seleção
+    // que acabou de terminar é a DELES, e é sobre ela que a barra age.
+    final target = activeView;
+    target.syncSelectionFromDom();
+    if (target.state.selection.empty) {
       _quickbar?.hide();
       return;
     }
     // Com um OBJETO selecionado quem aparece é o adorno (moldura + alças)
     // mais a barra DO OBJETO — não a de formatação de TEXTO, que não teria
     // em que agir.
-    if (_view.state.selection is NodeSelection) {
+    if (target.state.selection is NodeSelection) {
       _showObjectQuickbar();
       return;
     }
     // Seleção retangular de CÉLULAS: a barra é a de tabela.
-    if (_view.state.selection is CellSelection) {
+    if (target.state.selection is CellSelection) {
       final pointer = event is DomMouseEvent ? event : null;
       _quickbar?.showForTable(
         x: pointer?.clientX ?? 0,
@@ -1208,15 +1217,41 @@ class OfficeWordEditor implements OfficeWordController {
   /// terminam uma seleção abrem a barra.
   void _handleSelectionFinishedByKeyboard(DomEvent event) {
     if (_disposed || event is! DomKeyboardEvent) return;
+    if (!_insideProjection(event)) return;
     final selecting = event.shiftKey ||
         ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() == 'a');
     if (!selecting) return;
-    _view.syncSelectionFromDom();
-    if (_view.state.selection.empty) {
+    final target = activeView;
+    target.syncSelectionFromDom();
+    if (target.state.selection.empty) {
       _quickbar?.hide();
       return;
     }
     _quickbar?.showForSelection();
+  }
+
+  /// O evento nasceu na área de EDIÇÃO (o canvas das páginas, a superfície da
+  /// região de cabeçalho ou a da caixa de texto)?
+  ///
+  /// É o filtro que permite escutar no host — necessário porque região e
+  /// caixa são desenhadas no overlay, fora do canvas — sem que um clique na
+  /// ribbon seja confundido com o fim de uma seleção de texto.
+  bool _insideProjection(DomEvent event) {
+    final target = event.target;
+    if (target == null) return false;
+    for (final root in [
+      _canvas,
+      _headerFooter.regionView?.host,
+      _textBox.boxView?.host,
+    ]) {
+      if (root == null) continue;
+      DomNode? current = target;
+      while (current != null) {
+        if (current == root) return true;
+        current = current.parentNode;
+      }
+    }
+    return false;
   }
 
   /// A barra do objeto nasce no canto superior direito dele, onde o Word põe

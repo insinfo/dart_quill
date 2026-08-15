@@ -70,13 +70,15 @@ int? insertTextBox(
   // A posição do NÓ é a anterior ao ponto onde a seleção parou: o átomo
   // ocupa uma unidade e `replaceSelectionWith` deixa o cursor depois dele.
   final pos = at - 1;
-  final node = pos < 0 ? null : c.view.state.doc.nodeAt(pos);
+  final owner = c.activeView;
+  final node = pos < 0 ? null : owner.state.doc.nodeAt(pos);
   if (node == null || node.type.name != 'textBox') return null;
-  // Só o corpo hospeda a sessão de caixa; inserir dentro de um cabeçalho em
-  // edição continua criando o nó, mas abrir uma segunda sessão sobre a
-  // primeira é o caminho para duas views disputando o mesmo foco.
-  if (enterEditing && c.activeView == c.view) {
-    c.textBoxSession.enter(pos);
+  // A sessão sabe em que view a caixa vive, então inserir dentro de um
+  // cabeçalho em edição também abre o cursor dentro da caixa nova. O que
+  // continua fora é abrir uma caixa DENTRO de outra em edição: seriam duas
+  // views disputando o mesmo foco.
+  if (enterEditing && !c.textBoxSession.isActive) {
+    c.textBoxSession.enter(pos, view: owner);
   }
   return pos;
 }

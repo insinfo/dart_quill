@@ -531,12 +531,18 @@ void setObjectAlign(OfficeWordController c, String align) {
   if (selection is! NodeSelection) return;
   final node = selection.node;
   if (node.type.name == 'textBox') {
-    c.dispatch(state.tr
+    final tr = state.tr
       ..setNodeMarkup(selection.from, null, {
         ...node.attrs,
         'positionHAlign': align,
-      })
-      ..setSelection(NodeSelection.create(state.doc, selection.from)));
+      });
+    // `tr.doc`, NUNCA `state.doc`: depois do `setNodeMarkup` a seleção tem de
+    // apontar para o documento que a transação produziu. Com o doc antigo,
+    // alinhar uma caixa de texto lançava "Selection passed to setSelection
+    // must point at the current document" — o botão simplesmente não
+    // funcionava, e o erro morria dentro do handler do clique.
+    tr.setSelection(NodeSelection.create(tr.doc, selection.from));
+    c.dispatch(tr);
     return;
   }
   // Imagem em linha: alinhar o parágrafo que a contém, preservando a
@@ -550,6 +556,73 @@ void setObjectAlign(OfficeWordController c, String align) {
     ..setNodeMarkup(blockPos, null, {...block.attrs, 'align': align});
   tr.setSelection(NodeSelection.create(tr.doc, selection.from));
   c.dispatch(tr);
+}
+
+/// O objeto (imagem/caixa) selecionado agora, ou null.
+///
+/// Existe aqui, e não só no adorno, porque a aba contextual "Formato de
+/// Imagem" precisa da mesma resposta sem depender do chrome que desenha as
+/// alças.
+({int pos, PMNode node})? selectedObject(OfficeWordController c) {
+  final selection = c.activeView.state.selection;
+  if (selection is! NodeSelection) return null;
+  final name = selection.node.type.name;
+  if (name != 'image' && name != 'textBox') return null;
+  return (pos: selection.from, node: selection.node);
+}
+
+/// Tamanho do objeto selecionado em twips, ou null.
+({int width, int height})? objectSizeTwips(OfficeWordController c) {
+  final target = selectedObject(c);
+  if (target == null) return null;
+  final width = _twipsOf(target.node.attrs['width']);
+  final height = _twipsOf(target.node.attrs['height']);
+  if (width <= 0 || height <= 0) return null;
+  return (width: width, height: height);
+}
+
+int _twipsOf(Object? value) => switch (value) {
+      num number => number.toInt(),
+      _ => int.tryParse('$value') ?? 0,
+    };
+
+/// Grava o tamanho do objeto (twips), preservando a seleção do nó.
+///
+/// É o caminho ÚNICO de tamanho: a alça de redimensionamento
+/// (`ui/object_adorner.dart`) e os campos Altura/Largura da aba contextual
+/// chamam esta função. [pos]/[node] são opcionais e existem para o arrasto,
+/// que já resolveu o alvo antes de o ponteiro subir.
+void setObjectSizeTwips(
+  OfficeWordController c, {
+  int? pos,
+  PMNode? node,
+  int? widthTwips,
+  int? heightTwips,
+}) {
+  final target = pos != null && node != null
+      ? (pos: pos, node: node)
+      : selectedObject(c);
+  if (target == null) return;
+  final width = widthTwips ?? _twipsOf(target.node.attrs['width']);
+  final height = heightTwips ?? _twipsOf(target.node.attrs['height']);
+  if (width <= 0 || height <= 0) return;
+  if (width == _twipsOf(target.node.attrs['width']) &&
+      height == _twipsOf(target.node.attrs['height'])) {
+    return;
+  }
+  // A view do OBJETO: no modo cabeçalho/rodapé ele pertence ao documento da
+  // região, e `activeView` é justamente quem sabe disso.
+  final view = c.activeView;
+  final tr = view.state.tr;
+  tr.setNodeMarkup(target.pos, null, {
+    ...target.node.attrs,
+    'width': width,
+    'height': height,
+  });
+  // A seleção continua no NÓ: redimensionar não é motivo para o usuário
+  // perder o objeto que estava manipulando.
+  tr.setSelection(NodeSelection.create(tr.doc, target.pos));
+  view.dispatch(tr);
 }
 
 /// Disposição do texto do objeto selecionado, ou null quando não há objeto.

@@ -22,8 +22,10 @@ import '../layout/dom_position_map.dart';
 import '../layout/dom_renderer.dart';
 import '../model/index.dart';
 import '../state/index.dart';
+import '../view/editor_view.dart';
 import 'controller.dart';
 import 'layout_options.dart';
+import 'ribbon_actions.dart' as actions;
 
 /// As oito alças, na ordem em que o Word as desenha.
 const List<String> _handleKinds = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
@@ -139,10 +141,19 @@ class OfficeObjectAdorner {
     );
   }
 
+  /// A view a que o objeto pertence.
+  ///
+  /// É a ATIVA, não a do corpo: no modo cabeçalho/rodapé o brasão e o quadro
+  /// "Continuação de Processo" vivem no documento da REGIÃO, e a moldura
+  /// precisa nascer sobre a seleção que existe lá. Com `controller.view` fixa
+  /// no corpo, selecionar a imagem do cabeçalho não produzia alça nenhuma —
+  /// o adorno perguntava a uma view onde nada estava selecionado.
+  OfficeEditorView get _target => controller.activeView;
+
   /// O nó de objeto selecionado agora, ou null.
   ({int pos, PMNode node})? selectedObject() {
     if (!controller.viewReady) return null;
-    final selection = controller.view.state.selection;
+    final selection = _target.state.selection;
     if (selection is! NodeSelection) return null;
     if (!officeResizableNodeTypes.contains(selection.node.type.name)) {
       return null;
@@ -156,7 +167,7 @@ class OfficeObjectAdorner {
   /// posições faz a ponte de volta. Só existem alguns objetos por página, e
   /// a virtualização já limitou o DOM montado.
   DomElement? elementFor(int pos) {
-    final host = controller.view.host;
+    final host = _target.host;
     for (final selector in const [
       '.$officeCssPrefix-image',
       '.$officeCssPrefix-text-box',
@@ -329,17 +340,16 @@ class OfficeObjectAdorner {
     final widthTwips = (widthPx / pxPerTwip).round();
     final heightTwips = (heightPx / pxPerTwip).round();
     if (widthTwips <= 0 || heightTwips <= 0) return;
-    final state = controller.view.state;
-    final tr = state.tr;
-    tr.setNodeMarkup(pos, null, {
-      ...node.attrs,
-      'width': widthTwips,
-      'height': heightTwips,
-    });
-    // A seleção continua no NÓ: redimensionar não é motivo para o usuário
-    // perder o objeto que estava manipulando.
-    tr.setSelection(NodeSelection.create(tr.doc, pos));
-    controller.dispatch(tr);
+    // A MESMA função que os campos Altura/Largura da aba "Formato de Imagem"
+    // usam: a alça e o spinner não podem ter dois caminhos para gravar o
+    // tamanho, senão só um deles preserva a seleção do nó.
+    actions.setObjectSizeTwips(
+      controller,
+      pos: pos,
+      node: node,
+      widthTwips: widthTwips,
+      heightTwips: heightTwips,
+    );
   }
 
   /// Reposiciona a caixa flutuante somando o deslocamento aos offsets da
@@ -367,15 +377,19 @@ class OfficeObjectAdorner {
       refresh();
       return;
     }
-    final state = controller.view.state;
-    final tr = state.tr;
+    // A view do OBJETO, não a do corpo: uma caixa arrastada dentro do
+    // cabeçalho pertence ao documento da região, e montar a transação a
+    // partir do corpo para aplicá-la na região é a "mismatched transaction"
+    // que o estado recusa.
+    final target = _target;
+    final tr = target.state.tr;
     tr.setNodeMarkup(pos, null, {
       ...node.attrs,
       'offsetX': _twipsOf(node.attrs['offsetX']) + deltaXTwips,
       'offsetY': _twipsOf(node.attrs['offsetY']) + deltaYTwips,
     });
     tr.setSelection(NodeSelection.create(tr.doc, pos));
-    controller.dispatch(tr);
+    target.dispatch(tr);
   }
 
   static int _twipsOf(Object? value) => switch (value) {

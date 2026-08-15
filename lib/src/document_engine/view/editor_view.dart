@@ -628,7 +628,7 @@ class OfficeEditorView {
     if (target == null) return;
     final element = _objectElementAt(target);
     if (element == null) return;
-    final pos = _positions.modelPositionAt(element, 0);
+    final pos = _objectModelPosition(element);
     if (pos == null) return;
     final resolved = _state.doc.resolve(_clamp(pos, _state.doc));
     final node = resolved.nodeAfter;
@@ -637,6 +637,21 @@ class OfficeEditorView {
     // arrasto a partir daqui pertence ao redimensionamento/reposicionamento.
     event.preventDefault();
     dispatch(_state.tr..setSelection(NodeSelection.create(_state.doc, pos)));
+  }
+
+  /// A posição do NÓ de um objeto projetado.
+  ///
+  /// A caixa de texto flutuante é filha do FRAGMENTO, não da linha: o mapa de
+  /// posições sobe até `.dq-office-line` e devolve null para ela. Era por isso
+  /// que clicar numa caixa não a selecionava — e sem [NodeSelection] não há
+  /// moldura, alça, ícone de layout nem arrasto. O renderer carimba
+  /// `data-doc-pos` justamente nesses visuais; ler a âncora é o caminho
+  /// direto, e o mapa continua respondendo pelos objetos que vivem na linha
+  /// (a imagem inline).
+  int? _objectModelPosition(DomElement element) {
+    final declared = int.tryParse(element.getAttribute('data-doc-pos') ?? '');
+    if (declared != null && declared >= 0) return declared;
+    return _positions.modelPositionAt(element, 0);
   }
 
   /// O elemento de objeto que contém [node], ou null.

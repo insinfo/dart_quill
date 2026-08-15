@@ -128,13 +128,16 @@
 }
 
 /* ribbon: grupos de duas linhas, rotulo embaixo (padrao Word) */
+/* A faixa NUNCA rola horizontalmente: no Word ela é do tamanho da janela e
+   quem tem conteúdo demais (a galeria de estilos) encolhe e rola por dentro.
+   `overflow-x:auto` aqui produzia a barra que atravessava a ribbon inteira
+   num DOCX com 30 estilos qFormat. */
 .dq-office-ribbon-content {
   display: flex;
   align-items: stretch;
   height: 104px;
   padding: 6px 7px 16px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
 }
 
 .dq-office-ribbon-group {
@@ -143,6 +146,13 @@
   height: 84px;
   padding: 0 9px 14px;
   border-right: 1px solid #e1e1e1;
+  min-width: 0;
+}
+
+/* O grupo Estilos é o elástico da faixa: ele fica com a largura que sobrar. */
+.dq-office-ribbon-group[data-group-label='Estilos'] {
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .dq-office-ribbon-group::after {
@@ -369,6 +379,76 @@
    sobrescrito, então um estilo sem fonte própria segue com a do cartão. */
 .dq-office-stylecard-sample {
   max-height: 30px;
+}
+
+/* ---- galeria de estilos: JANELA com ▲ ▼ ⌄, como o Word ----
+   A trilha rola por dentro; a faixa de opções não cresce nem ganha barra de
+   rolagem por causa de um documento com muitos estilos. */
+.dq-office-ribbon-group[data-group-label='Estilos'] .dq-office-ribbon-rows,
+.dq-office-ribbon-group[data-group-label='Estilos'] .dq-office-ribbon-row {
+  min-width: 0;
+}
+
+.dq-office-stylegallery {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 2px;
+}
+
+.dq-office-stylegallery-track {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  scroll-behavior: smooth;
+}
+
+.dq-office-stylegallery-track > * {
+  flex: 0 0 auto;
+}
+
+.dq-office-stylegallery-nav {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  justify-content: center;
+  gap: 1px;
+  padding-left: 2px;
+  border-left: 1px solid #e1e1e1;
+}
+
+.dq-office-btn.dq-office-stylegallery-arrow {
+  width: 17px;
+  min-width: 17px;
+  height: 18px;
+  padding: 0;
+  font-size: 9px;
+  line-height: 18px;
+  border: 1px solid transparent;
+}
+
+.dq-office-btn.dq-office-stylegallery-arrow:hover {
+  border-color: #c8c8c8;
+  background: #eaf3fb;
+}
+
+.dq-office-btn.dq-office-stylegallery-more {
+  border-top: 1px solid #e1e1e1;
+  font-weight: 700;
+}
+
+/* O painel "Mais": a galeria inteira em grade, rolando na vertical. */
+.dq-office-stylegallery-panel {
+  display: grid;
+  grid-template-columns: repeat(4, 92px);
+  gap: 3px;
+  padding: 4px;
+  max-height: 340px;
+  overflow-y: auto;
 }
 
 /* "Criar um Estilo": ocupa um slot de cartão para a fileira não quebrar. */
@@ -1577,6 +1657,19 @@
   border-color: #185abd;
 }
 
+/* Caixa de seleção da faixa (a trava de proporção da aba de objeto). */
+.dq-office-checkfield {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: #444;
+}
+
+.dq-office-checkfield-input {
+  margin: 0;
+}
+
 /* overlay de ocupado (abrir/salvar) */
 .dq-office-busy {
   position: absolute;
@@ -1734,12 +1827,16 @@
   white-space: nowrap;
 }
 
+/* A etiqueta fica FORA da área, encostada na linha divisória — é onde o Word
+   a desenha: abaixo da linha no cabeçalho, acima dela no rodapé. */
 .dq-office-hf-frame-header .dq-office-hf-label {
-  bottom: -8px;
+  top: 100%;
+  margin-top: 1px;
 }
 
 .dq-office-hf-frame-footer .dq-office-hf-label {
-  top: -8px;
+  bottom: 100%;
+  margin-bottom: 1px;
 }
 
 /* O Fechar do Word encerra a sessão: destacado, e o único vermelho da aba. */

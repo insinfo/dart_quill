@@ -64,10 +64,23 @@ class OfficeTextBoxSession {
   DomElement? _surface;
   DomElement? _frame;
 
+  /// A view DONA da caixa: o corpo, ou a região quando a caixa está dentro de
+  /// um cabeçalho/rodapé em edição.
+  ///
+  /// Sem isto, o quadro "Continuação de Processo" do timbre — que vive no
+  /// documento do CABEÇALHO — não podia ser aberto: a sessão procurava o nó
+  /// pela posição no documento do corpo, não encontrava `textBox` ali e
+  /// desistia em silêncio. É o mesmo motivo pelo qual o commit tem de voltar
+  /// para a view certa.
+  OfficeEditorView? _ownerView;
+
   /// O elemento projetado da caixa: é dele que sai a geometria da superfície.
   DomElement? _boxElement;
 
   bool get isActive => _active;
+
+  /// A view em que a caixa editada vive (o corpo enquanto não há sessão).
+  OfficeEditorView get ownerView => _ownerView ?? controller.view;
 
   /// A view de dentro da caixa — a MESMA classe do corpo, outra raiz.
   OfficeEditorView? get boxView => _boxView;
@@ -86,24 +99,54 @@ class OfficeTextBoxSession {
     if (box != null) {
       final pos = int.tryParse(box.getAttribute('data-doc-pos') ?? '');
       if (pos == null) return false;
-      return enter(pos, element: box);
+      return enter(pos, element: box, view: _viewOwning(box));
     }
     if (!_active) return false;
+    // Só um duplo clique numa PROJEÇÃO de documento fecha a sessão. Este
+    // handler mora no host (é o que faz o gesto chegar às caixas de dentro do
+    // cabeçalho, que são desenhadas no overlay), e sem esta guarda um duplo
+    // clique na ribbon ou numa régua encerraria a edição.
+    if (target == null || !_insideEditableProjection(target)) return false;
     exit();
     return true;
   }
 
+  /// A view cuja projeção contém [element] — a região, se a sessão de
+  /// cabeçalho/rodapé estiver aberta e o elemento estiver dentro dela.
+  OfficeEditorView _viewOwning(DomElement element) {
+    final region = controller.headerFooter.regionView;
+    if (region != null && _isInside(element, region.host)) return region;
+    return controller.view;
+  }
+
+  bool _insideEditableProjection(DomNode node) {
+    final region = controller.headerFooter.regionView;
+    if (region != null && _isInside(node, region.host)) return true;
+    return _isInside(node, controller.view.host);
+  }
+
+  static bool _isInside(DomNode node, DomElement ancestor) {
+    DomNode? current = node;
+    while (current != null) {
+      if (current == ancestor) return true;
+      current = current.parentNode;
+    }
+    return false;
+  }
+
   /// Entra na caixa em [pos]. Devolve false quando ali não há uma caixa.
-  bool enter(int pos, {DomElement? element}) {
+  bool enter(int pos, {DomElement? element, OfficeEditorView? view}) {
     if (!controller.viewReady) return false;
-    final node = controller.view.state.doc.nodeAt(pos);
+    final owner = view ?? controller.activeView;
+    final node = owner.state.doc.nodeAt(pos);
     if (node == null || node.type.name != 'textBox') return false;
-    if (_active && _ref?.pos == pos) return true;
+    if (_active && _ref?.pos == pos && identical(_ownerView, owner)) return true;
 
     // Trocar de caixa GRAVA a anterior: perder o que foi digitado por ter
     // clicado na caixa vizinha seria indefensável.
     if (_active) exit();
 
+    _ownerView = owner;
     _ref = OfficeTextBoxRef(pos: pos, node: node);
     _boxElement = element ?? _boxElementForPos(pos);
     _active = true;
@@ -120,10 +163,14 @@ class OfficeTextBoxSession {
   void exit() {
     if (!_active) return;
     _active = false;
-    controller.setBodyEditingSuspended(false);
+    // Devolver a edição ao corpo só faz sentido se o cabeçalho não estiver
+    // aberto: sair de uma caixa DO cabeçalho não pode destravar o corpo, que
+    // continua suspenso pela sessão da região.
+    controller.setBodyEditingSuspended(controller.headerFooter.isActive);
     _commit();
     _disposeBoxView();
     _ref = null;
+    _ownerView = null;
     _mountedDoc = null;
     _boxElement = null;
     onChanged();
@@ -134,6 +181,7 @@ class OfficeTextBoxSession {
   void dispose() {
     _active = false;
     _ref = null;
+    _ownerView = null;
     _mountedDoc = null;
     _boxElement = null;
     _disposeBoxView();
@@ -324,7 +372,8 @@ class OfficeTextBoxSession {
     final doc = view.state.doc;
     if (identical(doc, _mountedDoc)) return;
 
-    final state = controller.view.state;
+    final owner = ownerView;
+    final state = owner.state;
     final current = state.doc.nodeAt(ref.pos);
     // A caixa pode ter saído do documento durante a sessão (undo, colagem):
     // gravar por posição nesse caso escreveria em cima de outro nó.
@@ -338,11 +387,11 @@ class OfficeTextBoxSession {
         for (var i = 0; i < doc.childCount; i++) doc.child(i).textContent,
       ].join('\n'),
     });
-    // Direto na view do CORPO, não por `controller.dispatch`: a view da caixa
+    // Direto na view DONA, não por `controller.dispatch`: a view da caixa
     // ainda existe neste ponto, então `activeView` ainda aponta para ela — e
-    // a transação é do documento do corpo. Aplicá-la na caixa é exatamente o
-    // "Applying a mismatched transaction" que o estado recusa.
-    controller.view.dispatch(tr);
+    // a transação é do documento que contém a caixa. Aplicá-la na caixa é
+    // exatamente o "Applying a mismatched transaction" que o estado recusa.
+    owner.dispatch(tr);
   }
 
   void _disposeBoxView() {
@@ -383,7 +432,7 @@ class OfficeTextBoxSession {
   /// O elemento projetado da caixa em [pos] — reencontrado a cada reprojeção.
   DomElement? _boxElementForPos(int? pos) {
     if (pos == null) return null;
-    final root = controller.view.host;
+    final root = ownerView.host;
     for (final element in root.querySelectorAll('.$officeCssPrefix-text-box')) {
       if (element.getAttribute('data-doc-pos') == '$pos') return element;
     }

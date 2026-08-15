@@ -208,6 +208,60 @@ void main() {
       expect(cardOf('Nivel01').classes.contains('dq-office-stylecard-active'),
           isFalse);
     });
+
+    /// A galeria é uma JANELA, não uma fileira: um DOCX real traz dezenas de
+    /// estilos `qFormat`, e despejá-los todos na faixa fazia a ribbon crescer
+    /// e nascer com uma barra de rolagem horizontal atravessando o editor —
+    /// o que o Word nunca faz.
+    test('os cartões vivem numa trilha recortada, com ▲ ▼ e "Mais"', () {
+      mount();
+      final viewport = host.querySelectorAll('.dq-office-stylegallery');
+      expect(viewport, hasLength(1));
+      final track = host.querySelectorAll('.dq-office-stylegallery-track');
+      expect(track, hasLength(1));
+      for (final card in cards()) {
+        expect(card.parentNode, same(track.single),
+            reason: 'nenhum cartão pode estar solto na linha da faixa');
+      }
+      expect(host.querySelectorAll('.dq-office-stylegallery-arrow'),
+          hasLength(3));
+    });
+
+    test('"Mais" abre a galeria inteira sem roubar o realce da faixa', () {
+      final editor = mount();
+      final track = host.querySelector('.dq-office-stylegallery-track')!;
+      DomElement trackCard(String styleId) => track
+          .querySelectorAll('.dq-office-stylecard')
+          .firstWhere((card) => card.getAttribute('data-style-id') == styleId);
+
+      click(host.querySelector('.dq-office-stylegallery-more')!);
+
+      final panel = host.querySelector('.dq-office-stylegallery-panel');
+      expect(panel, isNotNull);
+      expect(panel!.querySelectorAll('.dq-office-stylecard'), hasLength(2));
+      // O cartão do painel nasce refletindo o estilo corrente…
+      expect(
+        panel
+            .querySelectorAll('.dq-office-stylecard')
+            .where((c) => c.classes.contains('dq-office-stylecard-active'))
+            .length,
+        1,
+      );
+
+      // …mas quem o realce de ESTADO continua atualizando é o cartão da
+      // faixa: o mapa é indexado por styleId, e registrar os dois faria o
+      // cartão descartável do painel substituir o permanente.
+      final second = editor.state.doc.child(0).nodeSize + 1;
+      editor.view.dispatch(editor.state.tr
+        ..setSelection(TextSelection.create(editor.state.doc, second)));
+
+      expect(
+          trackCard('Normal').classes.contains('dq-office-stylecard-active'),
+          isTrue);
+      expect(
+          trackCard('Nivel01').classes.contains('dq-office-stylecard-active'),
+          isFalse);
+    });
   });
 
   group('aplicar', () {

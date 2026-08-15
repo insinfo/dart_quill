@@ -133,8 +133,25 @@ class OfficeHeaderFooterSession {
       return true;
     }
     if (!_active) return false;
+    // Sair é o gesto do Word para um duplo clique NO CORPO — e só nele. Este
+    // handler vive no host (é o que faz o duplo clique dentro da região, que
+    // é desenhada no overlay, chegar às caixas de texto de lá), então sem
+    // esta guarda um duplo clique dentro do próprio cabeçalho, na ribbon ou
+    // numa régua fecharia a sessão que o usuário acabou de abrir.
+    if (target == null || !_isInside(target, controller.view.host)) {
+      return false;
+    }
     exit();
     return true;
+  }
+
+  static bool _isInside(DomNode node, DomElement ancestor) {
+    DomNode? current = node;
+    while (current != null) {
+      if (current == ancestor) return true;
+      current = current.parentNode;
+    }
+    return false;
   }
 
   /// Entra no modo (ou troca a região/página editada).
@@ -240,12 +257,32 @@ class OfficeHeaderFooterSession {
     final bandTop = _isHeader
         ? setup.headerDistanceTwips * px
         : (setup.heightTwips - setup.footerDistanceTwips - band) * px;
-    final box = 'left:${left.toStringAsFixed(1)}px;'
-        'top:${(top + bandTop).toStringAsFixed(1)}px;'
-        'width:${(setup.widthTwips * px).toStringAsFixed(1)}px;'
-        'height:${(band * px).toStringAsFixed(1)}px;';
-    surface.setAttribute('style', box);
-    frame.setAttribute('style', box);
+    final pageWidth = setup.widthTwips * px;
+    final pageHeight = setup.heightTwips * px;
+    // A SUPERFÍCIE editável é a faixa em que a região é composta: ela começa
+    // exatamente onde o primeiro parágrafo do cabeçalho é desenhado.
+    surface.setAttribute(
+        'style',
+        'left:${left.toStringAsFixed(1)}px;'
+            'top:${(top + bandTop).toStringAsFixed(1)}px;'
+            'width:${pageWidth.toStringAsFixed(1)}px;'
+            'height:${(band * px).toStringAsFixed(1)}px;');
+
+    // A MOLDURA é outra coisa, e era aqui que a tela divergia do Word: a área
+    // do cabeçalho vai da BORDA DA FOLHA até a linha divisória — a distância
+    // até o topo faz parte dela. Desenhando o tracejado só sobre a faixa
+    // composta, a tira entre o topo do papel e o conteúdo ficava de fora,
+    // como se não pertencesse ao cabeçalho. O rodapé é o simétrico: da linha
+    // divisória até a borda de baixo.
+    final frameTop = _isHeader ? top : top + bandTop;
+    final frameHeight =
+        _isHeader ? bandTop + band * px : pageHeight - bandTop;
+    frame.setAttribute(
+        'style',
+        'left:${left.toStringAsFixed(1)}px;'
+            'top:${frameTop.toStringAsFixed(1)}px;'
+            'width:${pageWidth.toStringAsFixed(1)}px;'
+            'height:${(frameHeight > 1 ? frameHeight : 1).toStringAsFixed(1)}px;');
     if (_label != null) _kit.setText(_label!, label);
   }
 

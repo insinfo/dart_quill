@@ -73,9 +73,16 @@ List<OfficeMenuEntry> buildLayoutOptionsEntries(OfficeWordController c) {
       OfficeMenuEntry(
         label: choice.label,
         icon: choice.icon,
-        checked: !isImage && choice.mode == current,
+        // Numa imagem, "Em linha com o texto" é o modo VIGENTE — e o Word o
+        // mostra marcado. Deixar a lista inteira apagada dizia ao usuário
+        // que o editor não sabe o que a imagem é; ela sabe, e é este.
+        checked: isImage ? choice.mode == 'inline' : choice.mode == current,
         enabled: !isImage && choice.disabledReason == null,
-        description: isImage ? imageReason : choice.disabledReason,
+        description: isImage
+            ? (choice.mode == 'inline'
+                ? 'a imagem já está em linha com o texto'
+                : imageReason)
+            : choice.disabledReason,
         onSelect: () => actions.setObjectWrap(c, choice.mode),
       ),
   ];
