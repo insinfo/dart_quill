@@ -544,9 +544,35 @@ class PageGraphPdfRenderer {
   void _strokeBorder(PdfContentBuilder builder, TableBorder? border, double x1,
       double y1, double x2, double y2) {
     if (border == null || !border.isVisible) return;
+    final width = _twipsToPt(border.widthTwips);
+
+    // `double` é DUAS linhas, não uma grossa — é o que o Word desenha e o
+    // que o CSS `border-style:double` já dava no DOM. Enquanto o PDF traçava
+    // uma linha só, a mesma moldura saía diferente nas duas saídas, e a
+    // comparação com o gabarito do Word (harness `tool/word_reference`)
+    // mostrou isso na primeira fixture.
+    //
+    // A repartição segue a regra do CSS: três faixas iguais (linha, vão,
+    // linha), então cada traço fica com um terço da espessura declarada.
+    if (border.style == 'double' && width >= 1.5) {
+      final stroke = width / 3;
+      final offset = width / 3;
+      // A perpendicular: numa aresta horizontal desloca em y, numa vertical
+      // em x. Comparar as coordenadas é mais simples (e mais robusto para
+      // uma aresta de comprimento zero) que calcular o vetor normal.
+      final horizontal = (y1 - y2).abs() <= (x1 - x2).abs();
+      for (final sign in const [-1.0, 1.0]) {
+        final dx = horizontal ? 0.0 : sign * offset / 2;
+        final dy = horizontal ? sign * offset / 2 : 0.0;
+        builder.strokeLine(x1 + dx, y1 + dy, x2 + dx, y2 + dy,
+            color: border.color, widthPx: stroke);
+      }
+      return;
+    }
+
     builder.strokeLine(x1, y1, x2, y2,
         color: border.color,
-        widthPx: _twipsToPt(border.widthTwips),
+        widthPx: width,
         dashPx: _borderDash(border));
   }
 

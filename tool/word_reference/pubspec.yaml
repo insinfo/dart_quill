@@ -1,0 +1,21 @@
+name: word_reference
+description: >-
+  Harness de referência que dirige o Microsoft Word por COM como ORÁCULO do
+  editor Office do dart_quill. Ferramenta de desenvolvimento, Windows-only;
+  não faz parte do pacote publicado.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.6.0
+
+# Estas dependências são a razão de este harness ser um pacote SEPARADO.
+#
+# O `dart_quill` limita as dependências de produção a `web` e `html`, e a
+# disciplina do plano vale também para o que aparece no `pubspec` da raiz:
+# um contribuidor que rode `dart pub get` não deve baixar FFI de Windows para
+# trabalhar no editor. Aqui elas ficam contidas, e o analisador da raiz
+# ignora esta pasta.
+dependencies:
+  ffi: ^2.1.3
+  win32: ^5.10.1

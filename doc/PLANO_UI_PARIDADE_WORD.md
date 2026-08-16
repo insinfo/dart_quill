@@ -1206,18 +1206,81 @@ overlay/NodeSelection destravam tudo que envolve objeto.
 
 ---
 
-## 5. Harness de referência com o Word real (COM)
+## 5. Harness de referência com o Word real (COM) — **ENTREGUE 2026-08-15**
 
-Usar `C:\MyDartProjects\access_to_dart` (FFI/COM) para automatizar o Word do
-Windows como ORÁCULO:
-- `tool/word_reference/` (novo): scripts Dart que abrem um DOCX no Word,
-  ajustam zoom/página e capturam screenshot (via COM `Window.Activate` +
-  captura Win32), e geram DOCXs mínimos de referência (tabela com estilo X,
-  seção paisagem, tab stops…);
-- os DOCX gerados entram em `resources/` como fixtures de import/export;
-- os screenshots ficam em `doc/referencias-ui/` para comparação visual manual
-  (não são teste automatizado — fidelidade pixel a pixel não é meta, cf.
-  "Limite honesto" do plano do motor).
+`tool/word_reference/` dirige o Microsoft Word por COM (IDispatch/FFI) e o
+usa como ORÁCULO. É um **pacote separado**, com `pubspec` próprio: o harness
+precisa de `win32` e `ffi`, e um contribuidor que rode `dart pub get` na raiz
+do `dart_quill` não deve baixar FFI de Windows para trabalhar no editor. A
+base COM veio de `C:/MyDartProjects/access_to_dart` (mesmo mantenedor, com
+autorização), com a proveniência escrita no cabeçalho do arquivo.
+
+**O que ele produz.** `bin/generate_fixtures.dart` pede ao WORD que crie oito
+documentos, cada um isolando UMA capacidade, e grava o par
+`.docx` + `.pdf` (o PDF exportado pelo próprio Word) em
+`resources/word_reference/`:
+
+| fixture | o que isola |
+|---|---|
+| `page_borders` | `w:pgBorders` real (dupla, 2,25 pt, vermelha) |
+| `watermark` | a marca-d'água (WordArt no cabeçalho) |
+| `sections_landscape` | duas seções, retrato + paisagem |
+| `tab_stops` | paradas esquerda/centro/direita/decimal com líder |
+| `multilevel_numbering` | 1. / 1.1 / 1.1.1 da galeria do Word |
+| `header_first_even` | `titlePg` + `evenAndOddHeaders` + 3 variantes |
+| `columns_two` | `w:cols` com linha separadora |
+| `line_numbers` | `w:lnNumType` de 5 em 5 |
+
+**Por que gerar em vez de escrever o XML à mão.** Um `w:pgBorders` que eu
+escrevo é o que eu ACHO que o Word grava; o que interessa é o que ele grava
+de verdade — os filhos que completa sozinho, a ordem dos elementos e os
+padrões que assume. É a diferença entre testar contra a especificação e
+testar contra o produto.
+
+**Os dois usos.** O `.docx` vira fixture de importação
+(`test/.../word_reference_fixtures_test.dart`, 9 testes) e o `.pdf` vira
+gabarito de paginação para `tool/pdf_reference_diff.dart`. Medida na
+entrega: 7 das 8 fixtures batem com o Word em contagem de páginas E texto
+por página; `line_numbers` difere por uma linha, porque não desenhamos a
+numeração.
+
+**O que o harness já achou** — o valor que justifica o investimento:
+
+1. **borda `double` saía como linha única no PDF.** O DOM desenhava duas
+   (CSS `border-style:double`) e o PDF uma; a mesma moldura ficava diferente
+   nas duas saídas. Corrigido em `pdf_renderer._strokeBorder`, que agora
+   reparte a espessura em três faixas como o CSS.
+2. **a marca-d'água de um DOCX importado não é desenhada.** A forma
+   sobrevive no cabeçalho preservado (o teste prova), mas o editor não a lê —
+   lacuna agora DECLARADA e travada por teste.
+
+**Teclado, mouse e captura** entraram no `lib/com.dart` (`sendKey`,
+`sendText`, `clickMouse`, `dragMouse`, `scrollMouse`, `focusWindow`,
+`captureWindowToBmp`, `captureScreenToBmp`) — é o que permite dirigir o
+CHROME do Word, que o COM não alcança. Três aprendizados registrados no
+código:
+
+1. **`SetForegroundWindow` sozinho não funciona.** O Windows recusa a troca
+   de foreground pedida por processo em segundo plano; `focusWindow` usa
+   `AttachThreadInput`. Foi isso que fez a captura deixar de sair PRETA.
+2. **A janela se acha pelo PROCESSO, não pelo título.**
+   `Application.Caption` devolve só "Word" enquanto a janela se chama
+   "arquivo.docx - Word".
+3. **`SendInput` entrega a quem tem o foco AGORA.** Todo lote passa por
+   `whileFocused`, que aborta em vez de digitar no programa errado.
+
+`bin/ui_probe.dart` verifica os três de uma vez e confirma pelo MODELO (lê
+`Content.Text` por COM) que o texto chegou. **Nesta máquina a entrada
+sintética NÃO chega ao Word** — outro programa segura o foco de teclado —,
+então a sonda sai com código 70 e o roteiro de UI por teclado fica
+condicionado a uma área de trabalho livre. As capturas ficam em
+`doc/referencias-ui/`, que é **ignorado pelo git**: são BMPs de vários MB
+que descrevem a máquina de quem rodou. O oráculo VERSIONADO é o PDF.
+
+O "fallback" de copiar o retângulo da tela quando `PrintWindow` falha só é
+usado com a janela comprovadamente em primeiro plano — sem essa condição ele
+gravaria a janela de quem está usando a máquina, que foi o que a primeira
+versão fez antes de a imagem ser descartada.
 
 ## 6. Riscos e limites
 

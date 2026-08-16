@@ -18,3 +18,10 @@ resources/
 
 # Worktrees temporários de subagentes — nunca versionados.
 .claude/
+
+# Capturas de tela do harness do Word (tool/word_reference): artefatos
+# LOCAIS de comparação visual manual. São BMPs de vários MB e descrevem a
+# máquina de quem rodou — versioná-los engordaria o repositório sem dar
+# reprodutibilidade nenhuma. O oráculo versionado é o PDF que o Word exporta
+# em resources/word_reference/.
+doc/referencias-ui/
