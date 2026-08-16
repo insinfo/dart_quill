@@ -31,6 +31,7 @@ export 'src/document_engine/office/quill_codec.dart';
 export 'src/document_engine/office/schema.dart';
 export 'src/document_engine/office/sha256.dart' show sha256, sha256Hex;
 export 'src/document_engine/office/docx_codec.dart';
+export 'src/document_engine/office/font_library.dart';
 export 'src/document_engine/office/numbering.dart';
 export 'src/document_engine/office/pdf_service.dart';
 export 'src/document_engine/office/snapshot.dart';

@@ -368,6 +368,43 @@ abstract class DomAdapter {
   String? get platform;
 }
 
+/// Adaptador capaz de registrar uma FACE de fonte na plataforma.
+///
+/// Está separado de [DomAdapter] pelo mesmo motivo do download cooperativo:
+/// acrescentar um método à interface quebraria todo adaptador de terceiro que
+/// a implementa. Quem não implementa isto simplesmente não registra nada — a
+/// medição e o PDF continuam usando a face, e só a PROJEÇÃO fica com a fonte
+/// que o sistema tiver.
+abstract class DomFontFaceAdapter {
+  /// Registra [bytes] como a face [family] (peso/estilo pelos flags).
+  ///
+  /// Devolve false quando a plataforma recusou — fonte inválida, API
+  /// indisponível. Nunca lança: uma fonte que não carrega não pode derrubar
+  /// a abertura de um documento.
+  Future<bool> registerFontFace(
+    String family,
+    Uint8List bytes, {
+    bool bold = false,
+    bool italic = false,
+  });
+}
+
+extension DomAdapterFontFaces on DomAdapter {
+  /// Registra a face quando o adaptador sabe fazê-lo; caso contrário é um
+  /// no-op silencioso que devolve false.
+  Future<bool> registerFontFaceIfSupported(
+    String family,
+    Uint8List bytes, {
+    bool bold = false,
+    bool italic = false,
+  }) async {
+    final current = this;
+    if (current is! DomFontFaceAdapter) return false;
+    return (current as DomFontFaceAdapter)
+        .registerFontFace(family, bytes, bold: bold, italic: italic);
+  }
+}
+
 extension DomAdapterAsyncDownload on DomAdapter {
   Future<void> downloadBytesAsync(
       String filename, String mimeType, List<int> bytes,

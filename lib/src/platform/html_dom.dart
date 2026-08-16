@@ -620,12 +620,62 @@ class HtmlDomFile implements DomFile {
   String get type => _native.type;
 }
 
-class HtmlDomAdapter implements DomAdapter, DomCooperativeDownloadAdapter {
+class HtmlDomAdapter
+    implements DomAdapter, DomCooperativeDownloadAdapter, DomFontFaceAdapter {
   @override
   late final DomDocument document;
 
   HtmlDomAdapter() {
     document = HtmlDomDocument();
+  }
+
+  /// Faces já entregues ao browser, para não registrar a mesma duas vezes
+  /// (cada registro copia os bytes para o heap do JS).
+  final Set<String> _registeredFonts = <String>{};
+
+  /// Registra a face pela CSS Font Loading API.
+  ///
+  /// É o passo que faz a PROJEÇÃO desenhar com a mesma fonte que o
+  /// compositor mediu e que o PDF embute. Sem ele, fornecer uma face
+  /// pioraria a tela: a medida passaria a ser da fonte nova e o desenho
+  /// continuaria na antiga.
+  ///
+  /// Os bytes vão como `ArrayBuffer` (não como `data:` URL): o browser não
+  /// precisa decodificar base64, e a fonte fica disponível sem uma
+  /// requisição extra. `document.fonts.add` antes do `load()` é o que torna
+  /// a face visível para o CSS enquanto ela termina de carregar.
+  @override
+  Future<bool> registerFontFace(
+    String family,
+    Uint8List bytes, {
+    bool bold = false,
+    bool italic = false,
+  }) async {
+    final key = '${family.toLowerCase()}|$bold|$italic';
+    if (!_registeredFonts.add(key)) return true;
+    try {
+      final buffer = bytes.buffer.asUint8List(
+        bytes.offsetInBytes,
+        bytes.lengthInBytes,
+      );
+      final face = web.FontFace(
+        family,
+        buffer.toJS,
+        web.FontFaceDescriptors(
+          weight: bold ? '700' : '400',
+          style: italic ? 'italic' : 'normal',
+          display: 'swap',
+        ),
+      );
+      web.document.fonts.add(face);
+      await face.load().toDart;
+      return true;
+    } catch (_) {
+      // Fonte inválida ou API indisponível: a projeção segue com a fonte do
+      // sistema. A medição e o PDF não dependem disto.
+      _registeredFonts.remove(key);
+      return false;
+    }
   }
 
   @override

@@ -20,7 +20,15 @@
 /// dart run tool/pdf_reference_diff.dart                # os dois corpus
 /// dart run tool/pdf_reference_diff.dart caminho.docx   # um arquivo
 /// dart run tool/pdf_reference_diff.dart --out=dir      # onde gravar o PDF
+/// dart run tool/pdf_reference_diff.dart --fonts=C:/Windows/Fonts
 /// ```
+///
+/// **`--fonts`** liga a API opcional de fontes
+/// (`document_engine/office/font_library.dart`) com um loader de sistema de
+/// arquivos: o compositor passa a medir pela face REAL e o PDF a embute. É a
+/// diferença entre "a linha quebra quase no mesmo lugar que o Word" e "quebra
+/// no mesmo lugar" — e serve de demonstração de um [OfficeFontLoader] em ~20
+/// linhas.
 ///
 /// A extração de texto do PDF usa `pdftotext` (poppler), que já vem no
 /// ambiente de desenvolvimento deste repositório; sem ele a ferramenta
@@ -46,12 +54,15 @@ const List<({String docx, String pdf})> _corpus = [
 Future<void> main(List<String> arguments) async {
   var outDir = Directory.systemTemp.path;
   var pageLimit = 0;
+  String? fontDir;
   final paths = <String>[];
   for (final argument in arguments) {
     if (argument.startsWith('--out=')) {
       outDir = argument.substring('--out='.length);
     } else if (argument.startsWith('--pages=')) {
       pageLimit = int.parse(argument.substring('--pages='.length));
+    } else if (argument.startsWith('--fonts=')) {
+      fontDir = argument.substring('--fonts='.length);
     } else {
       paths.add(argument);
     }
@@ -69,16 +80,47 @@ Future<void> main(List<String> arguments) async {
       failures++;
       continue;
     }
-    failures += await _compare(target, outDir, pageLimit);
+    failures += await _compare(target, outDir, pageLimit, fontDir);
   }
   if (failures != 0) exit(1);
+}
+
+/// Um [OfficeFontLoader] de sistema de arquivos — a demonstração mais curta
+/// possível da API: o pacote diz de que face precisa, isto devolve bytes.
+///
+/// Cobre a convenção do Windows (`calibri.ttf`, `calibrib.ttf`, `calibribi`)
+/// e a convenção "Família-Bold.ttf" dos pacotes livres, tentando a família
+/// pedida e depois os aliases metricamente compatíveis.
+OfficeFontLoader? _fileSystemLoader(String? dir) {
+  if (dir == null) return null;
+  return (request) async {
+    for (final family in <String>{request.family, ...request.aliases}) {
+      final flat = family.replaceAll(' ', '').toLowerCase();
+      final windowsSuffix = request.bold && request.italic
+          ? 'z'
+          : request.bold
+              ? 'b'
+              : request.italic
+                  ? 'i'
+                  : '';
+      for (final candidate in [
+        '$flat$windowsSuffix.ttf',
+        '${family.replaceAll(' ', '')}${request.variantSuffix}.ttf',
+        if (!request.bold && !request.italic) '$flat.ttf',
+      ]) {
+        final file = File('$dir/$candidate');
+        if (file.existsSync()) return file.readAsBytesSync();
+      }
+    }
+    return null;
+  };
 }
 
 String _siblingPdf(String docx) =>
     docx.replaceFirst(RegExp(r'\.docx$', caseSensitive: false), '.pdf');
 
-Future<int> _compare(
-    ({String docx, String pdf}) target, String outDir, int pageLimit) async {
+Future<int> _compare(({String docx, String pdf}) target, String outDir,
+    int pageLimit, String? fontDir) async {
   final name = Uri.file(target.docx).pathSegments.last;
   stdout.writeln('\n=== $name ===');
 
@@ -98,7 +140,22 @@ Future<int> _compare(
       OfficeDocxCodec.regionVariantsOf(snapshot.headers, schema);
   final footerVariants =
       OfficeDocxCodec.regionVariantsOf(snapshot.footers, schema);
+  // A API opcional de fontes: as MESMAS faces medem e são embutidas.
+  final library = OfficeFontLibrary(loader: _fileSystemLoader(fontDir));
+  await library.ensureForDocument(
+    document,
+    extraDocuments: [
+      ...OfficeDocxCodec.regionVariantsOf(snapshot.headers, schema).values,
+      ...OfficeDocxCodec.regionVariantsOf(snapshot.footers, schema).values,
+    ],
+  );
+  if (!library.isEmpty) {
+    stdout.writeln('faces embutidas: ${library.faceCount}'
+        '${library.missing.isEmpty ? '' : '  (sem face: ${library.missing.length})'}');
+  }
+
   final composer = LayoutComposer(
+    fonts: library.fontSet,
     setup: OfficeDocxCodec.pageSetupOf(snapshot),
     sections: OfficeDocxCodec.pageSetupsOf(snapshot),
     header: headerVariants['default'] ?? empty,
@@ -109,7 +166,9 @@ Future<int> _compare(
     evenAndOddHeaders: OfficeDocxCodec.evenAndOddHeadersOf(snapshot),
   );
   final graph = composer.compose(document);
-  final pdf = OfficePdfService(title: name).fromPageGraph(graph).bytes;
+  final pdf = OfficePdfService(title: name, fonts: library.fontSet)
+      .fromPageGraph(graph)
+      .bytes;
 
   final outPath = '$outDir/${name.replaceAll(RegExp(r'\.docx$'), '')}.ours.pdf';
   File(outPath).writeAsBytesSync(pdf);

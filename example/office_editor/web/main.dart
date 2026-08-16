@@ -11,6 +11,7 @@
 library;
 
 import 'dart:js_interop';
+import 'dart:typed_data';
 
 import 'package:dart_quill/dart_quill_office.dart';
 import 'package:dart_quill/src/platform/platform.dart';
@@ -42,6 +43,10 @@ void main() {
       // Como no Word: as primeiras páginas aparecem imediatamente e o resto
       // pagina em background — a contagem da status bar cresce sozinha.
       progressivePagination: OfficeProgressivePagination(),
+      // Fontes REAIS, se a aplicação tiver alguma para servir. Sem isto o
+      // editor mede pela métrica compatível mais próxima — que é o padrão e
+      // continua correto; ver `_fetchFont`.
+      fontLoader: _fetchFont,
     ),
   );
 
@@ -49,6 +54,53 @@ void main() {
   // por script, então o e2e insere a figura por aqui. Fora do teste é
   // inofensivo — é a MESMA transação do botão Imagens.
   _installImageHook(editor);
+}
+
+/// O loader de fontes da aplicação — o lado que a BIBLIOTECA não implementa.
+///
+/// O pacote não faz rede nem lê arquivos (isso o amarraria a um ambiente);
+/// ele só descreve a face de que precisa. Aqui a busca é um `fetch` em
+/// `web/fonts/`, o caso mais comum numa aplicação web:
+///
+///     web/fonts/Carlito-Regular.ttf
+///     web/fonts/Carlito-Bold.ttf
+///     web/fonts/Inter-Regular.ttf
+///
+/// A tentativa passa pela família pedida E pelos ALIASES metricamente
+/// compatíveis que o editor já conhece: um documento que pede
+/// `Ecofont_Spranq_eco_Sans` é atendido por um `Carlito-Regular.ttf` no
+/// disco, que é exatamente a substituição que o Word faria.
+///
+/// 404 devolve null — "não tenho" — e o editor segue com a métrica
+/// compatível. Por isso o exemplo funciona sem NENHUM arquivo de fonte:
+/// baixe fontes livres (Carlito, Liberation, Inter) para `web/fonts/` e o
+/// mesmo documento passa a medir, desenhar e exportar PDF com elas.
+Future<Uint8List?> _fetchFont(OfficeFontRequest request) async {
+  for (final family in <String>{request.family, ...request.aliases}) {
+    final name = family.replaceAll(' ', '');
+    for (final path in [
+      'fonts/$name${request.variantSuffix}.ttf',
+      'fonts/$name${request.variantSuffix}.otf',
+      // Muitos pacotes de fonte nomeiam a regular sem sufixo nenhum.
+      if (!request.bold && !request.italic) 'fonts/$name.ttf',
+    ]) {
+      final bytes = await _fetchBytes(path);
+      if (bytes != null) return bytes;
+    }
+  }
+  return null;
+}
+
+Future<Uint8List?> _fetchBytes(String path) async {
+  try {
+    final response = await web.window.fetch(path.toJS).toDart;
+    if (!response.ok) return null;
+    final buffer = await response.arrayBuffer().toDart;
+    final bytes = buffer.toDart.asUint8List();
+    return bytes.isEmpty ? null : bytes;
+  } catch (_) {
+    return null;
+  }
 }
 
 @JS('dqOfficeInsertImage')

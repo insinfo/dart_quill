@@ -4,11 +4,41 @@ import 'package:dart_quill/src/platform/dom.dart';
 import 'package:html/dom.dart' as html_dom;
 import 'package:html/parser.dart' as html_parser;
 
-class FakeDomAdapter implements DomAdapter {
+class FakeDomAdapter implements DomAdapter, DomFontFaceAdapter {
   FakeDomAdapter() : document = FakeDomDocument();
 
   @override
   final FakeDomDocument document;
+
+  /// Faces registradas pelo acervo de fontes, na ordem em que chegaram.
+  ///
+  /// A VM não tem CSS Font Loading API; guardar o pedido é o que permite
+  /// afirmar no teste que o editor REGISTRA a face — sem isso a projeção
+  /// desenharia com outra fonte, e medir com uma e desenhar com outra é pior
+  /// do que não ter a fonte.
+  final List<({String family, bool bold, bool italic, int byteLength})>
+      registeredFonts = [];
+
+  /// Quando falso, [registerFontFace] devolve false — o caminho da plataforma
+  /// que recusa a face (fonte inválida, API ausente).
+  bool acceptsFontFaces = true;
+
+  @override
+  Future<bool> registerFontFace(
+    String family,
+    Uint8List bytes, {
+    bool bold = false,
+    bool italic = false,
+  }) async {
+    if (!acceptsFontFaces) return false;
+    registeredFonts.add((
+      family: family,
+      bold: bold,
+      italic: italic,
+      byteLength: bytes.length,
+    ));
+    return true;
+  }
 
   DomSelectionRange? selectionRange;
   DomNativeRange? nativeSelectionRange;

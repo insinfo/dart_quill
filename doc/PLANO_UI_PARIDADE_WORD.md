@@ -328,6 +328,44 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
     explicitamente na view do corpo e esconde os marcadores de coluna
     enquanto uma região está aberta.
 
+### 2.16 Fontes de verdade: a API opcional (2026-08-15)
+
+O motor já sabia usar uma face real (medir pela `hmtx`, embutir CID no PDF); o
+que faltava era **como a face chega até ele**. `office/font_library.dart`
+fecha isso sem amarrar a biblioteca a nenhum ambiente:
+
+- **`OfficeFontLoader`** — a aplicação recebe um [OfficeFontRequest] (família,
+  peso, estilo, os aliases metricamente compatíveis e o sufixo convencional de
+  arquivo) e devolve bytes, ou `null` para "não tenho". O pacote não faz rede
+  nem lê arquivos. `null` é MEMORIZADO: um loader de rede não é consultado
+  duas vezes pela mesma face.
+- **`OfficeFontLibrary`** — o acervo. Descobre o que o documento realmente usa
+  (marcas de run, `attrs['style']` do bloco e o JSON das caixas de texto, onde
+  mora o timbre), pede só essas combinações, e avisa uma vez quando o lote
+  chega.
+- **Registro na plataforma** — `DomFontFaceAdapter` (o mesmo padrão do
+  download cooperativo, para não quebrar adaptador de terceiro). No browser a
+  face entra pela CSS Font Loading API. Sem isso, fornecer uma fonte
+  PIORARIA a tela: a medida passaria a ser da face nova e o desenho
+  continuaria na antiga.
+- **Uma recomposição** quando faces novas entram — a métrica do documento
+  mudou, então ele repagina; caches de medição são invalidados junto.
+
+`OfficeWordEditorOptions.fontLoader` liga tudo, e `openDocument` dispara a
+busca em segundo plano (o documento aparece imediatamente com a métrica
+compatível e repagina quando as faces chegam). Quem preferir abrir já com a
+tipografia final chama `loadDocumentFonts()` e aguarda.
+
+Verificação com o corpus real (`--fonts=C:/Windows/Fonts` na ferramenta de
+comparação, que virou consumidora da API): o ETP embute 3 faces (Calibri,
+Calibri-Bold, Arial), mantém 19 × 19 páginas e a mesma única divergência de
+hifenização. `example/office_editor/web/fonts/README.md` documenta a
+convenção de nomes e as fontes livres que valem a pena.
+
+**Escopo deliberado:** o pacote continua NÃO distribuindo binários de fonte
+(a política do `THIRD_PARTY.md`), e sem loader nada muda — métricas
+compatíveis e standard-14, como antes.
+
 ### 2.15 Fidelidade do PDF contra o Word (2026-08-15)
 
 `tool/pdf_reference_diff.dart` compara o PDF que o editor gera com o PDF que

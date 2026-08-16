@@ -11,6 +11,7 @@ import 'dart:typed_data';
 import '../../platform/dom.dart';
 import '../layout/page_graph.dart';
 import '../model/index.dart';
+import '../office/font_library.dart';
 import '../office/snapshot.dart';
 import '../office/style_catalog.dart';
 import '../state/index.dart';
@@ -119,6 +120,19 @@ abstract interface class OfficeWordController {
 
   /// Puxa a seleção nativa para o modelo (guardada pelo host da view).
   void syncSelection();
+
+  /// O acervo de faces de fonte do editor.
+  ///
+  /// Sempre existe; fica vazio quando a aplicação não forneceu faces nem
+  /// `fontLoader` — e nesse caso o editor mede com as métricas compatíveis e
+  /// o PDF usa as standard-14, que é o comportamento histórico.
+  OfficeFontLibrary get fontLibrary;
+
+  /// Pede as faces que o documento aberto usa e recompõe quando elas chegam.
+  ///
+  /// Devolve quantas faces NOVAS entraram. Sem `fontLoader` é 0 e não há
+  /// recomposição nenhuma.
+  Future<int> loadDocumentFonts();
 
   /// Os estilos DO DOCUMENTO aberto (F8), ou null quando não há um pacote de
   /// origem — documento novo, ou Delta do Quill, que não tem `styles.xml`.

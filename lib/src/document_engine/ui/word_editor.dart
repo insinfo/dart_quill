@@ -46,10 +46,12 @@ import '../../platform/dom.dart';
 import '../diagnostics/open_document_timing.dart';
 import '../layout/dom_position_map.dart';
 import '../layout/dom_renderer.dart';
+import '../layout/fonts.dart';
 import '../layout/layout_composer.dart';
 import '../layout/page_graph.dart';
 import '../model/index.dart';
 import '../office/docx_codec.dart';
+import '../office/font_library.dart';
 import '../office/style_catalog.dart';
 import '../office/pdf_service.dart';
 import '../office/snapshot.dart';
@@ -192,6 +194,15 @@ class OfficeWordEditor implements OfficeWordController {
   late PageGraphDomRenderer _renderer;
   late DomElement _pagesHost;
   late DomElement _canvas;
+
+  /// O acervo de faces. Nasce com as que a aplicação já tinha e cresce com o
+  /// que o `fontLoader` trouxer para os documentos abertos.
+  late final OfficeFontLibrary _fontLibrary = OfficeFontLibrary(
+    faces: options.fonts.faces,
+    loader: options.fontLoader,
+    adapter: adapter,
+    onChanged: _handleFontsChanged,
+  );
 
   late final OfficeOverlay _overlay = OfficeOverlay(this);
   late final OfficeObjectAdorner _objectAdorner = OfficeObjectAdorner(this);
@@ -378,6 +389,48 @@ class OfficeWordEditor implements OfficeWordController {
   }
 
   @override
+  OfficeFontLibrary get fontLibrary => _fontLibrary;
+
+  /// As faces em vigor AGORA — o que o compositor mede e o que o PDF embute.
+  LayoutFontSet get fontSet => _fontLibrary.fontSet;
+
+  /// Pede ao `fontLoader` as faces que o documento aberto usa e recompõe uma
+  /// vez, se alguma chegar.
+  ///
+  /// Público porque a aplicação pode querer AGUARDAR (abrir o documento já
+  /// com a tipografia final, sem o pisca de recomposição) em vez de deixar o
+  /// editor resolver em segundo plano.
+  @override
+  Future<int> loadDocumentFonts() {
+    if (_disposed || !_viewReady || options.fontLoader == null) {
+      return Future.value(0);
+    }
+    return _fontLibrary.ensureForDocument(
+      _view.state.doc,
+      extraDocuments: [
+        if (_header != null) _header!,
+        if (_footer != null) _footer!,
+        ..._headerVariants.values,
+        ..._footerVariants.values,
+      ],
+    );
+  }
+
+  /// Faces novas entraram: a métrica do documento mudou, então ele repagina.
+  ///
+  /// UMA recomposição por lote de fontes (o `ensureAll` espera todas antes de
+  /// avisar), e nunca durante a montagem — remontar a view no meio do
+  /// `_build` deixaria o editor sem projeção.
+  void _handleFontsChanged() {
+    if (_disposed || !_viewReady) return;
+    _renderedPageBreakHintsValid = false;
+    _layoutMeasurementCache.clear();
+    _layoutTableCache.clear();
+    _layoutTableLineCache.clear();
+    _remountPreservingState();
+  }
+
+  @override
   OfficeStyleCatalog? get styleCatalog => _styleCatalog;
 
   @override
@@ -416,13 +469,13 @@ class OfficeWordEditor implements OfficeWordController {
   /// O PDF da MESMA paginação que está na tela — não há segunda composição.
   @override
   Uint8List exportPdf() =>
-      OfficePdfService(title: documentBaseName, fonts: options.fonts)
+      OfficePdfService(title: documentBaseName, fonts: fontSet)
           .fromPageGraph(_view.pageGraph)
           .bytes;
 
   @override
   Future<Uint8List> exportPdfAsync({Map<String, int>? timings}) async =>
-      (await OfficePdfService(title: documentBaseName, fonts: options.fonts)
+      (await OfficePdfService(title: documentBaseName, fonts: fontSet)
               .fromPageGraphAsync(
         _view.pageGraph,
         timings: timings,
@@ -870,6 +923,12 @@ class OfficeWordEditor implements OfficeWordController {
     // ele reflete a seleção nos controles que já existem, não a fonte de
     // dados deles.
     _ribbon?.rebuildActiveTab();
+    // As fontes do documento NOVO. Em segundo plano de propósito: o
+    // documento aparece imediatamente com a métrica compatível e repagina
+    // uma vez quando as faces chegam — esperar a rede antes de mostrar a
+    // primeira página é o oposto do que o usuário quer. Quem preferir o
+    // contrário chama `loadDocumentFonts()` e aguarda antes de abrir.
+    if (options.fontLoader != null) unawaited(loadDocumentFonts());
   }
 
   @override
@@ -900,7 +959,7 @@ class OfficeWordEditor implements OfficeWordController {
       footerVariants: footerVariants,
       titlePage: titlePage,
       evenAndOddHeaders: evenAndOddHeaders,
-      fonts: options.fonts,
+      fonts: fontSet,
       measurementCache: _layoutMeasurementCache,
       tableCache: _layoutTableCache,
       tableLineCache: _layoutTableLineCache,
@@ -1089,7 +1148,7 @@ class OfficeWordEditor implements OfficeWordController {
         footerVariants: _footerVariants,
         titlePage: _titlePage,
         evenAndOddHeaders: _evenAndOddHeaders,
-        fonts: options.fonts,
+        fonts: fontSet,
         measurementCache: _layoutMeasurementCache,
         tableCache: _layoutTableCache,
         tableLineCache: _layoutTableLineCache,
