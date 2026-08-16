@@ -242,11 +242,16 @@ void main() {
   });
 
   group('aba Tabela Layout', () {
-    /// Abre a aba contextual "Tabela Layout" (a sexta da régua de abas).
+    /// Abre a aba contextual "Tabela Layout".
+    ///
+    /// Pelo RÓTULO, não pelo índice: uma aba nova em qualquer posição
+    /// anterior (a Design entrou entre Inserir e Layout) fazia este teste
+    /// falhar em outra aba, apontando para um defeito que não existe.
     void openTableLayoutTab() {
-      final tabs = host.querySelectorAll('.dq-office-ribbon-tab').toList();
-      final tab = tabs[5] as FakeDomElement;
-      expect(tab.textContent, 'Tabela Layout');
+      final tab = host
+          .querySelectorAll('.dq-office-ribbon-tab')
+          .firstWhere((element) => element.textContent == 'Tabela Layout')
+          as FakeDomElement;
       tab.dispatchEvent('click', FakeDomMouseEvent(type: 'click', target: tab));
     }
 

@@ -779,6 +779,57 @@ class DocxWriter {
       setIfPresent(cols, 'w:space', section.columnSpacingTwips);
     }
 
+    // A moldura de página só é reescrita quando o editor a declara. Sem esse
+    // cuidado, um documento importado que tem `w:pgBorders` com arte, offset
+    // ou arestas parciais seria achatado no formato que o editor modela —
+    // a mesma corrupção silenciosa que `w:cols` já evitou.
+    final pageBorders = section.pageBorders;
+    if (pageBorders != null) {
+      final element = ensureChild('w:pgBorders', const {
+        'w:lnNumType',
+        'w:pgNumType',
+        'w:cols',
+        'w:formProt',
+        'w:vAlign',
+        'w:noEndnote',
+        'w:titlePg',
+        'w:textDirection',
+        'w:bidi',
+        'w:rtlGutter',
+        'w:docGrid',
+        'w:printerSettings',
+        'w:sectPrChange',
+      });
+      final offsetFrom = pageBorders['offsetFrom'];
+      if (offsetFrom is String) {
+        element.setAttribute('w:offsetFrom', offsetFrom);
+      }
+      for (final side in const ['top', 'left', 'bottom', 'right']) {
+        final raw = pageBorders[side];
+        final existing = element.firstChild('w:$side');
+        if (raw is! Map) {
+          // Aresta removida pelo editor: o elemento sai, senão a moldura
+          // antiga sobreviveria pela metade.
+          if (existing != null) element.children.remove(existing);
+          continue;
+        }
+        final edge = existing ?? XmlElement('w:$side');
+        if (existing == null) {
+          edge.parent = element;
+          element.children.add(edge);
+        }
+        for (final entry in const [
+          ('val', 'w:val'),
+          ('sz', 'w:sz'),
+          ('color', 'w:color'),
+          ('space', 'w:space'),
+        ]) {
+          final value = raw[entry.$1];
+          if (value != null) edge.setAttribute(entry.$2, '$value');
+        }
+      }
+    }
+
     if (section.documentGridType != null ||
         section.documentGridLinePitchTwips != null) {
       final docGrid = ensureChild('w:docGrid', const {

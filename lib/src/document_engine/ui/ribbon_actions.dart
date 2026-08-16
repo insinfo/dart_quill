@@ -1168,6 +1168,12 @@ void setMarginsTwips(
 /// documento (`w:docGrid`) governa a altura das linhas e vem do arquivo —
 /// perdê-la ao trocar o tamanho do papel mudaria a métrica de um documento
 /// inteiro sem ninguém pedir.
+/// Copiar a geometria trocando alguns campos.
+///
+/// Delegado a `PageSetupTwips.copyWith` de propósito: enquanto esta função
+/// listava campo a campo, toda propriedade NOVA de página nascia sendo
+/// apagada por ela — trocar o papel jogava fora a grade de texto do
+/// documento, e depois teria jogado fora cor, borda e marca-d'água.
 PageSetupTwips _copySetup(
   PageSetupTwips setup, {
   required int width,
@@ -1175,20 +1181,125 @@ PageSetupTwips _copySetup(
   int? columnCount,
   int? columnSpacingTwips,
 }) =>
-    PageSetupTwips(
+    setup.copyWith(
       widthTwips: width,
       heightTwips: height,
-      marginTopTwips: setup.marginTopTwips,
-      marginRightTwips: setup.marginRightTwips,
-      marginBottomTwips: setup.marginBottomTwips,
-      marginLeftTwips: setup.marginLeftTwips,
-      headerDistanceTwips: setup.headerDistanceTwips,
-      footerDistanceTwips: setup.footerDistanceTwips,
-      documentGridLinePitchTwips: setup.documentGridLinePitchTwips,
-      documentGridType: setup.documentGridType,
-      columnCount: columnCount ?? setup.columnCount,
-      columnSpacingTwips: columnSpacingTwips ?? setup.columnSpacingTwips,
+      columnCount: columnCount,
+      columnSpacingTwips: columnSpacingTwips,
     );
+
+// -- aba Design: o chrome da FOLHA -------------------------------------------
+//
+// As três propriedades abaixo mudam a página, não o conteúdo: no Word, cor,
+// borda e marca-d'água não reflowam uma linha. Por isso elas entram pela
+// geometria da seção (`setPageSetup`), como orientação e margens — e, como
+// elas, valem para a seção do cursor.
+
+/// Cor da folha (`w:background`). `null` remove.
+void setPageColor(OfficeWordController c, String? color) {
+  final setup = c.pageSetup;
+  if (setup.pageColor == color) return;
+  c.setPageSetup(color == null
+      ? setup.copyWith(clearPageColor: true)
+      : setup.copyWith(pageColor: color));
+}
+
+/// As molduras de página que a aba oferece, no vocabulário do Word.
+///
+/// A espessura é declarada em OITAVOS DE PONTO — a unidade do `w:sz` do
+/// OOXML —, e não em twips, para o round-trip ser exato: um oitavo vale 2,5
+/// twips, então uma espessura escolhida em twips que não seja múltiplo de
+/// 2,5 volta do arquivo diferente do que entrou (24 twips saíam como 25).
+const List<({String name, String? style, int sizeEighths})>
+    officePageBorderKinds = [
+  (name: 'Sem borda', style: null, sizeEighths: 0),
+  (name: 'Simples fina', style: 'single', sizeEighths: 4), // 0,5 pt
+  (name: 'Simples', style: 'single', sizeEighths: 8), // 1 pt
+  (name: 'Grossa', style: 'single', sizeEighths: 24), // 3 pt
+  (name: 'Tracejada', style: 'dashed', sizeEighths: 8),
+  (name: 'Pontilhada', style: 'dotted', sizeEighths: 8),
+  (name: 'Dupla', style: 'double', sizeEighths: 12), // 1,5 pt
+];
+
+/// Twips de uma espessura em oitavos de ponto (1 pt = 8 oitavos = 20 twips).
+int officeBorderTwipsOfEighths(int eighths) => (eighths * 2.5).round();
+
+/// Aplica uma moldura de página inteira (as quatro arestas).
+void setPageBorder(
+  OfficeWordController c, {
+  required String? style,
+  required int sizeEighths,
+  String color = '#000000',
+}) {
+  final setup = c.pageSetup;
+  if (style == null || sizeEighths <= 0) {
+    if (setup.pageBorders == null) return;
+    c.setPageSetup(setup.copyWith(clearPageBorders: true));
+    return;
+  }
+  final border = TableBorder(
+    style: style,
+    widthTwips: officeBorderTwipsOfEighths(sizeEighths),
+    color: color,
+  );
+  c.setPageSetup(setup.copyWith(
+    pageBorders: BlockBorders(
+      top: border,
+      right: border,
+      bottom: border,
+      left: border,
+    ),
+  ));
+}
+
+/// A moldura vigente descrita pelo nome da galeria, ou "Sem borda".
+String currentPageBorderName(OfficeWordController c) {
+  final borders = c.pageSetup.pageBorders;
+  final top = borders?.top;
+  if (top == null || !top.isVisible) return 'Sem borda';
+  for (final kind in officePageBorderKinds) {
+    if (kind.style == top.style &&
+        officeBorderTwipsOfEighths(kind.sizeEighths) == top.widthTwips) {
+      return kind.name;
+    }
+  }
+  return 'Personalizada';
+}
+
+/// Os textos de marca-d'água que o Word oferece prontos, no vocabulário de
+/// documento administrativo brasileiro.
+const List<String> officeWatermarkPresets = [
+  'MINUTA',
+  'RASCUNHO',
+  'CÓPIA',
+  'CONFIDENCIAL',
+  'URGENTE',
+  'NÃO COPIAR',
+];
+
+/// Marca-d'água de texto. `null` remove.
+void setWatermarkText(OfficeWordController c, String? text) {
+  final setup = c.pageSetup;
+  if (text == null || text.trim().isEmpty) {
+    if (setup.watermark == null) return;
+    c.setPageSetup(setup.copyWith(clearWatermark: true));
+    return;
+  }
+  final current = setup.watermark;
+  c.setPageSetup(setup.copyWith(
+    watermark: current == null
+        ? OfficePageWatermark(text: text)
+        : current.copyWith(text: text),
+  ));
+}
+
+/// Liga/desliga a diagonal da marca-d'água (o padrão do Word é diagonal).
+void setWatermarkDiagonal(OfficeWordController c, bool diagonal) {
+  final watermark = c.pageSetup.watermark;
+  if (watermark == null || watermark.diagonal == diagonal) return;
+  c.setPageSetup(
+      c.pageSetup.copyWith(watermark: watermark.copyWith(diagonal: diagonal)));
+}
 
 /// Menu Colunas: quantas colunas a SEÇÃO do cursor tem.
 ///

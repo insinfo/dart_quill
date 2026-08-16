@@ -2520,6 +2520,83 @@ void main() {
       expect(xml, contains('w:orient="landscape"'));
     });
 
+    test('a moldura de página IMPORTADA chega ao editor e ao save', () {
+      final codec = OfficeDocxCodec(schema: schema);
+      final sourceDoc = schema.node('doc', null,
+          Fragment.from([schema.node('paragraph', null, Fragment.empty)]));
+      final archive = ZipArchive.decodeBytes(codec.exportDocument(sourceDoc));
+      final originalXml = archive.readString('word/document.xml')!;
+      final sectionMatch =
+          RegExp(r'<w:sectPr\b[\s\S]*?</w:sectPr>').firstMatch(originalXml)!;
+      const sourceSection = '<w:sectPr>'
+          '<w:pgSz w:w="11906" w:h="16838"/>'
+          '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" '
+          'w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>'
+          '<w:pgBorders w:offsetFrom="page">'
+          '<w:top w:val="single" w:sz="24" w:space="24" w:color="C00000"/>'
+          '<w:left w:val="single" w:sz="24" w:space="24" w:color="C00000"/>'
+          '<w:bottom w:val="single" w:sz="24" w:space="24" w:color="C00000"/>'
+          '<w:right w:val="single" w:sz="24" w:space="24" w:color="C00000"/>'
+          '</w:pgBorders>'
+          '</w:sectPr>';
+      archive.setFile(
+        'word/document.xml',
+        utf8.encode(originalXml.replaceRange(
+            sectionMatch.start, sectionMatch.end, sourceSection)),
+      );
+      final imported = codec.import(archive.encode());
+
+      // 1. A moldura chega ao EDITOR: sem o parser ela sobrevivia no XML
+      //    preservado e a tela mostrava a página sem borda, como se o
+      //    documento a tivesse perdido.
+      final setup = OfficeDocxCodec.pageSetupOf(imported.snapshot);
+      expect(setup.pageBorders, isNotNull);
+      expect(setup.pageBorders!.top!.color, '#C00000');
+      expect(setup.pageBorders!.top!.widthTwips, 60); // 24 oitavos = 3 pt
+      expect(setup.pageBorderSpacePt, 24);
+
+      // 2. Salvar SEM tocar nela não reescreve o `w:pgBorders` de origem.
+      final saved = codec.exportEdited(
+        imported.snapshot,
+        PMNode.fromJSON(schema, imported.snapshot.body),
+        pageSetup: setup,
+      );
+      final savedXml = utf8.decode(partsOf(saved)['word/document.xml']!);
+      expect(savedXml, contains('w:sz="24"'));
+      expect(savedXml, contains('w:color="C00000"'));
+      expect(DocxValidator.validate(saved), isEmpty);
+    });
+
+    test('trocar a moldura reescreve só as arestas', () {
+      final codec = OfficeDocxCodec(schema: schema);
+      final sourceDoc = schema.node('doc', null,
+          Fragment.from([schema.node('paragraph', null, Fragment.empty)]));
+      final imported = codec.import(codec.exportDocument(sourceDoc));
+      const border = TableBorder(style: 'dashed', widthTwips: 20);
+      final setup = OfficeDocxCodec.pageSetupOf(imported.snapshot).copyWith(
+        pageBorders: const BlockBorders(
+            top: border, right: border, bottom: border, left: border),
+      );
+
+      final saved = codec.exportEdited(
+        imported.snapshot,
+        PMNode.fromJSON(schema, imported.snapshot.body),
+        pageSetup: setup,
+      );
+      final savedXml = utf8.decode(partsOf(saved)['word/document.xml']!);
+
+      expect(savedXml, contains('<w:pgBorders'));
+      expect(savedXml, contains('w:val="dashed"'));
+      // 20 twips = 1 pt = 8 oitavos: a unidade do arquivo, sem arredondar.
+      expect(savedXml, contains('w:sz="8"'));
+      expect(DocxValidator.validate(saved), isEmpty);
+
+      // E o round-trip devolve a MESMA moldura ao editor.
+      final reopened = OfficeDocxCodec.pageSetupOf(codec.import(saved).snapshot);
+      expect(reopened.pageBorders!.top!.style, 'dashed');
+      expect(reopened.pageBorders!.top!.widthTwips, 20);
+    });
+
     test('override altera geometria sem reescrever filhos ancillary do sectPr',
         () {
       final codec = OfficeDocxCodec(schema: schema);

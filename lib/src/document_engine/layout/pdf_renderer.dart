@@ -283,6 +283,17 @@ class PageGraphPdfRenderer {
     final contentTop = _twipsToPt(setup.marginTopTwips);
     final contentWidth = _twipsToPt(setup.contentWidthTwips);
 
+    // O chrome da FOLHA, na mesma ordem de pintura do DOM: cor do papel e
+    // marca-d'água ANTES de tudo (ficam atrás do texto) e a borda de página
+    // depois do conteúdo. Sem isso, um documento com marca-d'água apareceria
+    // marcado na tela e limpo no PDF assinado — a divergência mais cara que
+    // este projeto pode ter.
+    if (_shouldPaintPdfBackground(setup.pageColor)) {
+      builder.fillRect(0, 0, _twipsToPt(setup.widthTwips), pageHeightPt,
+          setup.pageColor!);
+    }
+    _renderWatermark(writer, builder, setup, pageHeightPt);
+
     // Cabeçalho e rodapé são medidos a partir da BORDA da página, como no
     // Word — não a partir da margem do corpo. Eles entram primeiro no
     // content stream: uma imagem opaca que invade a margem não apaga texto
@@ -357,12 +368,76 @@ class PageGraphPdfRenderer {
       );
     }
 
+    _renderPageBorders(builder, setup, pageHeightPt);
+
     writer.addPage(
       widthPt: _twipsToPt(setup.widthTwips),
       heightPt: pageHeightPt,
       content: builder.build(),
       xObjects: xObjects,
     );
+  }
+
+  /// A marca-d'água de texto, centrada na folha.
+  ///
+  /// A rotação é feita pela MATRIZ DE TEXTO (`Tm`), não por um `q/cm/Q` em
+  /// volta: o builder trabalha em coordenadas de topo-esquerda e converte
+  /// para o espaço do PDF ao escrever, então girar o sistema inteiro
+  /// inverteria também a conversão de y e a marca sairia fora da página.
+  void _renderWatermark(
+    PdfWriter writer,
+    PdfContentBuilder builder,
+    PageSetupTwips setup,
+    double pageHeightPt,
+  ) {
+    final watermark = setup.watermark;
+    if (watermark == null || watermark.isEmpty) return;
+    final style = ResolvedRunStyle(
+      family: watermark.fontFamily,
+      sizePt: watermark.sizePt,
+      color: watermark.color,
+    );
+    final font = standardFontFor(family: watermark.fontFamily);
+    final width = officeStandard14NaturalWidthPt(
+      text: watermark.text,
+      pdfFont: font,
+      sizePt: watermark.sizePt,
+    );
+    final pageWidth = _twipsToPt(setup.widthTwips);
+    // Centro da folha; a base do texto fica meia altura de maiúscula abaixo
+    // do centro, que é o que faz a marca parecer centrada e não pendurada.
+    final centerX = pageWidth / 2;
+    final centerY = pageHeightPt / 2 + watermark.sizePt * 0.35;
+    builder.textRotated(
+      fontResource: writer.fontResourceName(font),
+      sizePx: watermark.sizePt,
+      winAnsiText: encodeWinAnsi(watermark.text),
+      centerX: centerX,
+      baselineY: centerY,
+      textWidth: width,
+      degrees: watermark.diagonal ? 45 : 0,
+      color: style.color,
+    );
+  }
+
+  /// A moldura de página (`w:pgBorders`), recuada da borda do papel.
+  void _renderPageBorders(
+    PdfContentBuilder builder,
+    PageSetupTwips setup,
+    double pageHeightPt,
+  ) {
+    final borders = setup.pageBorders;
+    if (borders == null || !borders.hasVisibleSide) return;
+    final inset = setup.pageBorderSpacePt.toDouble();
+    final left = inset;
+    final top = inset;
+    final right = _twipsToPt(setup.widthTwips) - inset;
+    final bottom = pageHeightPt - inset;
+    if (right <= left || bottom <= top) return;
+    _strokeBorder(builder, borders.top, left, top, right, top);
+    _strokeBorder(builder, borders.bottom, left, bottom, right, bottom);
+    _strokeBorder(builder, borders.left, left, top, left, bottom);
+    _strokeBorder(builder, borders.right, right, top, right, bottom);
   }
 
   void _renderTable(

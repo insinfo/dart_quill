@@ -48,6 +48,103 @@ import 'sha256.dart';
 import 'snapshot.dart';
 import 'text_box_drawing.dart';
 
+// -- moldura de PÁGINA: OOXML ↔ layout ---------------------------------------
+//
+// `w:pgBorders` guarda a espessura em OITAVOS DE PONTO (`w:sz`) e o recuo em
+// PONTOS (`w:space`); o layout trabalha em twips. As duas conversões vivem
+// aqui, no codec, porque é a fronteira do formato — espalhá-las pelo chrome
+// produziria dois arredondamentos diferentes para a mesma borda.
+
+/// `w:pgBorders` (o mapa do snapshot) → as quatro arestas do layout.
+BlockBorders? officePageBordersFromOoxml(Object? raw) {
+  if (raw is! Map) return null;
+  TableBorder? edge(String side) {
+    final value = raw[side];
+    if (value is! Map) return null;
+    final style = '${value['val'] ?? 'single'}';
+    if (style == 'nil' || style == 'none') return null;
+    final eighths = value['sz'] is num ? (value['sz'] as num).toDouble() : 8.0;
+    final color = '${value['color'] ?? 'auto'}';
+    return TableBorder(
+      style: officeOoxmlBorderStyle(style),
+      // 1 pt = 8 oitavos = 20 twips.
+      widthTwips: (eighths * 2.5).round().clamp(1, 1000),
+      color: color == 'auto' ? '#000000' : officeHexColor(color),
+    );
+  }
+
+  final borders = BlockBorders(
+    top: edge('top'),
+    right: edge('right'),
+    bottom: edge('bottom'),
+    left: edge('left'),
+  );
+  return borders.hasVisibleSide ? borders : null;
+}
+
+/// O recuo da moldura até a borda do papel, em pontos (`w:space`).
+int officePageBorderSpaceOf(Object? raw) {
+  if (raw is! Map) return 24;
+  for (final side in const ['top', 'left', 'bottom', 'right']) {
+    final value = raw[side];
+    if (value is Map && value['space'] is num) {
+      return (value['space'] as num).toInt();
+    }
+  }
+  return 24;
+}
+
+/// As quatro arestas do layout → o mapa `w:pgBorders` do OOXML.
+Map<String, dynamic>? officePageBordersToOoxml(
+  BlockBorders? borders, {
+  int spacePt = 24,
+}) {
+  if (borders == null || !borders.hasVisibleSide) return null;
+  Map<String, dynamic>? edge(TableBorder? border) {
+    if (border == null || !border.isVisible) return null;
+    return {
+      'val': officeOoxmlBorderVal(border.style),
+      // De volta para oitavos de ponto, a unidade do arquivo.
+      'sz': (border.widthTwips / 2.5).round().clamp(2, 96),
+      'color': border.color.replaceFirst('#', '').toUpperCase(),
+      'space': spacePt,
+    };
+  }
+
+  final result = <String, dynamic>{'offsetFrom': 'page'};
+  for (final (key, value) in [
+    ('top', edge(borders.top)),
+    ('left', edge(borders.left)),
+    ('bottom', edge(borders.bottom)),
+    ('right', edge(borders.right)),
+  ]) {
+    if (value != null) result[key] = value;
+  }
+  return result;
+}
+
+/// `w:val` de borda → o vocabulário CSS que os dois renderers desenham.
+String officeOoxmlBorderStyle(String val) => switch (val) {
+      'dashed' || 'dashSmallGap' || 'dotDash' || 'dotDotDash' => 'dashed',
+      'dotted' => 'dotted',
+      'double' || 'triple' || 'thinThickSmallGap' => 'double',
+      _ => 'solid',
+    };
+
+/// O caminho inverso, para o arquivo.
+String officeOoxmlBorderVal(String style) => switch (style) {
+      'dashed' => 'dashed',
+      'dotted' => 'dotted',
+      'double' => 'double',
+      _ => 'single',
+    };
+
+/// `RRGGBB` do OOXML → `#RRGGBB` do CSS.
+String officeHexColor(String raw) {
+  final value = raw.replaceFirst('#', '').trim();
+  return value.length == 6 ? '#$value' : '#000000';
+}
+
 /// Vínculo persistente entre um nó editável e sua origem no OOXML.
 ///
 /// É o que permite, no save, reescrever SÓ o que o usuário tocou e
@@ -1636,6 +1733,10 @@ class OfficeDocxCodec {
         'documentGridLinePitchTwips': section.documentGridLinePitchTwips,
         'columnCount': section.columnCount,
         'columnSpacingTwips': section.columnSpacingTwips,
+        // O chrome da FOLHA (aba Design). Sem isto, uma moldura de página
+        // importada sobreviveria no XML preservado e mesmo assim sumiria da
+        // tela — o documento pareceria ter perdido a borda.
+        'pageBorders': section.pageBorders,
         'titlePage': section.titlePage,
       };
 
@@ -1690,6 +1791,11 @@ class OfficeDocxCodec {
               setup.columnCount == (base.columnCount ?? 1)
           ? null
           : setup.columnSpacingTwips,
+      // A moldura de página só chega ao arquivo quando MUDOU, pela mesma
+      // razão de `w:cols`: null aqui significa "não mexi", e o writer deixa
+      // o `w:pgBorders` de origem intacto — com a arte, o offset e as
+      // arestas parciais que o editor não modela.
+      pageBorders: _pageBordersOverride(base, setup),
       titlePage: base.titlePage,
       headerReferences: base.headerReferences,
       footerReferences: base.footerReferences,
@@ -1745,44 +1851,65 @@ class OfficeDocxCodec {
               ? (section['columnCount'] as num).toInt()
               : null,
       columnSpacingTwips: value('columnSpacingTwips', 720),
+      // O chrome da folha (aba Design).
+      pageBorders: officePageBordersFromOoxml(section['pageBorders']),
+      pageBorderSpacePt: officePageBorderSpaceOf(section['pageBorders']),
+      pageColor: section['pageColor'] as String?,
+      watermark: OfficePageWatermark.fromJson(section['watermark']),
     );
   }
 
-  static PageSetupTwips pageSetupOf(OfficeDocumentSnapshot snapshot) {
-    const fallback = PageSetupTwips();
-    if (snapshot.resources.sections.isEmpty) return fallback;
-    final section = snapshot.resources.sections.first;
-    int value(String key, int byDefault) {
-      final raw = section[key];
-      return raw is num && raw > 0 ? raw.toInt() : byDefault;
+  /// O `w:pgBorders` a gravar, ou null quando o editor não mexeu na moldura.
+  ///
+  /// A comparação é contra a moldura que veio do ARQUIVO (reconstruída pelo
+  /// mesmo conversor que a levou à tela): se o usuário não tocou nela, a
+  /// resposta é null e o `sectPr` de origem segue byte a byte. É a mesma
+  /// regra de `w:cols`, e ela existe porque `w:pgBorders` carrega coisas que
+  /// o editor não representa — `w:id` de arte decorativa, `w:shadow`,
+  /// `w:frame` e o `w:offsetFrom="text"`.
+  static Map<String, dynamic>? _pageBordersOverride(
+    WpSectionProperties base,
+    PageSetupTwips setup,
+  ) {
+    final fromFile = officePageBordersFromOoxml(base.pageBorders);
+    final fromEditor = setup.pageBorders;
+    if (_sameBorders(fromFile, fromEditor)) return null;
+    final encoded = officePageBordersToOoxml(
+      fromEditor,
+      spacePt: setup.pageBorderSpacePt,
+    );
+    // Moldura REMOVIDA: um mapa vazio faz o writer apagar as quatro arestas
+    // sem destruir o elemento (e o que mais houver nele).
+    return encoded ?? const <String, dynamic>{'offsetFrom': 'page'};
+  }
+
+  static bool _sameBorders(BlockBorders? a, BlockBorders? b) {
+    bool sameEdge(TableBorder? x, TableBorder? y) {
+      if (x == null || !x.isVisible) return y == null || !y.isVisible;
+      if (y == null || !y.isVisible) return false;
+      return x.style == y.style &&
+          x.widthTwips == y.widthTwips &&
+          x.color.toLowerCase() == y.color.toLowerCase();
     }
 
-    return PageSetupTwips(
-      widthTwips: value('pageWidthTwips', fallback.widthTwips),
-      heightTwips: value('pageHeightTwips', fallback.heightTwips),
-      marginTopTwips: value('marginTopTwips', fallback.marginTopTwips),
-      marginRightTwips: value('marginRightTwips', fallback.marginRightTwips),
-      marginBottomTwips: value('marginBottomTwips', fallback.marginBottomTwips),
-      marginLeftTwips: value('marginLeftTwips', fallback.marginLeftTwips),
-      headerDistanceTwips:
-          value('headerDistanceTwips', fallback.headerDistanceTwips),
-      footerDistanceTwips:
-          value('footerDistanceTwips', fallback.footerDistanceTwips),
-      documentGridLinePitchTwips:
-          section['documentGridLinePitchTwips'] is num &&
-                  (section['documentGridLinePitchTwips'] as num) > 0
-              ? (section['documentGridLinePitchTwips'] as num).toInt()
-              : null,
-      documentGridType: section['documentGridType'] as String?,
-      // `w:cols` ausente fica NULL, não 1: é o que permite reexportar sem
-      // carimbar um `w:num` que o arquivo não tinha.
-      columnCount:
-          section['columnCount'] is num && (section['columnCount'] as num) > 0
-              ? (section['columnCount'] as num).toInt()
-              : null,
-      columnSpacingTwips: value('columnSpacingTwips', 720),
-    );
+    if (a == null || !a.hasVisibleSide) return b == null || !b.hasVisibleSide;
+    if (b == null || !b.hasVisibleSide) return false;
+    return sameEdge(a.top, b.top) &&
+        sameEdge(a.right, b.right) &&
+        sameEdge(a.bottom, b.bottom) &&
+        sameEdge(a.left, b.left);
   }
+
+  /// A geometria da PRIMEIRA seção — o atalho para quem só precisa de uma.
+  ///
+  /// Delega a [_setupAt] em vez de repetir o mapeamento: enquanto as duas
+  /// funções listavam campo a campo, toda propriedade nova de página nascia
+  /// lida por uma e ignorada pela outra — e a divergência aparecia como
+  /// "abriu certo e o PDF saiu diferente".
+  static PageSetupTwips pageSetupOf(OfficeDocumentSnapshot snapshot) =>
+      snapshot.resources.sections.isEmpty
+          ? const PageSetupTwips()
+          : _setupAt(snapshot, 0);
 
   Map<String, OfficeSourceAnchor> _anchorsOf(Map<String, dynamic> sourceMap) {
     final raw = sourceMap['nodes'];

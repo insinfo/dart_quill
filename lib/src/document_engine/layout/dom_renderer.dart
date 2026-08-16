@@ -165,7 +165,18 @@ class PageGraphDomRenderer {
         'style',
         'position:relative;'
             'width:${_n(_px(setup.widthTwips))}px;'
-            'height:${_n(_px(setup.heightTwips))}px;');
+            'height:${_n(_px(setup.heightTwips))}px;'
+            // Cor da página (`w:background`): é a FOLHA que muda de cor, não
+            // o conteúdo; o CSS da folha define o branco padrão e este
+            // inline o sobrescreve só quando a seção declara uma cor.
+            '${setup.pageColor == null ? '' : 'background:${setup.pageColor};'}');
+
+    // Marca-d'água e borda de página são camadas INERTES: elas pertencem à
+    // folha, não ao documento. Sem `contenteditable=false` +
+    // `pointer-events:none` o caret cairia dentro da marca-d'água (que é
+    // texto de verdade no DOM) e o usuário a apagaria sem entender o quê.
+    final watermark = _watermarkLayer(setup);
+    if (watermark != null) pageElement.append(watermark);
 
     final content = document.createElement('div');
     content.classes.add('$officeCssPrefix-page-content');
@@ -217,7 +228,62 @@ class PageGraphDomRenderer {
           content.append(_renderTable(fragment, leftOffsetTwips: columnLeft));
       }
     }
+
+    // A borda da página vem por ÚLTIMO: no Word ela é desenhada por cima de
+    // tudo (um texto que invada a margem passa por baixo dela, não a apaga).
+    final border = _pageBorderLayer(setup);
+    if (border != null) pageElement.append(border);
     return pageElement;
+  }
+
+  /// A camada da marca-d'água: texto inerte, atrás do conteúdo.
+  DomElement? _watermarkLayer(PageSetupTwips setup) {
+    final watermark = setup.watermark;
+    if (watermark == null || watermark.isEmpty) return null;
+    final element = document.createElement('div');
+    element.classes.add('$officeCssPrefix-watermark');
+    element.setAttribute('contenteditable', 'false');
+    element.setAttribute('aria-hidden', 'true');
+    // Fora do mapa de posições: `data-model-length=0` declara que esta
+    // camada não consome NENHUMA posição do documento.
+    element.setAttribute('data-model-length', '0');
+    element.setAttribute(
+        'style',
+        'position:absolute;inset:0;z-index:0;'
+            'display:flex;align-items:center;justify-content:center;'
+            'pointer-events:none;user-select:none;overflow:hidden;'
+            'font-family:${_cssFontFamily(watermark.fontFamily)};'
+            'font-size:${_n(watermark.sizePt * pxPerPt)}px;'
+            'line-height:1.1;white-space:pre;'
+            'color:${watermark.color};'
+            '${watermark.diagonal ? 'transform:rotate(-45deg);' : ''}');
+    element.appendText(watermark.text);
+    return element;
+  }
+
+  /// A moldura de página (`w:pgBorders`), inerte e recuada da borda do papel.
+  DomElement? _pageBorderLayer(PageSetupTwips setup) {
+    final borders = setup.pageBorders;
+    if (borders == null || !borders.hasVisibleSide) return null;
+    final element = document.createElement('div');
+    element.classes.add('$officeCssPrefix-pageborder');
+    element.setAttribute('contenteditable', 'false');
+    element.setAttribute('aria-hidden', 'true');
+    element.setAttribute('data-model-length', '0');
+    // `w:space` é medido em PONTOS a partir da borda do papel — a mesma
+    // unidade que o diálogo do Word mostra.
+    final inset = setup.pageBorderSpacePt * pxPerPt;
+    element.setAttribute(
+        'style',
+        'position:absolute;z-index:3;box-sizing:border-box;'
+            'pointer-events:none;'
+            'left:${_n(inset)}px;top:${_n(inset)}px;'
+            'right:${_n(inset)}px;bottom:${_n(inset)}px;'
+            'border-top:${_borderCssValue(borders.top)};'
+            'border-right:${_borderCssValue(borders.right)};'
+            'border-bottom:${_borderCssValue(borders.bottom)};'
+            'border-left:${_borderCssValue(borders.left)};');
+    return element;
   }
 
   DomElement _renderRegion(

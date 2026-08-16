@@ -140,7 +140,7 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
 | Números de linha | ❌ | — |
 | Hifenização | ❌ | — |
 | Recuar/Espaçamento (grupo Parágrafo da aba Layout: esquerda/direita/antes/depois com spinners) | ✅ | `tabs/layout_tab.dart` (2026-08-09): 4 spinners (cm nos recuos, pt no espaçamento) pelo MESMO `applyBlockStyle` da régua, com o valor do bloco refletido |
-| Aba Design (temas, formatação do documento, marca-d'água, cor/bordas de página) | ❌ | — |
+| Aba Design (marca-d'água, cor da página, bordas de página) | ✅ | `tabs/design_tab.dart` (2026-08-15): as três propriedades vivem na GEOMETRIA da seção (`PageSetupTwips.watermark/pageColor/pageBorders`) e são desenhadas pelos DOIS renderers — ligar a marca-d'água não repagina nem move uma vírgula, porque o compositor não as enxerga. `w:pgBorders` faz round-trip (§2.17). **Temas/formatação do documento continuam fora**: trocar tema é reescrever `theme1.xml` e recalcular a cascata inteira — motor, não chrome |
 
 ### 1.8 Réguas
 
@@ -327,6 +327,54 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
     lado da mesma linha: ela mede a PÁGINA, então passou a despachar
     explicitamente na view do corpo e esconde os marcadores de coluna
     enquanto uma região está aberta.
+
+### 2.17 Aba Design: o chrome da FOLHA (2026-08-15)
+
+Marca-d'água, cor da página e bordas de página. As três compartilham a
+propriedade que decidiu onde elas moram: **não reflowam uma linha**. No Word,
+pintar a folha, marcar "MINUTA" ou pôr uma moldura não muda onde o texto
+quebra — então elas entram na `PageSetupTwips` da seção e são consumidas
+DIRETO pelos dois renderers. O compositor nem as enxerga, e é isso que
+garante que ligar a marca-d'água não repagine o documento.
+
+**A marca-d'água não é conteúdo.** Ela não ocupa posição, não entra na
+seleção, não é apagada por Ctrl+A e o caret não cai dentro dela — as camadas
+são `contenteditable=false`, `pointer-events:none` e `data-model-length=0`.
+Um editor que a inserisse como parágrafo faria o usuário apagá-la sem
+entender o que apagou, e ela reapareceria em todas as páginas.
+
+**Tela e PDF pela mesma fonte.** No PDF a rotação sai por MATRIZ DE TEXTO
+(`Tm`), não por `q/cm/Q` em volta do bloco: o builder trabalha em
+coordenadas de topo-esquerda e converte y ao escrever, então girar o sistema
+inteiro inverteria também essa conversão e a marca sairia da página.
+Verificado no corpus real (ETP com cor, moldura dupla e "MINUTA"): 19
+páginas, folha cinza, moldura a 24 pt da borda e a marca atrás do texto.
+
+**Round-trip.** `w:pgBorders` agora é LIDO (`WpSectionProperties.pageBorders`),
+chega ao snapshot e volta ao editor: antes uma moldura importada sobrevivia
+no XML preservado e mesmo assim sumia da tela — o documento parecia ter
+perdido a borda, e o usuário a redesenharia por cima da que já existia. A
+gravação segue a regra do `w:cols`: só quando MUDOU, senão o `sectPr` de
+origem fica byte a byte (com a arte decorativa, o `w:shadow` e o
+`offsetFrom="text"` que o editor não modela). A espessura é declarada em
+OITAVOS DE PONTO — a unidade do arquivo —, porque 1 oitavo vale 2,5 twips e
+uma escolha em twips que não seja múltiplo de 2,5 volta diferente do que
+entrou (24 twips saíam como 25; o teste de ponto fixo pegou).
+
+**Dívida honesta:** cor da página e marca-d'água ainda NÃO chegam ao `.docx`
+— a primeira precisa de `w:background` + `w:displayBackgroundShape` no
+`settings.xml`, e a segunda de um `v:shape` VML dentro do cabeçalho (e de
+CRIAR a parte quando o documento não tem cabeçalho, que é criação de
+estrutura, não edição). As duas sobrevivem no snapshot Office e no PDF, que
+é o caminho do SALI; o item da aba diz isso.
+
+**`copyWith` na geometria.** Os comandos de orientação/papel/colunas
+copiavam a `PageSetupTwips` campo a campo, e toda propriedade NOVA nascia
+sendo apagada por eles em silêncio — foi assim que a grade de texto do
+documento se perdeu ao trocar o papel. Agora quem não fala de um campo o
+preserva, e `pageSetupOf` delega a `_setupAt` pelo mesmo motivo: as duas
+funções listavam o mapeamento em paralelo e uma propriedade nova era lida
+por uma e ignorada pela outra.
 
 ### 2.16 Fontes de verdade: a API opcional (2026-08-15)
 

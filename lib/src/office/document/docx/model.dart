@@ -952,6 +952,16 @@ class WpSectionProperties {
   /// re-emitidas byte a byte enquanto o usuário não mexer nas colunas.
   final int? columnCount;
   final int? columnSpacingTwips;
+
+  /// `w:pgBorders` — as quatro arestas da moldura de página, cada uma como
+  /// `{'val': 'single', 'sz': 16, 'color': '000000', 'space': 24}`, mais
+  /// `offsetFrom`. Null = a seção não declara moldura.
+  ///
+  /// É um mapa e não um tipo próprio porque o writer só precisa devolvê-lo
+  /// ao XML e o editor já tem `BlockBorders` para desenhar: um terceiro tipo
+  /// de borda só produziria mais uma conversão para manter sincronizada.
+  final Map<String, dynamic>? pageBorders;
+
   final bool titlePage; // w:titlePg — header/footer "first" ativo
   final List<WpHeaderFooterReference> headerReferences;
   final List<WpHeaderFooterReference> footerReferences;
@@ -982,12 +992,41 @@ class WpSectionProperties {
     this.documentGridLinePitchTwips,
     this.columnCount,
     this.columnSpacingTwips,
+    this.pageBorders,
     this.titlePage = false,
     this.headerReferences = const [],
     this.footerReferences = const [],
     this.geometryOverridden = false,
     this.sourceXml,
   });
+
+  /// `w:pgBorders` → mapa por aresta, ou null quando ausente.
+  ///
+  /// Ler isto é o que faz uma moldura IMPORTADA aparecer na tela: sem o
+  /// parser ela sobrevivia no `sourceXml` (e voltava intacta ao salvar), mas
+  /// o editor mostrava a página sem borda — o documento parecia ter perdido
+  /// a moldura, e o usuário a redesenharia por cima da que já existia.
+  static Map<String, dynamic>? _pageBordersFromXml(XmlElement? el) {
+    if (el == null) return null;
+    final result = <String, dynamic>{};
+    final offsetFrom = el.getAttribute('w:offsetFrom');
+    if (offsetFrom != null) result['offsetFrom'] = offsetFrom;
+    for (final side in const ['top', 'left', 'bottom', 'right']) {
+      final edge = el.firstChild('w:$side');
+      if (edge == null) continue;
+      final value = <String, dynamic>{};
+      final val = edge.getAttribute('w:val');
+      if (val != null) value['val'] = val;
+      final size = edge.getAttribute('w:sz');
+      if (size != null) value['sz'] = int.tryParse(size);
+      final color = edge.getAttribute('w:color');
+      if (color != null) value['color'] = color;
+      final space = edge.getAttribute('w:space');
+      if (space != null) value['space'] = int.tryParse(space);
+      if (value.isNotEmpty) result[side] = value;
+    }
+    return result.isEmpty ? null : result;
+  }
 
   static WpSectionProperties? fromXml(XmlElement? el) {
     if (el == null) return null;
@@ -1016,6 +1055,7 @@ class WpSectionProperties {
           _intVal(el.firstChild('w:docGrid'), 'w:linePitch'),
       columnCount: _intVal(el.firstChild('w:cols'), 'w:num'),
       columnSpacingTwips: _intVal(el.firstChild('w:cols'), 'w:space'),
+      pageBorders: _pageBordersFromXml(el.firstChild('w:pgBorders')),
       titlePage: _onOff(el.firstChild('w:titlePg')) ?? false,
       headerReferences: refs('w:headerReference'),
       footerReferences: refs('w:footerReference'),

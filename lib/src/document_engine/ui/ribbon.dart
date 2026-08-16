@@ -14,6 +14,7 @@ import 'tabs/file_tab.dart';
 import 'tabs/header_footer_tab.dart';
 import 'tabs/home_tab.dart';
 import 'tabs/insert_tab.dart';
+import 'tabs/design_tab.dart';
 import 'tabs/layout_tab.dart';
 import 'tabs/object_format_tab.dart';
 import 'tabs/table_design_tab.dart';
@@ -152,6 +153,7 @@ class OfficeRibbon {
       ('file', 'Arquivo'),
       ('home', 'Página Inicial'),
       ('insert', 'Inserir'),
+      ('design', 'Design'),
       ('layout', 'Layout'),
       ('tableDesign', 'Design da Tabela'),
       ('tableLayout', 'Tabela Layout'),
@@ -232,6 +234,7 @@ class OfficeRibbon {
 
     final context = RibbonContext(controller, kit, this);
     final groups = switch (key) {
+      'design' => buildDesignTab(context),
       'layout' => buildLayoutTab(context),
       'insert' => buildInsertTab(context),
       'file' => buildFileTab(context),

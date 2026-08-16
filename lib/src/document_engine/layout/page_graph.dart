@@ -14,6 +14,82 @@ library;
 enum LayoutQuality { draft, fidelity }
 
 /// Geometria da página em twips (A4 retrato por padrão; 1 cm ≈ 567 twips).
+/// A marca-d'água de TEXTO de uma seção ("MINUTA", "RASCUNHO", "CÓPIA").
+///
+/// É o recurso da aba Design que mais aparece em documento administrativo, e
+/// no Word ele não é conteúdo: é um desenho atrás do texto, repetido em toda
+/// página, que o cursor não alcança. Aqui vale o mesmo — a marca vive na
+/// GEOMETRIA da seção, não na árvore, então ela não ocupa posição, não entra
+/// na seleção, não é apagada por Ctrl+A e não muda a paginação.
+final class OfficePageWatermark {
+  const OfficePageWatermark({
+    required this.text,
+    this.color = '#C8C8C8',
+    this.fontFamily = 'Calibri',
+    this.sizePt = 72,
+    this.diagonal = true,
+  });
+
+  final String text;
+  final String color;
+  final String fontFamily;
+  final double sizePt;
+
+  /// Diagonal (o padrão do Word, −45°) ou horizontal.
+  final bool diagonal;
+
+  bool get isEmpty => text.trim().isEmpty;
+
+  OfficePageWatermark copyWith({
+    String? text,
+    String? color,
+    String? fontFamily,
+    double? sizePt,
+    bool? diagonal,
+  }) =>
+      OfficePageWatermark(
+        text: text ?? this.text,
+        color: color ?? this.color,
+        fontFamily: fontFamily ?? this.fontFamily,
+        sizePt: sizePt ?? this.sizePt,
+        diagonal: diagonal ?? this.diagonal,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+        'color': color,
+        'fontFamily': fontFamily,
+        'sizePt': sizePt,
+        'diagonal': diagonal,
+      };
+
+  static OfficePageWatermark? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final text = raw['text'];
+    if (text is! String || text.trim().isEmpty) return null;
+    return OfficePageWatermark(
+      text: text,
+      color: raw['color'] is String ? raw['color'] as String : '#C8C8C8',
+      fontFamily:
+          raw['fontFamily'] is String ? raw['fontFamily'] as String : 'Calibri',
+      sizePt: raw['sizePt'] is num ? (raw['sizePt'] as num).toDouble() : 72,
+      diagonal: raw['diagonal'] != false,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is OfficePageWatermark &&
+      other.text == text &&
+      other.color == color &&
+      other.fontFamily == fontFamily &&
+      other.sizePt == sizePt &&
+      other.diagonal == diagonal;
+
+  @override
+  int get hashCode => Object.hash(text, color, fontFamily, sizePt, diagonal);
+}
+
 class PageSetupTwips {
   const PageSetupTwips({
     this.widthTwips = 11906, // 21,0 cm
@@ -28,6 +104,10 @@ class PageSetupTwips {
     this.documentGridType,
     this.columnCount,
     this.columnSpacingTwips = 720,
+    this.pageColor,
+    this.pageBorders,
+    this.pageBorderSpacePt = 24,
+    this.watermark,
   });
 
   final int widthTwips;
@@ -82,6 +162,26 @@ class PageSetupTwips {
   /// Espaço ENTRE colunas (`w:cols/@space`). O padrão do Word é 0,5".
   final int columnSpacingTwips;
 
+  // -- chrome da PÁGINA (aba Design) ------------------------------------------
+  //
+  // As três propriedades abaixo pintam a folha e NÃO mexem na área útil: no
+  // Word, cor, borda e marca-d'água não reflowam uma linha sequer. Por isso
+  // elas vivem na geometria e são consumidas direto pelos dois renderers, sem
+  // passar pelo compositor — nenhuma delas pode mudar onde o texto quebra.
+
+  /// Cor de fundo da folha (`w:background/@w:color`), ou null.
+  final String? pageColor;
+
+  /// Bordas de página (`w:pgBorders`), ou null.
+  final BlockBorders? pageBorders;
+
+  /// Distância da borda de página até a BORDA DO PAPEL, em pontos
+  /// (`w:pgBorders/w:top/@w:space`). O padrão do Word é 24 pt.
+  final int pageBorderSpacePt;
+
+  /// Marca-d'água de texto da seção, ou null.
+  final OfficePageWatermark? watermark;
+
   int get contentWidthTwips => widthTwips - marginLeftTwips - marginRightTwips;
 
   /// Largura de UMA coluna. O espaçamento entra `columnCount - 1` vezes.
@@ -108,6 +208,58 @@ class PageSetupTwips {
   static const int _minimumColumnTwips = 720;
   int get contentHeightTwips =>
       heightTwips - marginTopTwips - marginBottomTwips;
+
+  /// A mesma geometria com alguns campos trocados.
+  ///
+  /// Existe para que acrescentar uma propriedade de página não continue sendo
+  /// uma armadilha: o comando de orientação, de papel e de colunas copiavam a
+  /// geometria campo a campo, e cada campo novo nascia sendo APAGADO por eles
+  /// em silêncio — foi assim que a grade de texto do documento se perdeu ao
+  /// trocar o papel. Com um `copyWith`, quem não fala de um campo o preserva.
+  ///
+  /// Os anuláveis usam sentinelas (`clearX`) porque `null` aqui significa
+  /// "não mexi", e sem elas seria impossível REMOVER uma marca-d'água.
+  PageSetupTwips copyWith({
+    int? widthTwips,
+    int? heightTwips,
+    int? marginTopTwips,
+    int? marginRightTwips,
+    int? marginBottomTwips,
+    int? marginLeftTwips,
+    int? headerDistanceTwips,
+    int? footerDistanceTwips,
+    int? documentGridLinePitchTwips,
+    String? documentGridType,
+    int? columnCount,
+    int? columnSpacingTwips,
+    String? pageColor,
+    BlockBorders? pageBorders,
+    int? pageBorderSpacePt,
+    OfficePageWatermark? watermark,
+    bool clearPageColor = false,
+    bool clearPageBorders = false,
+    bool clearWatermark = false,
+  }) =>
+      PageSetupTwips(
+        widthTwips: widthTwips ?? this.widthTwips,
+        heightTwips: heightTwips ?? this.heightTwips,
+        marginTopTwips: marginTopTwips ?? this.marginTopTwips,
+        marginRightTwips: marginRightTwips ?? this.marginRightTwips,
+        marginBottomTwips: marginBottomTwips ?? this.marginBottomTwips,
+        marginLeftTwips: marginLeftTwips ?? this.marginLeftTwips,
+        headerDistanceTwips: headerDistanceTwips ?? this.headerDistanceTwips,
+        footerDistanceTwips: footerDistanceTwips ?? this.footerDistanceTwips,
+        documentGridLinePitchTwips:
+            documentGridLinePitchTwips ?? this.documentGridLinePitchTwips,
+        documentGridType: documentGridType ?? this.documentGridType,
+        columnCount: columnCount ?? this.columnCount,
+        columnSpacingTwips: columnSpacingTwips ?? this.columnSpacingTwips,
+        pageColor: clearPageColor ? null : (pageColor ?? this.pageColor),
+        pageBorders:
+            clearPageBorders ? null : (pageBorders ?? this.pageBorders),
+        pageBorderSpacePt: pageBorderSpacePt ?? this.pageBorderSpacePt,
+        watermark: clearWatermark ? null : (watermark ?? this.watermark),
+      );
 }
 
 /// Estilo resolvido de um run (a saída do StyleResolver para uma fatia de

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'pdf_writer.dart' show pdfFormatNumber, escapePdfString;
 
 /// Builder de content stream PDF que recebe coordenadas do canvas do editor
@@ -97,6 +99,48 @@ class PdfContentBuilder {
     _ops
       ..writeln('$fontResource ${_n(sizePx * k)} Tf')
       ..writeln('${_n(_x(x))} ${_n(_y(baselineY))} Td')
+      ..writeln('(${escapePdfString(winAnsiText)}) Tj')
+      ..writeln('ET');
+  }
+
+  /// Texto GIRADO em torno do próprio centro — a marca-d'água diagonal.
+  ///
+  /// A rotação entra na MATRIZ DE TEXTO (`Tm`), não num `q/cm/Q` em volta do
+  /// bloco: o builder trabalha em coordenadas de topo-esquerda e converte y
+  /// ao escrever, então girar o sistema de coordenadas inteiro giraria
+  /// também essa conversão e o texto sairia da página. Com `Tm`, o resto do
+  /// content stream continua no espaço de sempre.
+  ///
+  /// [centerX]/[baselineY] são o CENTRO horizontal e a baseline desejada;
+  /// [textWidth] é a largura que a fonte vai desenhar, usada para recuar meia
+  /// largura ao longo do eixo já girado — é isso que centra a marca em vez de
+  /// ancorá-la pelo canto.
+  void textRotated({
+    required String fontResource,
+    required double sizePx,
+    required String winAnsiText,
+    required double centerX,
+    required double baselineY,
+    required double textWidth,
+    required double degrees,
+    String color = '#000000',
+  }) {
+    if (winAnsiText.isEmpty) return;
+    _setFill(color);
+    final radians = degrees * math.pi / 180;
+    final cos = math.cos(radians);
+    final sin = math.sin(radians);
+    final halfWidthPt = textWidth * k / 2;
+    // Origem = centro − meia largura ao longo da direção do texto. No espaço
+    // do PDF o eixo y cresce para CIMA, então um ângulo positivo sobe.
+    final originX = _x(centerX) - halfWidthPt * cos;
+    final originY = _y(baselineY) - halfWidthPt * sin;
+    _ops.writeln('BT');
+    _setTextSpacing(0, 0);
+    _ops
+      ..writeln('$fontResource ${_n(sizePx * k)} Tf')
+      ..writeln('${_n(cos)} ${_n(sin)} ${_n(-sin)} ${_n(cos)} '
+          '${_n(originX)} ${_n(originY)} Tm')
       ..writeln('(${escapePdfString(winAnsiText)}) Tj')
       ..writeln('ET');
   }
