@@ -421,6 +421,13 @@ class OfficeHorizontalRuler {
     if (layer == null) return;
     _kit.clear(layer);
     if (!controller.viewReady) return;
+    // A régua mede a PÁGINA, e a página é o corpo. Com o cabeçalho ou uma
+    // caixa de texto abertos, o cursor não está no corpo: os marcadores
+    // descreveriam a última tabela em que o cursor esteve, e arrastá-los
+    // editaria um documento que não é o que está sendo digitado.
+    if (controller.headerFooter.isActive || controller.textBoxSession.isActive) {
+      return;
+    }
     final state = controller.view.state;
     final map = OfficeTableMap.at(state.doc, state.selection.from);
     if (map == null || map.columns == 0) return;
@@ -524,7 +531,10 @@ class OfficeHorizontalRuler {
       final state = controller.view.state;
       table_ops.setTableColumnWidth(
         state,
-        controller.dispatch,
+        // A view do CORPO, que é de quem este estado veio. `controller.dispatch`
+        // segue a view ATIVA, e as duas divergem com o cabeçalho aberto — a
+        // transação seria aplicada num documento que não é o dela.
+        controller.view.dispatch,
         tablePos: columnDrag.tablePos,
         columnIndex: columnDrag.columnIndex,
         widthTwips: _columnDragWidth(columnDrag, event.clientX),

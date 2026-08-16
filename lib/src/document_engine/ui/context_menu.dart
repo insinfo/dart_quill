@@ -38,7 +38,7 @@ class OfficeContextMenu {
   /// As entradas do contexto atual — públicas para os testes e para uma
   /// aplicação que queira estendê-las.
   List<OfficeMenuEntry> entries() {
-    final state = controller.view.state;
+    final state = controller.activeView.state;
     final hasSelection = !state.selection.empty;
     final inTable = table_ops.tableDepthOf(state) != null;
 
@@ -117,42 +117,42 @@ class OfficeContextMenu {
           label: 'Inserir Linha Acima',
           icon: 'addcell',
           onSelect: () => table_ops.tableInsertRow(
-              controller.view.state, controller.dispatch, controller.schema,
+              controller.activeView.state, controller.dispatch, controller.schema,
               above: true),
         ),
         OfficeMenuEntry(
           label: 'Inserir Linha Abaixo',
           onSelect: () => table_ops.tableInsertRow(
-              controller.view.state, controller.dispatch, controller.schema,
+              controller.activeView.state, controller.dispatch, controller.schema,
               above: false),
         ),
         OfficeMenuEntry(
           label: 'Inserir Coluna à Esquerda',
           onSelect: () => table_ops.tableInsertColumn(
-              controller.view.state, controller.dispatch, controller.schema,
+              controller.activeView.state, controller.dispatch, controller.schema,
               before: true),
         ),
         OfficeMenuEntry(
           label: 'Inserir Coluna à Direita',
           onSelect: () => table_ops.tableInsertColumn(
-              controller.view.state, controller.dispatch, controller.schema,
+              controller.activeView.state, controller.dispatch, controller.schema,
               before: false),
         ),
         OfficeMenuEntry(
           label: 'Excluir Linha',
           icon: 'delcell',
           onSelect: () => table_ops.tableDeleteRow(
-              controller.view.state, controller.dispatch),
+              controller.activeView.state, controller.dispatch),
         ),
         OfficeMenuEntry(
           label: 'Excluir Coluna',
           onSelect: () => table_ops.tableDeleteColumn(
-              controller.view.state, controller.dispatch),
+              controller.activeView.state, controller.dispatch),
         ),
         OfficeMenuEntry(
           label: 'Excluir Tabela',
           onSelect: () =>
-              table_ops.tableDelete(controller.view.state, controller.dispatch),
+              table_ops.tableDelete(controller.activeView.state, controller.dispatch),
         ),
       ],
     ];

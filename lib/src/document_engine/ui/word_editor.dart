@@ -1022,10 +1022,14 @@ class OfficeWordEditor implements OfficeWordController {
       // A divisa de coluna tem prioridade sobre a seleção de texto: o
       // ponteiro sobre a borda inicia o redimensionamento, como no Word.
       // Isso é do canvas — tabela só existe no corpo.
-      _canvas.addEventListener(
+      // No HOST, e não no canvas: uma tabela dentro do cabeçalho/rodapé em
+      // edição é projetada na superfície da região, que vive no overlay —
+      // irmão do canvas. Sem isto, redimensionar coluna e seleção retangular
+      // simplesmente não existiam ali.
+      host.addEventListener(
           'pointerdown', (event) => _tableAdorner.handlePointerDown(event));
-      _canvas.addEventListener('pointermove', _tableAdorner.handlePointerMove);
-      _canvas.addEventListener('pointerup', _tableAdorner.handlePointerUp);
+      host.addEventListener('pointermove', _tableAdorner.handlePointerMove);
+      host.addEventListener('pointerup', _tableAdorner.handlePointerUp);
       // O arrasto de ALÇA, por sua vez, pertence ao editor inteiro: as alças
       // moram no overlay (que não borbulha para o canvas) e soltar o ponteiro
       // fora do objeto ainda tem de aplicar o redimensionamento.

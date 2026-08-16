@@ -21,6 +21,7 @@ library;
 import 'package:test/test.dart';
 
 import 'package:dart_quill/dart_quill_office.dart';
+import 'package:dart_quill/src/document_engine/ui/table_ops.dart' as table_ops;
 import 'package:dart_quill/src/platform/dom.dart';
 
 import '../../../support/fake_dom.dart';
@@ -268,6 +269,80 @@ void main() {
 
       expect(editor.headerFooter.isActive, isTrue,
           reason: 'sair é o gesto do duplo clique NO CORPO, e só nele');
+    });
+  });
+
+  group('tabela dentro do rodapé', () {
+    /// O rodapé do TR de referência é uma TABELA (logo + endereço + página).
+    /// Editá-la é edição de rodapé como qualquer outra, e todo o vocabulário
+    /// de tabela tem de valer ali.
+    PMNode footerWithTable() {
+      PMNode cell(String text) => schema.node(
+          'tableCell', null, Fragment.from([paragraph(text)]));
+      return schema.node(
+          'doc',
+          null,
+          Fragment.from([
+            schema.node(
+                'table',
+                null,
+                Fragment.from([
+                  schema.node('tableRow', null,
+                      Fragment.from([cell('GOVTIC'), cell('Página 1')])),
+                ])),
+            schema.node('paragraph', null, Fragment.empty),
+          ]));
+    }
+
+    OfficeWordEditor enterFooter() {
+      final created = OfficeWordEditor.mount(
+        host: host,
+        adapter: adapter,
+        document: body(),
+        schema: schema,
+        options: const OfficeWordEditorOptions(),
+      );
+      editor = created;
+      created.openDocument(
+        body(),
+        header: headerRegion(),
+        footer: footerWithTable(),
+      );
+      created.headerFooter.enter(header: false, pageIndex: 0);
+      return created;
+    }
+
+    test('a aba contextual de tabela aparece com o cursor na célula', () {
+      final editor = enterFooter();
+      final region = editor.headerFooter.regionView!;
+      // Cursor dentro da primeira célula.
+      region.dispatch(region.state.tr
+        ..setSelection(TextSelection.create(region.state.doc, 4)));
+
+      final tabs = host
+          .querySelectorAll('.dq-office-ribbon-tab')
+          .where((tab) => !tab.classes.contains('dq-office-ribbon-tab-hidden'))
+          .map((tab) => tab.textContent)
+          .toList();
+      expect(tabs, contains('Tabela Layout'));
+      expect(tabs, contains('Design da Tabela'));
+    });
+
+    test('inserir linha age na tabela DO RODAPÉ, não no corpo', () {
+      final editor = enterFooter();
+      final region = editor.headerFooter.regionView!;
+      region.dispatch(region.state.tr
+        ..setSelection(TextSelection.create(region.state.doc, 4)));
+
+      final before = region.state.doc.child(0).childCount;
+      table_ops.tableInsertRow(
+          editor.activeView.state, editor.dispatch, editor.schema,
+          above: false);
+
+      expect(editor.headerFooter.regionView!.state.doc.child(0).childCount,
+          before + 1);
+      // E o corpo continua intacto — a transação não foi parar nele.
+      expect(editor.view.state.doc.childCount, 1);
     });
   });
 

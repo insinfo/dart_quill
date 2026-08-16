@@ -82,7 +82,10 @@ String imageMimeType(Uint8List bytes, {String? fileName}) {
   if (type == null) return (widthTwips: widthTwips, heightTwips: heightTwips);
 
   c.syncSelection();
-  final state = c.view.state;
+  // A view ATIVA: com o cabeçalho aberto, "Inserir → Imagens" põe a figura no
+  // CABEÇALHO, como no Word. Montar a transação a partir do corpo e
+  // despachá-la na região era a "mismatched transaction" que o estado recusa.
+  final state = c.activeView.state;
   final tr = state.tr
     ..replaceSelectionWith(type.create({
       'src': src,

@@ -71,7 +71,7 @@ class OfficeTableAdorner {
   // -- realce da seleção de células -------------------------------------------
 
   void _paintSelection() {
-    final selection = controller.view.state.selection;
+    final selection = controller.activeView.state.selection;
     if (selection is! CellSelection) return;
     for (final pos in selection.cellPositions) {
       final element = cellElementAt(pos);
@@ -96,7 +96,7 @@ class OfficeTableAdorner {
   /// exatamente a posição do NÓ (`docPos - 1`, ver `page_graph.dart`) — o
   /// chrome não precisa de atributo próprio.
   DomElement? cellElementAt(int cellPos) {
-    for (final element in controller.view.host
+    for (final element in controller.activeView.host
         .querySelectorAll('.$officeCssPrefix-table-cell')) {
       final raw = element.getAttribute('data-doc-from');
       if (raw != null && int.tryParse(raw) == cellPos) return element;
@@ -114,7 +114,7 @@ class OfficeTableAdorner {
   // -- âncora ⊞ ---------------------------------------------------------------
 
   void _paintAnchor() {
-    final state = controller.view.state;
+    final state = controller.activeView.state;
     final map = OfficeTableMap.at(state.doc, state.selection.from);
     if (map == null) return;
     final first = map.cellCovering(0, 0);
@@ -135,7 +135,7 @@ class OfficeTableAdorner {
     anchor.addEventListener('mousedown', (event) => event.preventDefault());
     anchor.addEventListener('click', (event) {
       event.preventDefault();
-      ops.selectWholeTable(controller.view.state, controller.dispatch);
+      ops.selectWholeTable(controller.activeView.state, controller.dispatch);
     });
     controller.overlay.layer.append(anchor);
     _anchor = anchor;
@@ -176,7 +176,7 @@ class OfficeTableAdorner {
     final cellPos =
         int.tryParse(cellElement.getAttribute('data-doc-from') ?? '');
     if (cellPos == null) return false;
-    final state = controller.view.state;
+    final state = controller.activeView.state;
     final map = OfficeTableMap.at(state.doc, cellPos + 1);
     final cell = map?.cellAt(cellPos + 1);
     if (map == null || cell == null) return false;
@@ -230,7 +230,7 @@ class OfficeTableAdorner {
     if (headPos == null || headPos == anchor) return;
     event.preventDefault();
     ops.selectCellRange(
-      controller.view.state,
+      controller.activeView.state,
       controller.dispatch,
       anchor + 1,
       headPos + 1,
@@ -257,7 +257,7 @@ class OfficeTableAdorner {
       refresh();
       return;
     }
-    final state = controller.view.state;
+    final state = controller.activeView.state;
     ops.setTableColumnWidth(
       state,
       controller.dispatch,
@@ -292,7 +292,7 @@ class OfficeTableAdorner {
           current.classes.contains('$officeCssPrefix-table-cell')) {
         return current;
       }
-      if (current == controller.view.host) break;
+      if (current == controller.activeView.host) break;
       current = current.parentNode;
     }
     return null;

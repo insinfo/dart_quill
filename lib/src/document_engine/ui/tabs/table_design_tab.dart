@@ -60,7 +60,7 @@ List<DomElement> buildTableDesignTab(RibbonContext ctx) {
               text,
               title,
               () => run(
-                  () => ops.setCellBorders(c.view.state, c.dispatch, which)),
+                  () => ops.setCellBorders(c.activeView.state, c.dispatch, which)),
               icon: icon),
       ]),
       kit.row([
@@ -79,7 +79,7 @@ List<DomElement> buildTableDesignTab(RibbonContext ctx) {
               text,
               title,
               () => run(
-                  () => ops.setCellBorders(c.view.state, c.dispatch, which)),
+                  () => ops.setCellBorders(c.activeView.state, c.dispatch, which)),
               icon: icon),
       ]),
     ]),
@@ -110,7 +110,7 @@ DomElement buildCellShadingButton(RibbonContext ctx) {
         event.preventDefault();
         c.overlay.closeGroup(group);
         c.syncSelection();
-        ops.setCellShading(c.view.state, c.dispatch, color);
+        ops.setCellShading(c.activeView.state, c.dispatch, color);
       });
       palette.append(swatch);
     }

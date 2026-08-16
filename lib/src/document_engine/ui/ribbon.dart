@@ -253,7 +253,11 @@ class OfficeRibbon {
   /// Inicial se a que sumiu estava ativa.
   void refreshContextual() {
     if (!controller.viewReady) return;
-    final inTable = table_ops.tableDepthOf(controller.view.state) != null;
+    // A view ATIVA: uma tabela dentro do cabeçalho/rodapé em edição é uma
+    // tabela como qualquer outra, e as abas dela têm de aparecer. Com a view
+    // do corpo fixa aqui, editar o rodapé em tabela (o timbre do TR é um)
+    // deixava o usuário sem nenhum comando de tabela.
+    final inTable = table_ops.tableDepthOf(controller.activeView.state) != null;
     for (final key in tableTabKeys) {
       final tab = _tabs[key];
       if (tab != null) _setContextualVisible(tab, inTable);

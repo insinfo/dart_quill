@@ -17,7 +17,7 @@ import 'dialog.dart';
 
 /// Abre o diálogo para a seleção corrente.
 void openFontDialog(OfficeWordController controller) {
-  final state = controller.view.state;
+  final state = controller.activeView.state;
   final selection = state.selection;
 
   bool hasMark(String name) {
@@ -118,7 +118,7 @@ void openFontDialog(OfficeWordController controller) {
 
 /// Aplica TODAS as escolhas numa transação só.
 void _applyFont(OfficeWordController controller, Map<String, String> values) {
-  final state = controller.view.state;
+  final state = controller.activeView.state;
   final selection = state.selection;
   final tr = state.tr;
 

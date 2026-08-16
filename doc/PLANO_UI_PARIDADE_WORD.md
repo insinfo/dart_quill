@@ -295,6 +295,67 @@ Legenda: ✅ implementado · 🟡 parcial · ❌ ausente · 🐞 com bug conheci
     `stopPropagation`. A subida para na raiz dos ELEMENTOS: quem escuta no
     `document` continua recebendo só o que é disparado nele.
 
+17. ~~**B17 — todo run era desenhado no PDF com a largura errada**~~ —
+    **CORRIGIDO 2026-08-15**, achado comparando o nosso PDF com o que o WORD
+    exportou do mesmo DOCX (`tool/pdf_reference_diff.dart`). Sem faces
+    embutidas o PDF desenha com as standard-14 (Helvetica/Times), enquanto o
+    compositor mede com o `FontRegistry` — e as duas tabelas não coincidem: a
+    Ecofont dos dois corpora resolve para Calibri/Carlito, ~7% mais estreita
+    que a Helvetica. Cada run era desenhado mais largo que a caixa reservada
+    e invadia o seguinte. No ETP o cabeçalho saía **"Processo nº44505/2025"**
+    (sem o espaço) e o rodapé **"P á g i n a2 | 19"**. Pior no NEGRITO: o
+    registro não tem variante de peso, então um run em negrito era medido com
+    a largura do peso normal — a linha "…gestão pública **municipal**, no
+    modelo…" saía com as duas partes sobrepostas. Agora
+    `layout/pdf_standard_widths.dart` traz as larguras AFM oficiais das 14
+    fontes-padrão (inclusive negrito e itálico) e o renderer absorve a
+    diferença no espaçamento entre caracteres, de modo que o run desenhado
+    termina exatamente onde a caixa do compositor termina. Medida contra a
+    referência: o ETP saiu de **19 páginas divergentes de 19** para **1**, e
+    essa uma difere só na escolha do ponto de hifenização dentro de uma
+    célula.
+18. ~~**B18 — comandos de TABELA quebravam no cabeçalho/rodapé**~~ —
+    **CORRIGIDO 2026-08-15**: quickbar, menu de contexto, as duas abas
+    contextuais, o diálogo de Propriedades e os adornos liam
+    `controller.view.state` (o CORPO) e despachavam por `controller.dispatch`
+    (a view ATIVA). Com o rodapé em edição — e o rodapé do TR de referência é
+    uma tabela — inserir linha significava montar a transação a partir de um
+    documento e aplicá-la em outro, que é a "mismatched transaction" que o
+    estado recusa. As abas de tabela nem apareciam, porque a detecção também
+    olhava o corpo. Pelo mesmo motivo, "Inserir → Imagens" com o cabeçalho
+    aberto agora insere NO cabeçalho, como no Word. A régua ficou do outro
+    lado da mesma linha: ela mede a PÁGINA, então passou a despachar
+    explicitamente na view do corpo e esconde os marcadores de coluna
+    enquanto uma região está aberta.
+
+### 2.15 Fidelidade do PDF contra o Word (2026-08-15)
+
+`tool/pdf_reference_diff.dart` compara o PDF que o editor gera com o PDF que
+o **Word** exportou do mesmo DOCX (`resources/*.pdf`). Não compara pixels —
+fidelidade pixel a pixel não é meta — e sim as três coisas que um usuário
+percebe na primeira olhada e que dá para afirmar automaticamente: contagem de
+páginas, texto POR página e texto total. A extração usa `pdftotext`.
+
+Estado atual:
+
+| Corpus | Páginas (nosso × Word) | Páginas com texto divergente |
+|---|---|---|
+| ETP (19 páginas) | 19 × 19 | 1 — ponto de hifenização numa célula |
+| TR (140 páginas) | 140 × 140 | poucas linhas de deriva acumulada |
+
+O que continua divergindo, e por quê: **onde a linha quebra**. O Word tem a
+fonte real do documento; nós temos a métrica compatível mais próxima e, sem
+faces embutidas, o PDF desenha com uma standard-14. Uma diferença de 1% de
+largura muda a última palavra de um parágrafo de página, e a hifenização
+escolhe outro ponto ("on-premise" inteiro × "on-pre-/mise"). O que NÃO pode
+divergir — e não diverge mais — é run invadindo run.
+
+**Pendência conhecida:** o compositor mede negrito com métricas do peso
+normal (`FontRegistry` não tem variante de peso). Hoje isso é compensado no
+desenho do PDF, mas continua afetando a QUEBRA de linha de parágrafos com
+muito negrito. Corrigir na origem é acrescentar tabelas de peso ao registro —
+mudança de motor, com repaginação de todo o corpus para revalidar.
+
 ### 2.14 Objetos dentro da região (2026-08-15)
 
 O timbre do documento real (brasão + quadro "Continuação de Processo" no

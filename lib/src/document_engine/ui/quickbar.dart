@@ -125,46 +125,46 @@ class OfficeSelectionQuickbar {
         '⬆+',
         'Inserir linha acima',
         () => table_ops.tableInsertRow(
-            controller.view.state, controller.dispatch, controller.schema,
+            controller.activeView.state, controller.dispatch, controller.schema,
             above: true),
         icon: 'addcell'));
     row.append(_kit.button(
         '⬇+',
         'Inserir linha abaixo',
         () => table_ops.tableInsertRow(
-            controller.view.state, controller.dispatch, controller.schema,
+            controller.activeView.state, controller.dispatch, controller.schema,
             above: false)));
     row.append(_kit.button(
         '➡+',
         'Inserir coluna à direita',
         () => table_ops.tableInsertColumn(
-            controller.view.state, controller.dispatch, controller.schema,
+            controller.activeView.state, controller.dispatch, controller.schema,
             before: false)));
     row.append(_kit.el('span', 'dq-office-ribbon-sep'));
     row.append(_kit.button(
         '⧉',
         'Mesclar células',
         () => run(() => table_ops.mergeSelectedCells(
-            controller.view.state, controller.dispatch)),
+            controller.activeView.state, controller.dispatch)),
         icon: 'merge-cells'));
     row.append(_kit.button(
         '⫯',
         'Dividir célula',
         () => run(() => table_ops.splitSelectedCell(
-            controller.view.state, controller.dispatch)),
+            controller.activeView.state, controller.dispatch)),
         icon: 'rows-and-columns'));
     row.append(_kit.el('span', 'dq-office-ribbon-sep'));
     row.append(_kit.button(
         '⬚✕',
         'Excluir linha',
         () => table_ops.tableDeleteRow(
-            controller.view.state, controller.dispatch),
+            controller.activeView.state, controller.dispatch),
         icon: 'delcell'));
     row.append(_kit.button(
         '▯✕',
         'Excluir coluna',
         () => table_ops.tableDeleteColumn(
-            controller.view.state, controller.dispatch)));
+            controller.activeView.state, controller.dispatch)));
     bar.append(row);
     return bar;
   }

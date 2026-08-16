@@ -34,19 +34,19 @@ List<DomElement> buildTableLayoutTab(RibbonContext ctx) {
             'Célula',
             'Selecionar célula',
             () => run(() {
-                  final from = c.view.state.selection.from;
-                  ops.selectCellRange(c.view.state, c.dispatch, from, from);
+                  final from = c.activeView.state.selection.from;
+                  ops.selectCellRange(c.activeView.state, c.dispatch, from, from);
                 }),
             extraClass: 'dq-office-btn-labeled',
             icon: 'select-tool'),
         kit.button('Linha', 'Selecionar linha',
-            () => run(() => ops.selectTableRow(c.view.state, c.dispatch)),
+            () => run(() => ops.selectTableRow(c.activeView.state, c.dispatch)),
             extraClass: 'dq-office-btn-labeled'),
         kit.button('Coluna', 'Selecionar coluna',
-            () => run(() => ops.selectTableColumn(c.view.state, c.dispatch)),
+            () => run(() => ops.selectTableColumn(c.activeView.state, c.dispatch)),
             extraClass: 'dq-office-btn-labeled'),
         kit.button('Tabela', 'Selecionar tabela',
-            () => run(() => ops.selectWholeTable(c.view.state, c.dispatch)),
+            () => run(() => ops.selectWholeTable(c.activeView.state, c.dispatch)),
             extraClass: 'dq-office-btn-labeled'),
       ]),
       kit.row([
@@ -61,7 +61,7 @@ List<DomElement> buildTableLayoutTab(RibbonContext ctx) {
             'Acima',
             'Inserir linha acima',
             () => run(() => ops.tableInsertRow(
-                c.view.state, c.dispatch, c.schema,
+                c.activeView.state, c.dispatch, c.schema,
                 above: true)),
             extraClass: 'dq-office-btn-labeled',
             icon: 'addcell'),
@@ -69,43 +69,43 @@ List<DomElement> buildTableLayoutTab(RibbonContext ctx) {
             'Abaixo',
             'Inserir linha abaixo',
             () => run(() => ops.tableInsertRow(
-                c.view.state, c.dispatch, c.schema,
+                c.activeView.state, c.dispatch, c.schema,
                 above: false)),
             extraClass: 'dq-office-btn-labeled'),
         kit.button(
             'À Esquerda',
             'Inserir coluna à esquerda',
             () => run(() => ops.tableInsertColumn(
-                c.view.state, c.dispatch, c.schema,
+                c.activeView.state, c.dispatch, c.schema,
                 before: true)),
             extraClass: 'dq-office-btn-labeled'),
         kit.button(
             'À Direita',
             'Inserir coluna à direita',
             () => run(() => ops.tableInsertColumn(
-                c.view.state, c.dispatch, c.schema,
+                c.activeView.state, c.dispatch, c.schema,
                 before: false)),
             extraClass: 'dq-office-btn-labeled'),
       ]),
       kit.row([
         kit.button('Excluir Linha', 'Excluir linha',
-            () => run(() => ops.tableDeleteRow(c.view.state, c.dispatch)),
+            () => run(() => ops.tableDeleteRow(c.activeView.state, c.dispatch)),
             extraClass: 'dq-office-btn-labeled', icon: 'delcell'),
         kit.button('Excluir Coluna', 'Excluir coluna',
-            () => run(() => ops.tableDeleteColumn(c.view.state, c.dispatch)),
+            () => run(() => ops.tableDeleteColumn(c.activeView.state, c.dispatch)),
             extraClass: 'dq-office-btn-labeled'),
         kit.button('Excluir Tabela', 'Excluir tabela',
-            () => run(() => ops.tableDelete(c.view.state, c.dispatch)),
+            () => run(() => ops.tableDelete(c.activeView.state, c.dispatch)),
             extraClass: 'dq-office-btn-labeled'),
       ]),
     ]),
     kit.group('Mesclar', [
       kit.row([
         kit.button('Mesclar', 'Mesclar células',
-            () => run(() => ops.mergeSelectedCells(c.view.state, c.dispatch)),
+            () => run(() => ops.mergeSelectedCells(c.activeView.state, c.dispatch)),
             extraClass: 'dq-office-btn-labeled', icon: 'merge-cells'),
         kit.button('Dividir', 'Dividir célula',
-            () => run(() => ops.splitSelectedCell(c.view.state, c.dispatch)),
+            () => run(() => ops.splitSelectedCell(c.activeView.state, c.dispatch)),
             extraClass: 'dq-office-btn-labeled', icon: 'rows-and-columns'),
       ]),
     ]),
@@ -137,7 +137,7 @@ List<DomElement> buildTableLayoutTab(RibbonContext ctx) {
               text,
               title,
               () => run(() =>
-                  ops.setCellVerticalAlign(c.view.state, c.dispatch, value)),
+                  ops.setCellVerticalAlign(c.activeView.state, c.dispatch, value)),
               icon: icon),
       ]),
       kit.row([
@@ -225,7 +225,7 @@ List<OfficeMenuEntry> _textDirectionEntries() {
 }
 
 void _autoFit(OfficeWordController c, ops.OfficeTableAutoFit mode) {
-  final state = c.view.state;
+  final state = c.activeView.state;
   final map = OfficeTableMap.at(state.doc, state.selection.from);
   if (map == null) return;
   ops.setTableAutoFit(
@@ -251,15 +251,15 @@ DomElement _repeatHeaderButton(RibbonContext ctx) {
     'Repetir a(s) linha(s) de cabeçalho no topo de cada página',
     () {
       c.syncSelection();
-      ops.setTableHeaderRows(c.view.state, c.dispatch,
-          repeat: !ops.tableHeaderRowsActive(c.view.state));
+      ops.setTableHeaderRows(c.activeView.state, c.dispatch,
+          repeat: !ops.tableHeaderRowsActive(c.activeView.state));
     },
     extraClass: 'dq-office-btn-labeled',
     icon: 'menu-header',
   );
   ctx.registerRefresh(() {
     if (!c.viewReady) return;
-    if (ops.tableHeaderRowsActive(c.view.state)) {
+    if (ops.tableHeaderRowsActive(c.activeView.state)) {
       button.classes.add('dq-office-btn-active');
     } else {
       button.classes.remove('dq-office-btn-active');
@@ -279,12 +279,12 @@ DomElement _rowHeightSpinner(RibbonContext ctx) {
     ctx,
     'Altura',
     'Altura da linha (cm)',
-    onCommit: (twips) => ops.setRowProperties(c.view.state, c.dispatch,
+    onCommit: (twips) => ops.setRowProperties(c.activeView.state, c.dispatch,
         heightTwips: twips, heightRule: 'atLeast'),
     read: () {
-      final positions = ops.selectedRowPositions(c.view.state);
+      final positions = ops.selectedRowPositions(c.activeView.state);
       if (positions.isEmpty) return null;
-      final row = c.view.state.doc.nodeAt(positions.first);
+      final row = c.activeView.state.doc.nodeAt(positions.first);
       final word = row?.attrs['word'];
       final value = word is Map ? word['heightTwips'] : null;
       return value is num ? value.toInt() : 0;
@@ -301,7 +301,7 @@ DomElement _rowHeightSpinner(RibbonContext ctx) {
 DomElement _columnWidthSpinner(RibbonContext ctx) {
   final c = ctx.controller;
   ({OfficeTableMap map, int column})? target() {
-    final state = c.view.state;
+    final state = c.activeView.state;
     final map = OfficeTableMap.at(state.doc, state.selection.from);
     final cell = map?.cellAt(state.selection.from);
     if (map == null || cell == null) return null;
@@ -316,7 +316,7 @@ DomElement _columnWidthSpinner(RibbonContext ctx) {
       final current = target();
       if (current == null || twips <= 0) return;
       ops.setTableColumnWidth(
-        c.view.state,
+        c.activeView.state,
         c.dispatch,
         tablePos: current.map.tablePos,
         columnIndex: current.column,
@@ -389,7 +389,7 @@ DomElement _cellSizeSpinner(
 void _distributeColumns(OfficeWordController c) {
   final setup = c.pageSetup;
   ops.distributeTableColumns(
-    c.view.state,
+    c.activeView.state,
     c.dispatch,
     totalWidthTwips:
         setup.widthTwips - setup.marginLeftTwips - setup.marginRightTwips,
@@ -406,7 +406,7 @@ void _distributeColumns(OfficeWordController c) {
 /// Sem projeção (nenhuma linha medida) o botão não faz nada: distribuir por
 /// um palpite espremeria a tabela.
 void _distributeRows(OfficeWordController c) {
-  final state = c.view.state;
+  final state = c.activeView.state;
   final map = OfficeTableMap.at(state.doc, state.selection.from);
   if (map == null) return;
   final positions = ops.tableRowPositions(map).toSet();

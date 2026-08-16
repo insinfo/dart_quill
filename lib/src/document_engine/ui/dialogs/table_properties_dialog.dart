@@ -40,7 +40,7 @@ void openTablePropertiesDialog(
   OfficeWordController controller, {
   String? initialGroup,
 }) {
-  final state = controller.view.state;
+  final state = controller.activeView.state;
   final scope = ops.tableFormatScope(state);
   if (scope == null) return;
   final map = scope.map;
@@ -200,7 +200,7 @@ void openTablePropertiesDialog(
       }
 
       ops.applyTableProperties(
-        controller.view.state,
+        controller.activeView.state,
         controller.dispatch,
         tableCellMargins: margins('tableMargin'),
         rowHeightTwips: twips('rowHeight'),

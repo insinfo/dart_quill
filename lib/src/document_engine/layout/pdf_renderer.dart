@@ -15,6 +15,7 @@ import '../../office/document/pdf/pdf_image.dart';
 import '../../office/document/pdf/pdf_writer.dart';
 import 'fonts.dart';
 import 'page_graph.dart';
+import 'pdf_standard_widths.dart';
 
 double _twipsToPt(int twips) => twips / 20.0;
 
@@ -596,12 +597,16 @@ class PageGraphPdfRenderer {
           continue;
         }
         if (segment.text.isNotEmpty) {
+          final adjustedWidth = _twipsToPt(segment.widthTwips) +
+              _ordinarySpaceCount(segment.text) * line.wordSpacingTwips / 20.0;
           _drawRunText(writer, builder, segment.text, style,
               x: cursorX,
               baseline: baseline,
-              wordSpacingTwips: line.wordSpacingTwips);
-          final adjustedWidth = _twipsToPt(segment.widthTwips) +
-              _ordinarySpaceCount(segment.text) * line.wordSpacingTwips / 20.0;
+              wordSpacingTwips: line.wordSpacingTwips,
+              // A caixa que o COMPOSITOR reservou para este run. Sem ela o
+              // desenho com a standard-14 pode ser mais largo que a caixa e
+              // invadir o run seguinte — ver `_drawRunText`.
+              targetWidthPt: adjustedWidth);
           if (style.underline) {
             builder.strokeLine(
               cursorX,
@@ -677,6 +682,23 @@ class PageGraphPdfRenderer {
     return centered.clamp(0, lineHeight).toDouble();
   }
 
+  /// Desenha um run na posição que o grafo decidiu.
+  ///
+  /// [targetWidthPt] é a largura que o COMPOSITOR reservou para o run. Ela
+  /// importa porque as duas pontas podem usar fontes diferentes: o compositor
+  /// mede com a face resolvida pelo `FontRegistry` (a Ecofont dos dois
+  /// corpora PGCTIC resolve para Calibri/Carlito), enquanto o PDF sem faces
+  /// embutidas desenha com a standard-14 (Helvetica), que é ~7% mais larga.
+  /// Cada run era então desenhado mais largo que a caixa reservada e invadia
+  /// o seguinte: no ETP o cabeçalho saía "Processo nº44505/2025" (sem o
+  /// espaço) e o rodapé "P á g i n a2 | 19", porque o espaço final de um run
+  /// era engolido pelo run seguinte. A diferença é absorvida no espaçamento
+  /// entre caracteres (`Tc`), que é onde ela desaparece visualmente — as
+  /// quebras de linha continuam sendo as que o compositor decidiu, e o texto
+  /// passa a terminar exatamente na margem.
+  ///
+  /// Com face EMBUTIDA (CID) não há correção nenhuma a fazer: quem desenha é
+  /// a mesma face que mediu.
   void _drawRunText(
     PdfWriter writer,
     PdfContentBuilder builder,
@@ -685,6 +707,7 @@ class PageGraphPdfRenderer {
     required double x,
     required double baseline,
     double wordSpacingTwips = 0,
+    double? targetWidthPt,
   }) {
     if (text.isEmpty) return;
     final pair = _faceAndCidFor(style);
@@ -719,11 +742,29 @@ class PageGraphPdfRenderer {
         x: x,
         baselineY: baseline,
         color: style.color,
-        characterSpacingPx: _twipsToPt(style.letterSpacingTwips),
+        characterSpacingPx: _twipsToPt(style.letterSpacingTwips) +
+            _standardFontFitPt(
+                text, style, font, wordSpacingTwips, targetWidthPt),
         wordSpacingPx: wordSpacingTwips / 20.0,
       );
     }
   }
+
+  double _standardFontFitPt(
+    String text,
+    ResolvedRunStyle style,
+    String pdfFont,
+    double wordSpacingTwips,
+    double? targetWidthPt,
+  ) =>
+      officeStandard14FitPerCharPt(
+        text: text,
+        pdfFont: pdfFont,
+        sizePt: style.sizePt,
+        letterSpacingPt: _twipsToPt(style.letterSpacingTwips),
+        wordSpacingPt: wordSpacingTwips / 20.0,
+        targetWidthPt: targetWidthPt,
+      );
 
   List<(String hex, int adjust)> _shapeCidWithSpacing(
     LayoutFontFace face,
