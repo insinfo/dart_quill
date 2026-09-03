@@ -9,6 +9,9 @@ analyzer:
     - build/** 
     # Reference sources are kept only for comparison and should not be analyzed.
     - referencias/**
+    # Harness Windows-only com pacote próprio (ffi/win32): sem o `pub get`
+    # dele o analisador da raiz falha no CI (ver tool/word_reference/pubspec.yaml).
+    - tool/word_reference/**
   errors:
     # Permanent inclusions: These are optional hints that are not default on.
     # unused_element: warning
