@@ -264,9 +264,47 @@ class OfficeEditorView {
     if (range == null) return false;
     final current = _state.selection;
     if (current.from == range.from && current.to == range.to) return false;
+    // Uma seleção RETANGULAR de células sobrevive à seleção nativa que o
+    // browser continua esticando durante o arrasto: enquanto os dois
+    // extremos do intervalo nativo estiverem dentro do retângulo, o modelo
+    // continua sendo o de células. Sem esta guarda, o `selectionchange`
+    // seguinte ao `pointermove` trocava a CellSelection por uma seleção de
+    // texto atravessando células — e com ela sumiam o realce, a quickbar de
+    // tabela e mesclar/dividir, que só existem sobre células.
+    if (current is CellSelection &&
+        range.from != range.to &&
+        _withinCellSelection(current, range.from) &&
+        _withinCellSelection(current, range.to)) {
+      return false;
+    }
     _state = _state.apply(_state.tr
       ..setSelection(TextSelection.create(_state.doc, range.from, range.to)));
     return true;
+  }
+
+  bool _withinCellSelection(CellSelection selection, int position) {
+    for (final cellPos in selection.cellPositions) {
+      final cell = _state.doc.nodeAt(cellPos);
+      if (cell == null) continue;
+      if (position >= cellPos && position <= cellPos + cell.nodeSize) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Dá o foco à superfície editável e reescreve a seleção do MODELO nela.
+  ///
+  /// `focus()` nativo num `contenteditable` põe o caret no início do
+  /// ELEMENTO (offset 0 do content box), e um caret em offset de elemento é
+  /// desenhado com a altura do elemento inteiro — era o "cursor gigante"
+  /// que aparecia ao entrar no rodapé. Reescrever a seleção logo em seguida
+  /// devolve o caret à linha do modelo, com a altura da linha.
+  void focus() {
+    if (_disposed) return;
+    final content = host.querySelector('.$officeCssPrefix-page-content');
+    if (content != null) _adapter.focus(content);
+    _writeSelection();
   }
 
   /// Aplica uma transação: novo estado → recompõe → reprojeta → restaura a

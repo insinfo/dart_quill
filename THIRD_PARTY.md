@@ -43,12 +43,12 @@ de extensões é INSPIRADA no conceito do Tiptap (MIT), sem código portado.
 
 | Componente | Upstream | Licença | Onde neste repositório |
 |---|---|---|---|
-| Ícones de GUI do ONLYOFFICE (SVGs da ribbon) | <https://github.com/ONLYOFFICE/web-apps> (commit `1c8ca9987876bada73c0bde21367da09c0e1ed83`) | CC BY-SA 4.0 | fonte de ícones `lib/assets/fonts/dq-office-icons.*` e `lib/assets/office_word_icons.css`, gerados por `tool/build_icon_font.dart` |
+| Ícones de GUI do ONLYOFFICE (SVGs da ribbon) | <https://github.com/ONLYOFFICE/web-apps> (commit `1c8ca9987876bada73c0bde21367da09c0e1ed83`) | CC BY-SA 4.0 | `lib/assets/office_word_icons.css` (SVGs embutidos como `mask-image`), gerado por `tool/build_icon_css.dart` |
 
 Os **ícones** de interface do ONLYOFFICE são licenciados pela upstream sob
 Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0) —
 licença distinta da do código (AGPL-3.0), que segue NÃO incorporado (ver
-abaixo). A fonte `dq-office-icons` é obra derivada desses SVGs e permanece
+abaixo). A folha `office_word_icons.css` é obra derivada desses SVGs e permanece
 sob CC BY-SA 4.0, com atribuição no cabeçalho do CSS. O asset é opcional e
 substituível: o componente só referencia classes `dq-icon-*`, e quem
 preferir outra iconografia troca o stylesheet sem tocar no código.

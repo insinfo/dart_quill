@@ -126,7 +126,16 @@ class OfficeHeaderFooterSession {
   /// Word, e o simétrico dele.
   bool handleDoubleClick(DomEvent event) {
     final target = event.target;
-    final region = target == null ? null : _regionElementAt(target);
+    var region = target == null ? null : _regionElementAt(target);
+    // O content box do CORPO cobre a faixa do rodapé (e do cabeçalho) sempre
+    // que a região é mais alta que a margem — ele vem depois na ordem de
+    // pintura, e é ele que o browser entrega como alvo. Num timbre com três
+    // logotipos no rodapé, o duplo clique "no rodapé" chegava aqui com o
+    // corpo como alvo e não abria nada. Por isso a geometria decide: se o
+    // ponto do clique está dentro da caixa de uma região da página, é ela.
+    if (region == null && event is DomMouseEvent && target != null) {
+      region = _regionAtPoint(target, event.clientX, event.clientY);
+    }
     if (region != null) {
       final header = region.classes.contains('$officeCssPrefix-header');
       enter(header: header, pageIndex: _pageIndexOfElement(region) ?? 0);
@@ -143,6 +152,50 @@ class OfficeHeaderFooterSession {
     }
     exit();
     return true;
+  }
+
+  /// A região da PÁGINA clicada cuja caixa contém o ponto ([x], [y] em
+  /// coordenadas de tela), ou null. Só olha a página que contém [target]:
+  /// o rodapé de uma página e o cabeçalho da seguinte são vizinhos na tela.
+  DomElement? _regionAtPoint(DomNode target, num x, num y) {
+    if (!_isInside(target, controller.view.host)) return null;
+    DomNode? current = target;
+    DomElement? page;
+    while (current != null) {
+      if (current is DomElement &&
+          current.classes.contains('$officeCssPrefix-page')) {
+        page = current;
+        break;
+      }
+      current = current.parentNode;
+    }
+    if (page == null) return null;
+    final pageBounds = controller.adapter.getElementBounds(page);
+    for (final className in const [
+      '$officeCssPrefix-header',
+      '$officeCssPrefix-footer',
+    ]) {
+      for (final region in page.querySelectorAll('.$className')) {
+        final bounds = controller.adapter.getElementBounds(region);
+        if (bounds == null) continue;
+        final left = _numOf(bounds['left']);
+        final top = _numOf(bounds['top']);
+        final width = _numOf(bounds['width']);
+        final height = _numOf(bounds['height']);
+        // Sem geometria real (fake DOM: toda caixa é igual à da página) o
+        // ponto não distingue nada, e o alvo do evento continua mandando.
+        if (width <= 0 || height <= 0) continue;
+        if (pageBounds != null &&
+            _numOf(pageBounds['top']) == top &&
+            _numOf(pageBounds['height']) == height) {
+          continue;
+        }
+        if (x >= left && x <= left + width && y >= top && y <= top + height) {
+          return region;
+        }
+      }
+    }
+    return null;
   }
 
   static bool _isInside(DomNode node, DomElement ancestor) {
@@ -365,7 +418,11 @@ class OfficeHeaderFooterSession {
       extensions: extensions,
       composer: LayoutComposer(
         setup: _regionSetup(),
-        fonts: controller.options.fonts,
+        // As MESMAS faces do corpo (as que o `fontLoader` trouxe incluídas):
+        // com `options.fonts` a região era medida pela métrica compatível
+        // enquanto o corpo já usava a face real, e o cabeçalho em edição
+        // quebrava linha em lugar diferente do cabeçalho projetado.
+        fonts: controller.fontLibrary.fontSet,
       ),
       renderer: PageGraphDomRenderer(
         document: controller.adapter.document,
@@ -382,8 +439,10 @@ class OfficeHeaderFooterSession {
       onStateChange: _handleRegionChange,
     );
 
-    final content = surface.querySelector('.$officeCssPrefix-page-content');
-    if (content != null) controller.adapter.focus(content);
+    // Foco + seleção do modelo, e não só o foco: o `focus()` cru deixava o
+    // caret no offset 0 do content box, desenhado com a altura da faixa
+    // inteira do rodapé.
+    _regionView!.focus();
   }
 
   /// A geometria em que a região é composta.

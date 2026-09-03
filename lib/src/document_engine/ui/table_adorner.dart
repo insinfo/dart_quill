@@ -23,6 +23,13 @@ import 'table_ops.dart' as ops;
 /// "sobre a divisa" — a mesma tolerância generosa do Word.
 const double officeColumnResizeTolerancePx = 4;
 
+/// Deslocamento (px) a partir do qual a pressão na divisa vira arrasto.
+const double officeColumnDragThresholdPx = 3;
+
+/// Classe do host enquanto o ponteiro está sobre uma divisa de coluna: o
+/// CSS troca o cursor para `col-resize`, como no Word.
+const String officeColumnResizeHoverClass = 'dq-office-app-colresize';
+
 class OfficeTableAdorner {
   OfficeTableAdorner(this.controller) : _kit = OfficeDomKit(controller.adapter);
 
@@ -41,6 +48,18 @@ class OfficeTableAdorner {
     double startWidthTwips,
     double guideLeft,
   })? _drag;
+
+  /// O ponteiro já se afastou do ponto de pressão além de
+  /// [officeColumnDragThresholdPx]: só então a guia aparece e o `pointerup`
+  /// grava uma largura. Um clique parado na divisa NÃO é um arrasto — e era
+  /// tratado como um: a transação de largura zero de deslocamento
+  /// reescrevia a grade inteira a partir da projeção, mudava a largura das
+  /// colunas e repaginava o documento (140 → 141 páginas) por um clique.
+  bool _dragStarted = false;
+
+  /// Chamado depois que a âncora ⊞ seleciona a tabela inteira, com o
+  /// elemento da âncora — é onde o orquestrador abre a quickbar de tabela.
+  void Function(DomElement anchor)? onWholeTableSelected;
 
   /// Célula onde um arrasto de SELEÇÃO começou (posição do nó), enquanto o
   /// botão está pressionado. Só vira seleção retangular quando o ponteiro
@@ -66,6 +85,20 @@ class OfficeTableAdorner {
     _clearAnchor();
     _guide?.remove();
     _guide = null;
+    _drag = null;
+    _dragStarted = false;
+    _setResizeHover(false);
+  }
+
+  void _setResizeHover(bool over) {
+    final classes = controller.hostElement.classes;
+    if (over) {
+      if (!classes.contains(officeColumnResizeHoverClass)) {
+        classes.add(officeColumnResizeHoverClass);
+      }
+    } else if (classes.contains(officeColumnResizeHoverClass)) {
+      classes.remove(officeColumnResizeHoverClass);
+    }
   }
 
   // -- realce da seleção de células -------------------------------------------
@@ -125,17 +158,25 @@ class OfficeTableAdorner {
         .getElementBounds(element, relativeTo: controller.overlay.layer);
     if (bounds == null) return;
 
-    final anchor = _kit.el('div', 'dq-office-tableanchor');
+    final anchor = _kit.el('button', 'dq-office-tableanchor');
+    anchor.setAttribute('type', 'button');
     anchor.setAttribute('title', 'Selecionar tabela');
-    anchor.appendText('⊞');
+    anchor.setAttribute('aria-label', 'Selecionar tabela');
     anchor.setAttribute(
       'style',
-      'left:${_px(bounds['left']) - 16}px;top:${_px(bounds['top']) - 16}px;',
+      'left:${_px(bounds['left']) - 18}px;top:${_px(bounds['top']) - 18}px;',
     );
     anchor.addEventListener('mousedown', (event) => event.preventDefault());
     anchor.addEventListener('click', (event) {
       event.preventDefault();
-      ops.selectWholeTable(controller.activeView.state, controller.dispatch);
+      if (!ops.selectWholeTable(
+          controller.activeView.state, controller.dispatch)) {
+        return;
+      }
+      // A âncora que acabou de ser clicada foi redesenhada pelo refresh da
+      // transação; quem recebe o callback é a nova, que está no lugar certo.
+      final current = _anchor ?? anchor;
+      onWholeTableSelected?.call(current);
     });
     controller.overlay.layer.append(anchor);
     _anchor = anchor;
@@ -195,7 +236,10 @@ class OfficeTableAdorner {
       startWidthTwips: widthTwips,
       guideLeft: (right - _px(layerBounds?['left'])).toDouble(),
     );
-    _showGuide(_drag!.guideLeft);
+    // A guia só aparece quando o ponteiro de fato se move
+    // (`officeColumnDragThresholdPx`): pressionar e soltar no mesmo lugar
+    // não é um arrasto.
+    _dragStarted = false;
     return true;
   }
 
@@ -204,10 +248,31 @@ class OfficeTableAdorner {
     final drag = _drag;
     if (drag != null) {
       event.preventDefault();
-      _showGuide(drag.guideLeft + (event.clientX - drag.startX).toDouble());
+      final delta = (event.clientX - drag.startX).toDouble();
+      if (!_dragStarted && delta.abs() < officeColumnDragThresholdPx) return;
+      _dragStarted = true;
+      _showGuide(drag.guideLeft + delta);
       return;
     }
-    _extendCellSelection(event);
+    if (_selectionAnchorCell != null) {
+      _extendCellSelection(event);
+      return;
+    }
+    _updateResizeHover(event);
+  }
+
+  /// Sem botão pressionado: o cursor avisa quando está sobre uma divisa.
+  void _updateResizeHover(DomMouseEvent event) {
+    final target = event.target;
+    final cellElement = target == null ? null : _ancestorCell(target);
+    if (cellElement == null) {
+      _setResizeHover(false);
+      return;
+    }
+    final bounds = controller.adapter.getElementBounds(cellElement);
+    final right = bounds?['right'];
+    _setResizeHover(right is num &&
+        (event.clientX - right).abs() <= officeColumnResizeTolerancePx);
   }
 
   /// Arrastar entre células: assim que o ponteiro entra numa célula
@@ -244,7 +309,12 @@ class OfficeTableAdorner {
     _drag = null;
     _guide?.remove();
     _guide = null;
-    if (event is! DomMouseEvent) {
+    final started = _dragStarted;
+    _dragStarted = false;
+    // Pressionou e soltou sem mover: nenhuma transação. Gravar a largura
+    // "inalterada" aqui reescrevia a grade a partir da projeção e mudava o
+    // documento por um clique.
+    if (!started || event is! DomMouseEvent) {
       refresh();
       return;
     }

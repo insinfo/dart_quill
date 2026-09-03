@@ -7,7 +7,7 @@ simples, e os dois podem coexistir na mesma página.
 
 O visual são **assets do pacote** — dois `<link>` no `index.html`, ambos
 substituíveis por tema/iconografia próprios (as classes `dq-icon-*` são o
-contrato; a fonte de ícones deriva dos SVGs do ONLYOFFICE, CC BY-SA 4.0):
+contrato; os ícones são os SVGs do ONLYOFFICE embutidos como `mask-image`, CC BY-SA 4.0):
 
 ```html
 <link rel="stylesheet"

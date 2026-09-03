@@ -1,21 +1,24 @@
-/// Gera a fonte de ícones `dq-office-icons` a partir dos SVGs oficiais do
-/// ONLYOFFICE e escreve os assets finais do pacote:
+/// Gera a folha de ícones `office_word_icons.css` do OfficeWordEditor a
+/// partir dos SVGs oficiais do ONLYOFFICE.
 ///
-///   * `lib/assets/fonts/dq-office-icons.{woff2,woff,ttf}`
-///   * `lib/assets/office_word_icons.css`
+/// Cada classe `dq-icon-<nome>` recebe o SVG como `mask-image` (data URI) e
+/// pinta com `currentColor`. Uma FONTE de ícones — o formato anterior — não
+/// serve para este conjunto: 266 dos SVGs do ONLYOFFICE usam
+/// `fill-rule="evenodd"`, que glifos TrueType não representam. Convertidos
+/// em fonte, os furos dos contornos fechavam e os ícones de disposição do
+/// texto (e vários outros) viravam blocos pretos. Como máscara, o browser
+/// rasteriza o próprio SVG, e o desenho é exatamente o do ONLYOFFICE.
 ///
 /// Uso:
 ///
 /// ```
-/// dart run tool/build_icon_font.dart [caminho-para-onlyoffice-ribbon-icons-full]
+/// dart run tool/build_icon_css.dart [caminho-para-onlyoffice-ribbon-icons-full]
+/// dart run tool/build_icon_css.dart --check   # CI: a folha está atualizada?
 /// ```
 ///
 /// O argumento aponta para o diretório `onlyoffice-ribbon-icons-full` (um
 /// checkout dos ícones do repositório ONLYOFFICE/web-apps). Sem argumento,
-/// usa o caminho local padrão do autor.
-///
-/// Requisitos: Node.js no PATH (a fonte é montada com `npx svgtofont` —
-/// o fantasticon tem um bug de glob no Windows e não encontra os SVGs).
+/// usa o caminho local padrão do autor. Não há dependência de Node.
 ///
 /// Licença dos ícones: CC BY-SA 4.0 (ONLYOFFICE). A atribuição vai no
 /// cabeçalho do CSS gerado e em THIRD_PARTY.md.
@@ -218,58 +221,59 @@ const Map<String, String> icons = {
   'flip-vert': 'common/main/resources/img/toolbar/2.5x/btn-flip-vert.svg',
   'advanced-ratio':
       'common/main/resources/img/toolbar/2.5x/btn-advanced-ratio.svg',
+  // Chrome do editor (quickbars, adornos)
+  'close': 'common/main/resources/img/toolbar/2.5x/btn-close.svg',
+  'select-all': 'common/main/resources/img/toolbar/2.5x/btn-select-all.svg',
+  'menu-table': 'common/main/resources/img/toolbar/2.5x/btn-menu-table.svg',
 };
 
 const String cssHeader = '''
 /*
- * dart_quill — fonte de icones da ribbon do OfficeWordEditor.
- * GERADO por tool/build_icon_font.dart — nao edite a mao.
+ * dart_quill — icones da ribbon do OfficeWordEditor.
+ * GERADO por tool/build_icon_css.dart — nao edite a mao.
  *
  * Asset OPCIONAL e substituivel: o componente so referencia classes
- * `dq-icon-*`; troque este stylesheet (e/ou a fonte em fonts/) por outro
- * que defina as mesmas classes e nada no codigo muda.
+ * `dq-icon-*`; troque este stylesheet por outro que defina as mesmas
+ * classes e nada no codigo muda.
  *
  *   <link rel="stylesheet"
  *         href="packages/dart_quill/assets/office_word_icons.css">
  *
- * Fonte gerada com svgtofont a partir dos SVGs oficiais do ONLYOFFICE
- * (https://github.com/ONLYOFFICE/web-apps), cujos icones de GUI sao
- * licenciados sob Creative Commons Attribution-ShareAlike 4.0
- * International (CC BY-SA 4.0). Este arquivo e a fonte derivada permanecem
- * sob CC BY-SA 4.0; veja THIRD_PARTY.md.
+ * Cada icone e o SVG oficial do ONLYOFFICE embutido como mask-image e
+ * pintado com currentColor (o SVG usa fill-rule evenodd, que uma fonte de
+ * icones nao representa). Icones de GUI do ONLYOFFICE
+ * (https://github.com/ONLYOFFICE/web-apps), licenciados sob Creative
+ * Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0). Este
+ * arquivo e obra derivada e permanece sob CC BY-SA 4.0; veja THIRD_PARTY.md.
  */
-
-@font-face {
-  font-family: 'dq-office-icons';
-  src: url('fonts/dq-office-icons.woff2') format('woff2'),
-       url('fonts/dq-office-icons.woff') format('woff'),
-       url('fonts/dq-office-icons.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: block;
-}
 
 .dq-icon {
   display: inline-block;
-  font-family: 'dq-office-icons' !important;
-  font-style: normal;
-  font-weight: normal;
-  font-size: 20px;
-  line-height: 1;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
   vertical-align: middle;
-  speak: none;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  background-color: currentColor;
+  -webkit-mask-image: var(--dq-icon);
+  mask-image: var(--dq-icon);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 }
 
-/* Com a fonte carregada, o texto-fallback dos botoes some — exceto nos
+/* Com a folha carregada, o texto-fallback dos botoes some — exceto nos
    botoes ROTULADOS (grandes ou icone+rotulo, como no Word). */
 .dq-office-btn:not(.dq-office-btn-labeled):has(.dq-icon) .dq-office-btn-text { display: none; }
 ''';
 
 Future<void> main(List<String> args) async {
-  final appsDir = Directory(args.isNotEmpty
-      ? '${args.first}${Platform.pathSeparator}apps'
+  final check = args.contains('--check');
+  final positional = args.where((a) => !a.startsWith('--')).toList();
+  final appsDir = Directory(positional.isNotEmpty
+      ? '${positional.first}${Platform.pathSeparator}apps'
       : r'C:\MyDartProjects\docx_rendering\resources\onlyoffice_ribbon_icons'
           r'\onlyoffice-ribbon-icons-full\apps');
   if (!appsDir.existsSync()) {
@@ -280,89 +284,55 @@ Future<void> main(List<String> args) async {
   }
 
   final root = File(Platform.script.toFilePath()).parent.parent.path;
-  final work = Directory('$root${Platform.pathSeparator}build'
-          '${Platform.pathSeparator}icon_font')
-      .absolute;
-  final svgDir = Directory('${work.path}${Platform.pathSeparator}svgs');
-  final outDir = Directory('${work.path}${Platform.pathSeparator}out');
-  if (work.existsSync()) work.deleteSync(recursive: true);
-  svgDir.createSync(recursive: true);
-
-  // 1) Seleciona e renomeia os SVGs oficiais.
-  var copied = 0;
-  for (final entry in icons.entries) {
+  final buffer = StringBuffer(cssHeader);
+  final names = icons.keys.toList()..sort();
+  for (final name in names) {
     final src = File('${appsDir.path}${Platform.pathSeparator}'
-        '${entry.value.replaceAll('/', Platform.pathSeparator)}');
+        '${icons[name]!.replaceAll('/', Platform.pathSeparator)}');
     if (!src.existsSync()) {
-      stderr.writeln('FALTA: ${entry.key} <- ${src.path}');
+      stderr.writeln('FALTA: $name <- ${src.path}');
       exit(1);
     }
-    src.copySync('${svgDir.path}${Platform.pathSeparator}${entry.key}.svg');
-    copied++;
-  }
-  stdout.writeln('SVGs selecionados: $copied');
-
-  // 2) Monta a fonte. svgtofont, não fantasticon: o fantasticon tem um bug
-  //    de expansão de glob no Windows e não encontra os SVGs.
-  final npx = Platform.isWindows ? 'npx.cmd' : 'npx';
-  final result = await Process.run(
-      npx,
-      [
-        '--yes',
-        'svgtofont',
-        '--sources',
-        svgDir.path,
-        '--output',
-        outDir.path,
-        '--fontName',
-        'dq-office-icons',
-      ],
-      workingDirectory: work.path,
-      runInShell: true);
-  if (result.exitCode != 0) {
-    stderr.writeln(result.stdout);
-    stderr.writeln(result.stderr);
-    exit(result.exitCode);
-  }
-
-  // 3) Copia as fontes para os assets do pacote.
-  final fontsDir =
-      Directory('$root${Platform.pathSeparator}lib${Platform.pathSeparator}'
-          'assets${Platform.pathSeparator}fonts')
-        ..createSync(recursive: true);
-  for (final ext in ['woff2', 'woff', 'ttf']) {
-    File('${outDir.path}${Platform.pathSeparator}dq-office-icons.$ext')
-        .copySync('${fontsDir.path}${Platform.pathSeparator}'
-            'dq-office-icons.$ext');
-  }
-
-  // 4) Extrai os codepoints do CSS do svgtofont e escreve o CSS do pacote.
-  final generatedCss =
-      File('${outDir.path}${Platform.pathSeparator}dq-office-icons.css')
-          .readAsStringSync();
-  final matches = RegExp(
-          r'\.dq-office-icons-([a-z0-9-]+)::?before\s*\{\s*'
-          r'content:\s*"\\([0-9a-fA-F]+)"')
-      .allMatches(generatedCss)
-      .toList();
-  if (matches.length != icons.length) {
-    stderr.writeln('Esperava ${icons.length} codepoints, achei '
-        '${matches.length} — confira o CSS gerado em ${outDir.path}.');
-    exit(1);
-  }
-
-  final buffer = StringBuffer(cssHeader);
-  final pairs = [
-    for (final m in matches) MapEntry(m.group(1)!, m.group(2)!)
-  ]..sort((a, b) => a.key.compareTo(b.key));
-  for (final pair in pairs) {
     buffer.writeln(
-        '.dq-icon-${pair.key}:before { content: "\\${pair.value}"; }');
+        '.dq-icon-$name { --dq-icon: url("${dataUri(src.readAsStringSync())}"); }');
   }
+
   final cssFile = File('$root${Platform.pathSeparator}lib'
       '${Platform.pathSeparator}assets${Platform.pathSeparator}'
       'office_word_icons.css');
-  cssFile.writeAsStringSync(buffer.toString());
+  final generated = buffer.toString();
+  if (check) {
+    final current = cssFile.existsSync() ? cssFile.readAsStringSync() : '';
+    if (current.replaceAll('\r\n', '\n') != generated) {
+      stderr.writeln('office_word_icons.css está desatualizado: rode '
+          '`dart run tool/build_icon_css.dart`.');
+      exit(1);
+    }
+    stdout.writeln('OK: office_word_icons.css atualizado (${names.length} '
+        'ícones).');
+    return;
+  }
+  cssFile.writeAsStringSync(generated);
+  stdout.writeln('OK: ${names.length} ícones -> ${cssFile.path}');
+}
 
-  stdout.writeln('OK: ${pairs.length} ícones -> ${cssFile.path}');
+/// O SVG como data URI para CSS: sem declaração XML, sem quebras de linha e
+/// com os caracteres que quebrariam a `url("...")` percent-encoded. A cor de
+/// preenchimento é irrelevante — só o alfa da máscara conta.
+String dataUri(String svg) {
+  var body = svg
+      .replaceAll(RegExp(r'<\?xml[^>]*\?>'), '')
+      .replaceAll(RegExp(r'<!--.*?-->', dotAll: true), '')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceAll('> <', '><')
+      .trim();
+  body = body
+      .replaceAll('%', '%25')
+      .replaceAll('"', "'")
+      .replaceAll('#', '%23')
+      .replaceAll('<', '%3C')
+      .replaceAll('>', '%3E')
+      .replaceAll('{', '%7B')
+      .replaceAll('}', '%7D');
+  return 'data:image/svg+xml,$body';
 }

@@ -2572,7 +2572,7 @@ A rodada seguinte atacou quatro exigências do mantenedor de uma vez:
    tema próprio troca o stylesheet; o código não muda.
 3. **Fonte de ícones dos SVGs oficiais do ONLYOFFICE** (CC BY-SA 4.0,
    licença dos ícones — distinta do código AGPL, que segue fora):
-   `tool/build_icon_font.dart` reproduz a pipeline (seleção dos 37 SVGs →
+   `tool/build_icon_css.dart` reproduz a pipeline (seleção dos 37 SVGs →
    `svgtofont` → `lib/assets/fonts/dq-office-icons.{woff2,woff,ttf}` +
    CSS com os codepoints). O contrato é a classe `dq-icon-*` com fallback
    de texto (`:has` esconde o rótulo quando há ícone) — iconografia
@@ -2614,7 +2614,7 @@ rodada corrigiu o contrato, não apenas a aparência:
    subscrito/sobrescrito, realce e cor com paletas), Parágrafo (listas,
    recuos e quatro alinhamentos), galeria visual de Estilos e Edição. Os
    SVGs oficiais incorporados passaram de 37 para 46 e a pipeline
-   reprodutível continua sendo `tool/build_icon_font.dart`.
+   reprodutível continua sendo `tool/build_icon_css.dart`.
 3. **Ribbon realmente contextual** — `selectionchange` do documento agora
    sincroniza a seleção nativa com `EditorState` mesmo quando mover o cursor
    não produz transação. Negrito e demais marcas acendem/apagam, a galeria

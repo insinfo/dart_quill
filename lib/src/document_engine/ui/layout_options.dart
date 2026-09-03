@@ -64,10 +64,21 @@ List<OfficeMenuEntry> buildLayoutOptionsEntries(OfficeWordController c) {
   // `wp:anchor` em inline (`docx/reader.dart` registra a nota
   // "drawing flutuante (anchor) tratado como inline"). Mostrar os modos
   // habilitados aqui gravaria um atributo que ninguém lê.
-  final imageReason = 'imagem é importada sempre em linha; '
-      'o motor não modela âncora flutuante de imagem';
+  final imageReason = 'os modos flutuantes exigem âncora de imagem, que o '
+      'motor não modela: a imagem é importada sempre em linha';
   final isImage = node?.type.name == 'image';
   final current = actions.objectWrapMode(c);
+  // O motivo aparece UMA vez, no primeiro modo apagado: repetir a mesma
+  // frase em seis itens fazia o menu de uma imagem virar um bloco de texto.
+  // Cada item apagado ainda leva o motivo no tooltip (`buildMenu`).
+  var imageReasonShown = false;
+  String? imageDescription(_WrapChoice choice) {
+    if (choice.mode == 'inline') return 'a imagem já está em linha com o texto';
+    if (imageReasonShown) return null;
+    imageReasonShown = true;
+    return imageReason;
+  }
+
   return [
     for (final choice in _choices)
       OfficeMenuEntry(
@@ -78,11 +89,8 @@ List<OfficeMenuEntry> buildLayoutOptionsEntries(OfficeWordController c) {
         // que o editor não sabe o que a imagem é; ela sabe, e é este.
         checked: isImage ? choice.mode == 'inline' : choice.mode == current,
         enabled: !isImage && choice.disabledReason == null,
-        description: isImage
-            ? (choice.mode == 'inline'
-                ? 'a imagem já está em linha com o texto'
-                : imageReason)
-            : choice.disabledReason,
+        description:
+            isImage ? imageDescription(choice) : choice.disabledReason,
         onSelect: () => actions.setObjectWrap(c, choice.mode),
       ),
   ];

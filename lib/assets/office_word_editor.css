@@ -17,6 +17,11 @@
   flex-direction: column;
   height: 100%;
   min-height: 400px;
+  /* Nada do editor vaza para a página hospedeira: um adorno ou popup
+     posicionado além da borda (uma página distante no zoom 200%) fazia o
+     BODY ganhar barra de rolagem própria e empurrava a ribbon para fora da
+     janela. O único scroll do componente é o do canvas. */
+  overflow: hidden;
   font: 13px/1.4 "Segoe UI", system-ui, sans-serif;
   color: #242424;
   background: #f8f8f7;
@@ -285,7 +290,8 @@
 }
 
 .dq-office-btn-big .dq-icon {
-  font-size: 27px;
+  width: 28px;
+  height: 28px;
 }
 
 .dq-office-btn-small {
@@ -725,6 +731,16 @@
   user-select: none;
 }
 
+/* Um objeto selecionado mostra a MOLDURA com alças (o adorno do overlay), e
+   não o véu azul com que o browser pinta um <img> dentro do intervalo
+   nativo — no Word a figura selecionada continua com as cores dela. */
+.dq-office-image::selection,
+.dq-office-text-box::selection,
+.dq-office-text-box *::selection {
+  background: transparent;
+  color: inherit;
+}
+
 .dq-office-header,
 .dq-office-footer {
   color: #5a6b76;
@@ -883,11 +899,20 @@
   z-index: 30;
   /* A camada em si é transparente a eventos; só os popups recebem. */
   pointer-events: none;
+  /* Popups e adornos são posicionados DENTRO da camada (o overlay os
+     encaixa na borda); o que ainda sobrar é recortado em vez de estender o
+     documento hospedeiro. */
+  overflow: hidden;
 }
 
 .dq-office-popup {
   position: absolute;
   pointer-events: auto;
+  /* Acima de TODO adorno do overlay (superfície de cabeçalho/rodapé 33,
+     moldura de objeto 35, guia de coluna 37): um menu aberto a partir do
+     ícone de layout de uma imagem do cabeçalho ficava atrás da caixa de
+     texto "Continuação de Processo" da própria região. */
+  z-index: 50;
   background: #fff;
   border: 1px solid #b9b9b9;
   border-radius: 2px;
@@ -1153,25 +1178,35 @@
   z-index: 33;
 }
 
+/* A alça de mover/selecionar tabela do Word: um quadradinho com a seta de
+   quatro pontas, no canto superior esquerdo, fora da grade. */
 .dq-office-tableanchor {
   position: absolute;
   pointer-events: auto;
-  width: 14px;
-  height: 14px;
-  line-height: 12px;
-  text-align: center;
-  font-size: 11px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
   color: #444;
   background: #fff;
   border: 1px solid #b9b9b9;
+  border-radius: 2px;
   cursor: pointer;
   z-index: 36;
   user-select: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath d='M7 1l2 2H8v3h3V5l2 2-2 2V8H8v3h1l-2 2-2-2h1V8H3v1L1 7l2-2v1h3V3H5z' fill='%23555'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
 .dq-office-tableanchor:hover {
   border-color: #185abd;
-  color: #185abd;
+  background-color: #eaf3fb;
+}
+
+/* O ponteiro sobre a divisa de coluna avisa que ela arrasta, como no Word. */
+.dq-office-app-colresize .dq-office-page-content,
+.dq-office-app-colresize .dq-office-table-cell {
+  cursor: col-resize;
 }
 
 /* A guia vertical do redimensionamento de coluna, como no Word. */
@@ -1348,7 +1383,16 @@
 .dq-office-menu-description {
   font-size: 11px;
   color: #666;
-  white-space: nowrap;
+  /* A linha secundária QUEBRA: um motivo longo não pode alargar o menu até
+     a borda da janela. */
+  white-space: normal;
+  max-width: 260px;
+}
+
+/* Nos itens desabilitados o motivo vai para o tooltip (`title`), não para
+   dentro do menu — o Word apaga o item e explica ao passar o mouse. */
+.dq-office-menu-item-disabled .dq-icon {
+  opacity: .45;
 }
 
 .dq-office-menu-detail {
@@ -1718,6 +1762,15 @@
    modo. As regiões seguem clicáveis para trocar de página/região sem sair. */
 .dq-office-app-hf .dq-office-page-content {
   opacity: .42;
+}
+
+/* A região EM EDIÇÃO (e uma caixa de texto aberta dentro dela) fica com o
+   contraste inteiro: só o corpo esmaece. A superfície da região também é um
+   `.dq-office-page-content`, e a regra acima a apagava junto — o rodapé que
+   o usuário estava editando parecia desabilitado. */
+.dq-office-app-hf .dq-office-hf-surface .dq-office-page-content,
+.dq-office-app-hf .dq-office-tb-surface .dq-office-page-content {
+  opacity: 1;
 }
 
 .dq-office-app-hf .dq-office-pages {

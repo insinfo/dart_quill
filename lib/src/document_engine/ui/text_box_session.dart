@@ -279,7 +279,10 @@ class OfficeTextBoxSession {
       extensions: extensions,
       composer: LayoutComposer(
         setup: _boxSetup(node),
-        fonts: controller.options.fonts,
+        // As mesmas faces do corpo, inclusive as carregadas pelo
+        // `fontLoader` — senão o texto da caixa em edição quebra em lugar
+        // diferente do texto da caixa projetada.
+        fonts: controller.fontLibrary.fontSet,
       ),
       renderer: PageGraphDomRenderer(
         document: controller.adapter.document,
@@ -295,8 +298,9 @@ class OfficeTextBoxSession {
       onStateChange: (_) => onChanged(),
     );
 
-    final content = surface.querySelector('.$officeCssPrefix-page-content');
-    if (content != null) controller.adapter.focus(content);
+    // Foco + seleção do modelo: o `focus()` cru deixa o caret no offset 0 do
+    // content box, desenhado com a altura da superfície inteira.
+    _boxView!.focus();
   }
 
   /// A geometria em que o conteúdo da caixa é composto.

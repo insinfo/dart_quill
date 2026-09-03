@@ -214,6 +214,7 @@ class OfficeWordEditor implements OfficeWordController {
   OfficeSelectionQuickbar? _quickbar;
   OfficeContextMenu? _contextMenu;
   DomEventListener? _contextMenuListener;
+  DomEventListener? _documentPointerUp;
   OfficeRibbon? _ribbon;
   OfficeHorizontalRuler? _hRuler;
   OfficeVerticalRuler? _vRuler;
@@ -1028,11 +1029,12 @@ class OfficeWordEditor implements OfficeWordController {
       // régua, nunca produziria um `pointermove` no canvas. Os dois registros
       // cobrem o gesto inteiro sem duplicar evento (as duas caixas não se
       // contêm).
+      // O `pointerup` correspondente é registrado no DOCUMENTO, junto com o
+      // dos adornos (abaixo): soltar fora da faixa e do canvas também
+      // encerra o gesto.
       for (final target in [_canvas, _hRulerSlot!]) {
         target.addEventListener(
             'pointermove', (event) => _hRuler?.handlePointerMove(event));
-        target.addEventListener(
-            'pointerup', (event) => _hRuler?.handlePointerUp(event));
       }
       _canvas.addEventListener('scroll', (_) {
         _lastCanvasScrollLeft = _canvas.scrollLeft;
@@ -1088,12 +1090,33 @@ class OfficeWordEditor implements OfficeWordController {
       host.addEventListener(
           'pointerdown', (event) => _tableAdorner.handlePointerDown(event));
       host.addEventListener('pointermove', _tableAdorner.handlePointerMove);
-      host.addEventListener('pointerup', _tableAdorner.handlePointerUp);
       // O arrasto de ALÇA, por sua vez, pertence ao editor inteiro: as alças
       // moram no overlay (que não borbulha para o canvas) e soltar o ponteiro
       // fora do objeto ainda tem de aplicar o redimensionamento.
       host.addEventListener('pointermove', _objectAdorner.handlePointerMove);
-      host.addEventListener('pointerup', _objectAdorner.handlePointerUp);
+      // O `pointerup` é do DOCUMENTO, não do host: soltar o botão fora do
+      // editor (ou fora da janela, com o ponteiro voltando depois) nunca
+      // chegava ao host, e a guia tracejada da coluna — ou a moldura do
+      // objeto em arrasto — ficava presa na tela até o próximo gesto.
+      _documentPointerUp = (event) {
+        _tableAdorner.handlePointerUp(event);
+        _objectAdorner.handlePointerUp(event);
+        _hRuler?.handlePointerUp(event);
+      };
+      // No host E no documento: o browser entrega o evento aos dois (o
+      // segundo é no-op, cada handler zera o arrasto antes de agir), e um
+      // adaptador sem bubbling até o documento ainda encerra o gesto.
+      host.addEventListener('pointerup', _documentPointerUp!);
+      adapter.document.addEventListener('pointerup', _documentPointerUp!);
+      adapter.document.addEventListener('pointercancel', _documentPointerUp!);
+      // A âncora ⊞ seleciona a tabela E abre a mini-barra dela, como no Word.
+      _tableAdorner.onWholeTableSelected = (anchor) {
+        final bounds = adapter.getElementBounds(anchor);
+        _quickbar?.showForTable(
+          x: _numOf(bounds?['left']) + _numOf(bounds?['width']) + 6,
+          y: _numOf(bounds?['top']),
+        );
+      };
     }
 
     if (options.mode != OfficeWordMode.view) {
@@ -1452,6 +1475,12 @@ class OfficeWordEditor implements OfficeWordController {
     if (contextMenu != null) {
       _canvas.removeEventListener('contextmenu', contextMenu);
     }
+    final pointerUp = _documentPointerUp;
+    if (pointerUp != null) {
+      adapter.document.removeEventListener('pointerup', pointerUp);
+      adapter.document.removeEventListener('pointercancel', pointerUp);
+    }
+    host.classes.remove(officeColumnResizeHoverClass);
     _objectAdorner.clear();
     _tableAdorner.clear();
     _headerFooter.dispose();

@@ -93,6 +93,9 @@ DomElement buildMenu(
       final description = kit.el('span', 'dq-office-menu-description');
       description.appendText(entry.description!);
       texts.append(description);
+      // Num item DESABILITADO a descrição é o MOTIVO: além da linha
+      // secundária (que quebra em vez de alargar o menu), ele vira tooltip.
+      if (!entry.enabled) item.setAttribute('title', entry.description!);
     }
     item.append(texts);
 

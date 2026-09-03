@@ -209,6 +209,15 @@ class OfficeOverlay {
       final height = _numOf(bounds['height']);
       if (placement == OfficePopupPlacement.below) {
         top += height;
+        // Sem espaço embaixo, o menu abre PARA CIMA do controle — é o que
+        // toda barra de ferramentas faz perto da borda inferior da janela.
+        final popupHeight = popup.offsetHeight.toDouble();
+        final layerHeight = layer.clientHeight.toDouble();
+        if (layerHeight > 0 &&
+            top + popupHeight > layerHeight &&
+            top - height - popupHeight >= 0) {
+          top -= height + popupHeight;
+        }
       } else {
         // aboveCentered: o quickbar do Word nasce acima e centralizado; a
         // largura real só existe depois de anexado, por isso medimos agora.
@@ -217,6 +226,21 @@ class OfficeOverlay {
         left += (width - popupWidth) / 2;
         top -= popupHeight + 6;
       }
+    }
+    // O popup fica INTEIRO dentro da camada. Sem isto, o menu de disposição
+    // do texto aberto num objeto encostado à margem direita saía pela borda
+    // e perdia metade dos itens; o menu de contexto perto do rodapé da
+    // janela, idem. Só encaixa quando há geometria (no fake DOM tudo é 0).
+    final layerWidth = layer.clientWidth.toDouble();
+    final layerHeight = layer.clientHeight.toDouble();
+    final popupWidth = popup.offsetWidth.toDouble();
+    final popupHeight = popup.offsetHeight.toDouble();
+    const gap = 4.0;
+    if (layerWidth > 0 && left + popupWidth > layerWidth - gap) {
+      left = layerWidth - gap - popupWidth;
+    }
+    if (layerHeight > 0 && top + popupHeight > layerHeight - gap) {
+      top = layerHeight - gap - popupHeight;
     }
     if (left < 0) left = 0;
     if (top < 0) top = 0;

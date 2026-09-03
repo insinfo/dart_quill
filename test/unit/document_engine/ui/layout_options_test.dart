@@ -155,8 +155,14 @@ void main() {
 
       final entries = buildLayoutOptionsEntries(editor);
       expect(entries.every((entry) => !entry.enabled), isTrue);
-      expect(entries.every((entry) => entry.description!.contains('em linha')),
-          isTrue);
+      // O motivo é dito UMA vez (no primeiro modo flutuante), não repetido em
+      // cada item — o menu de uma imagem não pode virar um bloco de texto.
+      final reasons = entries
+          .where((entry) => entry.description != null)
+          .map((entry) => entry.description!)
+          .toList();
+      expect(reasons, hasLength(2), reason: 'em linha + o motivo dos demais');
+      expect(reasons.every((reason) => reason.contains('em linha')), isTrue);
       // O modo VIGENTE da imagem é "em linha com o texto" — o Word o mostra
       // marcado, e uma lista inteiramente apagada dizia ao usuário que o
       // editor não sabe o que a imagem é.

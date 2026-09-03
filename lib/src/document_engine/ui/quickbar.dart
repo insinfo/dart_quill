@@ -23,11 +23,13 @@ library;
 import '../../platform/dom.dart';
 import 'controller.dart';
 import 'layout_options.dart';
+import 'menu.dart';
 import 'overlay.dart';
 import 'ribbon.dart';
 import 'ribbon_actions.dart' as actions;
 import 'table_ops.dart' as table_ops;
 import 'tabs/home_tab.dart';
+import 'tabs/table_design_tab.dart';
 
 /// Grupo de popup da quickbar — um só, então abrir uma fecha a anterior.
 const String officeQuickbarGroup = 'quickbar';
@@ -92,7 +94,7 @@ class OfficeSelectionQuickbar {
     row.append(_kit.el('span', 'dq-office-ribbon-sep'));
     row.append(_kit.button(
         '✕', 'Excluir objeto', () => actions.deleteSelectedObject(controller),
-        icon: 'delcell'));
+        icon: 'close'));
     bar.append(row);
     return bar;
   }
@@ -113,59 +115,159 @@ class OfficeSelectionQuickbar {
     );
   }
 
+  /// A mini-barra de tabela do Word: duas fileiras — fonte/tamanho e
+  /// negrito/itálico/realce em cima; Inserir ▾, Excluir ▾, mesclar/dividir,
+  /// bordas e sombreamento embaixo.
+  ///
+  /// Inserir e Excluir são MENUS (como no Word) porque cada um tem quatro
+  /// destinos, e quatro botões iguais com títulos diferentes não se
+  /// distinguem a olho. As entradas são as mesmas funções de `table_ops.dart`
+  /// que a aba "Tabela Layout" usa.
   DomElement _buildTableBar() {
     final bar = _kit.el('div', 'dq-office-quickbar-bar');
+    final ribbon = OfficeRibbon(controller);
+    _controls = ribbon;
+    final ctx = ribbon.contextFor();
+    final state = () => controller.activeView.state;
+    final schema = controller.schema;
+
+    final firstRow = _kit.el('div', 'dq-office-quickbar-row');
+    firstRow.append(buildFontFamilyCombo(ctx, extraClass: 'dq-office-qb-font'));
+    firstRow.append(buildFontSizeCombo(ctx, extraClass: 'dq-office-qb-size'));
+    firstRow.append(ctx.markButton(
+        'bold', 'N', 'Negrito (Ctrl+B)', 'dq-office-b',
+        icon: 'bold'));
+    firstRow.append(ctx.markButton(
+        'italic', 'I', 'Itálico (Ctrl+I)', 'dq-office-i',
+        icon: 'italic'));
+    firstRow.append(buildPaletteButton(ctx,
+        icon: 'highlight',
+        text: 'ab',
+        title: 'Cor do Realce do Texto',
+        mark: 'background',
+        colors: officeHighlightColors));
+    firstRow.append(buildPaletteButton(ctx,
+        icon: 'fontcolor',
+        text: 'A',
+        title: 'Cor da Fonte',
+        mark: 'color',
+        colors: officeFontColors));
+    bar.append(firstRow);
+
     final row = _kit.el('div', 'dq-office-quickbar-row');
     void run(bool Function() action) {
       controller.syncSelection();
       action();
     }
 
-    row.append(_kit.button(
-        '⬆+',
-        'Inserir linha acima',
-        () => table_ops.tableInsertRow(
-            controller.activeView.state, controller.dispatch, controller.schema,
-            above: true),
-        icon: 'addcell'));
-    row.append(_kit.button(
-        '⬇+',
-        'Inserir linha abaixo',
-        () => table_ops.tableInsertRow(
-            controller.activeView.state, controller.dispatch, controller.schema,
-            above: false)));
-    row.append(_kit.button(
-        '➡+',
-        'Inserir coluna à direita',
-        () => table_ops.tableInsertColumn(
-            controller.activeView.state, controller.dispatch, controller.schema,
-            before: false)));
+    row.append(menuButton(
+      controller,
+      'Inserir',
+      'Inserir linhas e colunas',
+      'quickbar:insert',
+      () => [
+        OfficeMenuEntry(
+            label: 'Inserir Acima',
+            icon: 'addcell',
+            onSelect: () => table_ops.tableInsertRow(
+                state(), controller.dispatch, schema,
+                above: true)),
+        OfficeMenuEntry(
+            label: 'Inserir Abaixo',
+            onSelect: () => table_ops.tableInsertRow(
+                state(), controller.dispatch, schema,
+                above: false)),
+        OfficeMenuEntry(
+            label: 'Inserir à Esquerda',
+            onSelect: () => table_ops.tableInsertColumn(
+                state(), controller.dispatch, schema,
+                before: true)),
+        OfficeMenuEntry(
+            label: 'Inserir à Direita',
+            onSelect: () => table_ops.tableInsertColumn(
+                state(), controller.dispatch, schema,
+                before: false)),
+      ],
+      icon: 'addcell',
+      extraClass: 'dq-office-qb-menu',
+    ));
+    row.append(menuButton(
+      controller,
+      'Excluir',
+      'Excluir linhas, colunas ou a tabela',
+      'quickbar:delete',
+      () => [
+        OfficeMenuEntry(
+            label: 'Excluir Linhas',
+            icon: 'delcell',
+            onSelect: () =>
+                table_ops.tableDeleteRow(state(), controller.dispatch)),
+        OfficeMenuEntry(
+            label: 'Excluir Colunas',
+            onSelect: () =>
+                table_ops.tableDeleteColumn(state(), controller.dispatch)),
+        OfficeMenuEntry(
+            label: 'Excluir Tabela',
+            onSelect: () =>
+                table_ops.tableDelete(state(), controller.dispatch)),
+      ],
+      icon: 'delcell',
+      extraClass: 'dq-office-qb-menu',
+    ));
     row.append(_kit.el('span', 'dq-office-ribbon-sep'));
     row.append(_kit.button(
         '⧉',
         'Mesclar células',
-        () => run(() => table_ops.mergeSelectedCells(
-            controller.activeView.state, controller.dispatch)),
+        () => run(() =>
+            table_ops.mergeSelectedCells(state(), controller.dispatch)),
         icon: 'merge-cells'));
     row.append(_kit.button(
         '⫯',
         'Dividir célula',
-        () => run(() => table_ops.splitSelectedCell(
-            controller.activeView.state, controller.dispatch)),
+        () =>
+            run(() => table_ops.splitSelectedCell(state(), controller.dispatch)),
         icon: 'rows-and-columns'));
     row.append(_kit.el('span', 'dq-office-ribbon-sep'));
-    row.append(_kit.button(
-        '⬚✕',
-        'Excluir linha',
-        () => table_ops.tableDeleteRow(
-            controller.activeView.state, controller.dispatch),
-        icon: 'delcell'));
-    row.append(_kit.button(
-        '▯✕',
-        'Excluir coluna',
-        () => table_ops.tableDeleteColumn(
-            controller.activeView.state, controller.dispatch)));
+    row.append(menuButton(
+      controller,
+      'Bordas',
+      'Bordas',
+      'quickbar:borders',
+      () => [
+        for (final (which, label, icon) in const [
+          (table_ops.OfficeCellBorders.all, 'Todas as Bordas', 'border-all'),
+          (table_ops.OfficeCellBorders.none, 'Sem Borda', 'border-no'),
+          (
+            table_ops.OfficeCellBorders.outside,
+            'Bordas Externas',
+            'border-out'
+          ),
+          (
+            table_ops.OfficeCellBorders.inside,
+            'Bordas Internas',
+            'border-inside'
+          ),
+          (table_ops.OfficeCellBorders.top, 'Borda Superior', 'border-top'),
+          (
+            table_ops.OfficeCellBorders.bottom,
+            'Borda Inferior',
+            'border-bottom'
+          ),
+          (table_ops.OfficeCellBorders.left, 'Borda Esquerda', 'border-left'),
+          (table_ops.OfficeCellBorders.right, 'Borda Direita', 'border-right'),
+        ])
+          OfficeMenuEntry(
+              label: label,
+              icon: icon,
+              onSelect: () => run(() => table_ops.setCellBorders(
+                  state(), controller.dispatch, which))),
+      ],
+      icon: 'border-all',
+      extraClass: 'dq-office-qb-menu',
+    ));
+    row.append(buildCellShadingButton(ctx));
     bar.append(row);
+    ribbon.refreshState();
     return bar;
   }
 
