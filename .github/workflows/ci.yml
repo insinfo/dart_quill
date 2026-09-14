@@ -6,10 +6,6 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
-  schedule:
-    # Weekly, only for the job that compares the goldens against the real
-    # upstream Quill — that one needs npm and is not on the PR path.
-    - cron: '0 6 * * 1'
 
 # A new push to the same branch cancels the previous run: the browser and E2E
 # jobs are expensive and there is no value in finishing a superseded one.
@@ -156,11 +152,18 @@ jobs:
   # Delta compatibility against the REAL Quill 2.0.3 (and the table-better
   # plugin): regenerates the goldens from upstream in a headless Chrome and
   # fails if they drifted. Needs npm, so it is kept out of the PR path and runs
-  # on demand plus weekly.
+  # on demand only.
+  #
+  # It used to also run weekly on a cron. The schedule was removed: it fired
+  # against a repository nobody was pushing to, so every failure was either a
+  # drift upstream that nobody was going to act on that week, or infrastructure
+  # rot -- and a red mark that nobody acts on teaches everyone to ignore red
+  # marks. Trigger it from the Actions tab when the upstream comparison
+  # actually matters.
   # ---------------------------------------------------------------------------
   goldens-vs-upstream:
     name: goldens vs upstream Quill
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
